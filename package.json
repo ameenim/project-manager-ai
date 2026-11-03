@@ -1,12 +1,17 @@
 {
   "name": "project-manager-ai",
-  "version": "1.0.0",
-  "description": "Project Manager AI demo app, served as a static site",
+  "version": "1.1.0",
+  "description": "Project Manager AI app with server side document reading and a private Claude proxy",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "mammoth": "^1.8.0",
+    "pdf-parse": "^2.4.5",
+    "xlsx": "^0.18.5"
   }
 }

@@ -1164,32 +1164,44 @@ window.__AI=(function(){var module={exports:{}};var exports=module.exports;var p
 const fs = require('fs');
 const path = require('path');
 
-const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5';
-const hasKey = () => !!process.env.ANTHROPIC_API_KEY;
+// The browser never sees the API key. It asks the server (/srv/ai) which holds ANTHROPIC_API_KEY.
+const MODEL = 'claude-sonnet-5-5';
+const aiState = { configured: false, model: MODEL };
+const aiReady = (typeof window !== 'undefined' && typeof fetch === 'function')
+  ? fetch('/srv/ai/status').then((r) => r.json()).then((j) => { aiState.configured = !!j.configured; if (j.model) aiState.model = j.model; }).catch(() => {})
+  : Promise.resolve();
+const hasKey = () => aiState.configured;
 
-async function claude(system, user, maxTokens = 4000) {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return null;
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({ model: MODEL, max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }] }),
-  });
-  if (!res.ok) {
-    const t = await res.text();
-    throw new Error(`Claude API ${res.status}: ${t.slice(0, 300)}`);
+async function claudeRaw(system, user, maxTokens = 4000) {
+  await aiReady;
+  if (!aiState.configured) return null;
+  let res;
+  try {
+    res = await fetch('/srv/ai', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ system, user, max_tokens: maxTokens }) });
+  } catch (e) {
+    throw Object.assign(new Error('Could not reach the server'), { code: 'network' });
   }
-  const j = await res.json();
-  return (j.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n');
+  let j = null;
+  try { j = await res.json(); } catch (e) { /* not json */ }
+  if (!res.ok) throw Object.assign(new Error((j && j.error) || `Claude request failed (${res.status})`), { code: (j && j.code) || 'upstream' });
+  return { text: (j && j.text) || '', stop: (j && j.stop_reason) || null };
 }
 
+async function claude(system, user, maxTokens = 4000) {
+  const r = await claudeRaw(system, user, maxTokens);
+  return r == null ? null : r.text;
+}
+
+// Parses the model reply. Empty, cut off or invalid output is reported as a normal error, never a crash.
 async function claudeJSON(system, user, maxTokens = 6000) {
-  const txt = await claude(system + '\nReply with one JSON object only. No prose, no code fences.', user, maxTokens);
-  if (txt == null) return null;
+  const r = await claudeRaw(system + '\nReply with one JSON object only. No prose, no code fences.', user, maxTokens);
+  if (r == null) return null;
+  const txt = r.text || '';
+  if (r.stop === 'max_tokens') throw Object.assign(new Error('Model reply was cut off'), { code: 'cutoff' });
   const a = txt.indexOf('{');
   const b = txt.lastIndexOf('}');
-  if (a < 0 || b < 0) throw new Error('Model did not return JSON');
-  return JSON.parse(txt.slice(a, b + 1));
+  if (a < 0 || b < a) throw Object.assign(new Error('Model did not return JSON'), { code: 'badjson' });
+  try { return JSON.parse(txt.slice(a, b + 1)); } catch (e) { throw Object.assign(new Error('Model returned invalid JSON'), { code: 'badjson' }); }
 }
 
 // ---------- text extraction ----------
@@ -1466,26 +1478,128 @@ Return JSON with this shape:
  "milestones": [{"title":"","percent":number or null,"amount":number or null,"due_date":"YYYY-MM-DD or null","confidence":0.0,"quote":""}],
  "schedule": [{"name":"","start":"YYYY-MM-DD or null","end":"YYYY-MM-DD or null","duration_days":number or null,"confidence":0.0,"quote":""}]
 }
-Rules: only extract what the document supports. value is a number without currency symbols, currency is an ISO code. Dates are ISO. Quote must be copied from the document and short. Payment milestones are invoicing or payment events, not delivery tasks.`;
+Rules: only extract what the document supports. value is a number without currency symbols, currency is an ISO code. Dates are ISO. The quote must be copied exactly, word for word, from the text you were given, about 8 to 25 words. Never rewrite or translate a quote. Skip any item you cannot quote. If a part of the document has no relevant facts, return empty lists. Payment milestones are invoicing or payment events, not delivery tasks.`;
 
-async function analyzeDocument({ text, filename }) {
+// The whole document is read. Long text is split into parts at paragraph breaks and every part is sent.
+const PART_SIZE = 40000;
+const PART_MIN = 8000;
+const PART_CONCURRENCY = 3;
+const LIST_KEYS = ['deliverables', 'requirements', 'risks', 'milestones', 'schedule'];
+
+function splitParts(text, size = PART_SIZE) {
+  const out = [];
+  let i = 0;
+  while (i < text.length) {
+    let end = Math.min(i + size, text.length);
+    if (end < text.length) {
+      const floor = i + Math.floor(size * 0.6);
+      const p = text.lastIndexOf('\n\n', end);
+      const n = text.lastIndexOf('\n', end);
+      end = p > floor ? p : n > floor ? n : end;
+    }
+    out.push(text.slice(i, end));
+    i = end;
+  }
+  return out;
+}
+
+const normQuote = (s) => String(s || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+// A fact is kept only when its quote really appears in the part it came from.
+function quoteFound(quote, hay) {
+  const q = normQuote(quote);
+  if (q.length < 6) return false;
+  return hay.includes(q) || (q.length > 50 && (hay.includes(q.slice(0, 40)) || hay.includes(q.slice(-40))));
+}
+
+async function extractPart(part, label, depth = 0, retry = false) {
+  try {
+    const j = await claudeJSON(EXTRACT_SYSTEM, `${label}\n\nDocument text:\n${part}`, 12000);
+    return { j, failed: 0 };
+  } catch (e) {
+    if (e.code === 'bad_key' || e.code === 'budget' || e.code === 'rate' || e.code === 'network') throw e;
+    // A reply that was cut off means the part holds too many facts, so it is read again as two halves.
+    if (e.code === 'cutoff' && depth < 2 && part.length > PART_MIN * 2) {
+      const mid = part.lastIndexOf('\n', Math.floor(part.length / 2));
+      const cut = mid > PART_MIN ? mid : Math.floor(part.length / 2);
+      const a = await extractPart(part.slice(0, cut), label + ' (first half)', depth + 1);
+      const b = await extractPart(part.slice(cut), label + ' (second half)', depth + 1);
+      const halves = [a.j, b.j].filter(Boolean);
+      return { j: halves.length ? { _halves: halves } : null, failed: a.failed + b.failed, error: a.error || b.error };
+    }
+    // An empty or invalid reply is tried once more on the same part.
+    if (e.code === 'badjson' && !retry) return extractPart(part, label, depth, true);
+    return { j: null, failed: 1, error: e.message, code: e.code };
+  }
+}
+
+async function analyzeDocument({ text, filename, onProgress }) {
   const kind = classify(filename, text);
+  let aiError = null;
+  await aiReady;
   if (hasKey()) {
     try {
-      const j = await claudeJSON(EXTRACT_SYSTEM, `Filename: ${filename}\n\nDocument text:\n${text.slice(0, 150000)}`, 8000);
-      if (j) {
-        j.kind = j.kind || kind;
-        for (const k of ['fields', 'deliverables', 'requirements', 'risks', 'milestones', 'schedule']) j[k] = Array.isArray(j[k]) ? j[k] : [];
-        j.engine = 'claude';
-        return j;
-      }
+      const parts = splitParts(text);
+      const results = new Array(parts.length);
+      let next = 0;
+      let done = 0;
+      let lastError = null;
+      let lastCode = null;
+      const worker = async () => {
+        while (next < parts.length) {
+          const idx = next++;
+          const r = await extractPart(parts[idx], `Filename: ${filename}. Part ${idx + 1} of ${parts.length}. Extract only what this part states.`);
+          results[idx] = r;
+          if (r.error) { lastError = r.error; lastCode = r.code || lastCode; }
+          done++;
+          if (onProgress) onProgress({ done, total: parts.length });
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(PART_CONCURRENCY, parts.length) }, worker));
+
+      const merged = { kind: null, summary: '', fields: [], deliverables: [], requirements: [], risks: [], milestones: [], schedule: [] };
+      let ok = 0, failed = 0, dropped = 0, charsSent = 0;
+      const seen = new Set();
+      const take = (j, partText, partIdx) => {
+        if (!j) return;
+        const hay = normQuote(partText);
+        if (!merged.kind && j.kind) merged.kind = j.kind;
+        if (!merged.summary && j.summary && partIdx === 0) merged.summary = String(j.summary);
+        for (const k of ['fields', ...LIST_KEYS]) {
+          for (const it of Array.isArray(j[k]) ? j[k] : []) {
+            if (!it || typeof it !== 'object') continue;
+            if (!quoteFound(it.quote, hay)) { dropped++; continue; }
+            const sig = k + '|' + normQuote(it.title || it.name || it.field) + '|' + normQuote(it.value || it.due_date || it.start || it.percent);
+            if (seen.has(sig)) continue;
+            seen.add(sig);
+            merged[k].push(it);
+          }
+        }
+      };
+      results.forEach((r, i) => {
+        if (r.failed) failed++;
+        if (r.j) {
+          ok++;
+          charsSent += parts[i].length;
+          if (r.j._halves) r.j._halves.forEach((h) => take(h, parts[i], i));
+          else take(r.j, parts[i], i);
+        }
+      });
+      if (!ok) throw Object.assign(new Error(lastError || 'Claude returned nothing usable'), { code: lastCode || 'badjson' });
+      merged.kind = merged.kind || kind;
+      merged.engine = 'claude';
+      merged.coverage = { chars_total: text.length, chars_sent: charsSent, parts: parts.length, parts_read: ok, parts_failed: failed, dropped_no_quote: dropped };
+      if (!merged.summary) merged.summary = `Read ${filename} (${text.length.toLocaleString('en-US')} characters).`;
+      return merged;
     } catch (e) {
+      aiError = { code: e.code || 'upstream', message: e.message };
       console.error('AI extraction failed, using fallback:', e.message);
     }
+  } else {
+    aiError = { code: 'no_key', message: 'The Anthropic API key is not set on the server' };
   }
   const h = heuristicExtract(text, filename);
   const n = h.deliverables.length + h.requirements.length + h.risks.length + h.milestones.length + h.schedule.length + h.fields.length;
-  return { kind, summary: `Rule based reading of ${filename}. Found ${n} candidate items.`, ...h, engine: 'rules' };
+  return { kind, summary: `Rule based reading of ${filename}. Found ${n} candidate items.`, ...h, engine: 'rules', ai_error: aiError, coverage: { chars_total: text.length, chars_sent: text.length, parts: 1, parts_read: 1, parts_failed: 0, dropped_no_quote: 0 } };
 }
 
 // ---------- matching helpers ----------
@@ -1508,6 +1622,7 @@ function similarity(a, b) {
 
 // Interpret an incoming message (Teams, email, Jira) against project data.
 async function interpretMessage({ text, sender, tasks, resources, deliverables }) {
+  await aiReady;
   if (hasKey()) {
     try {
       const j = await claudeJSON(
@@ -1570,13 +1685,14 @@ function heuristicInterpret({ text, sender, tasks, resources, deliverables }) {
 
 // Interpret an uploaded document as progress evidence.
 async function interpretEvidence({ doc, deliverables, tasks, milestones, projectName }) {
+  await aiReady;
   if (hasKey()) {
     try {
       const j = await claudeJSON(
         `A project manager uploaded a document during project execution. Decide which project records it updates.
 Return {"updates":[{"type":"close_deliverable|update_task|milestone_invoiced|milestone_paid","deliverable_id":number|null,"task_id":number|null,"milestone_id":number|null,"progress":0-100|null,"note":"short reason","confidence":0.0-1.0}]}.
 Use only ids from the lists. A BOQ, delivery note, handover or acceptance record can close the deliverable it covers. An invoice relates to a payment milestone. If nothing matches return {"updates":[]}.`,
-        `Filename: ${doc.filename}\nDetected type: ${doc.kind}\nText:\n${doc.text.slice(0, 60000)}\n\nDeliverables: ${JSON.stringify(deliverables.map((d) => ({ id: d.id, title: d.title, state: d.state })))}\nTasks: ${JSON.stringify(tasks.map((t) => ({ id: t.id, name: t.name, progress: t.progress })))}\nPayment milestones: ${JSON.stringify(milestones.map((m) => ({ id: m.id, title: m.title, state: m.state })))}`,
+        `Filename: ${doc.filename}\nDetected type: ${doc.kind}\nText:\n${doc.text.slice(0, 100000)}\n\nDeliverables: ${JSON.stringify(deliverables.map((d) => ({ id: d.id, title: d.title, state: d.state })))}\nTasks: ${JSON.stringify(tasks.map((t) => ({ id: t.id, name: t.name, progress: t.progress })))}\nPayment milestones: ${JSON.stringify(milestones.map((m) => ({ id: m.id, title: m.title, state: m.state })))}`,
         3000
       );
       if (j) return { updates: j.updates || [], engine: 'claude' };

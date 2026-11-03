@@ -161,7 +161,7 @@
     const end = sched.reduce((mx, t) => (t.finish && t.finish > mx ? t.finish : mx), '');
     return { progress: m.actualPct, planned: m.plannedPct, spi: m.spi, overdue: m.overdue, tasks: m.taskCount, pendingItems, pendingInbox, health, forecast_end: end || null, today: TODAY };
   }
-  const projectView = (P) => ({ ...clone(P.p), stats: stats(P) });
+  const projectView = (P) => ({ ...clone(P.p), stats: stats(P), analysis: P.analysis ? clone(P.analysis) : null });
 
   function sanitizeChange(ch) {
     const o = {};
@@ -350,28 +350,89 @@
     }
     return counts;
   }
+  // Plain language reason shown to the person when the AI could not be used for a file.
+  const AI_REASON = {
+    no_key: 'The AI is not connected because the server has no ANTHROPIC_API_KEY. Only a basic rule based reading was done.',
+    bad_key: 'The Anthropic API key was rejected. Check the ANTHROPIC_API_KEY secret. Only a basic rule based reading was done.',
+    budget: 'The Anthropic account has no credit left. Only a basic rule based reading was done.',
+    rate: 'The AI is busy right now (rate limit). Use Reanalyze in a few minutes. Only a basic rule based reading was done.',
+    network: 'The server could not be reached. Only a basic rule based reading was done.',
+    badjson: 'The AI reply could not be read. Use Reanalyze to try again. Only a basic rule based reading was done.',
+    cutoff: 'The AI reply could not be read. Use Reanalyze to try again. Only a basic rule based reading was done.',
+    upstream: 'The AI service could not be reached. Use Reanalyze to try again. Only a basic rule based reading was done.',
+  };
+  // Runs in the background. P.p.analyzing drives the progress banner and P.analysis holds one status row per file.
   async function analyzeDocs(P, docs) {
-    for (const doc of docs) {
-      const text = P.texts[doc.id] || '';
-      if (!text.trim()) { audit(P, 'AI', 'document_failed', { summary: `Could not read text from ${doc.filename}. The demo reads .txt, .md and .csv files.` }); continue; }
-      const a = await AI.analyzeDocument({ text, filename: doc.filename });
-      if (a.kind && a.kind !== 'other') doc.kind = a.kind;
-      doc.summary = a.summary || '';
-      const c = insertExtracted(P, doc, a);
-      audit(P, 'AI', 'document_analyzed', { summary: `Analyzed ${doc.filename}: ${c.deliverable} deliverables, ${c.requirement} requirements, ${c.risk} risks, ${c.milestone} payment milestones, ${c.schedule} schedule lines` });
+    const run = { at: nowTs(), docs: docs.map((d) => ({ id: d.id, filename: d.filename, status: 'waiting', message: '', counts: null, coverage: null, engine: null, progress: '' })) };
+    P.analysis = run;
+    P.p.analyzing = 1;
+    try {
+      for (let i = 0; i < docs.length; i++) {
+        const doc = docs[i];
+        const st = run.docs[i];
+        const text = P.texts[doc.id] || '';
+        if (!text.trim()) {
+          st.status = 'failed';
+          st.message = doc.read_error || 'No text could be read from this file.';
+          audit(P, 'AI', 'document_failed', { summary: `Could not read ${doc.filename}. ${st.message}` });
+          continue;
+        }
+        st.status = 'reading';
+        try {
+          const a = await AI.analyzeDocument({ text, filename: doc.filename, onProgress: (p) => { st.progress = `part ${p.done} of ${p.total}`; } });
+          if (a.kind && a.kind !== 'other') doc.kind = a.kind;
+          doc.summary = a.summary || '';
+          const c = insertExtracted(P, doc, a);
+          const found = c.deliverable + c.requirement + c.risk + c.milestone + c.schedule + c.field;
+          st.counts = c; st.coverage = a.coverage || null; st.engine = a.engine; st.progress = '';
+          if (a.engine === 'rules') {
+            st.status = 'basic';
+            st.message = AI_REASON[(a.ai_error && a.ai_error.code) || 'upstream'] || AI_REASON.upstream;
+          } else if (a.coverage && a.coverage.parts_failed) {
+            st.status = 'partial';
+            st.message = `Part of this document could not be read by the AI (${a.coverage.parts_failed} of ${a.coverage.parts} parts). Use Reanalyze to try again.`;
+          } else if (!found && !c.merged) {
+            st.status = 'empty';
+            st.message = 'The document was read in full but no deliverables, schedule, payments or risks were found in it.';
+          } else {
+            st.status = 'done';
+          }
+          audit(P, 'AI', 'document_analyzed', { summary: `Analyzed ${doc.filename}: ${c.deliverable} deliverables, ${c.requirement} requirements, ${c.risk} risks, ${c.milestone} payment milestones, ${c.schedule} schedule lines${a.coverage ? `. Read ${a.coverage.chars_sent.toLocaleString('en-US')} of ${a.coverage.chars_total.toLocaleString('en-US')} characters` : ''}` });
+        } catch (e) {
+          console.error(e);
+          st.status = 'failed'; st.progress = '';
+          st.message = 'Something went wrong while analyzing this file. Use Reanalyze to try again.';
+          audit(P, 'AI', 'document_failed', { summary: `Analysis failed for ${doc.filename}` });
+        }
+      }
+    } finally {
+      P.p.analyzing = 0;
     }
   }
+  // Returns { text, error }. Text files are read here. PDF, Word and Excel files are read by the server.
   async function readFile(f) {
     const n = (f.name || '').toLowerCase();
-    if (/\.(txt|md|csv|tsv|json|eml|html?)$/.test(n)) return await f.text();
-    return '';
+    if (/\.(txt|md|csv|tsv|json|eml|html?)$/.test(n)) return { text: await f.text() };
+    if (/\.(pdf|docx|xlsx|xls)$/.test(n)) {
+      try {
+        const r = await fetch('/srv/extract?name=' + encodeURIComponent(f.name), { method: 'POST', body: f });
+        let j = null;
+        try { j = await r.json(); } catch (e) { /* not json */ }
+        if (!r.ok) return { text: '', error: (j && j.error) || `The server could not read this file (${r.status}).` };
+        return { text: (j && j.text) || '', pages: (j && j.pages) || null };
+      } catch (e) {
+        return { text: '', error: 'The server could not be reached to read this file.' };
+      }
+    }
+    return { text: '', error: 'This file type is not supported. Use PDF, Word, Excel or text files.' };
   }
   async function addDocuments(P, files) {
     const docs = [];
     for (const f of files) {
-      const text = await readFile(f);
+      const r = await readFile(f);
+      const text = r.text || '';
       const kind = AI.classify(f.name, text);
-      const d = { id: nid(), filename: f.name, kind, summary: '', uploaded_by: ACTOR, created_at: nowTs(), chars: text.length };
+      const d = { id: nid(), filename: f.name, kind, summary: '', uploaded_by: ACTOR, created_at: nowTs(), chars: text.length, pages: r.pages || null, read_error: r.error || null };
       P.documents.push(d); P.texts[d.id] = text; docs.push(d);
     }
     return docs;
@@ -492,7 +553,7 @@
     if (files.length) docs = await addDocuments(P, files);
     else { docs = []; for (const n of ['Proposal_Smart_Portal.txt', 'Contract_Smart_Portal.txt', 'PO_4500123.txt']) { const d = { id: nid(), filename: n, kind: AI.classify(n, SEED.docTexts[n]), summary: '', uploaded_by: ACTOR, created_at: nowTs(), chars: SEED.docTexts[n].length }; P.documents.push(d); P.texts[d.id] = SEED.docTexts[n]; docs.push(d); } }
     audit(P, ACTOR, 'project_created', { summary: `Project "${name}" created with ${docs.length} document${docs.length === 1 ? '' : 's'}` });
-    await analyzeDocs(P, docs);
+    analyzeDocs(P, docs).catch((e) => console.error(e));
     return { project: clone(P.p) };
   });
   on('GET', '/api/projects/(\\d+)', async (m) => ({ project: projectView(P_(m[1])) }));
@@ -520,11 +581,12 @@
     const out = [], src = [];
     for (const d of await addDocuments(P, files)) {
       audit(P, ACTOR, 'document_uploaded', { summary: `Uploaded ${d.filename} (${d.kind})` });
+      if (d.read_error) { out.push({ id: d.id, filename: d.filename, kind: d.kind, handled: 'failed', error: d.read_error }); continue; }
       const asSource = mode === 'source' || (mode === 'auto' && ['proposal', 'contract', 'po'].includes(d.kind));
       if (asSource) { src.push(d); out.push({ id: d.id, filename: d.filename, kind: d.kind, handled: 'extraction' }); }
       else { const n = await processEvidence(P, d); out.push({ id: d.id, filename: d.filename, kind: d.kind, handled: 'progress', suggestions: n }); }
     }
-    if (src.length) await analyzeDocs(P, src);
+    if (src.length) analyzeDocs(P, src).catch((e) => console.error(e));
     return { results: out };
   });
   on('POST', '/api/projects/(\\d+)/documents/(\\d+)/link', async (m, q, b) => {
@@ -540,7 +602,7 @@
   });
   on('POST', '/api/projects/(\\d+)/analyze', async (m) => {
     const P = P_(m[1]);
-    await analyzeDocs(P, P.documents.filter((d) => ['proposal', 'contract', 'po', 'other'].includes(d.kind)));
+    analyzeDocs(P, P.documents.filter((d) => ['proposal', 'contract', 'po', 'other'].includes(d.kind))).catch((e) => console.error(e));
     return { results: [] };
   });
 

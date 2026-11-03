@@ -184,7 +184,10 @@
         if (!r) return;
         files = [];
         const prog = r.results.filter((x) => x.handled === 'progress');
-        toast(prog.length ? t('upload_done_progress', { n: prog.reduce((a, x) => a + x.suggestions, 0) }) : t('upload_done_source'), 'ok');
+        const failed = r.results.filter((x) => x.handled === 'failed');
+        if (failed.length) toast(failed.map((x) => `${x.filename}: ${x.error}`).join(' '), 'err');
+        if (failed.length === r.results.length) { reload(); return; }
+        if (!failed.length) toast(prog.length ? t('upload_done_progress', { n: prog.reduce((a, x) => a + x.suggestions, 0) }) : t('upload_done_source'), 'ok');
         if (prog.length) location.hash = `#/p/${p.id}/inbox`; else location.hash = `#/p/${p.id}/review`;
       };
       $('#reAn', root).onclick = async () => { const r = await busy($('#reAn', root), () => api('POST', `/api/projects/${p.id}/analyze`)); if (r) { toast(t('reanalyzed'), 'ok'); location.hash = `#/p/${p.id}/review`; } };

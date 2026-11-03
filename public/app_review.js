@@ -55,6 +55,23 @@
     milestone: ['milestone', 'share_pct', 'amount', 'due_date', 'source'], risk: ['risk', 'probability', 'impact', 'mitigation', 'source'], schedule: ['task', 'start', 'finish', 'source'],
   };
 
+  // ---------- document reading status ----------
+  const AN_KEY = { waiting: 'an_waiting', reading: 'an_reading', done: 'an_done', partial: 'an_partial', basic: 'an_basic', empty: 'an_empty', failed: 'an_failed' };
+  const AN_CHIP = { waiting: '', reading: 'blue', done: 'green', partial: 'amber', basic: 'amber', empty: 'amber', failed: 'red' };
+  function analysisCard(an, analyzing, itemCount) {
+    if (!an || !an.docs || !an.docs.length) return '';
+    const issues = an.docs.some((d) => !['done'].includes(d.status));
+    if (!analyzing && !issues && itemCount) return '';
+    const rows = an.docs.map((d) => {
+      const found = d.counts ? d.counts.deliverable + d.counts.requirement + d.counts.risk + d.counts.milestone + d.counts.schedule + d.counts.field : 0;
+      const cov = d.coverage ? t('an_coverage', { sent: d.coverage.chars_sent.toLocaleString('en-US'), total: d.coverage.chars_total.toLocaleString('en-US') }) : '';
+      const drop = d.coverage && d.coverage.dropped_no_quote ? t('an_dropped', { n: d.coverage.dropped_no_quote }) : '';
+      const detail = [d.status === 'reading' && d.progress ? d.progress : '', d.message, d.status === 'done' || d.status === 'partial' ? t('an_found', { n: found }) : '', cov, drop].filter(Boolean).map((s) => String(s).replace(/\.$/, '')).join('. ');
+      return `<div class="list-item"><div class="grow"><b>${esc(d.filename)}</b>${detail ? `<div class="small muted">${esc(detail)}</div>` : ''}</div><span class="chip ${AN_CHIP[d.status] || ''}">${d.status === 'reading' ? '<span class="spinner" style="width:12px;height:12px;border-width:2px"></span>' : ''}${t(AN_KEY[d.status] || 'an_waiting')}</span></div>`;
+    }).join('');
+    return `<div class="card mb" id="anCard"><div class="card-head"><h3>${t('an_title')}</h3></div>${rows}</div>`;
+  }
+
   // ---------- tab ----------
   window.PM.views.tab_review = async function (root, p, q, token) {
     let items = (await api('GET', `/api/projects/${p.id}/items`)).items;
@@ -64,7 +81,8 @@
     let stateF = '';
     const proposedBy = () => KINDS.reduce((o, k) => ((o[k] = items.filter((i) => i.kind === k && i.status === 'proposed').length), o), {});
     if (!kind || !KINDS.includes(kind)) { const pb = proposedBy(); kind = KINDS.find((k) => pb[k]) || 'deliverable'; }
-    const reload = async () => { items = (await api('GET', `/api/projects/${p.id}/items`)).items; S.project = (await api('GET', `/api/projects/${p.id}`)).project; draw(); };
+    let an = p.analysis || null;
+    const reload = async () => { items = (await api('GET', `/api/projects/${p.id}/items`)).items; S.project = (await api('GET', `/api/projects/${p.id}`)).project; an = S.project.analysis || null; draw(); };
 
     function draw() {
       if (window.PM.stale(token)) return;
@@ -88,6 +106,7 @@
         ${p.analyzing ? `<div class="banner mb"><span class="spinner"></span><div class="grow"><b>${t('ai_reading')}</b><div class="small muted">${t('ai_reading_hint')}</div></div></div>` : ''}
         ${!p.analyzing && total ? `<div class="banner mb">${icon('spark')}<div class="grow"><b>${t('items_waiting', { n: total })}</b><div class="small muted">${t('wizard_intro')}</div></div><button class="btn primary" id="wizBtn">${icon('play')}${t('start_wizard')}</button></div>` : ''}
         ${!p.analyzing && !total && items.length ? `<div class="banner ok mb">${icon('check')}<div class="grow"><b>${t('all_reviewed')}</b></div></div>` : ''}
+        ${analysisCard(an, p.analyzing, items.length)}
         ${!p.analyzing && !items.length ? `<div class="card empty mb"><div class="big">📄</div><p>${t('no_items_yet')}</p><a class="btn primary" href="#/p/${p.id}/documents">${icon('upload')}${t('upload_docs')}</a></div>` : ''}
         <div class="card"><div class="row wrap" style="margin-bottom:12px">${KINDS.map((k) => `<button class="tab ${k === kind ? 'active' : ''}" data-kind="${k}" style="border-radius:8px 8px 0 0">${t('kind_' + k)} <span class="badge-count ${pb[k] ? '' : 'soft'}">${pb[k] || items.filter((i) => i.kind === k && i.status !== 'ignored').length}</span></button>`).join('')}</div>
         <div class="row wrap" style="margin-bottom:12px">${['all', 'proposed', 'confirmed', 'ignored'].map((s) => `<span class="chip filter-chip ${status === s ? 'on' : ''}" data-status="${s}">${s === 'all' ? t('all') : t('st_' + s)}</span>`).join('')}
@@ -140,7 +159,11 @@
       const poll = async () => {
         if (window.PM.stale(token)) return;
         const np = (await api('GET', `/api/projects/${p.id}`)).project;
-        if (np.analyzing) setTimeout(poll, 1500);
+        if (np.analyzing) {
+          const host = root.querySelector('#anCard');
+          if (host && np.analysis) { const tmp = document.createElement('div'); tmp.innerHTML = analysisCard(np.analysis, true, 0); if (tmp.firstElementChild) host.replaceWith(tmp.firstElementChild); }
+          setTimeout(poll, 1500);
+        }
         else { window.PM.projectView(p.id, 'review', new URLSearchParams()); }
       };
       setTimeout(poll, 1500);

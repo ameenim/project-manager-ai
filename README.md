@@ -10,6 +10,18 @@ Install Node 18 or newer, then run:
 
 Open http://localhost:5000
 
+## Reading documents with AI
+
+When a project is created or a document is uploaded, PDF, Word and Excel files are read by the server and the full text is analyzed by Claude. The browser never sees the API key.
+
+1. Add a secret named `ANTHROPIC_API_KEY` in Replit (Tools, Secrets). Optionally add `ANTHROPIC_MODEL` to change the model.
+2. Run `npm install` once (Replit does this on deploy). The server needs `pdf-parse`, `mammoth` and `xlsx`.
+3. Create a project and attach the contract, proposal or purchase order. The Review tab shows progress for each file, then the deliverables, schedule, payment milestones, requirements and risks found.
+
+Long documents are split into parts and every part is read. A fact is kept only when its source quote is found in the document text. If the key is missing, rejected or out of credit, or a file cannot be read (for example a scanned PDF), the Review tab says so for that file and a basic rule based reading is used instead.
+
+Server routes (not part of the demo API): `POST /srv/extract` reads a file, `POST /srv/ai` forwards a request to Claude, `GET /srv/ai/status` reports whether the key is set.
+
 ## Run on Replit
 
 Import this repository into Replit and press Run. The `.replit` file already points to `npm start`. To go live, use the Deploy button.
