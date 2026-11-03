@@ -175,7 +175,7 @@
         <button class="btn primary mt" id="upGo" style="width:100%;justify-content:center" ${files.length ? '' : 'disabled'}>${icon('upload')}${t('upload_analyze')}</button><div class="small muted mt">${t('upload_help')}</div></div></div></div>`;
       $('#purpose', root).value = purpose;
       $('#purpose', root).onchange = (e) => (purpose = e.target.value);
-      dropzone($('#dz', root), { accept: '.pdf,.docx,.txt,.md,.xlsx,.xls,.csv', onFiles: (f) => { files = files.concat(f); list(); } });
+      dropzone($('#dz', root), { accept: '.pdf,.docx,.pptx,.xlsx,.xls,.csv,.txt,.md,.png,.jpg,.jpeg,.webp,.gif,.xml,.mpp', onFiles: (f) => { files = files.concat(f); list(); } });
       const list = () => { $('#fl', root).innerHTML = files.map((f, i) => `<div class="fi">${icon('file')}<span class="grow">${esc(f.name)}</span><button class="btn ghost icon sm" data-rm="${i}">${icon('x')}</button></div>`).join(''); $('#upGo', root).disabled = !files.length; $$('[data-rm]', root).forEach((b) => (b.onclick = () => { files.splice(Number(b.dataset.rm), 1); list(); })); };
       list();
       $('#upGo', root).onclick = async () => {

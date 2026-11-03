@@ -1652,6 +1652,15 @@ function runChecks({ items, project, docs }) {
   const pct = by('milestone').filter((i) => i.data.percent != null).reduce((a, i) => a + Number(i.data.percent), 0);
   if (by('milestone').some((i) => i.data.percent != null) && !(payAmt && ref && Math.abs(payAmt - ref) < 1)) add('pct', Math.abs(pct - 100) < 0.01 ? 'Pass' : 'Warn', 'Payment percentages add up to 100%', `Payment shares total ${Math.round(pct * 100) / 100}%.`);
 
+  // Every payment line should match a deliverable in the proposal
+  const dels = by('deliverable'), pays = by('milestone');
+  if (dels.length && pays.length) {
+    const numSet = (x) => [...new Set(String(x || '').match(/\d+/g) || [])].sort().join(',');
+    const match = (a, b) => { const na = numSet(a), nb = numSet(b); if (na && nb && na !== nb) return false; return similarity(a, b) >= 0.5 || similarity(b, a) >= 0.5; };
+    const orphan = pays.filter((m) => !dels.some((d) => match(m.title.replace(/^payment[:\s-]*/i, ''), d.title)));
+    add('map', orphan.length ? 'Warn' : 'Pass', 'Every payment milestone matches a deliverable', orphan.length ? `${orphan.length} payment lines have no matching deliverable in the technical proposal: ${orphan.slice(0, 3).map((x) => x.title).join(', ')}.` : 'Each payment line is tied to a deliverable.');
+  }
+
   // Dates
   const award = (fieldVals('award_date')[0] || {}).data;
   const awardIso = award && validIso(award.value) ? award.value : validIso(project.award_date) ? project.award_date : null;
@@ -1857,7 +1866,7 @@ Use only ids from the lists. A BOQ, delivery note, handover or acceptance record
   return { updates, engine: 'rules' };
 }
 
-module.exports = { hasKey, claude, claudeJSON, extractText, classify, analyzeDocument, runChecks, synthesizeSchedule, weeksToDates, interpretMessage, interpretEvidence, similarity, tokens, parseDate, parseAmount, findCurrency, MODEL };
+module.exports = { hasKey, claude, claudeJSON, splitParts, quoteFound, normQuote, ready: () => aiReady, extractText, classify, analyzeDocument, runChecks, synthesizeSchedule, weeksToDates, interpretMessage, interpretEvidence, similarity, tokens, parseDate, parseAmount, findCurrency, MODEL };
 ;return module.exports})();
 window.__Reports=(function(){var module={exports:{}};var exports=module.exports;var process={env:{}};var require=function(n){if(n==='./schedule')return window.__Sched;if(n==='./ai')return window.__AI;if(n==='docx')return new Proxy({},{get:function(){return function(){}}});return {}};
 // Report and document generation: default and custom templates, progress reports

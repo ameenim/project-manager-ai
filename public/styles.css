@@ -846,3 +846,22 @@ input.te-name { font-size: var(--fs-heading); font-weight: 650; padding: 10px 12
 .dw-bar .btn.sm { min-height: 39px; padding: 6px 12px; border-radius: 8px; font-size: var(--fs-body); font-weight: 500; }
 .dw-bar .btn.sm .i { width: 16px; height: 16px; }
 .dw-bar .btn.sm[aria-expanded="true"] { background: var(--primary-soft); color: var(--primary); border-color: var(--primary); }
+
+/* Analysis loading page */
+.ap-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 28px; align-items: start; }
+.ap-steps { display: flex; flex-direction: column; gap: 4px; }
+.ap-step { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; border: 1px solid transparent; opacity: .55; transition: opacity .25s, background .25s; }
+.ap-step.active, .ap-step.done { opacity: 1; }
+.ap-step.active { background: var(--surface-2); border-color: var(--border); }
+.ap-ic { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 600; border: 1px solid var(--border); background: var(--surface); color: var(--muted); flex: none; }
+.ap-ic.done { background: var(--success, #16a34a); border-color: transparent; color: #fff; }
+.ap-ic.done svg { width: 14px; height: 14px; }
+.ap-ic.act { border-color: var(--primary); }
+.ap-conf { padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); }
+.ap-big { font-size: 44px; font-weight: 700; line-height: 1.1; margin: 4px 0 2px; }
+.ap-bar { display: grid; grid-template-columns: 110px 1fr 42px; gap: 8px; align-items: center; margin-top: 8px; }
+.ap-bar .progress { position: relative; height: 6px; border-radius: 99px; background: var(--border); overflow: hidden; bottom: auto; transform: none; }
+.ap-bar .progress > i { display: block; height: 100%; border-radius: 99px; background: var(--primary); transition: width .5s; }
+.ap-bar b { text-align: end; }
+.ap-big.hi, .ap-bar b.hi { color: var(--success, #16a34a); } .ap-big.mid, .ap-bar b.mid { color: var(--warning, #d97706); } .ap-big.lo, .ap-bar b.lo { color: var(--danger, #dc2626); }
+@media (max-width: 800px) { .ap-grid { grid-template-columns: 1fr; } }

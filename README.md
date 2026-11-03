@@ -33,3 +33,13 @@ The `public` folder holds the whole app: `index.html`, `styles.css`, the JavaScr
 ## Notes
 
 The demo data lives in `public/seed.js` and the in browser API in `public/mock.js`. Downloads are turned off in demo mode. To connect a real backend, replace the mock API calls in `mock.js` with real endpoints.
+
+
+## How documents are analyzed
+
+1. Ingestion and Parsing. The server reads PDF (scans through Claude vision), Word (tables kept), PowerPoint, Excel, pictures, Project XML and text. Old .doc, .ppt and .mpp files get an instruction to save in the newer format.
+2. Retrieval. Each document gets a role: technical proposal, financial proposal, contract, award letter, purchase order or schedule file. The role decides what it may supply.
+3. Contextual Analysis. Claude confirms the role and summarizes the document.
+4. Analyzing. Every part of every page is read with a prompt for that role. Project info comes from all documents, deliverables and requirements from technical proposals and contracts, payment milestones from financial proposals, purchase orders and contracts, and the schedule from technical proposals and Project XML. Every item must carry a quote that is found in the text.
+5. Response Generation. One schedule with phases and dependencies is built, project risks are analyzed from the whole set, and plain code checks run (value, payments, dates).
+6. Filling project data. Items with confidence of 0.8 or more from AI reading are confirmed. The rest wait in the Review tab. The rule based fallback is never filled in automatically.

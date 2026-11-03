@@ -38,7 +38,7 @@
 
   function summaryCells(kind, it, p) {
     const d = it.data;
-    const src = `<div class="small muted">${esc(it.doc_name || t('manual'))}${d.also_in && d.also_in.length ? ` +${d.also_in.length}` : ''}</div>`;
+    const src = `<div class="small muted">${esc(it.doc_name || (d.analysis ? t('ai_analysis') : t('manual')))}${d.also_in && d.also_in.length ? ` +${d.also_in.length}` : ''}</div>`;
     if (kind === 'field') {
       const v = d.field === 'value' ? money(d.value, p.currency) : esc(d.value);
       return [`<b>${t('fld_' + d.field)}</b>`, `${v}${d.conflict ? ` <span class="chip amber">${t('conflict')}</span>` : ''}`, src];
@@ -85,8 +85,66 @@
       ${checks ? `<div><b>${t('plan_checks')}</b>${checks}</div>` : ''}</div>`;
   }
 
+  // ---------- loading page shown while documents are analyzed ----------
+  const CONF_CLS = (c) => (c == null ? '' : c >= 0.85 ? 'hi' : c >= 0.7 ? 'mid' : 'lo');
+  const pct = (c) => (c == null ? '–' : Math.round(c * 100) + '%');
+  function confBar(label, c) {
+    return `<div class="ap-bar"><span class="small">${label}</span><div class="progress"><i style="width:${c == null ? 0 : Math.round(c * 100)}%"></i></div><b class="small conf ${CONF_CLS(c)}">${pct(c)}</b></div>`;
+  }
+  function analysisPage(p) {
+    const an = p.analysis || { stages: [], docs: [], confidence: {} };
+    const fin = an.finished && !p.analyzing;
+    const cf = an.confidence || {};
+    const rows = (an.stages || []).map((st, i) => {
+      const ic = st.status === 'done' ? `<span class="ap-ic done">${icon('check')}</span>` : st.status === 'active' ? '<span class="ap-ic act"><span class="spinner" style="width:14px;height:14px;border-width:2px"></span></span>' : `<span class="ap-ic">${i + 1}</span>`;
+      return `<div class="ap-step ${st.status}">${ic}<div class="grow"><b>${t('stage_' + st.key)}</b>${st.detail ? `<div class="small muted">${esc(st.detail)}</div>` : ''}</div></div>`;
+    }).join('');
+    const kinds = [['info', 'kind_field'], ['deliverable', 'kind_deliverable'], ['requirement', 'kind_requirement'], ['payment', 'kind_milestone'], ['schedule', 'kind_schedule'], ['risk', 'kind_risk']];
+    const bars = kinds.map(([k, lab]) => confBar(t(lab), (cf.by || {})[k])).join('');
+    const files = (an.docs || []).map((d) => {
+      const found = d.counts ? d.counts.deliverable + d.counts.requirement + d.counts.risk + d.counts.milestone + d.counts.schedule + d.counts.field : 0;
+      const detail = [d.role_label, d.status === 'reading' && d.progress ? d.progress : '', d.message, d.status === 'done' || d.status === 'partial' ? t('an_found', { n: found }) : '', d.coverage ? t('an_coverage', { sent: d.coverage.chars_sent.toLocaleString('en-US'), total: d.coverage.chars_total.toLocaleString('en-US') }) : ''].filter(Boolean).map((x) => String(x).replace(/\.$/, '')).join('. ');
+      return `<div class="list-item"><div class="grow"><b>${esc(d.filename)}</b>${detail ? `<div class="small muted">${esc(detail)}</div>` : ''}</div><span class="chip ${AN_CHIP[d.status] || ''}">${d.status === 'reading' ? '<span class="spinner" style="width:12px;height:12px;border-width:2px"></span>' : ''}${t(AN_KEY[d.status] || 'an_waiting')}</span></div>`;
+    }).join('');
+    const f = an.filled;
+    const done = fin ? `<div class="card mb ap-done"><div class="card-head"><h3>${t('ap_done')}</h3></div>
+      <p>${f ? t('ap_filled', { a: f.confirmed, b: f.review }) : ''}</p>
+      ${an.synthesis && an.synthesis.summary ? `<p class="small">${esc(an.synthesis.summary)}</p>` : ''}
+      ${f && f.conflicts && f.conflicts.length ? `<ul class="small muted">${f.conflicts.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>` : ''}
+      <div class="row gap"><button class="btn primary" id="apReview">${icon('check')}${t('ap_review')}</button><a class="btn" href="#/p/${p.id}/schedule" id="apSched">${icon('cal')}${t('open_schedule')}</a></div></div>` : '';
+    return `<div class="page">
+      <div class="card mb"><div class="card-head"><h3>${fin ? t('ap_done') : t('ap_title')}</h3><span class="small muted">${esc(p.name)}</span></div>
+        <div class="ap-grid"><div class="ap-steps">${rows}</div>
+          <div class="ap-conf"><div class="small muted">${t('ap_conf')}</div><div class="ap-big conf ${CONF_CLS(cf.overall)}">${pct(cf.overall)}</div>
+            ${cf.coverage != null ? `<div class="small muted mb">${t('ap_cov', { n: Math.round(cf.coverage * 100) })}</div>` : ''}${bars}</div></div></div>
+      ${done}
+      <div class="card"><div class="card-head"><h3>${t('an_title')}</h3></div>${files}</div></div>`;
+  }
+
   // ---------- tab ----------
   window.PM.views.tab_review = async function (root, p, q, token) {
+    const seenKey = p.analysis ? `an_seen_${p.id}_${p.analysis.at}` : null;
+    const seen = () => { try { return sessionStorage.getItem(seenKey); } catch (e) { return null; } };
+    if (p.analysis && p.analysis.stages && p.analysis.stages.length && (p.analyzing || (p.analysis.finished && p.analysis.show_summary && !seen()))) {
+      const show = (pp) => {
+        root.innerHTML = analysisPage(pp);
+        const go = $('#apReview', root);
+        if (go) go.onclick = () => { try { sessionStorage.setItem(seenKey, '1'); } catch (e) { /* ignore */ } window.PM.projectView(p.id, 'review', new URLSearchParams()); };
+        const sc = $('#apSched', root);
+        if (sc) sc.addEventListener('click', () => { try { sessionStorage.setItem(seenKey, '1'); } catch (e) { /* ignore */ } });
+      };
+      show(p);
+      if (p.analyzing) {
+        const poll = async () => {
+          if (window.PM.stale(token)) return;
+          const np = (await api('GET', `/api/projects/${p.id}`)).project;
+          if (np.analyzing) { show(np); setTimeout(poll, 900); }
+          else window.PM.projectView(p.id, 'review', new URLSearchParams());
+        };
+        setTimeout(poll, 900);
+      }
+      return;
+    }
     let items = (await api('GET', `/api/projects/${p.id}/items`)).items;
     let kind = q.get('kind') || sessionStorage.getItem('rv_kind') || null;
     let status = sessionStorage.getItem('rv_status') || 'all';

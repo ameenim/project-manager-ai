@@ -59,25 +59,105 @@ function limited(req, max) {
 }
 
 // ---------- text extraction ----------
+const IMAGE_TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' };
+const TRANSCRIBE_SYSTEM = 'You transcribe project documents. Write all text you can see in reading order, exactly as written, without commentary. Keep tables as one line per row with cells separated by " | ". Keep headings on their own line. For a Gantt chart or timeline picture, list every task label and every date you can actually read. If bars have no readable dates write "[chart bars have no readable dates]". Never guess or add dates. Write [illegible] for text you cannot read.';
+
+const xmlText = (x) => String(x || '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
+
+// Reads text out of a scan or picture with Claude vision. Needs the API key.
+async function transcribe(blocks) {
+  if (!process.env.ANTHROPIC_API_KEY) throw Object.assign(new Error('Reading pictures and scanned files needs the Anthropic API key, which is not set on the server.'), { status: 503 });
+  const r = await callClaude({ system: TRANSCRIBE_SYSTEM, content: [...blocks, { type: 'text', text: 'Transcribe this.' }], max_tokens: 16000 });
+  return r.text.trim();
+}
+
+// Scanned PDFs are split into small page groups so each reply stays complete.
+async function ocrPdf(buf) {
+  const { PDFDocument } = require('pdf-lib');
+  const src = await PDFDocument.load(buf, { ignoreEncryption: true });
+  const total = src.getPageCount();
+  const CHUNK = 5, MAX_CHUNKS = 14;
+  const ranges = [];
+  for (let i = 0; i < total && ranges.length < MAX_CHUNKS; i += CHUNK) ranges.push([i, Math.min(i + CHUNK, total)]);
+  const out = new Array(ranges.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < ranges.length) {
+      const idx = next++;
+      const [a, z] = ranges[idx];
+      const part = await PDFDocument.create();
+      (await part.copyPages(src, Array.from({ length: z - a }, (_, k) => a + k))).forEach((pg) => part.addPage(pg));
+      const data = Buffer.from(await part.save()).toString('base64');
+      out[idx] = await transcribe([{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data } }]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(3, ranges.length) }, worker));
+  const read = Math.min(total, ranges.length * CHUNK);
+  return { text: out.map((t, i) => `[Pages ${ranges[i][0] + 1} to ${ranges[i][1]}]\n${t}`).join('\n\n'), pages: total, pages_read: read };
+}
+
+function htmlToText(html) {
+  return xmlText(String(html)
+    .replace(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi, (m, inner) => inner.replace(/<\/p>\s*<p[^>]*>/gi, ' ').replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, '').trim() + ' | ')
+    .replace(/<\/tr>/gi, '\n')
+    .replace(/<h([1-6])[^>]*>/gi, '\n# ')
+    .replace(/<\/(p|h[1-6]|li|table)>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/[ \t]+\|[ \t]*\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n'));
+}
+
+async function extractPptx(buf) {
+  const JSZip = require('jszip');
+  const zip = await JSZip.loadAsync(buf);
+  const num = (n) => Number((n.match(/(\d+)\.xml$/) || [])[1] || 0);
+  const slides = Object.keys(zip.files).filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n)).sort((a, b) => num(a) - num(b));
+  const parts = [];
+  for (const n of slides) {
+    const xml = await zip.file(n).async('string');
+    const rows = [...xml.matchAll(/<a:tr[ >][\s\S]*?<\/a:tr>/g)].map((m) => m[0]);
+    const tableText = rows.map((r) => [...r.matchAll(/<a:tc[ >][\s\S]*?<\/a:tc>/g)].map((c) => [...c[0].matchAll(/<a:t>([^<]*)<\/a:t>/g)].map((t) => t[1]).join(' ').trim()).join(' | '));
+    const body = xml.replace(/<a:tbl>[\s\S]*?<\/a:tbl>/g, '');
+    const paras = [...body.matchAll(/<a:p[ >][\s\S]*?<\/a:p>/g)].map((p) => [...p[0].matchAll(/<a:t>([^<]*)<\/a:t>/g)].map((t) => t[1]).join('')).map((t) => xmlText(t).trim()).filter(Boolean);
+    const notesName = n.replace('slides/slide', 'notesSlides/notesSlide');
+    let notes = '';
+    if (zip.file(notesName)) notes = [...(await zip.file(notesName).async('string')).matchAll(/<a:t>([^<]*)<\/a:t>/g)].map((t) => xmlText(t[1])).join(' ').trim();
+    parts.push(`Slide ${num(n)}\n${paras.join('\n')}${tableText.length ? '\n' + tableText.map(xmlText).join('\n') : ''}${notes ? '\nNotes: ' + notes : ''}`);
+  }
+  return { text: parts.join('\n\n'), slides: slides.length, kind: 'pptx' };
+}
+
 async function extractText(buf, name) {
   const ext = path.extname(name || '').toLowerCase();
   if (ext === '.pdf') {
     const { PDFParse } = require('pdf-parse');
     const parser = new PDFParse({ data: new Uint8Array(buf) });
+    let pages = 0, text = '';
     try {
       const r = await parser.getText();
-      const pages = r.total || (r.pages ? r.pages.length : 0) || 0;
-      const text = (r.text || '').replace(/^\s*-- \d+ of \d+ --\s*$/gm, '');
-      return { text, pages, kind: 'pdf' };
+      pages = r.total || (r.pages ? r.pages.length : 0) || 0;
+      text = (r.text || '').replace(/^\s*-- \d+ of \d+ --\s*$/gm, '');
     } finally {
       await parser.destroy().catch(() => {});
     }
+    // A PDF with almost no text per page is a scan. It is read with vision instead of being rejected.
+    if (text.trim().length / Math.max(pages, 1) < 40) {
+      const o = await ocrPdf(buf);
+      return { text: o.text, pages: o.pages, pages_read: o.pages_read, kind: 'pdf', ocr: true };
+    }
+    return { text, pages, kind: 'pdf' };
+  }
+  if (IMAGE_TYPES[ext]) {
+    const t = await transcribe([{ type: 'image', source: { type: 'base64', media_type: IMAGE_TYPES[ext], data: buf.toString('base64') } }]);
+    return { text: t, kind: 'image', ocr: true };
   }
   if (ext === '.docx') {
     const mammoth = require('mammoth');
-    const r = await mammoth.extractRawText({ buffer: buf });
-    return { text: r.value || '', kind: 'docx' };
+    const r = await mammoth.convertToHtml({ buffer: buf });
+    return { text: htmlToText(r.value || ''), kind: 'docx' };
   }
+  if (ext === '.pptx') return extractPptx(buf);
   if (ext === '.xlsx' || ext === '.xls') {
     const XLSX = require('xlsx');
     const wb = XLSX.read(buf, { type: 'buffer', cellDates: true });
@@ -90,8 +170,10 @@ async function extractText(buf, name) {
     }
     return { text: parts.join('\n'), sheets: wb.SheetNames.length, kind: 'xlsx' };
   }
-  if (['.txt', '.md', '.csv', '.tsv', '.json', '.html', '.htm', '.eml', ''].includes(ext)) return { text: buf.toString('utf8'), kind: 'text' };
-  throw Object.assign(new Error(`The ${ext} format is not supported. Use PDF, Word, Excel or text files.`), { status: 415 });
+  if (ext === '.mpp') throw Object.assign(new Error('Microsoft Project .mpp files cannot be read directly. In Project choose File, Save As, then XML Format, and upload the .xml file.'), { status: 415 });
+  if (ext === '.doc' || ext === '.ppt') throw Object.assign(new Error(`Old ${ext} files cannot be read. Save the file as ${ext}x and upload it again.`), { status: 415 });
+  if (['.txt', '.md', '.csv', '.tsv', '.json', '.html', '.htm', '.eml', '.xml', ''].includes(ext)) return { text: buf.toString('utf8'), kind: 'text' };
+  throw Object.assign(new Error(`The ${ext} format is not supported. Use PDF, Word, PowerPoint, Excel, pictures, Project XML or text files.`), { status: 415 });
 }
 
 async function handleExtract(req, res, url) {
@@ -104,17 +186,8 @@ async function handleExtract(req, res, url) {
   try {
     const out = await extractText(buf, name);
     const text = (out.text || '').replace(/\u0000/g, '').trim();
-    if (!text) {
-      const why = out.kind === 'pdf'
-        ? 'No text found. This PDF looks like a scan or image, so it cannot be read. Upload a text based PDF or a Word file.'
-        : 'No text found in this file.';
-      return send(res, 422, { error: why });
-    }
-    // A PDF with very little text per page is almost certainly a scan with a few stray characters.
-    if (out.kind === 'pdf' && out.pages && text.length / out.pages < 40) {
-      return send(res, 422, { error: `Only ${text.length} characters found across ${out.pages} pages. This PDF looks like a scan, so it cannot be read.` });
-    }
-    return send(res, 200, { text, chars: text.length, pages: out.pages || null, kind: out.kind });
+    if (!text) return send(res, 422, { error: out.ocr ? 'The AI could not find any readable text in this file.' : 'No text found in this file.' });
+    return send(res, 200, { text, chars: text.length, pages: out.pages || out.slides || null, pages_read: out.pages_read || null, kind: out.kind, ocr: !!out.ocr });
   } catch (e) {
     const missing = e && e.code === 'MODULE_NOT_FOUND';
     console.error('extract failed:', name, e.message);
@@ -125,7 +198,7 @@ async function handleExtract(req, res, url) {
 // ---------- Claude proxy ----------
 async function callClaude(payload) {
   const key = process.env.ANTHROPIC_API_KEY;
-  const body = JSON.stringify({ model: MODEL, max_tokens: payload.max_tokens, system: payload.system, messages: [{ role: 'user', content: payload.user }] });
+  const body = JSON.stringify({ model: MODEL, max_tokens: payload.max_tokens, system: payload.system, messages: [{ role: 'user', content: payload.content || payload.user }] });
   let last;
   for (let attempt = 0; attempt < 2; attempt++) {
     const r = await fetch(API_URL, {

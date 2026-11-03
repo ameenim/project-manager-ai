@@ -320,7 +320,7 @@
       <div><div style="font-weight:600;margin-bottom:4px">${t('attach_docs')}</div><div class="small muted" style="margin-bottom:8px">${t('attach_docs_hint')}</div><div id="npDrop"></div><div class="filelist" id="npFiles"></div></div>
       <div class="banner">${icon('spark')}<div class="small">${t('np_explain')}</div></div></form>`, footer: `<button class="btn" data-close>${t('cancel')}</button><button class="btn primary" id="npGo">${icon('spark')}${t('create_analyze')}</button>` });
     const list = () => { m.$('#npFiles').innerHTML = files.map((f, i) => `<div class="fi">${icon('file')}<span class="grow">${esc(f.name)}</span><span class="small muted">${(f.size / 1024).toFixed(0)} KB</span><button type="button" class="btn ghost icon sm" data-rm="${i}">${icon('x')}</button></div>`).join(''); m.$$('[data-rm]').forEach((b) => (b.onclick = () => { files.splice(Number(b.dataset.rm), 1); list(); })); };
-    dropzone(m.$('#npDrop'), { accept: '.pdf,.docx,.txt,.md,.xlsx,.xls,.csv', onFiles: (f) => { files = files.concat(f).slice(0, 12); list(); } });
+    dropzone(m.$('#npDrop'), { accept: '.pdf,.docx,.pptx,.xlsx,.xls,.csv,.txt,.md,.png,.jpg,.jpeg,.webp,.gif,.xml,.mpp', onFiles: (f) => { files = files.concat(f).slice(0, 12); list(); } });
     const go = async () => {
       const name = m.$('#npName').value.trim();
       if (!name) { m.$('#npName').focus(); return; }

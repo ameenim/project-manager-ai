@@ -3,7 +3,7 @@
    report generator and rule based document reader, so behavior matches the product. */
 (function () {
   'use strict';
-  const S = window.__Sched, R = window.__Reports, AI = window.__AI;
+  const S = window.__Sched, R = window.__Reports, AI = window.__AI, Pipe = window.__Pipe;
   // The demo follows the real calendar: today is the viewer's date, and the sample project dates move with it in whole weeks so working days stay aligned.
   const RAW = window.DEMO_SEED;
   const TODAY = new Date().toLocaleDateString('en-CA');
@@ -217,11 +217,11 @@
       let dur = d.duration_days || 1;
       if (s0 && e0) dur = Math.max(1, S.countWork(s0, e0, c));
       if (d.level === 'milestone') dur = 1;
-      const topName = (nm) => P.tasks.find((t) => !t.parent_id && similarity(t.name, nm) >= 0.9 && similarity(nm, t.name) >= 0.9);
+      const topName = (nm) => [...P.tasks].reverse().find((t) => similarity(t.name, nm) >= 0.9 && similarity(nm, t.name) >= 0.9);
       const mkTask = (o) => { const t = { id: nid(), parent_id: null, position: P.tasks.reduce((m, x) => Math.max(m, x.position ?? 0), 0) + 1, name: '', start, duration: 1, progress: 0, assignee: null, deps: [], deliverable_id: null, b_start: null, b_end: null, notes: null, is_milestone: 0, jira_key: null, color: null, ...o }; P.tasks.push(t); return t; };
       let parent = null;
-      if (d.level !== 'phase' && d.phase) parent = topName(d.phase) || mkTask({ name: d.phase, duration: 1 });
-      const dupe = d.level === 'phase' ? topName(item.title) : null;
+      if (d.phase) parent = topName(d.phase) || mkTask({ name: d.phase, duration: 1 });
+      const dupe = d.level === 'phase' && !d.phase ? topName(item.title) : null;
       const t = dupe || mkTask({ name: item.title, parent_id: parent ? parent.id : null, duration: dur, is_milestone: d.level === 'milestone' ? 1 : 0, notes: [d.note, item.quote ? `Source: "${item.quote}"` : null].filter(Boolean).join(' ') || null });
       if (dupe) { t.start = start; t.duration = dur; }
       const deps = [];
@@ -353,11 +353,11 @@
         ex.push(insertItem(P, kind, make(r), doc.id)); counts[kind]++;
       }
     };
-    dedupe('deliverable', a.deliverables, (r) => r.title, 0.8, (r) => ({ title: r.title, description: r.description, data: { due_date: r.due_date || null, due_dates: r.due_date ? [r.due_date] : [], amount: Number(r.amount) > 0 ? Number(r.amount) : null }, confidence: r.confidence, quote: r.quote }), (dup, r) => {
+    dedupe('deliverable', a.deliverables, (r) => r.title, 0.8, (r) => ({ title: r.title, description: r.description, data: { due_date: r.due_date || null, due_dates: r.due_date ? [r.due_date] : [], amount: Number(r.amount) > 0 ? Number(r.amount) : null, category: r.category || null, week: r.week ?? null }, confidence: r.confidence, quote: r.quote }), (dup, r) => {
       if (r.due_date) { dup.data.due_dates = [...new Set([...(dup.data.due_dates || (dup.data.due_date ? [dup.data.due_date] : [])), r.due_date])]; if (!dup.data.due_date) dup.data.due_date = r.due_date; }
       if (Number(r.amount) > 0 && !dup.data.amount) dup.data.amount = Number(r.amount);
     });
-    dedupe('requirement', a.requirements, (r) => r.description || r.title, 0.8, (r) => ({ title: (r.title || '').slice(0, 120), description: r.description || r.title, data: { priority: r.priority || 'Should' }, confidence: r.confidence, quote: r.quote }));
+    dedupe('requirement', a.requirements, (r) => r.description || r.title, 0.8, (r) => ({ title: (r.title || '').slice(0, 120), description: r.description || r.title, data: { priority: r.priority || 'Should', type: r.type || null }, confidence: r.confidence, quote: r.quote }));
     dedupe('risk', a.risks, (r) => r.title, 0.7, (r) => ({ title: r.title, description: r.description || '', data: { probability: r.probability || 'Medium', impact: r.impact || 'Medium', mitigation: r.mitigation || '' }, confidence: r.confidence, quote: r.quote }));
     dedupe('schedule', a.schedule, (r) => r.name, 0.85, (r) => ({ title: r.name, data: { start: r.start || null, end: r.end || null, duration_days: r.duration_days || null, level: r.level || 'task', phase: r.phase || null, start_week: r.start_week ?? null, end_week: r.end_week ?? null, depends_on: Array.isArray(r.depends_on) ? r.depends_on : [] }, confidence: r.confidence, quote: r.quote }));
     const ms = live('milestone');
@@ -370,7 +370,7 @@
         if (dup.data.amount == null && m.amount != null) dup.data.amount = m.amount;
         counts.merged++; continue;
       }
-      ms.push(insertItem(P, 'milestone', { title: m.title, data: { percent: m.percent ?? null, amount: m.amount ?? null, due_date: m.due_date || null }, confidence: m.confidence, quote: m.quote }, doc.id)); counts.milestone++;
+      ms.push(insertItem(P, 'milestone', { title: m.title, data: { percent: m.percent ?? null, amount: m.amount ?? null, due_date: m.due_date || null, trigger: m.trigger || null }, confidence: m.confidence, quote: m.quote }, doc.id)); counts.milestone++;
     }
     return counts;
   }
@@ -385,58 +385,176 @@
     cutoff: 'The AI reply could not be read. Use Reanalyze to try again. Only a basic rule based reading was done.',
     upstream: 'The AI service could not be reached. Use Reanalyze to try again. Only a basic rule based reading was done.',
   };
-  // Runs in the background. P.p.analyzing drives the progress banner and P.analysis holds one status row per file.
+  // ---------- analysis pipeline ----------
+  // Six visible stages. The Review tab shows them while P.p.analyzing is on.
+  const STAGES = [['ingest', 'Ingestion and Parsing'], ['retrieve', 'Retrieval'], ['context', 'Contextual Analysis'], ['analyze', 'Analyzing'], ['generate', 'Response Generation'], ['fill', 'Filling project data']];
+  const FILL_AT = 0.8;
+  function setStage(P, key, status, detail) {
+    const st = P.analysis.stages.find((x) => x.key === key);
+    if (!st) return;
+    st.status = status;
+    if (detail != null) st.detail = detail;
+    if (status === 'active') { st.started = Date.now(); P.analysis.stage = key; }
+  }
+  const refreshConfidence = (P) => { P.analysis.confidence = Pipe.confidence(P.items, P.analysis.docs); };
+  const countIn = (c) => c.deliverable + c.requirement + c.risk + c.milestone + c.schedule + c.field;
+
   async function analyzeDocs(P, docs) {
-    const run = { at: nowTs(), docs: docs.map((d) => ({ id: d.id, filename: d.filename, status: 'waiting', message: '', counts: null, coverage: null, engine: null, progress: '' })) };
+    const run = { at: nowTs(), finished: false, show_summary: false, stage: 'ingest', stages: STAGES.map(([key, label]) => ({ key, label, status: 'waiting', detail: '' })), confidence: { overall: null, by: {}, coverage: null }, filled: null, docs: docs.map((d) => ({ id: d.id, filename: d.filename, status: 'waiting', message: '', counts: null, coverage: null, engine: null, progress: '', role: null, role_label: null })) };
     P.analysis = run;
     P.p.analyzing = 1;
+    const rowOf = (d) => run.docs.find((r) => r.id === d.id);
     try {
-      for (let i = 0; i < docs.length; i++) {
-        const doc = docs[i];
-        const st = run.docs[i];
-        const text = P.texts[doc.id] || '';
-        if (!text.trim()) {
-          st.status = 'failed';
-          st.message = doc.read_error || 'No text could be read from this file.';
-          audit(P, 'AI', 'document_failed', { summary: `Could not read ${doc.filename}. ${st.message}` });
-          continue;
+      // 1. Ingestion and parsing
+      setStage(P, 'ingest', 'active', `Reading ${docs.length} file${docs.length === 1 ? '' : 's'}`);
+      let n = 0;
+      for (const doc of docs) {
+        const st = rowOf(doc);
+        const f = P._files && P._files[doc.id];
+        if (f) {
+          st.status = 'reading'; st.progress = 'reading the file';
+          const r = await readFile(f);
+          P.texts[doc.id] = r.text || '';
+          doc.chars = (r.text || '').length; doc.pages = r.pages || null; doc.read_error = r.error || null; doc.ocr = !!r.ocr;
+          doc.kind = AI.classify(doc.filename, r.text || '');
+          delete P._files[doc.id];
+          audit(P, ACTOR, 'document_uploaded', { summary: `Uploaded ${doc.filename} (${doc.kind})` });
         }
+        n++;
+        run.stages[0].detail = `${n} of ${docs.length} files read${doc.pages ? `, ${doc.pages} pages` : ''}`;
+        const text = P.texts[doc.id] || '';
+        if (!text.trim()) { st.status = 'failed'; st.message = doc.read_error || 'No text could be read from this file.'; audit(P, 'AI', 'document_failed', { summary: `Could not read ${doc.filename}. ${st.message}` }); }
+        else st.status = 'waiting';
+      }
+      const readable = docs.filter((d) => (P.texts[d.id] || '').trim());
+      setStage(P, 'ingest', 'done', `${readable.length} of ${docs.length} files read, ${readable.reduce((a, d) => a + (d.chars || 0), 0).toLocaleString('en-US')} characters`);
+
+      // 2. Retrieval: decide what each document may supply and pull out the passages that matter
+      setStage(P, 'retrieve', 'active', 'Matching documents to the data they can supply');
+      let passageCount = 0;
+      for (const doc of readable) {
+        const text = P.texts[doc.id];
+        const r = Pipe.detectRole(doc.filename, text);
+        doc.role = r.role; doc.role_conf = r.confidence;
+        const st = rowOf(doc); st.role = r.role; st.role_label = Pipe.ROLE_LABEL[r.role];
+        passageCount += Pipe.passages(text).length;
+      }
+      setStage(P, 'retrieve', 'done', `${readable.map((d) => Pipe.ROLE_LABEL[d.role]).join(', ') || 'No documents'}. ${passageCount} passages about assumptions and dependencies indexed`);
+
+      // 3. Contextual analysis: confirm the role and summarize each document
+      setStage(P, 'context', 'active', 'Understanding each document');
+      await AI.ready();
+      const aiOn = AI.hasKey();
+      let aiError = null;
+      if (aiOn) {
+        await Promise.all(readable.filter((d) => d.role !== 'schedule').map(async (doc) => {
+          try {
+            const c = await Pipe.context(doc, P.texts[doc.id], doc.role);
+            doc.role = c.role; doc.summary = c.summary || doc.summary || ''; if (c.project_name && !P.p.ai_name) P.p.ai_name = c.project_name;
+            const st = rowOf(doc); st.role = doc.role; st.role_label = Pipe.ROLE_LABEL[doc.role];
+          } catch (e) { aiError = aiError || { code: e.code || 'upstream', message: e.message }; }
+        }));
+      }
+      setStage(P, 'context', 'done', aiOn && !aiError ? readable.map((d) => `${d.filename}: ${Pipe.ROLE_LABEL[d.role]}`).join('. ') : 'Basic role detection only');
+
+      // 4. Analyzing: read every part of every document with the prompt that fits its role
+      setStage(P, 'analyze', 'active', 'Reading every page');
+      let docNo = 0;
+      for (const doc of readable) {
+        const st = rowOf(doc);
+        const text = P.texts[doc.id];
+        docNo++;
         st.status = 'reading';
         try {
-          const a = await AI.analyzeDocument({ text, filename: doc.filename, onProgress: (p) => { st.progress = `part ${p.done} of ${p.total}`; } });
-          if (a.kind && a.kind !== 'other') doc.kind = a.kind;
-          doc.summary = a.summary || '';
-          const c = insertExtracted(P, doc, a);
-          const found = c.deliverable + c.requirement + c.risk + c.milestone + c.schedule + c.field;
-          st.counts = c; st.coverage = a.coverage || null; st.engine = a.engine; st.progress = '';
-          if (a.engine === 'rules') {
-            st.status = 'basic';
-            st.message = AI_REASON[(a.ai_error && a.ai_error.code) || 'upstream'] || AI_REASON.upstream;
-          } else if (a.coverage && a.coverage.parts_failed) {
-            st.status = 'partial';
-            st.message = `Part of this document could not be read by the AI (${a.coverage.parts_failed} of ${a.coverage.parts} parts). Use Reanalyze to try again.`;
-          } else if (!found && !c.merged) {
-            st.status = 'empty';
-            st.message = 'The document was read in full but no deliverables, schedule, payments or risks were found in it.';
+          let a, scope = Pipe.SCOPE[doc.role] || Pipe.SCOPE.other;
+          if (doc.role === 'schedule') {
+            const m = Pipe.scheduleFromMsp(text);
+            a = { engine: 'msp', fields: [m.start ? { field: 'start_date', value: m.start, confidence: 0.98, quote: m.items[0].quote } : null, m.end ? { field: 'end_date', value: m.end, confidence: 0.98, quote: m.items[m.items.length - 1].quote } : null].filter(Boolean), schedule: m.items, deliverables: [], requirements: [], milestones: [], coverage: { chars_total: text.length, chars_sent: text.length, parts: 1, parts_read: 1, parts_failed: 0, dropped_no_quote: 0 } };
+            doc.summary = `Microsoft Project schedule with ${m.items.length} tasks, ${m.start} to ${m.end}.`;
+          } else if (aiOn && !aiError) {
+            a = await Pipe.extractDoc({ text, filename: doc.filename, role: doc.role, onProgress: (p) => { st.progress = `part ${p.done} of ${p.total}`; } });
           } else {
-            st.status = 'done';
+            a = await AI.analyzeDocument({ text, filename: doc.filename, onProgress: () => {} });
+            const keep = { deliverables: 'deliverables', requirements: 'requirements', milestones: 'payments', schedule: 'schedule', fields: 'info' };
+            for (const [k, sec] of Object.entries(keep)) { if (!scope.includes(sec)) a[k] = []; else a[k] = (a[k] || []).slice(0, 40); }
+            a.risks = [];
+            if (!a.ai_error && aiError) a.ai_error = aiError;
           }
-          audit(P, 'AI', 'document_analyzed', { summary: `Analyzed ${doc.filename}: ${c.deliverable} deliverables, ${c.requirement} requirements, ${c.risk} risks, ${c.milestone} payment milestones, ${c.schedule} schedule lines${a.coverage ? `. Read ${a.coverage.chars_sent.toLocaleString('en-US')} of ${a.coverage.chars_total.toLocaleString('en-US')} characters` : ''}` });
+          if (!doc.summary) doc.summary = a.summary || '';
+          const c = insertExtracted(P, doc, a);
+          const found = countIn(c);
+          st.counts = c; st.coverage = a.coverage || null; st.engine = a.engine; st.progress = '';
+          if (a.engine === 'rules') { st.status = 'basic'; st.message = AI_REASON[(a.ai_error && a.ai_error.code) || 'upstream'] || AI_REASON.upstream; }
+          else if (a.coverage && a.coverage.parts_failed) { st.status = 'partial'; st.message = `Part of this document could not be read by the AI (${a.coverage.parts_failed} of ${a.coverage.parts} parts). Use Reanalyze to try again.`; }
+          else if (!found && !c.merged) { st.status = 'empty'; st.message = 'The document was read in full but nothing it is allowed to supply was found in it.'; }
+          else st.status = 'done';
+          refreshConfidence(P);
+          run.stages[3].detail = `Document ${docNo} of ${readable.length}: ${P.items.filter((i) => i.status !== 'ignored').length} items found so far`;
+          audit(P, 'AI', 'document_analyzed', { summary: `Analyzed ${doc.filename} as ${Pipe.ROLE_LABEL[doc.role]}: ${c.deliverable} deliverables, ${c.requirement} requirements, ${c.milestone} payment milestones, ${c.schedule} schedule lines${a.coverage ? `. Read ${a.coverage.chars_sent.toLocaleString('en-US')} of ${a.coverage.chars_total.toLocaleString('en-US')} characters` : ''}` });
         } catch (e) {
           console.error(e);
           st.status = 'failed'; st.progress = '';
-          st.message = 'Something went wrong while analyzing this file. Use Reanalyze to try again.';
+          st.message = e.code && AI_REASON[e.code] ? AI_REASON[e.code] : 'Something went wrong while analyzing this file. Use Reanalyze to try again.';
           audit(P, 'AI', 'document_failed', { summary: `Analysis failed for ${doc.filename}` });
         }
       }
-      try { if (docs.length) await reconcile(P); } catch (e) { console.error('reconcile failed', e); }
+      setStage(P, 'analyze', 'done', `${P.items.filter((i) => i.status !== 'ignored').length} items extracted from ${readable.length} documents`);
+
+      // 5. Response generation: one schedule, project risks, consistency checks
+      setStage(P, 'generate', 'active', 'Building the schedule');
+      try { if (readable.length) await reconcile(P); } catch (e) { console.error('reconcile failed', e); }
+      refreshConfidence(P);
+      setStage(P, 'generate', 'done', P.analysis.synthesis ? `${P.analysis.synthesis.checks.length} checks run, ${P.analysis.synthesis.phases} phases planned` : 'Checks run');
+
+      // 6. Fill the project
+      setStage(P, 'fill', 'active', 'Filling project data');
+      const filled = autofill(P);
+      refreshConfidence(P);
+      run.filled = filled;
+      setStage(P, 'fill', 'done', `${filled.confirmed} items filled in, ${filled.review} left for your review`);
     } finally {
       P.p.analyzing = 0;
+      run.finished = true;
+      run.show_summary = true;
+      for (const st of run.stages) if (st.status === 'active' || st.status === 'waiting') st.status = st.status === 'active' ? 'done' : 'skipped';
     }
+  }
+
+  // Puts the extracted data into the project. High confidence items are confirmed, the rest wait for review.
+  function autofill(P) {
+    const authority = (it) => { const d = P.documents.find((x) => x.id === it.doc_id); return (d && Pipe.AUTHORITY[d.role]) || 1; };
+    const out = { confirmed: 0, review: 0, kinds: {}, conflicts: [] };
+    // Only items read by the AI or taken from a schedule file are filled in. The rule based fallback is never trusted on its own.
+    const trusted = new Set(((P.analysis && P.analysis.docs) || []).filter((d) => d.engine === 'claude' || d.engine === 'msp').map((d) => d.id));
+    const ok = (it) => it.doc_id == null || trusted.has(it.doc_id);
+    const bump = (kind) => { out.confirmed++; out.kinds[kind] = (out.kinds[kind] || 0) + 1; };
+    for (const col of Object.keys(FIELD_LABEL)) {
+      const c = P.items.filter((i) => i.kind === 'field' && i.status === 'proposed' && i.data.field === col && ok(i)).sort((a, b) => authority(b) - authority(a) || (b.confidence || 0) - (a.confidence || 0));
+      if (!c.length || (c[0].confidence || 0) < 0.7) continue;
+      const alts = [...new Set(c.slice(1).map((x) => String(x.data.value)).filter((v) => v !== String(c[0].data.value)))];
+      if (alts.length) { c[0].data.alternatives = alts; out.conflicts.push(`${FIELD_LABEL[col]}: using ${c[0].data.value}, other documents say ${alts.join(', ')}`); }
+      confirmItem(P, c[0], 'AI'); bump('field');
+    }
+    for (const kind of ['deliverable', 'requirement', 'milestone', 'risk']) {
+      for (const it of P.items.filter((i) => i.kind === kind && i.status === 'proposed' && ok(i))) if ((it.confidence || 0) >= FILL_AT) { confirmItem(P, it, 'AI'); bump(kind); }
+    }
+    if (!P.tasks.length) {
+      for (const it of P.items.filter((i) => i.kind === 'schedule' && i.status === 'proposed' && ok(i)).sort((a, b) => a.id - b.id)) if ((it.confidence || 0) >= 0.7) { confirmItem(P, it, 'AI'); bump('schedule'); }
+    }
+    // Project dates the documents did not state are taken from the schedule that was built.
+    const dated = P.items.filter((i) => i.kind === 'schedule' && i.status === 'confirmed' && i.data.start && !i.data.note);
+    if (dated.length) {
+      const starts = dated.map((i) => i.data.start).sort(), ends = dated.map((i) => i.data.end || i.data.start).sort();
+      if (!P.p.start_date) { P.p.start_date = starts[0]; out.conflicts.push(`Start date taken from the schedule: ${starts[0]}`); }
+      if (!P.p.end_date) { P.p.end_date = ends[ends.length - 1]; out.conflicts.push(`End date taken from the schedule: ${ends[ends.length - 1]}`); }
+    }
+    out.review = P.items.filter((i) => i.status === 'proposed').length;
+    audit(P, 'AI', 'project_filled', { summary: `Filled the project: ${out.confirmed} items confirmed, ${out.review} waiting for review` });
+    return out;
   }
   // After every file is read: put weeks on the calendar, build one consolidated schedule, and run the plain code checks.
   async function reconcile(P) {
-    const docs = P.documents.filter((d) => d.summary || P.items.some((i) => i.doc_id === d.id));
+    const docs = P.documents.filter((d) => (P.texts[d.id] || '').trim() && (d.summary || P.items.some((i) => i.doc_id === d.id)));
     const view = () => P.items.map((i) => itemView(P, i));
     const fld = (f) => { const it = P.items.find((i) => i.kind === 'field' && i.data.field === f && i.status !== 'ignored'); return it ? it.data.value : null; };
     const proj = () => ({ start_date: P.p.start_date || fld('start_date'), end_date: P.p.end_date || fld('end_date'), award_date: P.p.award_date || fld('award_date'), value: P.p.value || Number(fld('value')) || null, currency: P.p.currency || fld('currency') });
@@ -447,7 +565,8 @@
     const out = { at: nowTs(), summary: '', notes: [], anchor, anchor_basis: P.p.start_date ? 'project start date' : proj().award_date ? 'award date' : proj().start_date ? 'start date in the documents' : null, engine: 'rules', phases: 0, checks: [] };
     P.items = P.items.filter((i) => !(i.data && i.data.synthesized && i.status === 'proposed'));
     for (const i of P.items) if (i.data && i.data.superseded && i.status === 'ignored') { i.status = 'proposed'; delete i.data.superseded; }
-    const syn = await AI.synthesizeSchedule({ docs, items: view(), anchor, project: proj() }).catch(() => null);
+    const hasSchedFile = docs.some((d) => d.role === 'schedule');
+    const syn = hasSchedFile ? null : await AI.synthesizeSchedule({ docs, items: view(), anchor, project: proj() }).catch(() => null);
     if (syn && syn.plan.length >= 3) {
       for (const i of P.items) if (i.kind === 'schedule' && i.status === 'proposed') { i.status = 'ignored'; i.data.superseded = true; }
       for (const r of syn.plan) {
@@ -460,27 +579,43 @@
       }
       out.summary = syn.summary; out.notes = syn.notes; out.engine = 'claude';
     }
+    // Project risks are analysed from the whole document set
+    P.items = P.items.filter((i) => !(i.kind === 'risk' && i.data && i.data.analysis && i.status === 'proposed'));
+    if (AI.hasKey() && docs.length) {
+      P.analysis.stages.find((x) => x.key === 'generate').detail = 'Analyzing project risks';
+      const rdocs = docs.map((d) => ({ id: d.id, filename: d.filename, role: d.role, summary: d.summary }));
+      const risks = await Pipe.analyzeRisks({ project: proj(), docs: rdocs, items: view(), text: P.texts }).catch((e) => { console.error('risk analysis', e); return []; });
+      const ex = P.items.filter((i) => i.kind === 'risk' && i.status !== 'ignored');
+      for (const r of risks) {
+        if (ex.some((x) => similarity(x.title, r.title) >= 0.7)) continue;
+        const it = insertItem(P, 'risk', { title: r.title, description: r.description, data: { probability: r.probability, impact: r.impact, mitigation: r.mitigation, category: r.category, owner: r.owner, analysis: true, inferred: r.inferred }, confidence: r.confidence, quote: r.quote }, null);
+        ex.push(it);
+      }
+      out.risks = risks.length;
+    }
+    P.analysis.stages.find((x) => x.key === 'generate').detail = 'Running consistency checks';
     out.checks = AI.runChecks({ items: view(), project: proj(), docs: (P.analysis && P.analysis.docs) || [] });
     if (!out.summary) out.summary = [...new Set(docs.map((d) => d.summary).filter(Boolean))].join(' ').slice(0, 600);
-    P.analysis = { ...(P.analysis || { docs: [] }), synthesis: out };
+    if (!P.analysis) P.analysis = { docs: [], stages: [] };
+    P.analysis.synthesis = out;
     audit(P, 'AI', 'project_reconciled', { summary: `Cross checked ${docs.length} documents: ${out.checks.filter((c) => c.status === 'Pass').length} passed, ${out.checks.filter((c) => c.status === 'Warn').length} warnings, ${out.checks.filter((c) => c.status === 'Fail').length} failed${out.phases ? `. Built a schedule with ${out.phases} phases` : ''}` });
   }
-  // Returns { text, error }. Text files are read here. PDF, Word and Excel files are read by the server.
+  // Returns { text, error, pages, ocr }. Plain text and XML are read here. Everything else is read by the server.
   async function readFile(f) {
     const n = (f.name || '').toLowerCase();
-    if (/\.(txt|md|csv|tsv|json|eml|html?)$/.test(n)) return { text: await f.text() };
-    if (/\.(pdf|docx|xlsx|xls)$/.test(n)) {
+    if (/\.(txt|md|csv|tsv|json|eml|html?|xml)$/.test(n)) return { text: await f.text() };
+    if (/\.(pdf|docx|pptx|xlsx|xls|png|jpe?g|webp|gif|mpp|doc|ppt)$/.test(n)) {
       try {
         const r = await fetch('/srv/extract?name=' + encodeURIComponent(f.name), { method: 'POST', body: f });
         let j = null;
         try { j = await r.json(); } catch (e) { /* not json */ }
         if (!r.ok) return { text: '', error: (j && j.error) || `The server could not read this file (${r.status}).` };
-        return { text: (j && j.text) || '', pages: (j && j.pages) || null };
+        return { text: (j && j.text) || '', pages: (j && j.pages) || null, ocr: !!(j && j.ocr) };
       } catch (e) {
         return { text: '', error: 'The server could not be reached to read this file.' };
       }
     }
-    return { text: '', error: 'This file type is not supported. Use PDF, Word, Excel or text files.' };
+    return { text: '', error: 'This file type is not supported. Use PDF, Word, PowerPoint, Excel, pictures, Project XML or text files.' };
   }
   async function addDocuments(P, files) {
     const docs = [];
@@ -606,7 +741,7 @@
     DB.projects[id] = P; DB.order.push(id);
     let files = fd.getAll('files').filter((f) => f && f.name);
     let docs;
-    if (files.length) docs = await addDocuments(P, files);
+    if (files.length) { docs = []; P._files = {}; for (const f of files) { const d = { id: nid(), filename: f.name, kind: AI.classify(f.name, ''), summary: '', uploaded_by: ACTOR, created_at: nowTs(), chars: 0, pages: null, read_error: null }; P.documents.push(d); P.texts[d.id] = ''; P._files[d.id] = f; docs.push(d); } }
     else { docs = []; for (const n of ['Proposal_Smart_Portal.txt', 'Contract_Smart_Portal.txt', 'PO_4500123.txt']) { const d = { id: nid(), filename: n, kind: AI.classify(n, SEED.docTexts[n]), summary: '', uploaded_by: ACTOR, created_at: nowTs(), chars: SEED.docTexts[n].length }; P.documents.push(d); P.texts[d.id] = SEED.docTexts[n]; docs.push(d); } }
     audit(P, ACTOR, 'project_created', { summary: `Project "${name}" created with ${docs.length} document${docs.length === 1 ? '' : 's'}` });
     analyzeDocs(P, docs).catch((e) => console.error(e));
