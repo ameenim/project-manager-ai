@@ -1702,32 +1702,62 @@ function runChecks({ items, project, docs }) {
   return checks;
 }
 
-const SYNTH_SYSTEM = `You are a senior project manager building one delivery schedule from several project documents. You receive numbered items already extracted and verified from the documents, plus the anchor date.
-Return JSON: {"summary":"3 to 5 sentences: what is being delivered, for whom, the contract value, the overall duration and the main risk to the dates","plan":[{"level":"phase|task|milestone","name":"","phase":"parent phase name or null","start":"YYYY-MM-DD or null","end":"YYYY-MM-DD or null","start_week":number or null,"end_week":number or null,"depends_on":["predecessor name"],"refs":[item numbers]}],"notes":["one line per conflict, gap or assumption the project manager must resolve"]}
-Rules: build only from the given items and cite them in refs, every plan row needs at least one valid ref. Never invent dates. Use explicit dates when an item has them, otherwise keep weeks. Merge duplicates that describe the same work from different documents. Order the plan so that phases come before their tasks. Add depends_on for every phase after the first and for gates such as UAT, go live and handover. Documents rank: award letter, then financial offer, then technical proposal. When documents disagree on a date, value or scope, schedule the higher ranked one and list the disagreement in notes. Notes must be plain sentences without dashes or semicolons.`;
+const SYNTH_SYSTEM = `You are a principal project manager with more than twenty years of delivery experience on government and enterprise technology programs. You hold PMP and PRINCE2 qualifications and you work to PMBOK and ISO 21502. You are building the baseline delivery schedule for a project from several documents, the way you would enter it in MS Project before the kick off. You receive numbered items already extracted and verified from the documents (phases, tasks, milestones, deliverables with prices and dates, payment milestones), plus the anchor date.
+
+Your job is to turn the stated plan into a complete, workable schedule, not to copy a table. Think like the person accountable for delivery:
+1. Keep every stated phase, task, gate and date. These are basis "stated" and they cite their items.
+2. Add the work that a real project needs but the documents do not list. These are basis "implied". For every deliverable and gate add the steps in between: prepare or draft it, client review, approval or sign off, and the invoice trigger when a payment depends on it. Add mobilization and contract steps, kick off, governance setup, requirements workshops, design reviews, security and architecture reviews, sprint build with demo and acceptance when the approach is agile, system and integration testing, UAT planning, UAT cycles, defect fixing, security testing, CAB or change approval, deployment and rollback rehearsal, go live verification, hypercare, training, handover and closure, and recurring governance such as the weekly status meeting and the monthly steering committee.
+3. Give every task a realistic duration in working days. Use typical durations unless the documents state one: client review of plans and governance 3 days, requirements 5 days, designs 3 days, security architecture review 4 days, sprint demo and review 2 days, UAT cycle 5 to 8 days, CAB review 2 days, approval 1 day after the review. Show the review and the approval as separate lines, with type review and type approval, owned by the client. These client lines are where schedule risk sits, so never skip them.
+4. Link everything. Give depends_on for every row that follows other work, naming predecessors exactly as they are named in the plan. List rows so that a predecessor always appears before its successors. Every phase after the first and every gate depends on the work before it.
+5. Tie money to the plan. Each payment milestone must be triggered by an approval line for its deliverable, followed by a milestone line for the invoice.
+
+Return JSON: {"summary":"3 to 5 sentences: what is being delivered, for whom, the contract value, the overall duration and the main risk to the dates","plan":[{"level":"phase|task|milestone","type":"task|review|approval|milestone","name":"","phase":"parent phase name or null","start":"YYYY-MM-DD or null","end":"YYYY-MM-DD or null","start_week":number or null,"end_week":number or null,"start_day":number or null,"duration_days":number or null,"owner":"role or party","depends_on":["predecessor name"],"basis":"stated|implied","assumption":"for implied rows, one sentence on why it is needed and where the duration comes from","refs":[item numbers]}],"notes":["one line per conflict, gap or assumption the project manager must resolve"]}
+
+Timing rules. Never invent calendar dates. Use explicit start and end dates only when an item states them. A phase with week numbers gets start_week and end_week, where week 1 starts on the anchor date. For every other row use start_day, the working day number counted from the anchor date where day 1 is the anchor day, and duration_days. Week n starts on working day (n minus 1) times 5 plus 1. A milestone has start_day and no duration. A dependent row never starts before its predecessors end.
+
+Evidence rules. Stated rows cite the items they come from in refs. Implied rows cite the item of the phase, deliverable or gate they support, so every row has at least one valid ref. Merge duplicates that describe the same work from different documents. Order the plan so that phases come before their tasks. Documents rank: award letter, then financial offer, then technical proposal. When documents disagree on a date, value or scope, schedule the higher ranked one and list the disagreement in notes. Also list in notes every date that falls before the award date, every go live dated before its staging, and any gap between the week plan and the dated windows. State your assumptions in notes, including review durations and holidays. Aim for 60 to 140 rows. Write all text as plain sentences without dashes or semicolons.`;
 
 async function synthesizeSchedule({ docs, items, anchor, project }) {
   await aiReady;
   if (!hasKey()) return null;
   const rows = items.filter((i) => i.status !== 'ignored' && ['schedule', 'deliverable', 'milestone'].includes(i.kind));
   if (!rows.length) return null;
-  const list = rows.slice(0, 220).map((i, n) => ({ n: n + 1, kind: i.kind, doc: i.doc_name || '', name: i.title, level: i.data.level || null, phase: i.data.phase || null, start: i.data.start || i.data.due_date || null, end: i.data.end || null, start_week: i.data.start_week ?? null, end_week: i.data.end_week ?? null, days: i.data.duration_days ?? null, amount: i.data.amount ?? null, percent: i.data.percent ?? null, depends_on: i.data.depends_on || null }));
+  const list = rows.slice(0, 220).map((i, n) => ({ n: n + 1, kind: i.kind, doc: i.doc_name || '', ref: i.data.ref || null, name: i.title, level: i.data.level || null, type: i.data.type || null, phase: i.data.phase || null, owner: i.data.owner || null, start: i.data.start || i.data.due_date || null, end: i.data.end || null, start_week: i.data.start_week ?? null, end_week: i.data.end_week ?? null, days: i.data.duration_days ?? null, amount: i.data.amount ?? null, percent: i.data.percent ?? null, trigger: i.data.trigger || null, acceptance: i.data.acceptance || null, depends_on: i.data.depends_on || null }));
+  const userMsg = `Anchor date for Week 1: ${anchor || 'unknown'}\nProject: ${JSON.stringify({ value: project.value, currency: project.currency, award_date: project.award_date || null, start_date: project.start_date || null, end_date: project.end_date || null })}\nDocuments: ${JSON.stringify(docs.map((d) => ({ file: d.filename, kind: d.kind, summary: d.summary })))}\nItems: ${JSON.stringify(list)}`;
   try {
-    const j = await claudeJSON(SYNTH_SYSTEM, `Anchor date for Week 1: ${anchor || 'unknown'}\nProject: ${JSON.stringify({ value: project.value, currency: project.currency, award_date: project.award_date || null, start_date: project.start_date || null, end_date: project.end_date || null })}\nDocuments: ${JSON.stringify(docs.map((d) => ({ file: d.filename, kind: d.kind, summary: d.summary })))}\nItems: ${JSON.stringify(list)}`, 12000);
+    let j;
+    try { j = await claudeJSON(SYNTH_SYSTEM, userMsg, 16000); }
+    catch (e) {
+      // A very long plan can be cut off. Ask once for a tighter plan.
+      if (e.code !== 'cutoff') throw e;
+      j = await claudeJSON(SYNTH_SYSTEM + '\nThe plan must fit in the reply: use 60 to 80 rows, keep names short, and leave out assumption text for rows whose duration is a standard one.', userMsg, 16000);
+    }
     if (!j || !Array.isArray(j.plan)) return null;
     const plan = [];
+    const refsByName = new Map();
+    let lastRefs = [];
     for (const r of j.plan) {
       if (!r || !String(r.name || '').trim()) continue;
-      const refs = (Array.isArray(r.refs) ? r.refs : []).map((n) => rows[Number(n) - 1]).filter(Boolean);
+      const implied = r.basis === 'implied';
+      let refs = (Array.isArray(r.refs) ? r.refs : []).map((n) => rows[Number(n) - 1]).filter(Boolean);
+      // An implied row supports a phase, deliverable or gate. If the model forgot the reference, inherit it from its phase.
+      if (!refs.length && implied) refs = refsByName.get(String(r.phase || '').trim().toLowerCase()) || lastRefs;
       if (!refs.length) continue;
       let start = validIso(r.start) ? r.start : null;
       let end = validIso(r.end) ? r.end : null;
       const sw = r.start_week != null ? Number(r.start_week) : null;
       const ew = r.end_week != null ? Number(r.end_week) : null;
       if (!start && sw) { const w = weeksToDates(anchor, sw, ew); start = w.start; end = end || w.end; }
-      plan.push({ level: ['phase', 'task', 'milestone'].includes(r.level) ? r.level : 'task', name: String(r.name).trim().slice(0, 140), phase: r.phase ? String(r.phase).slice(0, 140) : null, start, end, start_week: sw, end_week: ew, depends_on: (Array.isArray(r.depends_on) ? r.depends_on : []).map(String).filter(Boolean), refs: refs.map((x) => x.id), quote: (refs[0].quote || '').slice(0, 300), source_docs: [...new Set(refs.map((x) => x.doc_name).filter(Boolean))] });
+      const level = ['phase', 'task', 'milestone'].includes(r.level) ? r.level : 'task';
+      const type = ['task', 'review', 'approval', 'milestone'].includes(r.type) ? r.type : level === 'milestone' ? 'milestone' : 'task';
+      const sd = Number(r.start_day) > 0 ? Math.round(Number(r.start_day)) : null;
+      const dd = Number(r.duration_days) > 0 ? Math.round(Number(r.duration_days)) : null;
+      const name = String(r.name).trim().slice(0, 140);
+      refsByName.set(name.toLowerCase(), refs);
+      lastRefs = refs;
+      plan.push({ level, type, name, phase: r.phase ? String(r.phase).slice(0, 140) : null, start, end, start_week: sw, end_week: ew, start_day: start ? null : sd, duration_days: dd, owner: r.owner ? String(r.owner).slice(0, 80) : null, implied, assumption: implied && r.assumption ? String(r.assumption).slice(0, 240) : null, depends_on: (Array.isArray(r.depends_on) ? r.depends_on : []).map(String).filter(Boolean), refs: refs.map((x) => x.id), quote: (refs[0].quote || '').slice(0, 300), source_docs: [...new Set(refs.map((x) => x.doc_name).filter(Boolean))] });
     }
-    return { summary: String(j.summary || ''), plan, notes: (Array.isArray(j.notes) ? j.notes : []).map(String).filter(Boolean).slice(0, 12) };
+    return { summary: String(j.summary || ''), plan, notes: (Array.isArray(j.notes) ? j.notes : []).map(String).filter(Boolean).slice(0, 16) };
   } catch (e) {
     console.error('Synthesis failed:', e.message);
     return null;

@@ -4,16 +4,16 @@
    counts. Risks are analysed from the whole document set, not copied from a single page. */
 window.__Pipe = (function () {
   const AI = window.__AI;
-  const SECTIONS = ['info', 'deliverables', 'requirements', 'payments', 'schedule'];
+  const SECTIONS = ['info', 'deliverables', 'requirements', 'payments', 'schedule', 'risks'];
   // What each kind of document may supply.
   const SCOPE = {
-    technical: ['info', 'deliverables', 'requirements', 'schedule'],
-    financial: ['info', 'payments'],
-    contract: ['info', 'deliverables', 'requirements', 'payments', 'schedule'],
+    technical: ['info', 'deliverables', 'requirements', 'schedule', 'risks'],
+    financial: ['info', 'deliverables', 'payments'],
+    contract: ['info', 'deliverables', 'requirements', 'payments', 'schedule', 'risks'],
     award: ['info', 'payments'],
     po: ['info', 'payments'],
     schedule: ['schedule'],
-    other: ['info', 'deliverables', 'requirements', 'payments', 'schedule'],
+    other: ['info', 'deliverables', 'requirements', 'payments', 'schedule', 'risks'],
   };
   // When two documents disagree, the higher number wins for project info.
   const AUTHORITY = { award: 4, po: 4, contract: 4, financial: 3, technical: 2, schedule: 2, other: 1 };
@@ -44,32 +44,45 @@ window.__Pipe = (function () {
   }
 
   // ---------- prompts ----------
-  const BASE = `You are a senior project manager reading one part of a project document. You extract only the kinds of data listed below, and only what the text supports.
+  const BASE = `You are a principal project manager with more than twenty years of delivery experience on government and enterprise technology programs. You hold PMP and PRINCE2 qualifications and you work to PMBOK and ISO 21502. A delivery team will plan, staff, invoice and govern the project from what you extract, so you read like the person who is accountable for the outcome: precise, skeptical and complete. You are reading one part of a project document.
+
+How you read:
+1. First decide what this part of the document is for: scope, deliverables register, price table, payment terms, work plan, risk register, assumptions or boilerplate. Extract from the sections written to list the thing, and ignore passing mentions in narrative.
+2. Read tables cell by cell. One row is one record. Keep the columns of a row together. Totals, subtotals and taxes are never records.
+3. Keep the document's own numbering and names, for example "3.1 Detailed project plan", so people can find the line again.
+4. Capture the numbers that drive control: prices, percentages, durations, week numbers, dates, counts and service levels. Copy them exactly.
+5. Note who has to act. The client approving, providing access, environments or data is as important as the vendor's own work.
+
 Rules for every item:
 1. Every item needs a quote copied exactly, word for word, from the text you were given, about 8 to 25 words. Never rewrite, translate or join quotes. Skip anything you cannot quote.
 2. Never guess. A month or year without a day is not a date. If timing is relative such as Week 1 to Week 6, fill the week numbers and leave dates null.
 3. confidence is 0 to 1. Use 0.9 or more only when the text states the fact plainly. Use below 0.7 when you had to interpret.
-4. List each fact once. Do not repeat the same item from different places in the text. If this part has nothing relevant return empty lists.`;
+4. List each fact once. Do not repeat the same item from different places in the text. If this part has nothing relevant return empty lists.
+5. Write descriptions as plain sentences without dashes or semicolons.`;
   const DEFS = {
     info: {
       schema: '"fields": [{"field":"client|value|currency|start_date|end_date|award_date","value":"","confidence":0.0,"quote":""}]',
-      text: `PROJECT INFO. client is the customer organization that buys the work (never the vendor writing the proposal). value is the total contract or offer price as a plain number without currency symbols or thousands separators. If several totals appear choose the grand total and say so in the quote. currency is the ISO code. start_date and end_date are the project start and end written as exact dates. award_date is the date an award letter, contract or purchase order was issued. Only give a date if the day is stated.`,
+      text: `PROJECT INFO. client is the customer organization that buys the work, never the vendor writing the proposal. value is the total contract or offer price as a plain number without currency symbols or thousands separators. If several totals appear choose the grand total excluding VAT unless the text says the contract value includes it, and say which in the quote. A figure that appears in an award letter, contract or purchase order outranks a proposal. currency is the ISO code. start_date and end_date are the project start and end written as exact dates. award_date is the date an award letter, contract or purchase order was issued. Only give a date if the day is stated.`,
     },
     deliverables: {
-      schema: '"deliverables": [{"title":"","description":"","category":"document|system|service|training|other","due_date":"YYYY-MM-DD or null","week":number or null,"confidence":0.0,"quote":""}]',
-      text: `DELIVERABLES. A deliverable is a concrete output the vendor hands over and the client can accept, for example a project charter, detailed project plan, BOQ, design document, running system on staging, go live release, installation and deployment, training, user manual, UAT report, source code handover, maintenance and support service. It is not an activity, meeting, task, principle or feature. "Hold kickoff meeting" is a task. "Kickoff presentation and minutes" is a deliverable. Take deliverables from the section that lists what will be delivered, the deliverables register, the scope of supply or the contract schedule. Keep titles short and do not list the same deliverable twice under different wording.`,
+      schema: '"deliverables": [{"ref":"document numbering such as 3.1 or null","title":"","description":"what is handed over","category":"document|system|service|training|other","phase":"Phase 1|Phase 2|other label used by the document or null","due_date":"YYYY-MM-DD or null","week":number or null,"amount":number or null,"acceptance":"how the client accepts it, or null","confidence":0.0,"quote":""}]',
+      text: `DELIVERABLES. A deliverable is a concrete output the vendor hands over and the client can accept, for example a project charter, detailed project plan, BOQ, design document, running system on staging, go live release, installation and deployment, training, user manual, UAT report, source code handover, and a maintenance or support service. It is not an activity, meeting, task, principle or feature. "Hold kickoff meeting" is a task. "Kickoff presentation and minutes" is a deliverable. Take deliverables from the section that lists what will be delivered, the deliverables register, the scope of supply, the price table or the contract schedule. In a price table every priced line is a contract deliverable, so fill amount with its price exactly. When the same deliverable appears in a technical table and a price table, report it once with both its due date and its price. Keep the document's reference number in ref. Use phase for the release the deliverable belongs to. Use acceptance for the stated acceptance event or criteria, for example UAT sign off or approval by the client PMO.`,
     },
     requirements: {
-      schema: '"requirements": [{"title":"","description":"","type":"functional|non functional|security|compliance|contractual","priority":"Must|Should|Could","confidence":0.0,"quote":""}]',
-      text: `REQUIREMENTS. A requirement is something the solution or the vendor must do or meet, written as a testable statement, for example data must be hosted inside the UAE, the platform must support Arabic right to left, uptime of 99.5 percent, penetration test before go live. Group closely related statements into one requirement rather than one per sentence. Marketing claims, descriptions of how the system works and project activities are not requirements. priority is Must for shall or must, Should for should, Could for may.`,
+      schema: '"requirements": [{"ref":"section number or null","title":"","description":"","type":"functional|non functional|security|compliance|contractual","priority":"Must|Should|Could","verification":"how it will be tested or evidenced, or null","confidence":0.0,"quote":""}]',
+      text: `REQUIREMENTS. A requirement is something the solution or the vendor must do or meet, written as a testable statement. Examples are data hosted inside the UAE, Arabic right to left support, uptime of 99.9 percent, page load within a stated time, penetration test before go live, source code owned by the client, handover documentation, accessibility standards, integration with the client identity service. Cover every type: functional, non functional (performance, availability, scalability), security, compliance and standards, and contractual (warranty, support, intellectual property, confidentiality, service levels). Group closely related statements into one requirement rather than one per sentence, but never merge different types. Marketing claims, descriptions of how the system works and project activities are not requirements. priority is Must for shall, must or mandatory, Should for should, and Could for may or optional. verification names the test or gate that proves it, such as UAT, VAPT, performance test, or acceptance review.`,
     },
     payments: {
-      schema: '"milestones": [{"title":"","percent":number or null,"amount":number or null,"due_date":"YYYY-MM-DD or null","trigger":"what must happen before payment","confidence":0.0,"quote":""}]',
-      text: `PAYMENT MILESTONES. A payment milestone is one line of the payment schedule or price table: what is paid, the amount or percent, and the event that triggers the payment. Payment tables usually show each milestone with its amount, so copy amount exactly as a number. If a line is 100 percent of a priced item, percent is 100 and amount is that item's price. Do not include delivery tasks, taxes alone or the grand total as a milestone.`,
+      schema: '"milestones": [{"ref":"deliverable reference or null","title":"","deliverable":"the deliverable this payment is for, or null","percent":number or null,"amount":number or null,"due_date":"YYYY-MM-DD or null","terms_days":number or null,"trigger":"what must happen before payment","confidence":0.0,"quote":""}]',
+      text: `PAYMENT MILESTONES. A payment milestone is one line of the payment schedule or price table: what is paid, the amount or percent, and the event that triggers the payment. Payment tables usually show each milestone with its amount, so copy amount exactly as a number. If a line is 100 percent of a priced item, percent is 100 and amount is that item's price. If the text gives percentages only, compute nothing and leave amount null. Fill deliverable with the deliverable that the payment is tied to, and ref with its reference number. trigger is the event, for example acceptance and delivery, UAT sign off or go live. terms_days is the number of days the client has to pay after receiving the invoice, from the payment terms. due_date is a planned invoice or delivery date only if the text states it. Do not include delivery tasks, taxes alone, retention notes or the grand total as a milestone. Check that your milestones add up to the contract value and mention it in the quote of the last milestone only if the text itself says so.`,
     },
     schedule: {
-      schema: '"schedule": [{"name":"","level":"phase|task|milestone","phase":"parent phase name or null","start":"YYYY-MM-DD or null","end":"YYYY-MM-DD or null","start_week":number or null,"end_week":number or null,"duration_days":number or null,"depends_on":["predecessor name"],"confidence":0.0,"quote":""}]',
-      text: `SCHEDULE. Build the work breakdown the technical plan describes. A phase is a named stage that groups work (summary task). A task is work inside a phase. A milestone is a gate such as UAT sign off, go live or handover with no duration. Put the parent phase name in phase for every task and milestone. Use exact dates when the text gives them, otherwise week numbers counted from project start. Fill depends_on only when the order is stated or obvious from the plan, for example UAT follows build. Use the project plan, phase table or Gantt description, not the general discussion.`,
+      schema: '"schedule": [{"level":"phase|task|milestone","type":"task|review|approval|milestone","name":"","phase":"parent phase name or null","start":"YYYY-MM-DD or null","end":"YYYY-MM-DD or null","start_week":number or null,"end_week":number or null,"duration_days":number or null,"owner":"role or party responsible, or null","depends_on":["predecessor name"],"confidence":0.0,"quote":""}]',
+      text: `SCHEDULE. Build the work breakdown that the technical plan describes, as a project manager would enter it in MS Project. A phase is a named stage that groups work (a summary task). A task is work inside a phase. List the activities named in a phase's activity column as separate tasks under that phase. A milestone is a gate or event such as kick off, UAT sign off, go live or handover with no duration. Treat every stated gate or exit criterion as a milestone, and mark approvals by the client with type approval and client reviews with type review. Put the parent phase name in phase for every task and milestone. Use exact dates when the text gives them, otherwise week numbers counted from project start. Capture every duration the text gives in duration_days, converting weeks to working days at five days per week and months at twenty two days. Name the owner when the plan says who does the work or approves it. Fill depends_on only when the order is stated or obvious from the plan, for example UAT follows build. Use the project plan, phase table, timeline or Gantt description, not the general discussion. Extract only what the document states here. Expected review and approval steps that the document does not mention are added later in the schedule synthesis.`,
+    },
+    risks: {
+      schema: '"risks": [{"title":"","description":"","probability":"Low|Medium|High","impact":"Low|Medium|High","mitigation":"","owner":"role or null","confidence":0.0,"quote":""}]',
+      text: `RISKS STATED IN THE DOCUMENT. Extract only the risks that the document itself lists, in a risk register, risk table or risk section. Keep the document's own rating for probability and impact, its mitigation and its owner. Do not invent risks here and do not turn assumptions or dependencies into risks. A separate step analyzes the whole document set for additional project risks.`,
     },
   };
   function buildPrompt(role) {
@@ -87,14 +100,24 @@ Return JSON only, with exactly this shape:
 }`;
   }
 
-  const CONTEXT_SYSTEM = `You are a senior project manager. You receive the start of a project document and the list of its headings. Decide what kind of document it is and summarize it.
-Return JSON: {"role":"technical|financial|contract|award|po|schedule|other","summary":"two sentences: what this document is, who it is for and what it commits to","project_name":"","confidence":0.0}
-technical is a technical proposal or solution description with approach and plan. financial is a price offer or commercial proposal. contract covers agreements and statements of work. award is an award or acceptance letter. po is a purchase order.`;
+  const CONTEXT_SYSTEM = `You are a principal project manager screening a new project document before it is analyzed. You receive the start of the document and the list of its headings. Decide what kind of document it is and summarize it for the delivery team.
+Return JSON: {"role":"technical|financial|contract|award|po|schedule|other","summary":"three sentences: what this document is and who it is for, what it commits the vendor or the client to, and the key figures or dates it states","project_name":"","confidence":0.0}
+technical is a technical proposal or solution description with approach, plan, deliverables and resources. financial is a price offer or commercial proposal with prices and payment terms. contract covers agreements and statements of work. award is an award or acceptance letter. po is a purchase order. Write plain sentences without dashes or semicolons.`;
 
-  const RISK_SYSTEM = `You are a senior project manager preparing the risk register for a project from its documents. You get the project facts, what each document is, the deliverables, the schedule, the payment terms and passages about assumptions, dependencies and client responsibilities.
-Identify 8 to 14 risks to delivering THIS project. Focus on the project itself: client approval turnaround for deliverables and acceptance, client access to environments, data and stakeholders, dependencies on the client or third parties, schedule pressure and conflicting dates, payment only upon acceptance, scope ambiguity, resource and skills, integration and security approvals, performance and go live readiness. Do not list generic risks that could apply to any project.
-Return JSON: {"risks":[{"title":"short","description":"cause, event and effect in two sentences","category":"client dependency|schedule|commercial|scope|technical|resource|security|compliance","probability":"Low|Medium|High","impact":"Low|Medium|High","mitigation":"one concrete action","owner":"role","evidence":"short text copied exactly from the passages or documents that supports it, or null","confidence":0.0}]}
-Use confidence 0.8 or more only when a passage states the risk or dependency directly. Use 0.5 to 0.75 when you inferred it from the facts. Write plain sentences without dashes or semicolons.`;
+  const RISK_SYSTEM = `You are a principal project manager with more than twenty years of delivery experience on government and enterprise technology programs. You hold PMP and PRINCE2 qualifications and you work to PMBOK and ISO 31000. You are preparing the risk register for THIS project from its documents, the way a PMO director would review it before approving the plan.
+
+You receive the project facts, what each document is, the deliverables with prices and dates, the schedule, the payment milestones and terms, the risks the documents already list, and passages about assumptions, dependencies and client responsibilities.
+
+Think in this order:
+1. Where does the plan depend on the client? Approval turnaround for each deliverable and acceptance gate, naming of approvers, access to environments, tenants, test users and data, availability of stakeholders, security and architecture review slots, UAT calendar, rights cleared content.
+2. Where do the documents disagree or leave gaps? Dates before the award, go live before staging, a week plan shorter than the dated windows, a deliverable labeled for the wrong phase, values in words versus numbers, scope stated in one document and missing in another.
+3. Where can money slip? Payment only on acceptance, a payment that carries a large share of the value, no advance payment, payment terms in days, maintenance billing not defined, VAT treatment, performance bond or guarantee timing.
+4. Where can delivery slip? Hard to staff skills, integration with client identity and API services, security testing and remediation time, performance targets, hosting inside the country, language quality, data readiness, third party dependencies, holidays and Ramadan.
+5. Where does scope move? Optional modules, phase boundaries, change control, requirements still to be confirmed, handover and training expectations.
+
+Identify 12 to 20 risks to delivering THIS project. Do not repeat a risk the documents already list, build on them instead. Do not list generic risks that could apply to any project. Each risk must name the specific deliverable, phase, date, party or number it relates to.
+Return JSON: {"risks":[{"title":"short, specific","description":"cause, event and effect in two or three sentences, naming the deliverable, date or party","early_warning":"the sign that shows the risk is happening","category":"client dependency|schedule|commercial|scope|technical|resource|security|compliance","probability":"Low|Medium|High","impact":"Low|Medium|High","response":"avoid|mitigate|transfer|accept","mitigation":"one concrete action with a time or owner","contingency":"what to do if it happens","owner":"role","evidence":"short text copied exactly from the passages or documents that supports it, or null","confidence":0.0}]}
+Rate probability and impact honestly. A payment worth a third of the contract held up by one client approval is High impact. Use confidence 0.8 or more only when a passage states the risk or dependency directly. Use 0.5 to 0.75 when you inferred it from the facts. Write plain sentences without dashes or semicolons.`;
 
   // ---------- helpers ----------
   const clamp = (n, lo = 0, hi = 1) => Math.max(lo, Math.min(hi, Number.isFinite(n) ? n : 0.6));
@@ -170,13 +193,13 @@ Use confidence 0.8 or more only when a passage states the risk or dependency dir
       }
     };
     await Promise.all(Array.from({ length: Math.min(3, parts.length) }, worker));
-    const out = { fields: [], deliverables: [], requirements: [], milestones: [], schedule: [] };
+    const out = { fields: [], deliverables: [], requirements: [], milestones: [], schedule: [], risks: [] };
     let ok = 0, failed = 0, dropped = 0, charsSent = 0;
     const seen = new Set();
     const take = (j, partText) => {
       if (!j) return;
       const hay = AI.normQuote(partText);
-      const keyMap = { fields: 'info', deliverables: 'deliverables', requirements: 'requirements', milestones: 'payments', schedule: 'schedule' };
+      const keyMap = { fields: 'info', deliverables: 'deliverables', requirements: 'requirements', milestones: 'payments', schedule: 'schedule', risks: 'risks' };
       for (const k of Object.keys(out)) {
         if (!allowed.includes(keyMap[k])) continue;
         for (const it of Array.isArray(j[k]) ? j[k] : []) {
@@ -200,28 +223,33 @@ Use confidence 0.8 or more only when a passage states the risk or dependency dir
     return out;
   }
 
-  async function analyzeRisks({ project, docs, items, text }) {
-    const pick = (k) => items.filter((i) => i.kind === k && i.status !== 'ignored');
+  async function analyzeRisks({ project, docs, items, text, checks }) {
+    const live = (k) => items.filter((i) => i.kind === k && i.status !== 'ignored');
     const digest = {
       project,
       documents: docs.map((d) => ({ file: d.filename, role: ROLE_LABEL[d.role] || d.role, summary: d.summary })),
-      deliverables: pick('deliverable').slice(0, 40).map((i) => ({ title: i.title, due: i.data.due_date || null })),
-      schedule: pick('schedule').slice(0, 60).map((i) => ({ name: i.title, level: i.data.level, start: i.data.start, end: i.data.end, weeks: i.data.start_week != null ? `${i.data.start_week}-${i.data.end_week}` : null })),
-      payments: pick('milestone').slice(0, 30).map((i) => ({ title: i.title, percent: i.data.percent, amount: i.data.amount, trigger: i.data.trigger || null })),
+      deliverables: live('deliverable').slice(0, 40).map((i) => ({ ref: i.data.ref || null, title: i.title, phase: i.data.phase || null, due: i.data.due_date || null, price: i.data.amount || null, acceptance: i.data.acceptance || null })),
+      schedule: live('schedule').slice(0, 80).map((i) => ({ name: i.title, level: i.data.level, start: i.data.start, end: i.data.end, weeks: i.data.start_week != null ? `${i.data.start_week} to ${i.data.end_week}` : null, days: i.data.duration_days || null })),
+      payments: live('milestone').slice(0, 30).map((i) => ({ title: i.title, percent: i.data.percent, amount: i.data.amount, trigger: i.data.trigger || null, terms_days: i.data.terms_days || null, planned_date: i.data.due_date || null })),
+      requirements: live('requirement').slice(0, 40).map((i) => ({ type: i.data.type || null, priority: i.data.priority || null, text: (i.title || i.description || '').slice(0, 140) })),
+      risks_already_listed: live('risk').slice(0, 40).map((i) => i.title),
+      consistency_findings: (checks || []).filter((c) => c.status !== 'Pass').slice(0, 12).map((c) => `${c.status}: ${c.title}. ${c.detail}`),
     };
     const ps = [];
-    for (const d of docs) for (const t of passages(text[d.id] || '', 6000)) ps.push(`[${d.filename}] ${t}`);
+    for (const d of docs) for (const t of passages(text[d.id] || '', 7000)) ps.push(`[${d.filename}] ${t}`);
     const hay = AI.normQuote(Object.values(text).join(' '));
     try {
-      const j = await AI.claudeJSON(RISK_SYSTEM, `Project facts and documents:\n${JSON.stringify(digest)}\n\nPassages about assumptions, dependencies and client responsibilities:\n${ps.slice(0, 60).join('\n')}`, 8000);
+      const j = await AI.claudeJSON(RISK_SYSTEM, `Project facts and documents:\n${JSON.stringify(digest)}\n\nPassages about assumptions, dependencies and client responsibilities:\n${ps.slice(0, 80).join('\n')}`, 14000);
       const risks = [];
       for (const r of Array.isArray(j.risks) ? j.risks : []) {
         if (!r || !String(r.title || '').trim()) continue;
         const grounded = r.evidence && AI.quoteFound(String(r.evidence).replace(/^\[[^\]]+\]\s*/, ''), hay);
         const lvl = (x) => (['Low', 'Medium', 'High'].includes(x) ? x : 'Medium');
-        risks.push({ title: String(r.title).slice(0, 140), description: String(r.description || ''), probability: lvl(r.probability), impact: lvl(r.impact), mitigation: String(r.mitigation || ''), category: r.category || null, owner: r.owner || null, quote: grounded ? String(r.evidence).replace(/^\[[^\]]+\]\s*/, '') : '', inferred: !grounded, confidence: clamp(Number(r.confidence), 0.3, grounded ? 0.95 : 0.75) });
+        const warn = r.early_warning ? ` Early warning: ${String(r.early_warning).trim()}` : '';
+        const cont = r.contingency ? ` Contingency: ${String(r.contingency).trim()}` : '';
+        risks.push({ title: String(r.title).slice(0, 140), description: (String(r.description || '').trim() + warn).trim(), probability: lvl(r.probability), impact: lvl(r.impact), mitigation: (String(r.mitigation || '').trim() + cont).trim(), response: ['avoid', 'mitigate', 'transfer', 'accept'].includes(r.response) ? r.response : null, category: r.category || null, owner: r.owner || null, quote: grounded ? String(r.evidence).replace(/^\[[^\]]+\]\s*/, '') : '', inferred: !grounded, confidence: clamp(Number(r.confidence), 0.3, grounded ? 0.95 : 0.75) });
       }
-      return risks.slice(0, 16);
+      return risks.slice(0, 22);
     } catch (e) {
       if (['bad_key', 'budget', 'rate', 'network'].includes(e.code)) throw e;
       console.error('Risk analysis failed:', e.message);

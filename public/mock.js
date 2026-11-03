@@ -222,7 +222,7 @@
       let parent = null;
       if (d.phase) parent = topName(d.phase) || mkTask({ name: d.phase, duration: 1 });
       const dupe = d.level === 'phase' && !d.phase ? topName(item.title) : null;
-      const t = dupe || mkTask({ name: item.title, parent_id: parent ? parent.id : null, duration: dur, is_milestone: d.level === 'milestone' ? 1 : 0, notes: [d.note, item.quote ? `Source: "${item.quote}"` : null].filter(Boolean).join(' ') || null });
+      const t = dupe || mkTask({ name: item.title, parent_id: parent ? parent.id : null, duration: dur, is_milestone: d.level === 'milestone' ? 1 : 0, notes: [d.note, d.type && d.type !== 'task' && d.type !== 'milestone' ? `Type: ${d.type}.` : null, d.owner ? `Owner: ${d.owner}.` : null, d.implied ? 'Added by the AI as an expected project step.' : item.quote ? `Source: "${item.quote}"` : null].filter(Boolean).join(' ') || null });
       if (dupe) { t.start = start; t.duration = dur; }
       const deps = [];
       for (const nm of d.depends_on || []) {
@@ -353,13 +353,16 @@
         ex.push(insertItem(P, kind, make(r), doc.id)); counts[kind]++;
       }
     };
-    dedupe('deliverable', a.deliverables, (r) => r.title, 0.8, (r) => ({ title: r.title, description: r.description, data: { due_date: r.due_date || null, due_dates: r.due_date ? [r.due_date] : [], amount: Number(r.amount) > 0 ? Number(r.amount) : null, category: r.category || null, week: r.week ?? null }, confidence: r.confidence, quote: r.quote }), (dup, r) => {
+    dedupe('deliverable', a.deliverables, (r) => r.title, 0.8, (r) => ({ title: r.title, description: [r.ref ? `Ref ${r.ref}.` : '', r.description || '', r.acceptance ? `Acceptance: ${r.acceptance}.` : ''].filter(Boolean).join(' '), data: { ref: r.ref || null, phase: r.phase || null, acceptance: r.acceptance || null, due_date: r.due_date || null, due_dates: r.due_date ? [r.due_date] : [], amount: Number(r.amount) > 0 ? Number(r.amount) : null, category: r.category || null, week: r.week ?? null }, confidence: r.confidence, quote: r.quote }), (dup, r) => {
+      if (r.ref && !dup.data.ref) dup.data.ref = r.ref;
+      if (r.phase && !dup.data.phase) dup.data.phase = r.phase;
+      if (r.acceptance && !dup.data.acceptance) { dup.data.acceptance = r.acceptance; dup.description = `${dup.description} Acceptance: ${r.acceptance}.`.trim(); }
       if (r.due_date) { dup.data.due_dates = [...new Set([...(dup.data.due_dates || (dup.data.due_date ? [dup.data.due_date] : [])), r.due_date])]; if (!dup.data.due_date) dup.data.due_date = r.due_date; }
       if (Number(r.amount) > 0 && !dup.data.amount) dup.data.amount = Number(r.amount);
     });
-    dedupe('requirement', a.requirements, (r) => r.description || r.title, 0.8, (r) => ({ title: (r.title || '').slice(0, 120), description: r.description || r.title, data: { priority: r.priority || 'Should', type: r.type || null }, confidence: r.confidence, quote: r.quote }));
-    dedupe('risk', a.risks, (r) => r.title, 0.7, (r) => ({ title: r.title, description: r.description || '', data: { probability: r.probability || 'Medium', impact: r.impact || 'Medium', mitigation: r.mitigation || '' }, confidence: r.confidence, quote: r.quote }));
-    dedupe('schedule', a.schedule, (r) => r.name, 0.85, (r) => ({ title: r.name, data: { start: r.start || null, end: r.end || null, duration_days: r.duration_days || null, level: r.level || 'task', phase: r.phase || null, start_week: r.start_week ?? null, end_week: r.end_week ?? null, depends_on: Array.isArray(r.depends_on) ? r.depends_on : [] }, confidence: r.confidence, quote: r.quote }));
+    dedupe('requirement', a.requirements, (r) => r.description || r.title, 0.8, (r) => ({ title: (r.title || '').slice(0, 120), description: [r.description || r.title, r.verification ? `Verified by: ${r.verification}.` : ''].filter(Boolean).join(' '), data: { priority: r.priority || 'Should', type: r.type || null, ref: r.ref || null, verification: r.verification || null }, confidence: r.confidence, quote: r.quote }));
+    dedupe('risk', a.risks, (r) => r.title, 0.7, (r) => ({ title: r.title, description: r.description || '', data: { probability: r.probability || 'Medium', impact: r.impact || 'Medium', mitigation: r.mitigation || '', owner: r.owner || null, stated: true }, confidence: r.confidence, quote: r.quote }));
+    dedupe('schedule', a.schedule, (r) => r.name, 0.85, (r) => ({ title: r.name, data: { start: r.start || null, end: r.end || null, duration_days: r.duration_days || null, level: r.level || 'task', type: r.type || null, owner: r.owner || null, phase: r.phase || null, start_week: r.start_week ?? null, end_week: r.end_week ?? null, depends_on: Array.isArray(r.depends_on) ? r.depends_on : [] }, confidence: r.confidence, quote: r.quote }));
     const ms = live('milestone');
     for (const m of a.milestones || []) {
       if (!m.title) continue;
@@ -368,9 +371,11 @@
         addSource(dup, label);
         if (dup.data.due_date == null && m.due_date) dup.data.due_date = m.due_date;
         if (dup.data.amount == null && m.amount != null) dup.data.amount = m.amount;
+        if (!dup.data.deliverable && m.deliverable) dup.data.deliverable = m.deliverable;
+        if (!dup.data.terms_days && m.terms_days) dup.data.terms_days = m.terms_days;
         counts.merged++; continue;
       }
-      ms.push(insertItem(P, 'milestone', { title: m.title, data: { percent: m.percent ?? null, amount: m.amount ?? null, due_date: m.due_date || null, trigger: m.trigger || null }, confidence: m.confidence, quote: m.quote }, doc.id)); counts.milestone++;
+      ms.push(insertItem(P, 'milestone', { title: m.title, data: { percent: m.percent ?? null, amount: m.amount ?? null, due_date: m.due_date || null, trigger: m.trigger || null, deliverable: m.deliverable || null, ref: m.ref || null, terms_days: m.terms_days || null }, confidence: m.confidence, quote: m.quote }, doc.id)); counts.milestone++;
     }
     return counts;
   }
@@ -569,32 +574,40 @@
     const syn = hasSchedFile ? null : await AI.synthesizeSchedule({ docs, items: view(), anchor, project: proj() }).catch(() => null);
     if (syn && syn.plan.length >= 3) {
       for (const i of P.items) if (i.kind === 'schedule' && i.status === 'proposed') { i.status = 'ignored'; i.data.superseded = true; }
+      const cal = S.calendar(rawProject(P));
       for (const r of syn.plan) {
         let note = null;
+        // Rows without dates carry a working day number counted from the anchor. The calendar of the project turns it into dates.
+        if (!r.start && r.start_day && anchor) {
+          r.start = S.addWork(anchor, r.start_day - 1, cal);
+          r.end = r.level === 'milestone' || !(r.duration_days > 1) ? r.start : S.addWork(r.start, r.duration_days - 1, cal);
+        } else if (r.start && !r.end && r.duration_days > 1 && r.level !== 'milestone') r.end = S.addWork(r.start, r.duration_days - 1, cal);
         // A source date earlier than the award cannot be delivered. It is parked at the anchor with a visible note.
         if (anchor && r.level !== 'phase' && ((r.start && r.start < anchor) || (r.end && r.end < anchor))) { note = `Source date ${r.start || r.end} is before the award date ${anchor}. Re baseline with the client.`; r.start = anchor; r.end = anchor; }
-        const it = insertItem(P, 'schedule', { title: r.name, data: { note, start: r.start, end: r.end, duration_days: null, level: r.level, phase: r.phase, start_week: r.start_week, end_week: r.end_week, depends_on: r.depends_on, synthesized: true, refs: r.refs, also_in: r.source_docs }, confidence: 0.8, quote: r.quote }, null);
+        if (!note && r.implied && r.assumption) note = r.assumption;
+        const it = insertItem(P, 'schedule', { title: r.name, data: { note, start: r.start, end: r.end, duration_days: r.duration_days || null, level: r.level, type: r.type, owner: r.owner, implied: r.implied, phase: r.phase, start_week: r.start_week, end_week: r.end_week, depends_on: r.depends_on, synthesized: true, refs: r.refs, also_in: r.source_docs }, confidence: r.implied ? 0.75 : 0.8, quote: r.quote }, null);
         it.doc_id = (P.items.find((x) => x.id === r.refs[0]) || {}).doc_id ?? null;
         out.phases += r.level === 'phase' ? 1 : 0;
       }
       out.summary = syn.summary; out.notes = syn.notes; out.engine = 'claude';
     }
+    P.analysis.stages.find((x) => x.key === 'generate').detail = 'Running consistency checks';
+    const checks = AI.runChecks({ items: view(), project: proj(), docs: (P.analysis && P.analysis.docs) || [] });
     // Project risks are analysed from the whole document set
     P.items = P.items.filter((i) => !(i.kind === 'risk' && i.data && i.data.analysis && i.status === 'proposed'));
     if (AI.hasKey() && docs.length) {
       P.analysis.stages.find((x) => x.key === 'generate').detail = 'Analyzing project risks';
       const rdocs = docs.map((d) => ({ id: d.id, filename: d.filename, role: d.role, summary: d.summary }));
-      const risks = await Pipe.analyzeRisks({ project: proj(), docs: rdocs, items: view(), text: P.texts }).catch((e) => { console.error('risk analysis', e); return []; });
+      const risks = await Pipe.analyzeRisks({ project: proj(), docs: rdocs, items: view(), text: P.texts, checks }).catch((e) => { console.error('risk analysis', e); return []; });
       const ex = P.items.filter((i) => i.kind === 'risk' && i.status !== 'ignored');
       for (const r of risks) {
         if (ex.some((x) => similarity(x.title, r.title) >= 0.7)) continue;
-        const it = insertItem(P, 'risk', { title: r.title, description: r.description, data: { probability: r.probability, impact: r.impact, mitigation: r.mitigation, category: r.category, owner: r.owner, analysis: true, inferred: r.inferred }, confidence: r.confidence, quote: r.quote }, null);
+        const it = insertItem(P, 'risk', { title: r.title, description: r.description, data: { probability: r.probability, impact: r.impact, mitigation: r.mitigation, category: r.category, owner: r.owner, response: r.response, analysis: true, inferred: r.inferred }, confidence: r.confidence, quote: r.quote }, null);
         ex.push(it);
       }
       out.risks = risks.length;
     }
-    P.analysis.stages.find((x) => x.key === 'generate').detail = 'Running consistency checks';
-    out.checks = AI.runChecks({ items: view(), project: proj(), docs: (P.analysis && P.analysis.docs) || [] });
+    out.checks = checks;
     if (!out.summary) out.summary = [...new Set(docs.map((d) => d.summary).filter(Boolean))].join(' ').slice(0, 600);
     if (!P.analysis) P.analysis = { docs: [], stages: [] };
     P.analysis.synthesis = out;
