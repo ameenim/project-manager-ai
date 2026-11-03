@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Sign in to Project Manager AI</title>
+<meta name="description" content="Sign in to Project Manager AI or start a 15 day free trial of the AI project management tool.">
+<meta name="robots" content="noindex, follow">
+<meta name="theme-color" content="#2457d6">
+<link rel="icon" href="brand/mark.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="site.css">
+<style>
+  :root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-lang" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 3 1.9 5.6L19.5 10l-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.4z"/></symbol>
+    <symbol id="i-gantt" viewBox="0 0 24 24"><path d="M3 3v18M7 6h8M10 12h10M7 18h7"/></symbol>
+    <symbol id="i-radar" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9M12 7a5 5 0 1 0 5 5M12 12 19 5"/></symbol>
+  </defs>
+</svg>
+
+<div class="auth">
+  <aside class="auth-art" aria-label="About Project Manager AI">
+    <span class="sh a" aria-hidden="true"></span><span class="sh b" aria-hidden="true"></span><span class="sh c" aria-hidden="true"></span>
+    <a class="brand" href="index.html" aria-label="Project Manager AI, back to home"><img src="brand/mark.svg" alt="" width="34" height="34"><span>Project Manager <b>AI</b></span></a>
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <h2>Your contract, turned into a live plan.</h2>
+      <p>Upload the documents. Review what the AI found. Run the project from one workspace.</p>
+      <ul>
+        <li><svg class="ico sm"><use href="#i-spark"/></svg>AI reads proposals, contracts and purchase orders</li>
+        <li><svg class="ico sm"><use href="#i-gantt"/></svg>Gantt schedule with dependencies and baseline</li>
+        <li><svg class="ico sm"><use href="#i-radar"/></svg>Risk radar and payment tracking</li>
+      </ul>
+    </div>
+    <div class="mini-card" role="img" aria-label="Example: portfolio progress 68 percent, 9 of 12 projects on track">
+      <svg class="ring" viewBox="0 0 36 36" style="--off:32" aria-hidden="true"><circle class="bg" cx="18" cy="18" r="15.9155" pathLength="100"/><circle class="fg" cx="18" cy="18" r="15.9155" pathLength="100"/></svg>
+      <div><b>68% portfolio progress</b><span>9 of 12 projects on track. Example data.</span></div>
+    </div>
+  </aside>
+
+  <div class="auth-main">
+    <div class="auth-top">
+      <a class="back" href="index.html"><svg class="ico"><use href="#i-arrow"/></svg>Back to home</a>
+      <span style="display:flex;gap:8px"><button class="lang-btn" id="langBtn" type="button" aria-label="التبديل إلى العربية"><svg class="ico"><use href="#i-lang"/></svg><span id="langLabel">العربية</span></button>
+      <button class="icon-btn theme-btn" id="themeBtn" type="button" aria-label="Switch between light and dark mode" title="Switch theme"><svg class="ico sun"><use href="#i-sun"/></svg><svg class="ico moon"><use href="#i-moon"/></svg></button></span>
+    </div>
+
+    <a class="brand m-brand" href="index.html" aria-label="Project Manager AI, back to home"><img src="brand/mark.svg" alt="" width="34" height="34"><span>Project Manager <b>AI</b></span></a>
+    <div class="auth-center">
+      <div class="form-card">
+        <div id="formBody" style="display:flex;flex-direction:column;gap:18px">
+          <div class="tabs" role="tablist" aria-label="Sign in or create account">
+            <button id="tabIn" type="button" role="tab" aria-selected="true" aria-controls="authForm">Sign in</button>
+            <button id="tabUp" type="button" role="tab" aria-selected="false" aria-controls="authForm">Create account</button>
+          </div>
+          <div>
+            <h1 id="authTitle">Welcome back</h1>
+            <p class="sub" id="authSub" style="margin-top:6px">Sign in to your project workspace.</p>
+          </div>
+          <form id="authForm" novalidate>
+            <div class="f" id="fName" hidden><label for="name">Full name</label><div class="in-w"><input id="name" name="name" type="text" autocomplete="name" placeholder="Your name"></div><span class="err" role="alert"></span></div>
+            <div class="f" id="fEmail"><label for="email">Email</label><div class="in-w"><input id="email" name="email" type="email" autocomplete="email" placeholder="name@company.com" inputmode="email"></div><span class="err" role="alert"></span></div>
+            <div class="f" id="fPass"><label for="password">Password</label><div class="in-w"><input id="password" name="password" type="password" autocomplete="current-password" placeholder="At least 8 characters" style="padding-inline-end:46px"><button class="eye" id="eyeBtn" type="button" aria-label="Show password"><svg class="ico sm"><use href="#i-eye"/></svg></button></div><span class="err" role="alert"></span></div>
+            <div class="demo" id="demoNote"><svg class="ico"><use href="#i-spark"/></svg><span>Demo login: pm@example.com and demo1234. <button class="mini-btn" id="fillDemo" type="button" style="margin-inline-start:4px">Fill demo details</button></span></div>
+            <button class="btn primary lg" id="submitBtn" type="submit" style="width:100%">Sign in</button>
+          </form>
+        </div>
+
+        <div class="ok-panel" id="okPanel" hidden>
+          <span class="tile"><svg class="ico lg"><use href="#i-check"/></svg></span>
+          <h1 id="okTitle" style="font-size:26px">You are ready to go</h1>
+          <p id="okText"></p>
+          <a class="btn primary lg" id="okLink" href="app.html">Open Project Manager AI <svg class="ico sm"><use href="#i-arrow"/></svg></a>
+          <button class="btn ghost" id="backToForm" type="button" style="align-self:stretch">Back</button>
+        </div>
+      </div>
+    </div>
+    <p class="auth-foot">This page is the front door to the demo workspace. Your details are not sent anywhere from here.</p>
+  </div>
+</div>
+<script src="site.js"></script>
+<script src="lang.js"></script>
+</body>
+</html>

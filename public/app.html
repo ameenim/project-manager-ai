@@ -1,0 +1,45 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Project Manager AI</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="onboard.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
+<style>
+  #demoBadge { position: fixed; z-index: 60; left: 50%; transform: translateX(-50%); bottom: max(10px, env(safe-area-inset-bottom, 0px)); white-space: nowrap; display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--muted); font-size: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.12); }
+  #demoBadge button { border: 1px solid var(--border); background: var(--surface-2); color: var(--text); border-radius: 999px; padding: 3px 10px; font: inherit; cursor: pointer; }
+  #demoBadge button:hover { border-color: var(--primary); }
+  @media (max-width: 700px) { #demoBadge span { display: none; } }
+</style>
+<div id="app"><div style="display:grid;place-items:center;height:100vh"><span class="spinner"></span></div></div>
+<div id="demoBadge"><span id="demoDate">Demo data, dated today</span><button type="button" id="demoReset">Reset demo</button></div>
+<script src="i18n.js"></script>
+<script src="logo.js"></script>
+<script src="engine.js"></script>
+<script src="seed.js"></script>
+<script src="mock.js"></script>
+<script src="gantt.js"></script>
+<script src="app.js"></script>
+<script src="app_review.js"></script>
+<script src="app_board.js"></script>
+<script src="app_schedule.js"></script>
+<script src="app_other.js"></script>
+<script src="app_radar.js"></script>
+<script src="fx.js"></script>
+<script src="app_dash.js"></script>
+<script src="app_portfolio.js"></script>
+<script src="app_pdash.js"></script>
+<script src="app_connect.js"></script>
+<script src="app_brand.js"></script>
+<script src="app_onboard.js"></script>
+<script src="tips.js"></script>
+<script>
+  (function () {
+    try { localStorage.setItem('pm_token', 'demo-token'); } catch (e) { /* storage blocked */ }
+    PM.state.token = 'demo-token';
+    PM.download = function () { PM.toast('Downloads are turned off in the demo. The full app exports Word, Excel and PowerPoint files.', ''); return Promise.resolve(); };
+    document.getElementById('demoReset').onclick = function () { try { PM.onboard.reset(); } catch (e) { /* nothing stored yet */ } location.hash = '#/'; location.reload(); };
+    try { document.getElementById('demoDate').textContent = 'Demo data, dated ' + new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); } catch (e) { /* keep default */ }
+    PM.start();
+  })();
+</script>
+
+</body></html>
