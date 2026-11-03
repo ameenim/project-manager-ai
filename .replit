@@ -1,5 +1,5 @@
 entrypoint = "server.js"
-modules = ["nodejs-20:v8-20230920-bd784b9"]
+modules = ["nodejs-20", "python-base-3.13"]
 run = "npm start"
 
 [nix]
@@ -17,3 +17,27 @@ externalPort = 80
 [[ports]]
 localPort = 5057
 externalPort = 3000
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm start"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
