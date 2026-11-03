@@ -197,7 +197,7 @@
   const TASK_FIELDS = ['name', 'start', 'duration', 'progress', 'assignee', 'notes', 'is_milestone', 'jira_key', 'color', 'deliverable_id', 'parent_id', 'position', 'mode', 'flag', 'links'];
 
   // ---------- items ----------
-  const FIELD_LABEL = { start_date: 'Start date', end_date: 'End date', value: 'Project value', currency: 'Currency', client: 'Client' };
+  const FIELD_LABEL = { start_date: 'Start date', end_date: 'End date', award_date: 'Award date', value: 'Project value', currency: 'Currency', client: 'Client' };
   function confirmItem(P, item, actor) {
     const d = item.data;
     let note = null;
@@ -210,14 +210,29 @@
       }
     } else if (item.kind === 'schedule') {
       const c = S.calendar(rawProject(P));
-      const start = S.nextWork(d.start || P.p.start_date || TODAY, c);
+      const anchor = P.p.start_date || P.p.award_date || null;
+      let s0 = d.start || null, e0 = d.end || null;
+      if (!s0 && d.start_week && anchor) { const w = AI.weeksToDates(anchor, d.start_week, d.end_week); s0 = w.start; e0 = e0 || w.end; }
+      const start = S.nextWork(s0 || P.p.start_date || TODAY, c);
       let dur = d.duration_days || 1;
-      if (d.start && d.end) dur = Math.max(1, S.countWork(d.start, d.end, c));
-      const pos = P.tasks.reduce((m, t) => Math.max(m, t.position ?? 0), 0) + 1;
-      const tid = nid();
-      P.tasks.push({ id: tid, parent_id: null, position: pos, name: item.title, start, duration: dur, progress: 0, assignee: null, deps: [], deliverable_id: null, b_start: null, b_end: null, notes: null, is_milestone: 0, jira_key: null, color: null });
-      d.task_id = tid;
-      note = `Added "${item.title}" to the schedule`;
+      if (s0 && e0) dur = Math.max(1, S.countWork(s0, e0, c));
+      if (d.level === 'milestone') dur = 1;
+      const topName = (nm) => P.tasks.find((t) => !t.parent_id && similarity(t.name, nm) >= 0.9 && similarity(nm, t.name) >= 0.9);
+      const mkTask = (o) => { const t = { id: nid(), parent_id: null, position: P.tasks.reduce((m, x) => Math.max(m, x.position ?? 0), 0) + 1, name: '', start, duration: 1, progress: 0, assignee: null, deps: [], deliverable_id: null, b_start: null, b_end: null, notes: null, is_milestone: 0, jira_key: null, color: null, ...o }; P.tasks.push(t); return t; };
+      let parent = null;
+      if (d.level !== 'phase' && d.phase) parent = topName(d.phase) || mkTask({ name: d.phase, duration: 1 });
+      const dupe = d.level === 'phase' ? topName(item.title) : null;
+      const t = dupe || mkTask({ name: item.title, parent_id: parent ? parent.id : null, duration: dur, is_milestone: d.level === 'milestone' ? 1 : 0, notes: [d.note, item.quote ? `Source: "${item.quote}"` : null].filter(Boolean).join(' ') || null });
+      if (dupe) { t.start = start; t.duration = dur; }
+      const deps = [];
+      for (const nm of d.depends_on || []) {
+        const pred = P.tasks.find((x) => x.id !== t.id && similarity(x.name, nm) >= 0.85 && similarity(nm, x.name) >= 0.85);
+        if (pred && !deps.some((x) => x.id === pred.id) && !wouldLoop(P.tasks, t.id, [{ id: pred.id }])) deps.push({ id: pred.id, lag: 0, type: 'FS' });
+      }
+      t.deps = deps;
+      d.task_id = t.id;
+      try { recalc(P); } catch (e) { /* schedule engine will rebuild on next read */ }
+      note = `Added "${item.title}" to the schedule${parent ? ` under ${parent.name}` : ''}`;
     } else if (item.kind === 'milestone') {
       if (d.amount == null && d.percent != null && P.p.value) d.amount = Math.round((P.p.value * d.percent) / 100);
     }
@@ -299,7 +314,13 @@
     }
     return row;
   }
-  const similarity = (a, b) => Math.max(AI.similarity(a, b), AI.similarity(b, a));
+  // Phase 1 and Phase 2 are different things, so titles whose numbers differ never count as the same item.
+  const numSet = (x) => [...new Set(String(x || '').match(/\d+/g) || [])].sort().join(',');
+  const similarity = (a, b) => {
+    const na = numSet(a), nb = numSet(b);
+    if (na && nb && na !== nb) return 0;
+    return Math.max(AI.similarity(a, b), AI.similarity(b, a));
+  };
 
   // ---------- extraction (port of insertExtracted) ----------
   function insertItem(P, kind, o, docId) {
@@ -323,23 +344,26 @@
       if (rivals.length) for (const r of [...rivals, it]) r.data.conflict = true;
       fields.push(it); counts.field++;
     }
-    const dedupe = (kind, rows, text, threshold, make) => {
+    const dedupe = (kind, rows, text, threshold, make, enrich) => {
       const ex = live(kind);
       for (const r of rows || []) {
         const t = text(r); if (!t) continue;
         const dup = ex.find((x) => similarity(x.title + ' ' + x.description, t) >= threshold || similarity(x.title, t) >= threshold);
-        if (dup) { addSource(dup, label); counts.merged++; continue; }
+        if (dup) { addSource(dup, label); if (enrich) enrich(dup, r); counts.merged++; continue; }
         ex.push(insertItem(P, kind, make(r), doc.id)); counts[kind]++;
       }
     };
-    dedupe('deliverable', a.deliverables, (r) => r.title, 0.8, (r) => ({ title: r.title, description: r.description, data: { due_date: r.due_date || null }, confidence: r.confidence, quote: r.quote }));
+    dedupe('deliverable', a.deliverables, (r) => r.title, 0.8, (r) => ({ title: r.title, description: r.description, data: { due_date: r.due_date || null, due_dates: r.due_date ? [r.due_date] : [], amount: Number(r.amount) > 0 ? Number(r.amount) : null }, confidence: r.confidence, quote: r.quote }), (dup, r) => {
+      if (r.due_date) { dup.data.due_dates = [...new Set([...(dup.data.due_dates || (dup.data.due_date ? [dup.data.due_date] : [])), r.due_date])]; if (!dup.data.due_date) dup.data.due_date = r.due_date; }
+      if (Number(r.amount) > 0 && !dup.data.amount) dup.data.amount = Number(r.amount);
+    });
     dedupe('requirement', a.requirements, (r) => r.description || r.title, 0.8, (r) => ({ title: (r.title || '').slice(0, 120), description: r.description || r.title, data: { priority: r.priority || 'Should' }, confidence: r.confidence, quote: r.quote }));
     dedupe('risk', a.risks, (r) => r.title, 0.7, (r) => ({ title: r.title, description: r.description || '', data: { probability: r.probability || 'Medium', impact: r.impact || 'Medium', mitigation: r.mitigation || '' }, confidence: r.confidence, quote: r.quote }));
-    dedupe('schedule', a.schedule, (r) => r.name, 0.85, (r) => ({ title: r.name, data: { start: r.start || null, end: r.end || null, duration_days: r.duration_days || null }, confidence: r.confidence, quote: r.quote }));
+    dedupe('schedule', a.schedule, (r) => r.name, 0.85, (r) => ({ title: r.name, data: { start: r.start || null, end: r.end || null, duration_days: r.duration_days || null, level: r.level || 'task', phase: r.phase || null, start_week: r.start_week ?? null, end_week: r.end_week ?? null, depends_on: Array.isArray(r.depends_on) ? r.depends_on : [] }, confidence: r.confidence, quote: r.quote }));
     const ms = live('milestone');
     for (const m of a.milestones || []) {
       if (!m.title) continue;
-      const dup = ms.find((x) => { const s = similarity(x.title, m.title); return s >= 0.7 || (m.percent != null && x.data.percent === m.percent && s >= 0.4); });
+      const dup = ms.find((x) => { if (m.amount != null && x.data.amount != null && Math.round(m.amount) !== Math.round(x.data.amount)) return false; const s = similarity(x.title, m.title); return s >= 0.7 || (m.percent != null && x.data.percent === m.percent && s >= 0.4); });
       if (dup) {
         addSource(dup, label);
         if (dup.data.due_date == null && m.due_date) dup.data.due_date = m.due_date;
@@ -405,9 +429,41 @@
           audit(P, 'AI', 'document_failed', { summary: `Analysis failed for ${doc.filename}` });
         }
       }
+      try { if (docs.length) await reconcile(P); } catch (e) { console.error('reconcile failed', e); }
     } finally {
       P.p.analyzing = 0;
     }
+  }
+  // After every file is read: put weeks on the calendar, build one consolidated schedule, and run the plain code checks.
+  async function reconcile(P) {
+    const docs = P.documents.filter((d) => d.summary || P.items.some((i) => i.doc_id === d.id));
+    const view = () => P.items.map((i) => itemView(P, i));
+    const fld = (f) => { const it = P.items.find((i) => i.kind === 'field' && i.data.field === f && i.status !== 'ignored'); return it ? it.data.value : null; };
+    const proj = () => ({ start_date: P.p.start_date || fld('start_date'), end_date: P.p.end_date || fld('end_date'), award_date: P.p.award_date || fld('award_date'), value: P.p.value || Number(fld('value')) || null, currency: P.p.currency || fld('currency') });
+    const anchor = proj().start_date || proj().award_date || null;
+    for (const i of P.items) {
+      if (i.kind === 'schedule' && i.status === 'proposed' && !i.data.start && i.data.start_week && anchor) { const w = AI.weeksToDates(anchor, i.data.start_week, i.data.end_week); i.data.start = w.start; i.data.end = i.data.end || w.end; i.data.from_weeks = true; }
+    }
+    const out = { at: nowTs(), summary: '', notes: [], anchor, anchor_basis: P.p.start_date ? 'project start date' : proj().award_date ? 'award date' : proj().start_date ? 'start date in the documents' : null, engine: 'rules', phases: 0, checks: [] };
+    P.items = P.items.filter((i) => !(i.data && i.data.synthesized && i.status === 'proposed'));
+    for (const i of P.items) if (i.data && i.data.superseded && i.status === 'ignored') { i.status = 'proposed'; delete i.data.superseded; }
+    const syn = await AI.synthesizeSchedule({ docs, items: view(), anchor, project: proj() }).catch(() => null);
+    if (syn && syn.plan.length >= 3) {
+      for (const i of P.items) if (i.kind === 'schedule' && i.status === 'proposed') { i.status = 'ignored'; i.data.superseded = true; }
+      for (const r of syn.plan) {
+        let note = null;
+        // A source date earlier than the award cannot be delivered. It is parked at the anchor with a visible note.
+        if (anchor && r.level !== 'phase' && ((r.start && r.start < anchor) || (r.end && r.end < anchor))) { note = `Source date ${r.start || r.end} is before the award date ${anchor}. Re baseline with the client.`; r.start = anchor; r.end = anchor; }
+        const it = insertItem(P, 'schedule', { title: r.name, data: { note, start: r.start, end: r.end, duration_days: null, level: r.level, phase: r.phase, start_week: r.start_week, end_week: r.end_week, depends_on: r.depends_on, synthesized: true, refs: r.refs, also_in: r.source_docs }, confidence: 0.8, quote: r.quote }, null);
+        it.doc_id = (P.items.find((x) => x.id === r.refs[0]) || {}).doc_id ?? null;
+        out.phases += r.level === 'phase' ? 1 : 0;
+      }
+      out.summary = syn.summary; out.notes = syn.notes; out.engine = 'claude';
+    }
+    out.checks = AI.runChecks({ items: view(), project: proj(), docs: (P.analysis && P.analysis.docs) || [] });
+    if (!out.summary) out.summary = [...new Set(docs.map((d) => d.summary).filter(Boolean))].join(' ').slice(0, 600);
+    P.analysis = { ...(P.analysis || { docs: [] }), synthesis: out };
+    audit(P, 'AI', 'project_reconciled', { summary: `Cross checked ${docs.length} documents: ${out.checks.filter((c) => c.status === 'Pass').length} passed, ${out.checks.filter((c) => c.status === 'Warn').length} warnings, ${out.checks.filter((c) => c.status === 'Fail').length} failed${out.phases ? `. Built a schedule with ${out.phases} phases` : ''}` });
   }
   // Returns { text, error }. Text files are read here. PDF, Word and Excel files are read by the server.
   async function readFile(f) {

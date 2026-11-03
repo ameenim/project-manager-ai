@@ -47,7 +47,7 @@
     if (kind === 'requirement') return [`${esc(it.description || it.title)}`, `<span class="chip ${d.priority === 'Must' ? 'red' : d.priority === 'Could' ? '' : 'blue'}">${esc(d.priority || '')}</span>`, src];
     if (kind === 'milestone') return [`<b>${esc(it.title)}</b>`, `${d.percent != null ? d.percent + '%' : ''}`, d.amount != null ? money(d.amount, p.currency) : d.percent != null && p.value ? `<span class="muted">${money(Math.round((p.value * d.percent) / 100), p.currency)}</span>` : '', d.due_date || '', src];
     if (kind === 'risk') return [`<b>${esc(it.title)}</b>`, `<span class="chip ${d.probability === 'High' ? 'red' : d.probability === 'Low' ? 'green' : 'amber'}">${t('lv_' + (d.probability || 'Medium'))}</span>`, `<span class="chip ${d.impact === 'High' ? 'red' : d.impact === 'Low' ? 'green' : 'amber'}">${t('lv_' + (d.impact || 'Medium'))}</span>`, esc(d.mitigation || ''), src];
-    if (kind === 'schedule') return [`<b>${esc(it.title)}</b>`, d.start || '', d.end || (d.duration_days ? `${d.duration_days} ${t('days')}` : ''), src];
+    if (kind === 'schedule') return [`${d.level === 'phase' ? '<b>' : d.phase ? `<span class="muted small">${esc(d.phase)} › </span>` : ''}${esc(it.title)}${d.level === 'phase' ? '</b>' : ''}${d.depends_on && d.depends_on.length ? `<div class="small muted">${t('after')}: ${esc(d.depends_on.join(', '))}</div>` : ''}`, d.start ? esc(d.start) + (d.from_weeks ? ` <span class="muted small">(${t('week')} ${d.start_week})</span>` : '') : d.start_week ? `${t('week')} ${d.start_week}` : '', d.end || (d.end_week && !d.start ? `${t('week')} ${d.end_week}` : '') || (d.duration_days ? `${d.duration_days} ${t('days')}` : ''), src];
     return [];
   }
   const HEADS = {
@@ -70,6 +70,19 @@
       return `<div class="list-item"><div class="grow"><b>${esc(d.filename)}</b>${detail ? `<div class="small muted">${esc(detail)}</div>` : ''}</div><span class="chip ${AN_CHIP[d.status] || ''}">${d.status === 'reading' ? '<span class="spinner" style="width:12px;height:12px;border-width:2px"></span>' : ''}${t(AN_KEY[d.status] || 'an_waiting')}</span></div>`;
     }).join('');
     return `<div class="card mb" id="anCard"><div class="card-head"><h3>${t('an_title')}</h3></div>${rows}</div>`;
+  }
+
+  const CHECK_CHIP = { Pass: 'green', Warn: 'amber', Fail: 'red' };
+  function planCard(an, proposedSched) {
+    const sy = an && an.synthesis;
+    if (!sy) return '';
+    const checks = (sy.checks || []).map((c) => `<div class="list-item"><div class="grow"><b>${esc(c.title)}</b><div class="small muted">${esc(c.detail)}</div></div><span class="chip ${CHECK_CHIP[c.status] || ''}">${t('chk_' + c.status)}</span></div>`).join('');
+    const notes = (sy.notes || []).map((n) => `<li>${esc(n)}</li>`).join('');
+    const basis = sy.anchor ? t('plan_anchor', { date: sy.anchor, basis: sy.anchor_basis || '' }) : t('plan_no_anchor');
+    return `<div class="card mb" id="planCard"><div class="card-head"><h3>${t('plan_title')}</h3>${proposedSched ? `<button class="btn primary" id="applySched">${icon('cal')}${t('apply_schedule', { n: proposedSched })}</button>` : ''}</div>
+      ${sy.summary ? `<p>${esc(sy.summary)}</p>` : ''}<div class="small muted mb">${basis}</div>
+      ${notes ? `<div class="mb"><b>${t('plan_notes')}</b><ul class="small">${notes}</ul></div>` : ''}
+      ${checks ? `<div><b>${t('plan_checks')}</b>${checks}</div>` : ''}</div>`;
   }
 
   // ---------- tab ----------
@@ -107,6 +120,7 @@
         ${!p.analyzing && total ? `<div class="banner mb">${icon('spark')}<div class="grow"><b>${t('items_waiting', { n: total })}</b><div class="small muted">${t('wizard_intro')}</div></div><button class="btn primary" id="wizBtn">${icon('play')}${t('start_wizard')}</button></div>` : ''}
         ${!p.analyzing && !total && items.length ? `<div class="banner ok mb">${icon('check')}<div class="grow"><b>${t('all_reviewed')}</b></div></div>` : ''}
         ${analysisCard(an, p.analyzing, items.length)}
+        ${p.analyzing ? '' : planCard(an, items.filter((i) => i.kind === 'schedule' && i.status === 'proposed').length)}
         ${!p.analyzing && !items.length ? `<div class="card empty mb"><div class="big">📄</div><p>${t('no_items_yet')}</p><a class="btn primary" href="#/p/${p.id}/documents">${icon('upload')}${t('upload_docs')}</a></div>` : ''}
         <div class="card"><div class="row wrap" style="margin-bottom:12px">${KINDS.map((k) => `<button class="tab ${k === kind ? 'active' : ''}" data-kind="${k}" style="border-radius:8px 8px 0 0">${t('kind_' + k)} <span class="badge-count ${pb[k] ? '' : 'soft'}">${pb[k] || items.filter((i) => i.kind === k && i.status !== 'ignored').length}</span></button>`).join('')}</div>
         <div class="row wrap" style="margin-bottom:12px">${['all', 'proposed', 'confirmed', 'ignored'].map((s) => `<span class="chip filter-chip ${status === s ? 'on' : ''}" data-status="${s}">${s === 'all' ? t('all') : t('st_' + s)}</span>`).join('')}
@@ -132,6 +146,13 @@
       $$('[data-edit]', root).forEach((b) => (b.onclick = () => editItem(items.find((i) => i.id === Number(b.dataset.edit)))));
       $$('[data-state]', root).forEach((s) => (s.onchange = async () => { await busy(null, () => api('PUT', `/api/items/${s.dataset.state}`, { state: s.value })); reload(); }));
       $$('[data-dl]', root).forEach((a) => (a.onclick = (e) => { e.preventDefault(); window.PM.download(`/api/projects/${p.id}/documents/${a.dataset.dl}/file`, a.dataset.name); }));
+      const apply = $('#applySched', root);
+      if (apply) apply.onclick = async () => {
+        const ids = items.filter((i) => i.kind === 'schedule' && i.status === 'proposed').sort((a, b) => a.id - b.id).map((i) => i.id);
+        await busy(apply, async () => { await api('POST', `/api/projects/${p.id}/items/bulk`, { ids, action: 'confirm' }); });
+        toast(t('schedule_applied'));
+        location.hash = `#/p/${p.id}/schedule`;
+      };
       const bulk = $('#bulkOk', root);
       if (bulk) bulk.onclick = async () => {
         const picked = $$('[data-pick]:checked', root).map((c) => Number(c.dataset.pick));

@@ -1466,19 +1466,25 @@ function handleLine(kind, body, quote, out) {
 }
 
 // ---------- main document analysis ----------
-const EXTRACT_SYSTEM = `You are a project management analyst. Read the project document and extract structured data.
+const EXTRACT_SYSTEM = `You are a senior project manager reading one part of a project document (proposal, award letter, financial offer, contract or similar). Extract structured data.
 Return JSON with this shape:
 {
  "kind": "proposal|contract|po|boq|invoice|evidence|minutes|other",
- "summary": "two sentence summary",
- "fields": [{"field":"start_date|end_date|value|currency|client","value":"...","confidence":0.0-1.0,"quote":"short source text"}],
- "deliverables": [{"title":"","description":"","due_date":"YYYY-MM-DD or null","confidence":0.0,"quote":""}],
+ "summary": "two sentence summary of what this document is and what it commits to",
+ "fields": [{"field":"start_date|end_date|award_date|value|currency|client","value":"...","confidence":0.0-1.0,"quote":"short source text"}],
+ "deliverables": [{"title":"","description":"","due_date":"YYYY-MM-DD or null","amount":number or null,"confidence":0.0,"quote":""}],
  "requirements": [{"title":"","description":"","priority":"Must|Should|Could","confidence":0.0,"quote":""}],
  "risks": [{"title":"","description":"","probability":"Low|Medium|High","impact":"Low|Medium|High","mitigation":"","confidence":0.0,"quote":""}],
  "milestones": [{"title":"","percent":number or null,"amount":number or null,"due_date":"YYYY-MM-DD or null","confidence":0.0,"quote":""}],
- "schedule": [{"name":"","start":"YYYY-MM-DD or null","end":"YYYY-MM-DD or null","duration_days":number or null,"confidence":0.0,"quote":""}]
+ "schedule": [{"name":"","level":"phase|task|milestone","phase":"parent phase name or null","start":"YYYY-MM-DD or null","end":"YYYY-MM-DD or null","start_week":number or null,"end_week":number or null,"duration_days":number or null,"depends_on":["name of predecessor"],"confidence":0.0,"quote":""}]
 }
-Rules: only extract what the document supports. value is a number without currency symbols, currency is an ISO code. Dates are ISO. The quote must be copied exactly, word for word, from the text you were given, about 8 to 25 words. Never rewrite or translate a quote. Skip any item you cannot quote. If a part of the document has no relevant facts, return empty lists. Payment milestones are invoicing or payment events, not delivery tasks.`;
+Rules:
+1. Only extract what the text supports. Every item needs a quote copied exactly, word for word, from the text you were given, about 8 to 25 words. Never rewrite or translate a quote. Skip any item you cannot quote.
+2. value is a number without currency symbols, currency is an ISO code. award_date is the date a contract or award letter was issued. Dates are ISO. Never guess a date. If the text gives only relative timing such as Week 1 to Week 6 or Month 3, fill start_week and end_week (weeks, counted from project start) and leave start and end null. A month or year with no day is not a date, convert only when the text says the exact day.
+3. Schedule means project delivery work: phases, activities, release gates and delivery dates. Use level phase for a named stage that contains work, task for work inside a phase, milestone for a gate or go-live. Set phase on tasks and milestones. Fill depends_on only when the text states or clearly implies the order (for example UAT follows build).
+4. Deliverables are things handed to the client. Where a price is shown next to a deliverable, put it in amount as a number.
+5. Payment milestones are invoicing or payment events, not delivery tasks. Keep percent and amount exact as written.
+6. List each fact once. Do not repeat the same deliverable, phase or risk from different parts of the text. Tables of risks, dependencies and assumptions are risks. If a part has no relevant facts return empty lists.`;
 
 // The whole document is read. Long text is split into parts at paragraph breaks and every part is sent.
 const PART_SIZE = 40000;
@@ -1600,6 +1606,123 @@ async function analyzeDocument({ text, filename, onProgress }) {
   const h = heuristicExtract(text, filename);
   const n = h.deliverables.length + h.requirements.length + h.risks.length + h.milestones.length + h.schedule.length + h.fields.length;
   return { kind, summary: `Rule based reading of ${filename}. Found ${n} candidate items.`, ...h, engine: 'rules', ai_error: aiError, coverage: { chars_total: text.length, chars_sent: text.length, parts: 1, parts_read: 1, parts_failed: 0, dropped_no_quote: 0 } };
+}
+
+// ---------- cross document reading ----------
+const isoAdd = (iso, n) => { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+const validIso = (x) => typeof x === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x) && !isNaN(Date.parse(x));
+// Turns Week 3 to Week 6 into real dates from an anchor day. Week 1 starts on the anchor.
+function weeksToDates(anchor, sw, ew) {
+  if (!validIso(anchor) || sw == null || !(sw >= 1)) return { start: null, end: null };
+  const e = ew != null && ew >= sw ? ew : sw;
+  return { start: isoAdd(anchor, (Math.round(sw) - 1) * 7), end: isoAdd(anchor, Math.round(e) * 7 - 3) };
+}
+
+// Plain code checks. Nothing here depends on the AI, so the verdicts can be trusted.
+// input: { items:[{kind,title,data,doc,status}], project:{start_date,end_date,value,award_date}, docs:[{filename,status,coverage}] }
+function runChecks({ items, project, docs }) {
+  const live = items.filter((i) => i.status !== 'ignored');
+  const by = (k) => live.filter((i) => i.kind === k);
+  const checks = [];
+  const add = (id, status, title, detail) => checks.push({ id, status, title, detail });
+  const money = (n) => Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
+  const fieldVals = (f) => by('field').filter((i) => i.data.field === f);
+
+  // Coverage
+  const unread = (docs || []).filter((d) => d.status && d.status !== 'done' && d.status !== 'empty');
+  if ((docs || []).length) add('coverage', unread.length ? 'Warn' : 'Pass', 'Every document was read in full', unread.length ? `${unread.map((d) => d.filename).join(', ')} was not read completely, so some facts may be missing.` : 'All pages of all documents were read and each fact is tied to a quote.');
+
+  // Contract value consistency
+  const values = fieldVals('value').map((i) => ({ v: Number(i.data.value), doc: i.doc_name || '' })).filter((x) => x.v > 0);
+  const priced = by('deliverable').filter((i) => i.data.amount > 0);
+  const pricedSum = priced.reduce((a, i) => a + Number(i.data.amount), 0);
+  const payAmt = by('milestone').filter((i) => i.data.amount > 0).reduce((a, i) => a + Number(i.data.amount), 0);
+  const distinct = [...new Set(values.map((x) => Math.round(x.v * 100)))];
+  if (distinct.length > 1) add('value', 'Fail', 'Contract value is the same in every document', `Documents state different values: ${[...new Set(values.map((x) => money(x.v)))].join(' and ')}. Confirm which one is binding. The award letter outranks the proposals.`);
+  else if (distinct.length === 1) add('value', 'Pass', 'Contract value is the same in every document', `Stated value is ${money(values[0].v)}.`);
+  const ref = distinct.length ? values[0].v : Number(project.value) || 0;
+  if (ref && priced.length) {
+    const diff = Math.abs(pricedSum - ref);
+    add('sum', diff < 1 ? 'Pass' : diff / ref < 0.01 ? 'Warn' : 'Fail', 'Deliverable prices add up to the contract value', diff < 1 ? `${priced.length} priced deliverables add up to ${money(pricedSum)}, matching the contract value.` : `${priced.length} priced deliverables add up to ${money(pricedSum)} but the contract value is ${money(ref)}. Difference ${money(pricedSum - ref)}.`);
+  }
+  if (ref && payAmt) {
+    const diff = Math.abs(payAmt - ref);
+    add('pay', diff < 1 ? 'Pass' : 'Warn', 'Payment milestones add up to the contract value', diff < 1 ? `Payments total ${money(payAmt)}.` : `Payment milestones total ${money(payAmt)} against ${money(ref)}.`);
+  }
+  const pct = by('milestone').filter((i) => i.data.percent != null).reduce((a, i) => a + Number(i.data.percent), 0);
+  if (by('milestone').some((i) => i.data.percent != null) && !(payAmt && ref && Math.abs(payAmt - ref) < 1)) add('pct', Math.abs(pct - 100) < 0.01 ? 'Pass' : 'Warn', 'Payment percentages add up to 100%', `Payment shares total ${Math.round(pct * 100) / 100}%.`);
+
+  // Dates
+  const award = (fieldVals('award_date')[0] || {}).data;
+  const awardIso = award && validIso(award.value) ? award.value : validIso(project.award_date) ? project.award_date : null;
+  if (awardIso) {
+    const early = [];
+    for (const i of live) {
+      const ds = i.kind === 'deliverable' || i.kind === 'milestone' ? (i.data.due_dates && i.data.due_dates.length ? i.data.due_dates : [i.data.due_date]) : i.kind === 'schedule' ? [i.data.end || i.data.start] : [];
+      for (const d of ds) if (validIso(d) && d < awardIso && !(i.kind === 'schedule' && i.data.level === 'phase') && !early.includes(`${i.title} (${d})`)) early.push(`${i.title} (${d})`);
+    }
+    add('early', early.length ? 'Fail' : 'Pass', 'No delivery date falls before the award date', early.length ? `Award date is ${awardIso}. These dates are earlier: ${early.slice(0, 4).join(', ')}. The proposal dates were set before the award and need to be re baselined.` : `Award date is ${awardIso} and every dated item is after it.`);
+  }
+  // Go live before staging inside one release
+  const rel = by('deliverable').concat(by('milestone')).filter((i) => validIso(i.data.due_date)).map((i) => ({ ...i, data: { ...i.data, due_date: i.data.due_dates && i.data.due_dates.length ? i.data.due_dates.slice().sort()[0] : i.data.due_date } }));
+  const bad = [];
+  for (const g of rel.filter((i) => /go[\s-]?live/i.test(i.title))) {
+    const ph = (g.title.match(/phase\s*(\d)/i) || [])[1];
+    for (const s of rel.filter((i) => /staging/i.test(i.title) && (i.title.match(/phase\s*(\d)/i) || [])[1] === ph && ph)) if (g.data.due_date < s.data.due_date) bad.push(`Phase ${ph} go live ${g.data.due_date} is before staging ${s.data.due_date}`);
+  }
+  if (rel.some((i) => /go[\s-]?live/i.test(i.title))) add('order', bad.length ? 'Fail' : 'Pass', 'Staging comes before go live', bad.length ? bad.join('. ') + '. Labels in the source table are inconsistent, confirm the real sequence with the client.' : 'Go live dates follow staging dates.');
+
+  // Project window
+  const sd = validIso(project.start_date) ? project.start_date : null;
+  const ed = validIso(project.end_date) ? project.end_date : null;
+  const ends = by('schedule').map((i) => i.data.end).filter(validIso).sort();
+  if (ed && ends.length) {
+    const last = ends[ends.length - 1];
+    add('window', last > ed ? 'Warn' : 'Pass', 'Schedule finishes inside the project end date', last > ed ? `Schedule runs to ${last} but the project end date is ${ed}.` : `Last scheduled finish is ${last}, project ends ${ed}.`);
+  }
+  if (!sd && !awardIso && by('schedule').some((i) => i.data.start_week != null && !i.data.start)) add('anchor', 'Warn', 'A start date is needed to place the weeks on the calendar', 'The plan is written as Week 1 to Week N. Confirm the project start date so the weeks can be turned into dates.');
+  // Competing schedule models
+  const wk = by('schedule').filter((i) => i.data.end_week != null).map((i) => Number(i.data.end_week));
+  const wkMax = wk.length ? Math.max(...wk) : 0;
+  if (wkMax && ends.length && (sd || awardIso)) {
+    const a = sd || awardIso;
+    const weeksByDates = Math.round((Date.parse((ends[ends.length - 1])) - Date.parse(a)) / (7 * 86400e3));
+    const gap = Math.abs(weeksByDates - wkMax);
+    add('models', gap > 4 ? 'Warn' : 'Pass', 'Week plan and calendar dates agree', gap > 4 ? `The week plan runs ${wkMax} weeks but the dated windows run about ${weeksByDates} weeks from ${a}. The documents describe two different timelines.` : 'The week plan and the dated windows span a similar length.');
+  }
+  return checks;
+}
+
+const SYNTH_SYSTEM = `You are a senior project manager building one delivery schedule from several project documents. You receive numbered items already extracted and verified from the documents, plus the anchor date.
+Return JSON: {"summary":"3 to 5 sentences: what is being delivered, for whom, the contract value, the overall duration and the main risk to the dates","plan":[{"level":"phase|task|milestone","name":"","phase":"parent phase name or null","start":"YYYY-MM-DD or null","end":"YYYY-MM-DD or null","start_week":number or null,"end_week":number or null,"depends_on":["predecessor name"],"refs":[item numbers]}],"notes":["one line per conflict, gap or assumption the project manager must resolve"]}
+Rules: build only from the given items and cite them in refs, every plan row needs at least one valid ref. Never invent dates. Use explicit dates when an item has them, otherwise keep weeks. Merge duplicates that describe the same work from different documents. Order the plan so that phases come before their tasks. Add depends_on for every phase after the first and for gates such as UAT, go live and handover. Documents rank: award letter, then financial offer, then technical proposal. When documents disagree on a date, value or scope, schedule the higher ranked one and list the disagreement in notes. Notes must be plain sentences without dashes or semicolons.`;
+
+async function synthesizeSchedule({ docs, items, anchor, project }) {
+  await aiReady;
+  if (!hasKey()) return null;
+  const rows = items.filter((i) => i.status !== 'ignored' && ['schedule', 'deliverable', 'milestone'].includes(i.kind));
+  if (!rows.length) return null;
+  const list = rows.slice(0, 220).map((i, n) => ({ n: n + 1, kind: i.kind, doc: i.doc_name || '', name: i.title, level: i.data.level || null, phase: i.data.phase || null, start: i.data.start || i.data.due_date || null, end: i.data.end || null, start_week: i.data.start_week ?? null, end_week: i.data.end_week ?? null, days: i.data.duration_days ?? null, amount: i.data.amount ?? null, percent: i.data.percent ?? null, depends_on: i.data.depends_on || null }));
+  try {
+    const j = await claudeJSON(SYNTH_SYSTEM, `Anchor date for Week 1: ${anchor || 'unknown'}\nProject: ${JSON.stringify({ value: project.value, currency: project.currency, award_date: project.award_date || null, start_date: project.start_date || null, end_date: project.end_date || null })}\nDocuments: ${JSON.stringify(docs.map((d) => ({ file: d.filename, kind: d.kind, summary: d.summary })))}\nItems: ${JSON.stringify(list)}`, 12000);
+    if (!j || !Array.isArray(j.plan)) return null;
+    const plan = [];
+    for (const r of j.plan) {
+      if (!r || !String(r.name || '').trim()) continue;
+      const refs = (Array.isArray(r.refs) ? r.refs : []).map((n) => rows[Number(n) - 1]).filter(Boolean);
+      if (!refs.length) continue;
+      let start = validIso(r.start) ? r.start : null;
+      let end = validIso(r.end) ? r.end : null;
+      const sw = r.start_week != null ? Number(r.start_week) : null;
+      const ew = r.end_week != null ? Number(r.end_week) : null;
+      if (!start && sw) { const w = weeksToDates(anchor, sw, ew); start = w.start; end = end || w.end; }
+      plan.push({ level: ['phase', 'task', 'milestone'].includes(r.level) ? r.level : 'task', name: String(r.name).trim().slice(0, 140), phase: r.phase ? String(r.phase).slice(0, 140) : null, start, end, start_week: sw, end_week: ew, depends_on: (Array.isArray(r.depends_on) ? r.depends_on : []).map(String).filter(Boolean), refs: refs.map((x) => x.id), quote: (refs[0].quote || '').slice(0, 300), source_docs: [...new Set(refs.map((x) => x.doc_name).filter(Boolean))] });
+    }
+    return { summary: String(j.summary || ''), plan, notes: (Array.isArray(j.notes) ? j.notes : []).map(String).filter(Boolean).slice(0, 12) };
+  } catch (e) {
+    console.error('Synthesis failed:', e.message);
+    return null;
+  }
 }
 
 // ---------- matching helpers ----------
@@ -1734,7 +1857,7 @@ Use only ids from the lists. A BOQ, delivery note, handover or acceptance record
   return { updates, engine: 'rules' };
 }
 
-module.exports = { hasKey, claude, claudeJSON, extractText, classify, analyzeDocument, interpretMessage, interpretEvidence, similarity, tokens, parseDate, parseAmount, findCurrency, MODEL };
+module.exports = { hasKey, claude, claudeJSON, extractText, classify, analyzeDocument, runChecks, synthesizeSchedule, weeksToDates, interpretMessage, interpretEvidence, similarity, tokens, parseDate, parseAmount, findCurrency, MODEL };
 ;return module.exports})();
 window.__Reports=(function(){var module={exports:{}};var exports=module.exports;var process={env:{}};var require=function(n){if(n==='./schedule')return window.__Sched;if(n==='./ai')return window.__AI;if(n==='docx')return new Proxy({},{get:function(){return function(){}}});return {}};
 // Report and document generation: default and custom templates, progress reports
