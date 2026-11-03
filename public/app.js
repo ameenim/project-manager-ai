@@ -168,7 +168,7 @@
 
   function authView(mode) {
     $('#app').innerHTML = `<div class="auth"><div class="card"><div class="brand" style="padding-inline:0"><div class="logo">${PM.logo.mark()}</div><span>${t('app_name')}</span></div>
-      <h2 style="margin:6px 0 4px">${mode === 'login' ? t('sign_in') : t('create_account')}</h2><p class="muted" style="margin:0 0 16px">${t('auth_sub')}</p>
+      <h2 style="margin:6px 0 4px">${mode === 'login' ? t('sign_in') : t('create_account')}</h2><p class="muted" style="margin:0 0 ${mode === 'register' ? '8px' : '16px'}">${t('auth_sub')}</p>${mode === 'register' ? `<p class="small" style="margin:0 0 16px;color:var(--primary-600);font-weight:600">${t('ob_trial_note')}</p>` : ''}
       <form id="authForm" class="col">
         ${mode === 'register' ? `<label class="f">${t('name')}<input type="text" name="name" required autocomplete="name"></label>` : ''}
         <label class="f">${t('email')}<input type="email" name="email" required autocomplete="email" ${mode === 'login' ? 'value="pm@example.com"' : ''}></label>
@@ -202,8 +202,8 @@
     try { S.projects = (await api('GET', '/api/projects')).projects; } catch { /* handled */ }
   }
   function shell(active, content, projHead) {
-    $('#app').innerHTML = `<div class="shell"><aside class="sidebar"><div class="brand"><div class="logo">${PM.logo.mark()}</div><span class="grow">${t('app_name')}</span><button class="btn ghost icon sm" id="navHide" type="button" aria-label="${t('nav_hide')}" title="${t('nav_hide')}">${icon('chev_l')}</button></div>
-      <nav class="nav"><a href="#/" class="${active === 'dash' ? 'active' : ''}">${icon('home')}${t('nav_dashboard')}</a><div class="nav-fly" id="navFly"><a href="#/projects" class="${active === 'projects' ? 'active' : ''}" aria-haspopup="true" aria-expanded="false">${icon('folder')}<span class="grow">${t('nav_projects')}</span><span class="nav-caret">${icon('chev_r')}</span></a></div><a href="#/calendar" class="${active === 'calendar' ? 'active' : ''}">${icon('cal')}${t('nav_calendar')}</a></nav>
+    $('#app').innerHTML = `${PM.billing ? PM.billing.ribbon() : ''}<div class="shell"><aside class="sidebar"><div class="brand"><div class="logo">${PM.logo.mark()}</div><span class="grow">${t('app_name')}</span><button class="btn ghost icon sm" id="navHide" type="button" aria-label="${t('nav_hide')}" title="${t('nav_hide')}">${icon('chev_l')}</button></div>
+      <nav class="nav"><a href="#/" class="${active === 'dash' ? 'active' : ''}">${icon('home')}${t('nav_dashboard')}</a><div class="nav-fly" id="navFly"><a href="#/projects" class="${active === 'projects' ? 'active' : ''}" aria-haspopup="true" aria-expanded="false">${icon('folder')}<span class="grow">${t('nav_projects')}</span><span class="nav-caret">${icon('chev_r')}</span></a></div><a href="#/calendar" class="${active === 'calendar' ? 'active' : ''}">${icon('cal')}${t('nav_calendar')}</a><a href="#/billing" class="${active === 'billing' ? 'active' : ''}">${icon('coin')}${t('nav_billing')}</a></nav>
       <div class="spacer"></div>
       <div class="side-prefs">
         <div class="pref"><span class="pref-ic">${icon(S.theme === 'dark' ? 'moon' : 'sun')}</span><span class="grow">${t('dark_mode')}</span><button type="button" class="tgl ${S.theme === 'dark' ? 'on' : ''}" id="themeBtn" role="switch" aria-checked="${S.theme === 'dark'}" aria-label="${t('dark_mode')}" data-tip="${t('dark_mode')}"><i>${icon(S.theme === 'dark' ? 'moon' : 'sun')}</i></button></div>
@@ -236,6 +236,7 @@
     $('#themeBtn').onclick = () => setPref({ theme: S.theme === 'dark' ? 'light' : 'dark' });
     $('#langBtn').onclick = () => setPref({ language: S.lang === 'ar' ? 'en' : 'ar' });
     $('#logoutBtn').onclick = () => signOut();
+    if (PM.billing) PM.billing.bind();
   }
   // hover the Projects menu item to see every project, click one to open its workspace
   function projectFlyout() {
@@ -291,9 +292,11 @@
     const act = d.activity.map((a) => `<div class="list-item"><div class="grow"><div>${esc(a.detail.summary || a.action)}</div><div class="small muted">${esc(a.project)} · ${esc(a.actor)} · ${esc((a.ts || '').slice(0, 16))}</div></div></div>`).join('');
     $('#content').innerHTML = `<div class="page dash">
       <div class="page-head"><h1>${t('welcome', { name: esc(S.user.name.split(' ')[0]) })}</h1><button class="btn primary" id="newProj">${icon('plus')}${t('new_project')}</button></div>
+      ${PM.onboard ? PM.onboard.banner() : ''}
       ${d.pendingItems + d.pendingInbox ? `<div class="banner mb">${icon('spark')}<div class="grow"><b>${t('needs_attention')}</b> ${t('attention_detail', { items: d.pendingItems, updates: d.pendingInbox })}</div></div>` : ''}
       <div id="dashHost"></div>
       ${unassigned.length ? `<div class="card mt"><div class="card-head"><h3>${t('unassigned_msgs')}</h3></div>${unassigned.map((m) => `<div class="list-item"><div class="grow"><div class="small muted">${esc(m.source)} · ${esc(m.sender || '')}</div><div>${esc((m.body || '').slice(0, 200))}</div></div><select data-assign="${m.id}" style="width:180px"><option value="">${t('assign_to')}</option>${d.projects.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></div>`).join('')}</div>` : ''}</div>`;
+    if (PM.onboard) PM.onboard.bind($('#content'));
     PM.dash.mount($('#dashHost'), d);
     $$('[data-assign]').forEach((s) => (s.onchange = async () => { if (!s.value) return; await busy(null, () => api('POST', `/api/inbox/${s.dataset.assign}/assign`, { project_id: Number(s.value) })); toast(t('assigned'), 'ok'); route(); }));
     const np = $('#newProj'); if (np) np.onclick = newProjectDialog;
@@ -340,14 +343,17 @@
     $('#content').innerHTML = `<div class="page" style="max-width:760px"><div class="page-head"><h1>${t('account_settings')}</h1></div>
       <div class="card"><div class="row gap-lg">${avatarHtml(u, 'lg')}<div class="grow"><div style="font-weight:600;font-size:var(--fs-heading)">${esc(u.name)}</div><div class="muted">${esc(u.email)}</div></div><label class="btn"><input type="file" id="avFile" accept="image/*" class="hidden">${icon('upload')}${t('upload_photo')}</label></div></div>
       <div class="card mt"><div class="card-head"><h3>${t('profile')}</h3></div><div class="form-grid"><label class="f">${t('name')}<input type="text" id="acName" value="${esc(u.name)}"></label><label class="f">${t('email')}<input type="text" value="${esc(u.email)}" disabled></label>
+        <label class="f">${t('ob_mobile')}<input type="tel" id="acPhone" dir="ltr" value="${esc(PM.onboard ? PM.onboard.phone() : '')}" placeholder="+971501234567" inputmode="tel" autocomplete="tel"></label><span></span>
         <label class="f">${t('interface_language')}<select id="acLang"><option value="en" ${S.lang === 'en' ? 'selected' : ''}>English</option><option value="ar" ${S.lang === 'ar' ? 'selected' : ''}>العربية</option></select></label>
         <label class="f">${t('appearance')}<select id="acTheme"><option value="light" ${S.theme === 'light' ? 'selected' : ''}>${t('light')}</option><option value="dark" ${S.theme === 'dark' ? 'selected' : ''}>${t('dark')}</option></select></label></div>
         <div class="row mt"><button class="btn primary" id="acSave">${t('save')}</button></div></div>
+      ${PM.onboard ? PM.onboard.accountCards() : ''}
       <div class="card mt"><div class="card-head"><h3>${t('change_password')}</h3></div><div class="form-grid"><label class="f">${t('current_password')}<input type="password" id="pwCur" autocomplete="current-password"></label><label class="f">${t('new_password')}<input type="password" id="pwNew" autocomplete="new-password" minlength="8"></label></div><div class="row mt"><button class="btn" id="pwSave">${t('update_password')}</button></div></div>
       <div class="card mt"><div class="card-head"><h3>${t('cw_connections')}</h3></div><div class="small muted mb">${t('cw_connections_hint')}</div><div id="connHost" class="conn-list"></div></div>
       <div class="card mt"><div class="card-head"><h3>${t('ai_engine')}</h3></div><div class="row wrap"><span class="chip ${S.status.claude ? 'green' : 'amber'}">${S.status.claude ? `${t('ai_on')} (${esc(S.status.model)})` : t('ai_rules')}</span><span class="chip ${S.status.jira ? 'green' : ''}">Jira ${S.status.jira ? t('connected') : t('not_configured')}</span><span class="chip ${S.status.graph ? 'green' : ''}">Microsoft 365 ${S.status.graph ? t('connected') : t('not_configured')}</span></div><p class="small muted" style="margin-bottom:0">${t('ai_engine_hint')}</p></div></div>`;
     if ($('#connHost') && PM.connect) PM.connect.mountRows($('#connHost'));
-    $('#acSave').onclick = () => busy($('#acSave'), async () => { await api('PUT', '/api/me', { name: $('#acName').value.trim() || u.name, language: $('#acLang').value, theme: $('#acTheme').value }).then((r) => setUser(r.user)); toast(t('saved'), 'ok'); route(); });
+    if (PM.onboard) PM.onboard.bindAccount($('#content'));
+    $('#acSave').onclick = () => busy($('#acSave'), async () => { const pe = PM.onboard ? PM.onboard.savePhone($('#acPhone').value) : ''; if (pe) { toast(pe, 'err'); $('#acPhone').focus(); return; } await api('PUT', '/api/me', { name: $('#acName').value.trim() || u.name, language: $('#acLang').value, theme: $('#acTheme').value }).then((r) => setUser(r.user)); toast(t('saved'), 'ok'); route(); });
     $('#pwSave').onclick = () => busy($('#pwSave'), async () => { await api('POST', '/api/me/password', { current: $('#pwCur').value, next: $('#pwNew').value }); $('#pwCur').value = ''; $('#pwNew').value = ''; toast(t('saved'), 'ok'); });
     $('#avFile').onchange = async (e) => { const f = e.target.files[0]; if (!f) return; const fd = new FormData(); fd.append('file', f); const r = await busy(null, () => api('POST', '/api/me/avatar', fd)); if (r) { setUser(r.user); toast(t('saved'), 'ok'); route(); } };
   };
@@ -393,8 +399,10 @@
       try { const r = await api('GET', '/api/me'); setUser(r.user); S.status = r.status; } catch { return; }
     }
     if (parts[0] === 'login' || parts[0] === 'register') { location.hash = '#/'; return; }
+    if (PM.onboard) PM.onboard.gate();
     S.nav++;
     if (!parts.length) return PM.views.dashboard();
+    if (parts[0] === 'billing') { S.project = null; return PM.views.billing(); }
     if (parts[0] === 'brand') { S.project = null; return PM.views.brand(); }
     if (parts[0] === 'projects') { S.project = null; return PM.views.projects(); }
     if (parts[0] === 'calendar') { S.project = null; return PM.views.calendar(); }

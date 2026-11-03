@@ -1,0 +1,88 @@
+/* Plan ribbon, first login setup, product tour, subscription and billing page. Tokens only, both themes, left to right and right to left. */
+
+/* ribbon: always the first row of the screen */
+#app:has(> .ribbon) { display: flex; flex-direction: column; }
+#app:has(> .ribbon) > .shell { flex: 1; min-height: 0; height: auto; }
+.ribbon { flex: none; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 18px; padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--primary-soft); font-size: var(--fs-body); position: relative; z-index: 70; }
+.ribbon.paid { background: var(--success-soft); }
+.ribbon.warn { background: var(--warning-soft); }
+.ribbon.bad { background: var(--danger-soft); }
+.rb-status { display: flex; align-items: center; gap: 8px; flex: 1 1 220px; min-width: 0; font-weight: 600; }
+.rb-status span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ribbon.ok .rb-status svg { color: var(--primary); }
+.ribbon.paid .rb-status svg { color: var(--success); }
+.ribbon.warn .rb-status svg { color: var(--warning); }
+.ribbon.bad .rb-status svg { color: var(--danger); }
+.rb-tokens { display: flex; align-items: center; gap: 8px; font-size: var(--fs-small); color: var(--muted); border-radius: 8px; padding: 2px 4px; }
+.rb-tokens b { color: var(--text); font-size: var(--fs-body); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rb-tokens:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.rb-meter { width: 110px; flex: none; }
+.rb-tokens.warn .progress > i { background: var(--warning); }
+.rb-tokens.bad .progress > i { background: var(--danger); }
+.rb-tokens.bad b { color: var(--danger); }
+.rb-cta { display: flex; align-items: center; }
+.rb-short { display: none; }
+@media (max-width: 700px) {
+  .ribbon { padding: 6px 12px; gap: 4px 12px; }
+  .rb-long { display: none; }
+  .rb-short { display: inline; }
+  .rb-status { flex-basis: 60%; }
+  .rb-cta { margin-inline-start: auto; }
+  .rb-tokens { order: 3; flex: 1 1 100%; }
+  .rb-meter { flex: 1; width: auto; }
+}
+/* the menu button and the slide over menu start below the ribbon */
+@media (max-width: 820px) {
+  .nav-fab { top: calc(12px + var(--ribbon-h, 0px)); }
+  .shell.nav-open .sidebar { inset-block-start: var(--ribbon-h, 0px); }
+}
+
+/* first login setup */
+.ob-hero { display: grid; gap: 14px; }
+.ob-trial { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 14px; padding: 16px 18px; border-radius: var(--radius); background: var(--primary-soft); }
+.ob-trial b { font-size: var(--fs-metric); font-weight: 650; color: var(--primary); line-height: 1.1; }
+.ob-trial span { color: var(--text); flex: 1 1 220px; }
+.ob-body { min-height: 260px; }
+.ob-phone { display: grid; grid-template-columns: minmax(220px, 290px) 1fr; gap: 10px; }
+.ob-lock { position: relative; }
+.ob-lock input { width: 100%; padding-inline-end: 34px; }
+.ob-lock svg { position: absolute; inset-inline-end: 10px; top: 50%; transform: translateY(-50%); color: var(--faint); }
+input:disabled { background: var(--surface-2); color: var(--muted); cursor: not-allowed; }
+.ob-err { min-height: 18px; font-size: var(--fs-small); color: var(--danger); }
+input[aria-invalid="true"] { border-color: var(--danger); }
+@media (max-width: 600px) { .ob-phone { grid-template-columns: 1fr; } }
+
+/* product tour */
+.ob-tour { position: fixed; inset: 0; z-index: 140; }
+.ob-shield { position: absolute; inset: 0; }
+.ob-spot { position: fixed; border-radius: var(--radius); box-shadow: 0 0 0 2px var(--primary), 0 0 0 100vmax rgba(10, 16, 32, .6); transition: left .26s var(--ease), top .26s var(--ease), width .26s var(--ease), height .26s var(--ease); pointer-events: none; }
+.ob-pop { position: fixed; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-lg); padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; animation: modal-in .22s var(--ease); outline: none; }
+.ob-pop h3 { font-size: var(--fs-heading); }
+.ob-pop p { margin: 0; color: var(--muted); line-height: 1.5; }
+.ob-actions { display: flex; align-items: center; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+@media (prefers-reduced-motion: reduce) { .ob-spot { transition: none; } .ob-pop { animation: none; } }
+
+/* subscribe dialog */
+.sub-plan { padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.sub-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.sub-price { display: flex; align-items: baseline; gap: 6px; color: var(--muted); }
+.sub-price b { font-size: var(--fs-metric); font-weight: 650; color: var(--text); line-height: 1.1; }
+.sub-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
+.sub-list li { display: flex; align-items: center; gap: 8px; }
+.sub-list svg { color: var(--success); }
+.sub-sum { display: grid; gap: 6px; margin: 16px 0 0; padding: 12px 14px; border-radius: var(--radius); background: var(--surface-2); border: 1px solid var(--border); }
+.sub-sum div { display: flex; justify-content: space-between; gap: 12px; }
+.sub-sum dt { color: var(--muted); }
+.sub-sum dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* billing page */
+.bl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 16px; }
+.bl-metric { font-size: var(--fs-metric); font-weight: 650; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.bl-meter { margin: 12px 0 8px; }
+.bl-meter.amber > i { background: var(--warning); }
+.bl-meter.red > i { background: var(--danger); }
+.bl-uses { margin: 0; padding-inline-start: 18px; line-height: 1.7; color: var(--muted); }
+
+/* phone fields follow the same input style as the rest of the app */
+input[type=tel] { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); outline: none; }
+input[type=tel]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }

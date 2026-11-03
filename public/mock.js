@@ -3,8 +3,22 @@
    report generator and rule based document reader, so behavior matches the product. */
 (function () {
   'use strict';
-  const SEED = window.DEMO_SEED, S = window.__Sched, R = window.__Reports, AI = window.__AI;
-  const TODAY = SEED.today;
+  const S = window.__Sched, R = window.__Reports, AI = window.__AI;
+  // The demo follows the real calendar: today is the viewer's date, and the sample project dates move with it in whole weeks so working days stay aligned.
+  const RAW = window.DEMO_SEED;
+  const TODAY = new Date().toLocaleDateString('en-CA');
+  const DAYMS = 86400000, dnum = (d) => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10)) / DAYMS;
+  const SHIFT = Math.round((dnum(TODAY) - dnum(RAW.today)) / 7) * 7;
+  const dstr = (n) => new Date(n * DAYMS).toISOString().slice(0, 10);
+  const moveDates = (v) => {
+    if (typeof v === 'string') return /^\d{4}-\d{2}-\d{2}(?:[ T].{0,13})?$/.test(v) ? dstr(dnum(v) + SHIFT) + v.slice(10) : v;
+    if (Array.isArray(v)) return v.map(moveDates);
+    if (v && typeof v === 'object') { const o = {}; for (const k in v) o[k] = k === 'docTexts' || k === 'skeletons' || k === 'templates' ? v[k] : moveDates(v[k]); return o; }
+    return v;
+  };
+  const SEED = moveDates(RAW);
+  SEED.today = TODAY;
+  window.DEMO_TODAY = TODAY;
   const clone = (x) => JSON.parse(JSON.stringify(x));
   let seq = 5000;
   const nid = () => ++seq;
