@@ -1,0 +1,12 @@
+{
+  "name": "project-manager-ai",
+  "version": "1.0.0",
+  "description": "Project Manager AI demo app, served as a static site",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
