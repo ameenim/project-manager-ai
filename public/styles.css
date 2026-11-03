@@ -841,3 +841,8 @@ input.te-name { font-size: var(--fs-heading); font-weight: 650; padding: 10px 12
 .dw-body .list-item > .right .li-val { font-size: var(--fs-body); font-weight: 600; color: var(--text); }
 .dw-body .list-item > .right .li-val.bad { color: var(--danger); }
 .dw-body .list-item > .right .small { font-weight: 400; color: var(--muted); }
+
+/* Dashboard toolbar buttons match the currency toggle height */
+.dw-bar .btn.sm { min-height: 39px; padding: 6px 12px; border-radius: 8px; font-size: var(--fs-body); font-weight: 500; }
+.dw-bar .btn.sm .i { width: 16px; height: 16px; }
+.dw-bar .btn.sm[aria-expanded="true"] { background: var(--primary-soft); color: var(--primary); border-color: var(--primary); }
