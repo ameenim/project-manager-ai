@@ -161,10 +161,8 @@
   function signOut(expired) {
     if (!expired && S.token) fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${S.token}` } }).catch(() => {});
     S.token = null; S.user = null; localStorage.removeItem('pm_token');
-    if (!expired) { location.href = 'index.html'; return; }
-    location.hash = '#/login';
-    if (expired) toast(t('err_session'), 'err');
-    route();
+    location.replace('index.html');
+    return;
   }
   PM.signOut = signOut;
 
@@ -396,7 +394,7 @@
     const h = location.hash.replace(/^#/, '') || '/';
     const [pathPart, qs] = h.split('?');
     const parts = pathPart.split('/').filter(Boolean);
-    if (!S.token) { authView(parts[0] === 'register' ? 'register' : 'login'); return; }
+    if (!S.token) { location.replace('index.html'); return; }
     if (!S.user) {
       try { const r = await api('GET', '/api/me'); setUser(r.user); S.status = r.status; } catch { return; }
     }
