@@ -160,7 +160,7 @@
   // ---------- auth ----------
   function signOut(expired) {
     if (!expired && S.token) fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${S.token}` } }).catch(() => {});
-    S.token = null; S.user = null; localStorage.removeItem('pm_token');
+    S.token = null; S.user = null; localStorage.removeItem('pm_token'); localStorage.removeItem('pm_session');
     location.replace('index.html');
     return;
   }

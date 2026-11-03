@@ -15,7 +15,6 @@
 <script src="logo.js"></script>
 <script src="engine.js"></script>
 <script src="seed.js"></script>
-<script src="extract2.js"></script>
 <script src="mock.js"></script>
 <script src="gantt.js"></script>
 <script src="app.js"></script>
@@ -34,11 +33,16 @@
 <script src="tips.js"></script>
 <script>
   (function () {
-    try { localStorage.setItem('pm_token', 'demo-token'); } catch (e) { /* storage blocked */ }
-    PM.state.token = 'demo-token';
+    var sess = null;
+    try { sess = JSON.parse(localStorage.getItem('pm_session') || 'null'); } catch (e) { /* storage blocked */ }
+    if (!sess || !sess.id) { location.replace('login.html'); return; }
+    var tk = 'demo-token' + (sess.id === 'demo' ? '' : '-' + sess.id);
+    if (sess.id !== 'demo') { var dd = document.getElementById('demoDate'); if (dd) dd.textContent = 'Your own workspace'; }
+    try { localStorage.setItem('pm_token', tk); } catch (e) { /* storage blocked */ }
+    PM.state.token = tk;
     PM.download = function () { PM.toast('Downloads are turned off in the demo. The full app exports Word, Excel and PowerPoint files.', ''); return Promise.resolve(); };
     document.getElementById('demoReset').onclick = function () { try { PM.onboard.reset(); } catch (e) { /* nothing stored yet */ } location.hash = '#/'; location.reload(); };
-    try { document.getElementById('demoDate').textContent = 'Demo data, dated ' + new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); } catch (e) { /* keep default */ }
+    if (sess.id === 'demo') try { document.getElementById('demoDate').textContent = 'Demo data, dated ' + new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); } catch (e) { /* keep default */ }
     PM.start();
   })();
 </script>

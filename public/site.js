@@ -289,6 +289,20 @@
       inp.type = show ? 'text' : 'password';
       eye.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
     });
+    var DEMO_EMAIL = 'pm@example.com', DEMO_PW = 'demo1234';
+    function users() { try { return JSON.parse(localStorage.getItem('pm_users') || '{}') || {}; } catch (e) { return {}; } }
+    function hashPw(salt, pw) {
+      if (window.crypto && window.crypto.subtle && window.TextEncoder) {
+        return window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(salt + ':' + pw)).then(function (b) {
+          return Array.prototype.map.call(new Uint8Array(b), function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
+        });
+      }
+      return Promise.resolve('p' + salt + pw);
+    }
+    function openSession(s) {
+      try { localStorage.setItem('pm_session', JSON.stringify(s)); localStorage.removeItem('pm_token'); } catch (e) { /* checked below */ }
+      try { return JSON.parse(localStorage.getItem('pm_session') || 'null'); } catch (e) { return null; }
+    }
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       var bad = false;
@@ -297,11 +311,39 @@
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) { fieldErr(emailF, 'Enter a valid email address, for example name@company.com.'); bad = true; } else fieldErr(emailF, '');
       if ($('input', passF).value.length < 8) { fieldErr(passF, 'Use at least 8 characters.'); bad = true; } else fieldErr(passF, '');
       if (bad) { var first = $('.bad input', form); if (first) first.focus(); return; }
+      var emailKey = em.toLowerCase(), pw = $('input', passF).value, all = users(), nm = $('input', nameF).value.trim();
+      var done = function (s) {
+        if (!openSession(s)) { fieldErr(passF, 'Your browser is blocking storage, so the demo cannot keep you signed in.'); return; }
+        showOk();
+      };
+      if (mode === 'in') {
+        if (emailKey === DEMO_EMAIL) {
+          if (pw !== DEMO_PW) { fieldErr(passF, 'Email or password is not correct.'); return; }
+          done({ id: 'demo', name: 'Demo Project Manager', email: DEMO_EMAIL });
+        } else {
+          var u = all[emailKey];
+          if (!u) { fieldErr(emailF, 'No account found for this email. Create an account first.'); return; }
+          hashPw(u.salt, pw).then(function (h) {
+            if (h !== u.hash) { fieldErr(passF, 'Email or password is not correct.'); return; }
+            done({ id: u.id, name: u.name, email: u.email });
+          });
+        }
+      } else {
+        if (emailKey === DEMO_EMAIL || all[emailKey]) { fieldErr(emailF, 'An account with this email already exists. Sign in instead.'); return; }
+        var salt = Math.random().toString(36).slice(2), id = 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+        hashPw(salt, pw).then(function (h) {
+          all[emailKey] = { id: id, name: nm, email: em, salt: salt, hash: h };
+          try { localStorage.setItem('pm_users', JSON.stringify(all)); } catch (er) { /* checked in done */ }
+          done({ id: id, name: nm, email: em });
+        });
+      }
+    });
+    function showOk() {
       card.hidden = true; okBox.hidden = false;
       $('#okTitle').textContent = mode === 'in' ? 'You are ready to go' : 'Your trial is ready to start';
       $('#okText').textContent = mode === 'in' ? 'Open Project Manager AI to continue to your workspace.' : 'Your 15 day free trial starts in the app. Continue to open it.';
       var link = $('#okLink'); link.href = APP_URL; link.focus();
-    });
+    }
     $('#backToForm').addEventListener('click', function () { okBox.hidden = true; card.hidden = false; });
   }
 })();
