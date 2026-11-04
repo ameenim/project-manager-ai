@@ -389,7 +389,7 @@
   const AI_REASON = {
     no_key: 'The AI is not connected because the server has no ANTHROPIC_API_KEY. Only a basic rule based reading was done.',
     bad_key: 'The Anthropic API key was rejected. Open Secrets in Replit, set ANTHROPIC_API_KEY to a valid key (it starts with sk-ant-), restart the app and use Analyze again. Only a basic rule based reading was done.',
-    budget: 'The Anthropic account has no credit left. Only a basic rule based reading was done.',
+    budget: 'The Anthropic account behind this key has no credit left. Add credit under Plans and Billing in the Anthropic Console (console.anthropic.com), then use Analyze again. Only a basic rule based reading was done.',
     rate: 'The AI is busy right now (rate limit). Use Reanalyze in a few minutes. Only a basic rule based reading was done.',
     network: 'The server could not be reached. Only a basic rule based reading was done.',
     badjson: 'The AI reply could not be read. Use Reanalyze to try again. Only a basic rule based reading was done.',
