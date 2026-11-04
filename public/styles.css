@@ -1056,3 +1056,18 @@ input.te-name { font-size: var(--fs-heading); font-weight: 650; padding: 10px 12
   .fv-newf { flex: none; }
 }
 @media (prefers-reduced-motion: reduce) { .fv-folder, .fv-doc { transition: none; } }
+
+/* Document creation progress and done screens */
+.gen-run { display: grid; gap: 14px; }
+.gen-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.gen-steps li { display: flex; align-items: center; gap: 10px; color: var(--faint); font-size: var(--fs-body); transition: color .2s var(--ease); }
+.gen-steps li .dot { inline-size: 16px; block-size: 16px; border-radius: 50%; border: 2px solid var(--border-strong); flex: none; box-sizing: border-box; }
+.gen-steps li.on { color: var(--text); font-weight: 600; }
+.gen-steps li.on .dot { border-color: var(--primary); border-inline-end-color: transparent; animation: genspin .8s linear infinite; }
+.gen-steps li.done { color: var(--muted); }
+.gen-steps li.done .dot { background: var(--success); border-color: var(--success); }
+.gen-done { display: flex; align-items: center; gap: 12px; }
+.gen-done .ico { display: grid; place-items: center; inline-size: 40px; block-size: 40px; border-radius: 10px; background: var(--primary-soft); color: var(--primary); flex: none; }
+@keyframes genspin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .gen-steps li.on .dot { animation: none; } }
+.modal.gen .modal-head [data-close] { display: none; }

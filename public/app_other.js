@@ -223,53 +223,87 @@
     const ui = { creating: false, folderErr: '', renamingFolder: false, renamingDoc: null, dragging: null };
     const folderName = (id) => (id == null ? t('unfiled') : (folders.find((f) => f.id === id) || {}).name || t('unfiled'));
 
-    root.innerHTML = `<div class="page"><div class="grid g-main"><div class="col gap-lg"><div class="card" id="rpForm"></div><div class="card" id="rpDocs"></div></div><div class="card" id="rpTpls"></div></div></div>`;
+    root.innerHTML = `<div class="page"><div class="page-head"><h1>${t('tab_reports')}</h1><button class="btn primary" id="rpCreate">${icon('plus')}${t('create_document')}</button></div><div class="grid g-main"><div class="col gap-lg"><div class="card" id="rpDocs"></div></div><div class="card" id="rpTpls"></div></div></div>`;
+    $('#rpCreate', root).onclick = () => createDialog();
     const reloadAll = async () => {
       [templates, gen, folders] = await Promise.all([api('GET', '/api/templates').then((r) => r.templates), api('GET', `/api/projects/${p.id}/generated`).then((r) => r.generated), api('GET', `/api/projects/${p.id}/folders`).then((r) => r.folders)]);
       if (!['all', 'none'].includes(sel) && !folders.some((f) => String(f.id) === sel)) setSel('all');
-      drawForm(); drawDocs(); drawTpls();
+      drawDocs(); drawTpls();
     };
 
-    // ---------- create a document ----------
-    function drawForm() {
-      if (stale(token)) return;
-      const isProg = type.startsWith('progress');
-      const tpls = templates.filter((x) => x.doc_type === type);
-      const opt = (ts) => ts.map((x) => `<option value="${x.id}">${esc(x.title)}</option>`).join('');
-      const folderVal = form.folder != null ? form.folder : (/^\d+$/.test(sel) ? sel : '');
-      const period = form.period || (type === 'progress_biweekly' ? 14 : 7);
-      const el = $('#rpForm', root);
-      el.innerHTML = `<div class="card-head"><h3>${t('create_document')}</h3></div>
-        <div class="form-grid">
-        <div class="fmt-pick full"><span class="lbl" id="rpOutL">${t('doc_output')}</span>
-          <div class="seg" role="radiogroup" aria-labelledby="rpOutL">${Object.keys(FMT).map((k) => `<button type="button" role="radio" aria-checked="${out === k}" class="${out === k ? 'on' : ''}" data-fmt="${k}" data-tip="${esc(t(FMT[k].name))}">${icon(FMT[k].icon)}${FMT[k].label}</button>`).join('')}</div>
-          <div class="small muted">${t(FMT[out].hint)}</div></div>
-        <label class="f full">${t('doc_type')}<select id="rpType"><optgroup label="${t('grp_progress')}">${opt(types.filter((x) => x.progress))}</optgroup><optgroup label="${t('grp_project')}">${opt(types.filter((x) => !x.progress))}</optgroup></select></label>
-        <label class="f full">${t('template')}<select id="rpTpl"><option value="">${t('tpl_default')}</option>${tpls.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select></label>
-        <label class="f">${t('doc_name')}<input type="text" id="rpName" maxlength="120" value="${esc(form.touched ? form.name : defName())}"><span class="small muted">${t('doc_name_hint')}</span></label>
-        <label class="f">${t('save_in_folder')}<select id="rpFolder"><option value="">${t('unfiled')}</option>${folders.map((f) => `<option value="${f.id}">${esc(f.name)}</option>`).join('')}</select></label>
-        ${isProg ? `<label class="f">${t('as_of')}<input type="date" id="rpAsOf" value="${esc(form.asOf)}"></label><label class="f">${t('period')}<select id="rpPeriod"><option value="7">${t('days_n', { n: 7 })}</option><option value="14">${t('days_n', { n: 14 })}</option><option value="30">${t('days_n', { n: 30 })}</option></select></label>` : ''}
-        <div class="full small muted">${isProg ? t('progress_report_hint') : t('project_doc_hint')}${S.status.claude ? '' : ` ${t('ai_rules_note')}`}</div></div>
-        <div class="row mt"><button class="btn primary" id="rpGo">${icon('spark')}${t('generate')}</button></div>`;
-      $('#rpType', el).value = type; $('#rpTpl', el).value = form.tpl; $('#rpFolder', el).value = folderVal;
-      if (isProg) $('#rpPeriod', el).value = String(period);
-      $$('[data-fmt]', el).forEach((b) => (b.onclick = () => { out = b.dataset.fmt; sessionStorage.setItem('rp_out', out); drawForm(); }));
-      $('#rpType', el).onchange = (e) => { type = e.target.value; sessionStorage.setItem('rp_type', type); form.tpl = ''; form.period = null; drawForm(); };
-      $('#rpTpl', el).onchange = (e) => { form.tpl = e.target.value; };
-      $('#rpName', el).oninput = (e) => { form.name = e.target.value; form.touched = true; };
-      $('#rpFolder', el).onchange = (e) => { form.folder = e.target.value; };
-      if (isProg) { $('#rpAsOf', el).onchange = (e) => { form.asOf = e.target.value; }; $('#rpPeriod', el).onchange = (e) => { form.period = Number(e.target.value); }; }
-      $('#rpGo', el).onclick = async () => {
+    // ---------- create a document (pop up, then a progress screen) ----------
+    function createDialog() {
+      const body = () => {
+        const isProg = type.startsWith('progress');
+        const tpls = templates.filter((x) => x.doc_type === type);
+        const opt = (ts) => ts.map((x) => `<option value="${x.id}">${esc(x.title)}</option>`).join('');
+        return `<div class="form-grid">
+          <div class="fmt-pick full"><span class="lbl" id="rpOutL">${t('doc_output')}</span>
+            <div class="seg" role="radiogroup" aria-labelledby="rpOutL">${Object.keys(FMT).map((k) => `<button type="button" role="radio" aria-checked="${out === k}" class="${out === k ? 'on' : ''}" data-fmt="${k}" data-tip="${esc(t(FMT[k].name))}">${icon(FMT[k].icon)}${FMT[k].label}</button>`).join('')}</div>
+            <div class="small muted">${t(FMT[out].hint)}</div></div>
+          <label class="f full">${t('doc_type')}<select id="rpType"><optgroup label="${t('grp_progress')}">${opt(types.filter((x) => x.progress))}</optgroup><optgroup label="${t('grp_project')}">${opt(types.filter((x) => !x.progress))}</optgroup></select></label>
+          <label class="f full">${t('template')}<select id="rpTpl"><option value="">${t('tpl_default')}</option>${tpls.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select></label>
+          <label class="f">${t('doc_name')}<input type="text" id="rpName" maxlength="120" value="${esc(form.touched ? form.name : defName())}"><span class="small muted">${t('doc_name_hint')}</span></label>
+          <label class="f">${t('save_in_folder')}<select id="rpFolder"><option value="">${t('unfiled')}</option>${folders.map((f) => `<option value="${f.id}">${esc(f.name)}</option>`).join('')}</select></label>
+          ${isProg ? `<label class="f">${t('as_of')}<input type="date" id="rpAsOf" value="${esc(form.asOf)}"></label><label class="f">${t('period')}<select id="rpPeriod"><option value="7">${t('days_n', { n: 7 })}</option><option value="14">${t('days_n', { n: 14 })}</option><option value="30">${t('days_n', { n: 30 })}</option></select></label>` : ''}
+          <div class="full small muted">${isProg ? t('progress_report_hint') : t('project_doc_hint')}${S.status.claude ? '' : ` ${t('ai_rules_note')}`}</div></div>`;
+      };
+      const m = modal({ title: t('create_document'), size: 'md', body: '<div id="rpBody"></div>', footer: `<button class="btn" data-close>${t('cancel')}</button><button class="btn primary" id="rpGo">${icon('spark')}${t('generate')}</button>` });
+      const draw = () => {
+        const el = $('#rpBody', m.el);
+        const isProg = type.startsWith('progress');
+        el.innerHTML = body();
+        $('#rpType', el).value = type; $('#rpTpl', el).value = form.tpl;
+        $('#rpFolder', el).value = form.folder != null ? form.folder : (/^\d+$/.test(sel) ? sel : '');
+        if (isProg) $('#rpPeriod', el).value = String(form.period || (type === 'progress_biweekly' ? 14 : 7));
+        $$('[data-fmt]', el).forEach((b) => (b.onclick = () => { out = b.dataset.fmt; sessionStorage.setItem('rp_out', out); draw(); }));
+        $('#rpType', el).onchange = (e) => { type = e.target.value; sessionStorage.setItem('rp_type', type); form.tpl = ''; form.period = null; draw(); };
+        $('#rpTpl', el).onchange = (e) => { form.tpl = e.target.value; };
+        $('#rpName', el).oninput = (e) => { form.name = e.target.value; form.touched = true; };
+        $('#rpFolder', el).onchange = (e) => { form.folder = e.target.value; };
+        if (isProg) { $('#rpAsOf', el).onchange = (e) => { form.asOf = e.target.value; }; $('#rpPeriod', el).onchange = (e) => { form.period = Number(e.target.value); }; }
+      };
+      draw();
+      $('#rpGo', m.el).onclick = () => {
+        const el = $('#rpBody', m.el), isProg = type.startsWith('progress');
         const body = { type, format: out, template_id: form.tpl || null, title: $('#rpName', el).value.trim() || defName(), folder_id: $('#rpFolder', el).value ? Number($('#rpFolder', el).value) : null };
         if (isProg) { body.as_of = $('#rpAsOf', el).value; body.period_days = Number($('#rpPeriod', el).value); }
-        const r = await busy($('#rpGo', el), () => api('POST', `/api/projects/${p.id}/generate`, body));
-        if (!r) return;
-        if (r.unconfirmed) toast(t('unconfirmed_note', { n: r.unconfirmed }));
-        form.touched = false; form.folder = null;
-        setSel(r.generated.folder_id != null ? r.generated.folder_id : 'all');
-        await reloadAll();
-        openDoc(r.generated.id);
+        m.close();
+        runCreate(body);
       };
+    }
+
+    // The progress screen. Each status is a real stage of the work, shown for at least a moment so it can be read.
+    function runCreate(body) {
+      const steps = ['gen_s_read', 'gen_s_text', 'gen_s_format', 'gen_s_visuals', 'gen_s_design', 'gen_s_save'];
+      const m = modal({ title: t('gen_title'), size: 'sm gen', noBackdropClose: true, body: `<div class="gen-run" role="status" aria-live="polite"><div class="progress"><i id="gnBar" style="width:4%"></i></div><ul class="gen-steps">${steps.map((k, i) => `<li data-i="${i}"><span class="dot"></span><span>${t(k)}</span></li>`).join('')}</ul><div class="small muted" id="gnNote">${t('gen_wait')}</div></div>`, footer: '' });
+      const lis = $$('.gen-steps li', m.el), bar = $('#gnBar', m.el);
+      const show = (i) => { lis.forEach((li, n) => { li.className = n < i ? 'done' : n === i ? 'on' : ''; }); bar.style.width = `${Math.round(((i + 0.5) / steps.length) * 100)}%`; };
+      const pause = (ms) => new Promise((ok) => setTimeout(ok, ms));
+      const step = async (i, fn) => { show(i); const t0 = Date.now(); const r = fn ? await fn() : undefined; const left = 550 - (Date.now() - t0); if (left > 0) await pause(left); return r; };
+      (async () => {
+        try {
+          await step(0);
+          const r = await step(1, () => api('POST', `/api/projects/${p.id}/generate`, body));
+          const g = (await api('GET', `/api/generated/${r.generated.id}`)).generated;
+          await step(2); await step(3);
+          const built = await step(4, () => PM.exporter.build(g));
+          await step(5, async () => { form.touched = false; form.folder = null; setSel(g.folder_id != null ? g.folder_id : 'all'); await reloadAll(); });
+          lis.forEach((li) => (li.className = 'done')); bar.style.width = '100%';
+          await pause(350);
+          m.close();
+          if (r.unconfirmed) toast(t('unconfirmed_note', { n: r.unconfirmed }));
+          ready(g, built);
+        } catch (e) { m.close(); toast(e.message || t('err_download'), 'err'); }
+      })();
+    }
+
+    // done screen: the document is ready in the chosen format
+    function ready(g, built) {
+      const f = fmtOf(g.format);
+      const m = modal({ title: t('gen_ready'), size: 'sm', body: `<div class="gen-done"><span class="ico">${icon(f.icon)}</span><div><div style="font-weight:600">${esc(g.title)}</div><div class="small muted">${f.label} · ${esc(folderName(g.folder_id))}</div></div></div>`, footer: `<button class="btn" id="rdOpen">${icon('eye')}${t('open')}</button><button class="btn primary" id="rdDl">${icon('dl')}${t('download_fmt', { f: f.label })}</button>` });
+      $('#rdOpen', m.el).onclick = () => { m.close(); openDoc(g.id); };
+      $('#rdDl', m.el).onclick = () => { PM.exporter.save(built.blob, built.filename); toast(t('download_ready'), 'ok'); m.close(); };
     }
 
     // ---------- the folder view ----------
@@ -324,7 +358,7 @@
       $$('[data-sel]', el).forEach((b) => (b.onclick = () => { setSel(b.dataset.sel); ui.renamingFolder = false; ui.folderErr = ''; drawDocs(); }));
       const nb = $('[data-new]', el); if (nb) nb.onclick = () => { ui.creating = true; ui.folderErr = ''; drawDocs(); $('#fvNew', root).focus(); };
       const submitNew = async () => {
-        try { const r = await api('POST', `/api/projects/${p.id}/folders`, { name: $('#fvNew', root).value }); folders.push(r.folder); ui.creating = false; ui.folderErr = ''; setSel(r.folder.id); drawForm(); drawDocs(); toast(t('folder_created'), 'ok'); }
+        try { const r = await api('POST', `/api/projects/${p.id}/folders`, { name: $('#fvNew', root).value }); folders.push(r.folder); ui.creating = false; ui.folderErr = ''; setSel(r.folder.id); drawDocs(); toast(t('folder_created'), 'ok'); }
         catch (e) { ui.folderErr = e.message; drawDocs(); $('#fvNew', root).focus(); }
       };
       const ni = $('#fvNew', el);
@@ -332,7 +366,7 @@
       const rf = $('[data-rf]', el); if (rf) rf.onclick = () => { ui.renamingFolder = true; ui.folderErr = ''; drawDocs(); const i = $('#rnFolder', root); i.focus(); i.select(); };
       const rfi = $('#rnFolder', el);
       if (rfi) {
-        const ok = async () => { try { const r = await api('PUT', `/api/folders/${cur.id}`, { name: rfi.value }); cur.name = r.folder.name; ui.renamingFolder = false; ui.folderErr = ''; drawForm(); drawDocs(); toast(t('saved'), 'ok'); } catch (e) { ui.folderErr = e.message; drawDocs(); const i = $('#rnFolder', root); if (i) i.focus(); } };
+        const ok = async () => { try { const r = await api('PUT', `/api/folders/${cur.id}`, { name: rfi.value }); cur.name = r.folder.name; ui.renamingFolder = false; ui.folderErr = ''; drawDocs(); toast(t('saved'), 'ok'); } catch (e) { ui.folderErr = e.message; drawDocs(); const i = $('#rnFolder', root); if (i) i.focus(); } };
         rfi.onkeydown = (e) => { if (e.key === 'Enter') ok(); if (e.key === 'Escape') { ui.renamingFolder = false; ui.folderErr = ''; drawDocs(); } };
         $('[data-rf-ok]', el).onclick = ok; $('[data-rf-no]', el).onclick = () => { ui.renamingFolder = false; ui.folderErr = ''; drawDocs(); };
       }
@@ -403,7 +437,7 @@
       };
       show();
     }
-    drawForm(); drawDocs(); drawTpls();
+    drawDocs(); drawTpls();
   };
 
   function templateDialog(types, curType, done) {
