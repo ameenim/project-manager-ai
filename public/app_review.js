@@ -116,20 +116,21 @@
     const f = an.filled;
     const total = (an.docs || []).reduce((n, d) => n + (d.counts ? d.counts.deliverable + d.counts.requirement + d.counts.risk + d.counts.milestone + d.counts.schedule + d.counts.field : 0), 0);
     const bad = fin && (an.failed || !total);
+    const warn = fin && !bad && an.warning ? `<div class="card mb ap-done"><div class="card-head"><h3>${t('ap_warn_h')}</h3></div><p>${esc(an.warning.message)}</p><div class="row gap"><button class="btn primary" id="apRetry">${icon('refresh')}${t('reanalyze')}</button><button class="btn" id="apReview">${icon('check')}${t('ap_review')}</button></div></div>` : '';
     const badCard = bad ? `<div class="card mb ap-done"><div class="card-head"><h3>${an.failed ? t('ap_failed') : t('ap_empty_h')}</h3></div>
       <p>${esc(an.failed ? an.failed.message : t('ap_empty_p'))}</p>
       <div class="row gap"><button class="btn primary" id="apRetry">${icon('refresh')}${t('reanalyze')}</button><button class="btn" id="apReview">${icon('check')}${t('ap_review')}</button></div></div>` : '';
-    const done = fin && !bad ? `<div class="card mb ap-done"><div class="card-head"><h3>${t('ap_done')}</h3></div>
+    const done = fin && !bad && !warn ? `<div class="card mb ap-done"><div class="card-head"><h3>${t('ap_done')}</h3></div>
       <p>${f ? t('ap_filled', { a: f.confirmed, b: f.review }) : ''}</p>
       ${an.synthesis && an.synthesis.summary ? `<p class="small">${esc(an.synthesis.summary)}</p>` : ''}
       ${f && f.conflicts && f.conflicts.length ? `<ul class="small muted">${f.conflicts.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>` : ''}
       <div class="row gap"><button class="btn primary" id="apReview">${icon('check')}${t('ap_review')}</button><a class="btn" href="#/p/${p.id}/schedule" id="apSched">${icon('cal')}${t('open_schedule')}</a></div></div>` : '';
     return `<div class="page">
-      <div class="card mb"><div class="card-head"><h3>${fin ? (bad ? (an.failed ? t('ap_failed') : t('ap_empty_h')) : t('ap_done')) : t('ap_title')}</h3><span class="small muted">${esc(p.name)}</span></div>
+      <div class="card mb"><div class="card-head"><h3>${fin ? (bad ? (an.failed ? t('ap_failed') : t('ap_empty_h')) : an.warning ? t('ap_warn_h') : t('ap_done')) : t('ap_title')}</h3><span class="small muted">${esc(p.name)}</span></div>
         <div class="ap-grid"><div class="ap-steps">${rows}</div>
           <div class="ap-conf"><div class="small muted">${t('ap_conf')}</div><div class="ap-big conf ${CONF_CLS(cf.overall)}">${pct(cf.overall)}</div>
             ${cf.coverage != null ? `<div class="small muted mb">${t('ap_cov', { n: Math.round(cf.coverage * 100) })}</div>` : ''}${bars}</div></div></div>
-      ${done}${badCard}
+      ${done}${badCard}${warn}
       <div class="card"><div class="card-head"><h3>${t('an_title')}</h3></div>${files}</div></div>`;
   }
 

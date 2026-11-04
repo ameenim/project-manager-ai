@@ -388,7 +388,7 @@
   // Plain language reason shown to the person when the AI could not be used for a file.
   const AI_REASON = {
     no_key: 'The AI is not connected because the server has no ANTHROPIC_API_KEY. Only a basic rule based reading was done.',
-    bad_key: 'The Anthropic API key was rejected. Check the ANTHROPIC_API_KEY secret. Only a basic rule based reading was done.',
+    bad_key: 'The Anthropic API key was rejected. Open Secrets in Replit, set ANTHROPIC_API_KEY to a valid key (it starts with sk-ant-), restart the app and use Analyze again. Only a basic rule based reading was done.',
     budget: 'The Anthropic account has no credit left. Only a basic rule based reading was done.',
     rate: 'The AI is busy right now (rate limit). Use Reanalyze in a few minutes. Only a basic rule based reading was done.',
     network: 'The server could not be reached. Only a basic rule based reading was done.',
@@ -471,7 +471,9 @@
           } catch (e) { aiError = aiError || { code: e.code || 'upstream', message: e.message }; }
         }));
       }
-      setStage(P, 'context', 'done', aiOn && !aiError ? readable.map((d) => `${d.filename}: ${Pipe.ROLE_LABEL[d.role]}`).join('. ') : 'Basic role detection only');
+      // If the AI could not be used the person is told clearly, with the reason and a way to try again.
+      if (!aiOn || aiError) { const code = aiOn ? aiError.code : 'no_key'; run.warning = { code, message: AI_REASON[code] || AI_REASON.upstream }; }
+      setStage(P, 'context', aiOn && !aiError ? 'done' : 'failed', aiOn && !aiError ? readable.map((d) => `${d.filename}: ${Pipe.ROLE_LABEL[d.role]}`).join('. ') : `The AI could not be used. ${run.warning.message}`);
 
       // 4. Analyzing: read every part of every document with the prompt that fits its role
       setStage(P, 'analyze', 'active', 'Reading every page');
