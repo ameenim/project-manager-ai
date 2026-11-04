@@ -34,24 +34,33 @@
     m.$('#paDone').onclick = () => apply(100);
   }
 
-  // report: pick a type and an output, create it, download it
+  // report: pick the output format first, then the type, create it, download it in that same format
   async function report(pid) {
     const types = (await api('GET', '/api/doc-types')).types.filter((x) => x.progress);
-    let out = sessionStorage.getItem('rp_out') || 'docx';
+    const F = { docx: ['Word', 'file', 'out_word', 'out_hint_docx'], xlsx: ['Excel', 'grid', 'out_excel', 'out_hint_xlsx'], pptx: ['PowerPoint', 'chart', 'out_ppt', 'out_hint_pptx'] };
+    let out = sessionStorage.getItem('rp_out'); if (!F[out]) out = 'docx';
     const m = modal({
       title: t('ra_report'),
-      body: `<div class="form-grid"><label class="f full">${t('doc_type')}<select id="prType">${types.map((x) => `<option value="${x.id}">${esc(x.title)}</option>`).join('')}</select></label>
-        <label class="f full">${t('doc_output')}<select id="prOut"><option value="docx">${t('out_word')}</option><option value="xlsx">${t('out_excel')}</option><option value="pptx">${t('out_ppt')}</option></select></label></div>`,
+      body: `<div class="form-grid"><div class="fmt-pick full"><span class="lbl" id="prOutL">${t('doc_output')}</span><div class="seg" id="prSeg" role="radiogroup" aria-labelledby="prOutL"></div><div class="small muted" id="prHint"></div></div>
+        <label class="f full">${t('doc_type')}<select id="prType">${types.map((x) => `<option value="${x.id}">${esc(x.title)}</option>`).join('')}</select></label></div>`,
       footer: `<button class="btn" data-close>${t('cancel')}</button><button class="btn primary" id="prGo">${icon('spark')}${t('generate')}</button>`,
     });
-    m.$('#prOut').value = out;
+    const drawSeg = () => {
+      m.$('#prSeg').innerHTML = Object.keys(F).map((k) => `<button type="button" role="radio" aria-checked="${out === k}" class="${out === k ? 'on' : ''}" data-fmt="${k}" data-tip="${esc(t(F[k][2]))}">${icon(F[k][1])}${F[k][0]}</button>`).join('');
+      m.$('#prHint').textContent = t(F[out][3]);
+      m.$('#prGo').lastChild.textContent = t('generate');
+      m.el.querySelectorAll('[data-fmt]').forEach((b) => (b.onclick = () => { out = b.dataset.fmt; sessionStorage.setItem('rp_out', out); drawSeg(); }));
+    };
+    drawSeg();
     m.$('#prGo').onclick = async () => {
-      out = m.$('#prOut').value; sessionStorage.setItem('rp_out', out);
-      const r = await busy(m.$('#prGo'), () => api('POST', `/api/projects/${pid}/generate`, { type: m.$('#prType').value, as_of: PM.today(), period_days: m.$('#prType').value === 'progress_biweekly' ? 14 : 7 }));
-      if (!r) return;
+      const ty = m.$('#prType').value;
+      const ok = await busy(m.$('#prGo'), async () => {
+        const r = await api('POST', `/api/projects/${pid}/generate`, { type: ty, format: out, as_of: PM.today(), period_days: ty === 'progress_biweekly' ? 14 : 7 });
+        await PM.downloadGenerated(r.generated.id);
+        return true;
+      });
+      if (!ok) return;
       m.close();
-      const g = r.generated;
-      PM.download(`/api/generated/${g.id}/${out}`, `${(g.title || 'report').replace(/[^\w]+/g, '_')}.${out}`);
       toast(t('report_ready'), 'ok');
     };
   }

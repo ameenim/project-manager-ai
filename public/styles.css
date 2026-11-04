@@ -1007,3 +1007,52 @@ input.te-name { font-size: var(--fs-heading); font-weight: 650; padding: 10px 12
 .wz-mini b { font-weight: 600; overflow-wrap: anywhere; }
 .wz-mini span { flex: none; max-width: 55%; }
 .neg { color: var(--danger); }
+
+/* ---------- Reports: output format picker and folder view for generated documents ---------- */
+.fmt-pick { display: flex; flex-direction: column; gap: 6px; }
+.fmt-pick .lbl { font-size: var(--fs-small); color: var(--muted); font-weight: 500; }
+.fmt-pick .seg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
+.fmt-pick .seg button { justify-content: center; min-height: 40px; }
+.fmt-pick .seg button.on { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
+.fv { display: grid; grid-template-columns: 224px minmax(0, 1fr); gap: 18px; container-type: inline-size; }
+.fv-rail { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.fv-rail .sub { font-size: var(--fs-small); color: var(--muted); font-weight: 600; padding: 2px 10px 6px; }
+.fv-folder { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 6px 10px; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--text); font: inherit; font-size: var(--fs-body); text-align: start; cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
+.fv-folder:hover { background: var(--surface-2); }
+.fv-folder.on { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
+.fv-folder.over { border: 1px dashed var(--primary); background: var(--primary-soft); color: var(--primary); }
+.fv-folder .i { width: 16px; height: 16px; flex: none; }
+.fv-folder .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fv-folder .ct { font-size: var(--fs-small); font-weight: 600; color: var(--muted); }
+.fv-folder.on .ct { color: var(--primary); }
+.fv-newf { display: flex; gap: 6px; padding: 4px 2px; }
+.fv-newf input { flex: 1; min-width: 0; }
+.fv-err { color: var(--danger); font-size: var(--fs-small); padding: 0 10px; }
+.fv-main { min-width: 0; }
+.fv-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.fv-head h4 { margin: 0; font-size: var(--fs-body); font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fv-hint { font-size: var(--fs-small); color: var(--muted); margin-bottom: 10px; }
+.fv-doc { display: flex; gap: 10px; align-items: flex-start; padding: 12px; margin-bottom: 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); transition: opacity .15s, box-shadow .15s, border-color .15s; }
+.fv-doc:hover { border-color: var(--border-strong); }
+.fv-doc.dragging { opacity: .45; box-shadow: var(--shadow-lg); }
+.fv-doc .grip { color: var(--faint); cursor: grab; flex: none; margin-top: 7px; touch-action: none; }
+.fv-doc .grip .i { width: 16px; height: 16px; }
+.fv-doc[draggable="true"] { cursor: grab; }
+.fv-doc .ico { width: 36px; height: 36px; border-radius: 8px; display: grid; place-items: center; background: var(--primary-soft); color: var(--primary); flex: none; }
+.fv-doc .body { flex: 1; min-width: 0; }
+.fv-doc .ttl { font-weight: 600; font-size: var(--fs-body); overflow-wrap: anywhere; }
+.fv-doc .meta { font-size: var(--fs-small); color: var(--muted); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
+.fv-doc .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.fv-doc .rn { display: flex; gap: 6px; }
+.fv-doc .rn input { flex: 1; min-width: 0; }
+.fv-empty { border: 1px dashed var(--border-strong); border-radius: 10px; padding: 28px 16px; text-align: center; color: var(--muted); font-size: var(--fs-body); }
+.fv-empty.over { border-color: var(--primary); background: var(--primary-soft); color: var(--primary); }
+.mv-list { display: flex; flex-direction: column; gap: 4px; }
+@container (max-width: 640px) {
+  .fv { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .fv-rail { flex-direction: row; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; align-items: center; }
+  .fv-rail .sub { display: none; }
+  .fv-folder { width: auto; flex: none; white-space: nowrap; border-color: var(--border); }
+  .fv-newf { flex: none; }
+}
+@media (prefers-reduced-motion: reduce) { .fv-folder, .fv-doc { transition: none; } }

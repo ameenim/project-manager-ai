@@ -36,7 +36,7 @@
 
   // ---------- project containers ----------
   function makeProject(id, p) {
-    return { id, p, items: [], tasks: [], resources: [], inbox: [], documents: [], texts: {}, generated: [], audit: [] };
+    return { id, p, items: [], tasks: [], resources: [], inbox: [], documents: [], texts: {}, _kept: {}, generated: [], folders: [], audit: [] };
   }
   (function seedFirst() {
     const P = makeProject(1, clone(SEED.project));
@@ -700,7 +700,7 @@
       const text = r.text || '';
       const kind = AI.classify(f.name, text);
       const d = { id: nid(), filename: f.name, kind, summary: '', uploaded_by: ACTOR, created_at: nowTs(), chars: text.length, pages: r.pages || null, read_error: r.error || null };
-      P.documents.push(d); P.texts[d.id] = text; docs.push(d);
+      P.documents.push(d); P.texts[d.id] = text; (P._kept = P._kept || {})[d.id] = f; docs.push(d);
     }
     return docs;
   }
@@ -785,7 +785,7 @@
     }));
     let dirty = false, timer = null, saving = false, resetting = false, wasBusy = false;
     const analyzing = () => DB.order.some((id) => DB.projects[id] && DB.projects[id].p.analyzing);
-    const snapshot = () => JSON.stringify({ v: 1, seq, saved_at: Date.now(), user: DB.user, templates: DB.templates, order: DB.order, projects: DB.projects }, (k, v) => (k === '_files' ? undefined : v));
+    const snapshot = () => JSON.stringify({ v: 1, seq, saved_at: Date.now(), user: DB.user, templates: DB.templates, order: DB.order, projects: DB.projects }, (k, v) => (k === '_files' || k === '_kept' ? undefined : v));
     async function save() {
       if (resetting || saving) { dirty = true; return; }
       saving = true; dirty = false;
@@ -924,6 +924,12 @@
     if (src.length) analyzeDocs(P, src).catch((e) => console.error(e));
     return { results: out };
   });
+  on('GET', '/api/projects/(\\d+)/documents/(\\d+)/file', async (m) => {
+    const P = P_(m[1]); const d = P.documents.find((x) => x.id === Number(m[2]));
+    const f = d && P._kept && P._kept[d.id];
+    if (!f) throw err(404, 'The original file is not kept for sample documents. Upload your own file to download it again.');
+    return new Response(f, { status: 200, headers: { 'content-type': f.type || 'application/octet-stream' } });
+  });
   on('POST', '/api/projects/(\\d+)/documents/(\\d+)/link', async (m, q, b) => {
     const P = P_(m[1]); const d = P.documents.find((x) => x.id === Number(m[2])); const it = P.items.find((x) => x.id === Number(b.deliverable_id) && x.kind === 'deliverable');
     if (!d || !it) throw err(404, 'Document or deliverable not found');
@@ -931,7 +937,7 @@
   });
   on('DELETE', '/api/projects/(\\d+)/documents/(\\d+)', async (m) => {
     const P = P_(m[1]); const id = Number(m[2]);
-    P.documents = P.documents.filter((d) => d.id !== id); delete P.texts[id];
+    P.documents = P.documents.filter((d) => d.id !== id); delete P.texts[id]; if (P._kept) delete P._kept[id];
     for (const i of P.items) { if (i.doc_id === id) i.doc_id = null; if (i.evidence_doc_id === id) i.evidence_doc_id = null; }
     return { ok: true };
   });
@@ -1169,24 +1175,77 @@
   });
   on('DELETE', '/api/templates/(\\d+)', async (m) => { DB.templates = DB.templates.filter((t) => t.id !== Number(m[1])); return { ok: true }; });
 
+  const FORMATS = ['docx', 'xlsx', 'pptx'];
+  const cleanName = (v, max) => String(v == null ? '' : v).replace(/[\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+  // The facts printed on every page of an exported file, and the chart data behind its visuals
+  const docMeta = (P, today, pm) => ({ client: P.p.client || '', project: P.p.name, code: P.p.code || '', date: today, pm: pm || DB.user.name, currency: P.p.currency || '', client_logo: P.p.client_logo || null });
+  function snapshot(P, type, today, periodDays) {
+    const ctx = R.buildContext(reportInputs(P, today, periodDays));
+    const progress = R.DEFAULTS[type] ? type.startsWith('progress') : false;
+    return { ctx, visuals: window.__Visuals ? window.__Visuals.fromContext(ctx, progress) : null };
+  }
+  // Documents made before formats existed get a format and chart data the first time they are read
+  function complete(P, g) {
+    if (!g.format) g.format = 'docx';
+    if (!g.meta) g.meta = docMeta(P, String(g.created_at || TODAY).slice(0, 10));
+    if (!g.visuals && R.DEFAULTS[g.doc_type]) g.visuals = snapshot(P, g.doc_type, TODAY, R.DEFAULTS[g.doc_type].period || 7).visuals;
+    return g;
+  }
+  const folderOk = (P, id) => id == null || id === '' || P.folders.some((f) => f.id === Number(id));
+  const gSummary = (g) => ({ id: g.id, doc_type: g.doc_type, title: g.title, template: g.template, created_at: g.created_at, format: g.format || 'docx', folder_id: g.folder_id == null ? null : g.folder_id });
+
   on('POST', '/api/projects/(\\d+)/generate', async (m, q, b) => {
     const P = P_(m[1]);
     const def = R.DEFAULTS[b.type]; if (!def) throw err(400, 'Choose a document type');
+    const format = FORMATS.includes(b.format) ? b.format : 'docx';
     const tpl = b.template_id ? DB.templates.find((t) => t.id === Number(b.template_id)) : null;
     if (b.template_id && !tpl) throw err(404, 'Template not found');
+    if (!folderOk(P, b.folder_id)) throw err(404, 'Folder not found');
     const today = b.as_of && /^\d{4}-\d{2}-\d{2}$/.test(b.as_of) ? b.as_of : TODAY;
-    const ctx = R.buildContext(reportInputs(P, today, Number(b.period_days) || def.period || 7));
-    const out = await R.generate({ type: b.type, templateBody: tpl ? tpl.body : null, templateName: tpl ? tpl.name : null, ctx, useAI: false });
-    const g = { id: nid(), project_id: P.id, doc_type: b.type, title: out.title, template: out.template, content: out.markdown, created_at: nowTs() };
+    const periodDays = Number(b.period_days) || def.period || 7;
+    const snap = snapshot(P, b.type, today, periodDays);
+    const out = await R.generate({ type: b.type, templateBody: tpl ? tpl.body : null, templateName: tpl ? tpl.name : null, ctx: snap.ctx, useAI: false });
+    const g = { id: nid(), project_id: P.id, doc_type: b.type, title: cleanName(b.title, 120) || out.title, template: out.template, content: out.markdown, created_at: nowTs(), format, folder_id: b.folder_id ? Number(b.folder_id) : null, meta: docMeta(P, today), visuals: snap.visuals };
     P.generated.unshift(g);
-    audit(P, ACTOR, 'document_generated', { summary: `Generated ${out.title}${tpl ? ` from template "${tpl.name}"` : ''}` });
-    return { generated: clone(g), engine: out.engine, unconfirmed: ctx.unconfirmed };
+    audit(P, ACTOR, 'document_generated', { summary: `Generated ${g.title}${tpl ? ` from template "${tpl.name}"` : ''}` });
+    return { generated: clone(g), engine: out.engine, unconfirmed: snap.ctx.unconfirmed };
   });
-  on('GET', '/api/projects/(\\d+)/generated', async (m) => ({ generated: P_(m[1]).generated.map((g) => ({ id: g.id, doc_type: g.doc_type, title: g.title, template: g.template, created_at: g.created_at })) }));
+  on('GET', '/api/projects/(\\d+)/generated', async (m) => ({ generated: P_(m[1]).generated.map(gSummary) }));
   const findGen = (id) => { for (const k of DB.order) { const P = DB.projects[k]; const g = P && P.generated.find((x) => x.id === Number(id)); if (g) return [P, g]; } throw err(404, 'Not found'); };
-  on('GET', '/api/generated/(\\d+)', async (m) => ({ generated: clone(findGen(m[1])[1]) }));
-  on('PUT', '/api/generated/(\\d+)', async (m, q, b) => { const [, g] = findGen(m[1]); if (b.title != null) g.title = b.title; if (b.content != null) g.content = b.content; return { generated: clone(g) }; });
+  on('GET', '/api/generated/(\\d+)', async (m) => { const [P, g] = findGen(m[1]); return { generated: clone(complete(P, g)) }; });
+  on('PUT', '/api/generated/(\\d+)', async (m, q, b) => {
+    const [P, g] = findGen(m[1]);
+    if (b.title != null) { const v = cleanName(b.title, 120); if (!v) throw err(400, 'Give the document a name'); g.title = v; }
+    if (b.content != null) g.content = b.content;
+    if ('folder_id' in b) { if (!folderOk(P, b.folder_id)) throw err(404, 'Folder not found'); g.folder_id = b.folder_id == null || b.folder_id === '' ? null : Number(b.folder_id); }
+    return { generated: gSummary(g) };
+  });
   on('DELETE', '/api/generated/(\\d+)', async (m) => { const [P, g] = findGen(m[1]); P.generated = P.generated.filter((x) => x !== g); return { ok: true }; });
+
+  // ---------- folders for generated documents ----------
+  const folderRow = (P, f) => ({ id: f.id, name: f.name, created_at: f.created_at, count: P.generated.filter((g) => g.folder_id === f.id).length });
+  const folderName = (P, v, selfId) => {
+    const n = cleanName(v, 60);
+    if (!n) throw err(400, 'Give the folder a name');
+    if (P.folders.some((f) => f.id !== selfId && f.name.toLowerCase() === n.toLowerCase())) throw err(409, 'A folder with this name already exists');
+    return n;
+  };
+  on('GET', '/api/projects/(\\d+)/folders', async (m) => { const P = P_(m[1]); return { folders: P.folders.map((f) => folderRow(P, f)) }; });
+  on('POST', '/api/projects/(\\d+)/folders', async (m, q, b) => {
+    const P = P_(m[1]);
+    const f = { id: b.id && !P.folders.some((x) => x.id === Number(b.id)) ? Number(b.id) : nid(), name: folderName(P, b.name), created_at: nowTs() };
+    P.folders.push(f);
+    return { folder: folderRow(P, f) };
+  });
+  on('PUT', '/api/folders/(\\d+)', async (m, q, b) => {
+    for (const k of DB.order) { const P = DB.projects[k]; const f = P && P.folders.find((x) => x.id === Number(m[1])); if (f) { f.name = folderName(P, b.name, f.id); return { folder: folderRow(P, f) }; } }
+    throw err(404, 'Folder not found');
+  });
+  // Documents in a deleted folder move to Unfiled. They are never deleted.
+  on('DELETE', '/api/folders/(\\d+)', async (m) => {
+    for (const k of DB.order) { const P = DB.projects[k]; const f = P && P.folders.find((x) => x.id === Number(m[1])); if (f) { const moved = P.generated.filter((g) => g.folder_id === f.id).map((g) => g.id); P.generated.forEach((g) => { if (g.folder_id === f.id) g.folder_id = null; }); P.folders = P.folders.filter((x) => x !== f); return { ok: true, moved }; } }
+    throw err(404, 'Folder not found');
+  });
   on('GET', '/api/projects/(\\d+)/audit', async (m) => ({ audit: P_(m[1]).audit.slice(0, 200).map(clone) }));
 
   // ---------- fetch override ----------
@@ -1206,7 +1265,7 @@
       if (mth !== method) continue;
       const m = path.match(re);
       if (!m) continue;
-      try { const out = await fn(m, query, body); if (method !== 'GET') STORE.touch(); return json(200, out); }
+      try { const out = await fn(m, query, body); if (method !== 'GET') STORE.touch(); return out instanceof Response ? out : json(200, out); }
       catch (e) { if (!e.status) console.error(e); return json(e.status || 500, { error: e.message || 'Something went wrong' }); }
     }
     return json(404, { error: 'Not available in the demo' });

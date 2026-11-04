@@ -38,7 +38,7 @@ The `public` folder holds the whole app: `index.html`, `styles.css`, the JavaScr
 
 ## Notes
 
-The demo data lives in `public/seed.js` and the in browser API in `public/mock.js`. Downloads are turned off in demo mode. To connect a real backend, replace the mock API calls in `mock.js` with real endpoints.
+The demo data lives in `public/seed.js` and the in browser API in `public/mock.js`. Downloads work in the demo. Generated documents are built in the browser as Word, Excel or PowerPoint files with the platform logo, client, project, date, charts and shapes, using the libraries in `public/vendor/` (see its README). The format is chosen first and the download always uses that same format. The Reports tab has a folder view where documents can be dragged into folders and renamed. Source documents download only when uploaded in the current session. To connect a real backend, replace the mock API calls in `mock.js` with real endpoints.
 
 
 ## How documents are analyzed
