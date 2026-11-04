@@ -248,12 +248,27 @@ async function handleAi(req, res) {
   try { payload = JSON.parse((await readBody(req, MAX_AI_BODY)).toString('utf8')); } catch (e) { return send(res, e.status || 400, { error: e.status === 413 ? 'Request is too large' : 'Invalid request' }); }
   if (typeof payload.system !== 'string' || typeof payload.user !== 'string') return send(res, 400, { error: 'Invalid request' });
   payload.max_tokens = Math.min(Math.max(parseInt(payload.max_tokens, 10) || 4000, 200), 32000);
+  // A long answer can take minutes. Proxies cut a request that stays silent for about three minutes, so once the wait
+  // passes 15 seconds the server starts the reply and sends a space every 10 seconds. JSON ignores leading spaces.
+  let started = false;
+  let beat = null;
+  const wake = setTimeout(() => {
+    started = true;
+    res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+    res.write(' ');
+    beat = setInterval(() => res.write(' '), 10000);
+  }, 15000);
+  const finish = (status, obj) => {
+    clearTimeout(wake); if (beat) clearInterval(beat);
+    if (started) return res.end(JSON.stringify(status === 200 ? obj : { ...obj, failed: true }));
+    return send(res, status, obj);
+  };
   try {
-    return send(res, 200, await callClaude(payload));
+    return finish(200, await callClaude(payload));
   } catch (e) {
     console.error('claude failed:', e.message);
     const code = e.status === 401 ? 'bad_key' : e.status === 429 ? 'rate' : e.status === 400 && /credit|billing|balance/i.test(e.message) ? 'budget' : 'upstream';
-    return send(res, 502, { error: code === 'bad_key' ? 'The Anthropic API key was rejected' : code === 'budget' ? 'The Anthropic account has no credit left' : 'Claude could not be reached', code, status: e.status || null });
+    return finish(502, { error: code === 'bad_key' ? 'The Anthropic API key was rejected' : code === 'budget' ? 'The Anthropic account has no credit left' : 'Claude could not be reached', code, status: e.status || null });
   }
 }
 

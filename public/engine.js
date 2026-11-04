@@ -1184,7 +1184,7 @@ async function claudeRaw(system, user, maxTokens = 4000) {
   }
   let j = null;
   try { j = await res.json(); } catch (e) { /* not json */ }
-  if (!res.ok) throw Object.assign(new Error((j && j.error) || `Claude request failed (${res.status})`), { code: (j && j.code) || 'upstream' });
+  if (!res.ok || (j && j.failed)) throw Object.assign(new Error((j && j.error) || `Claude request failed (${res.status})`), { code: (j && j.code) || 'upstream' });
   return { text: (j && j.text) || '', stop: (j && j.stop_reason) || null };
 }
 
