@@ -515,7 +515,7 @@
         const w = `style="width:${c[2]}px"`;
         const leaf = !t.summary;
         switch (c[1]) {
-          case 'wbs': return `<div class="c num" ${w}>${t._wbs}</div>`;
+          case 'wbs': return `<div class="c num" ${w} data-tip="${esc(this.t('g_drag_tip'))}">${t._wbs}</div>`;
           case 'mode': return `<div class="c md" ${w}>${t.summary ? '' : `<button type="button" class="gt-mode ${t.mode === 'manual' ? 'manual' : ''}" data-mode="${t.id}" aria-label="${esc(this.t(t.mode === 'manual' ? 'g_mode_manual_tip' : 'g_mode_auto_tip'))}" data-tip="${esc(this.t(t.mode === 'manual' ? 'g_mode_manual_tip' : 'g_mode_auto_tip'))}">${ic(t.mode === 'manual' ? 'pin' : 'auto')}</button>`}</div>`;
           case 'pred': { const txt = (t.deps || []).map((d) => `${this._wbsAll.get(d.id) || '?'}${d.type && d.type !== 'FS' ? d.type : ''}${d.lag ? (d.lag > 0 ? '+' : '') + d.lag + 'd' : ''}`).join(', '); return `<div class="c pd ${t.conflict ? 'bad' : ''}" ${w} ${txt ? `data-tip="${esc(this.t('g_pred_tip'))}: ${esc(txt)}${t.conflict ? '\n' + esc(this.t('g_conflict_tip')) : ''}"` : ''}>${esc(txt)}</div>`; }
           case 'task': return `<div class="c nm ed" ${w} data-f="name" style="width:${c[2]}px;padding-inline-start:6px">${this.treeHtml(t)}${caret}${t.flag ? `<span class="gt-flagico">${ic('star')}</span>` : ''}${this.linkCount(t) ? `<span class="gt-lkico" data-tip="${esc(this.linkTip(t))}">${ic('link')}${this.linkCount(t)}</span>` : ''}<span class="txt" data-tip="${esc(t.name)}">${esc(t.name)}</span></div>`;
@@ -761,6 +761,7 @@
         if (row) this.select(Number(row.dataset.row), e);
       });
       this.bindInsert(left);
+      this.bindRowDrag(left);
       left.addEventListener('dblclick', (e) => {
         if (e.target.closest('.gt-rowbar,.gt-ins,[data-mode],[data-caret]')) return;
         const cell = e.target.closest('.c.ed');
@@ -858,6 +859,46 @@
     }
 
     // ---------- insert between two rows ----------
+    // Drag a task by its number cell and drop it above, below or inside another task.
+    bindRowDrag(left) {
+      left.addEventListener('pointerdown', (e) => {
+        const num = e.target.closest('.c.num');
+        if (!num || e.button || !this.o.onMoveTo) return;
+        const srcRow = num.closest('[data-row]');
+        const id = Number(srcRow.dataset.row);
+        const x0 = e.clientX, y0 = e.clientY;
+        let on = false, tgt = null, line = null;
+        const isUnder = (cand) => { let c = this.tasks.find((k) => k.id === cand); while (c) { if (c.id === id) return true; c = this.tasks.find((k) => k.id === c.parent_id); } return false; };
+        const clear = () => { left.querySelectorAll('.gt-drop-into,.gt-dragging').forEach((n) => n.classList.remove('gt-drop-into', 'gt-dragging')); if (line) line.hidden = true; };
+        const move = (ev) => {
+          if (!on) { if (Math.hypot(ev.clientX - x0, ev.clientY - y0) < 5) return; on = true; srcRow.classList.add('gt-dragging'); document.body.classList.add('gt-dnd'); line = document.createElement('div'); line.className = 'gt-dropline'; document.body.appendChild(line); }
+          ev.preventDefault();
+          const rows = [...left.querySelectorAll('.gt-cells[data-row]')];
+          const r = rows.find((n) => { const b = n.getBoundingClientRect(); return ev.clientY >= b.top && ev.clientY < b.bottom; });
+          left.querySelectorAll('.gt-drop-into').forEach((n) => n.classList.remove('gt-drop-into'));
+          tgt = null;
+          if (!r) { line.hidden = true; return; }
+          const tid = Number(r.dataset.row);
+          if (isUnder(tid)) { line.hidden = true; return; }
+          const b = r.getBoundingClientRect(), f = (ev.clientY - b.top) / b.height;
+          const pos = f < 0.28 ? 'before' : f > 0.72 ? 'after' : 'into';
+          tgt = { id: tid, pos };
+          if (pos === 'into') { r.classList.add('gt-drop-into'); line.hidden = true; }
+          else { line.hidden = false; const lb = left.getBoundingClientRect(); line.style.top = (pos === 'before' ? b.top : b.bottom) - 1 + 'px'; line.style.left = lb.left + 'px'; line.style.width = lb.width + 'px'; }
+          // scroll the page or the schedule while dragging near an edge
+          const sc = left.closest('.gt-scroll') || this.root; const sb = sc.getBoundingClientRect();
+          if (ev.clientY > sb.bottom - 30) sc.scrollTop += 12; else if (ev.clientY < sb.top + 60) sc.scrollTop -= 12;
+        };
+        const up = () => {
+          document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', up);
+          document.body.classList.remove('gt-dnd');
+          const t2 = tgt; clear(); if (line) line.remove();
+          if (on && t2) this.o.onMoveTo(id, t2.id, t2.pos);
+        };
+        document.addEventListener('pointermove', move, { passive: false }); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', up);
+      });
+    }
+
     bindInsert(left) {
       const w = document.createElement('div'); w.className = 'gt-ins'; w.hidden = true;
       w.innerHTML = `<i></i><button type="button" data-tip="${esc(this.t('g_insert_here'))}" aria-label="${esc(this.t('g_insert_here'))}">${ic('plus')}</button>`;

@@ -1090,3 +1090,11 @@ input.te-name { font-size: var(--fs-heading); font-weight: 650; padding: 10px 12
 .gt-left input, .gt-left select { user-select: text; }
 .cx-copy { display: flex; gap: 8px; align-items: center; margin-top: 6px; } .cx-copy code { flex: 1; min-width: 0; padding: 8px 10px; border-radius: var(--radius); background: var(--surface-2); border: 1px solid var(--border); word-break: break-all; user-select: all; }
 .cx-wait { display: flex; gap: 14px; align-items: center; padding: 18px 4px; } .cx-test { text-align: center; margin: 10px 0; min-height: 28px; }
+/* drag and drop of schedule rows */
+.gt-cells .c.num { cursor: grab; touch-action: none; user-select: none; }
+.gt-cells .c.num:hover { color: var(--primary); }
+.gt-cells.gt-dragging { opacity: .45; }
+.gt-cells.gt-drop-into { outline: 2px solid var(--primary); outline-offset: -2px; background: var(--primary-soft); }
+.gt-dropline { position: fixed; height: 3px; border-radius: 2px; background: var(--primary); z-index: 90; pointer-events: none; box-shadow: 0 0 0 2px var(--primary-soft); }
+.gt-dropline[hidden] { display: none; }
+body.gt-dnd, body.gt-dnd * { cursor: grabbing !important; user-select: none; }

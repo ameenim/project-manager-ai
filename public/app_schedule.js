@@ -456,6 +456,26 @@
       return moved;
     };
 
+    // Drag and drop: move a task above or below another task, or inside it as a subtask.
+    async function moveTo(id, targetId, pos) {
+      const tk = g.tasks.find((x) => x.id === id), tg = g.tasks.find((x) => x.id === targetId);
+      if (!tk || !tg || id === targetId) return;
+      const by = byParent();
+      const ids = new Set(g.tasks.map((x) => x.id));
+      const from = by.get(key(tk, ids));
+      from.splice(from.indexOf(tk), 1);
+      if (pos === 'into' || (pos === 'after' && tg.summary && !g.ui.collapsed.has(tg.id))) {
+        const kids = by.get(tg.id) || [];
+        if (pos === 'into') kids.push(tk); else kids.unshift(tk);
+        by.set(tg.id, kids);
+      } else {
+        const sibs = by.get(key(tg, ids));
+        const i = sibs.indexOf(tg);
+        sibs.splice(pos === 'before' ? i : i + 1, 0, tk);
+      }
+      try { data = await api('POST', `${base}/schedule/reorder`, { order: flatten(by) }); g.setData(data); g.select(id); toast(t('g_moved'), 'ok'); } catch (e) { toast(e.message, 'err'); }
+    }
+
     // the plus button between two rows: new task right there, name ready to type
     async function insertBetween(prev, next) {
       const body = { name: t('g_new_task'), duration: 1 };
@@ -473,7 +493,7 @@
 
     g = new window.Gantt($('#gt', root), {
       t, lang: S.lang, commit,
-      onInsert: insertBetween, onAdd: () => addDialog(false), onAddMilestone: () => addDialog(true), onEdit: editDialog, onDelete: del,
+      onInsert: insertBetween, onMoveTo: moveTo, onAdd: () => addDialog(false), onAddMilestone: () => addDialog(true), onEdit: editDialog, onDelete: del,
       onIndent: () => reorder(indentAll, 'cant_indent'),
       onOutdent: () => reorder(outdentAll, 'cant_outdent'),
       onUp: () => reorder(moveUp, 'cant_move'),
