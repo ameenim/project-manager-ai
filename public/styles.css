@@ -857,6 +857,10 @@ input.te-name { font-size: var(--fs-heading); font-weight: 650; padding: 10px 12
 .ap-ic.done { background: var(--success, #16a34a); border-color: transparent; color: #fff; }
 .ap-ic.done svg { width: 14px; height: 14px; }
 .ap-ic.act { border-color: var(--primary); }
+.ap-ic.fail { background: var(--danger, #dc2626); border-color: transparent; color: #fff; }
+.ap-ic.fail svg { width: 14px; height: 14px; }
+.banner.err { background: var(--danger-soft, #fee2e2); }
+.ap-step.failed b { color: var(--danger, #dc2626); }
 .ap-conf { padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); }
 .ap-big { font-size: 44px; font-weight: 700; line-height: 1.1; margin: 4px 0 2px; }
 .ap-bar { display: grid; grid-template-columns: 110px 1fr 42px; gap: 8px; align-items: center; margin-top: 8px; }

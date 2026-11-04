@@ -69,7 +69,14 @@
       const detail = [d.status === 'reading' && d.progress ? d.progress : '', d.message, d.status === 'done' || d.status === 'partial' ? t('an_found', { n: found }) : '', cov, drop].filter(Boolean).map((s) => String(s).replace(/\.$/, '')).join('. ');
       return `<div class="list-item"><div class="grow"><b>${esc(d.filename)}</b>${detail ? `<div class="small muted">${esc(detail)}</div>` : ''}</div><span class="chip ${AN_CHIP[d.status] || ''}">${d.status === 'reading' ? '<span class="spinner" style="width:12px;height:12px;border-width:2px"></span>' : ''}${t(AN_KEY[d.status] || 'an_waiting')}</span></div>`;
     }).join('');
-    return `<div class="card mb" id="anCard"><div class="card-head"><h3>${t('an_title')}</h3></div>${rows}</div>`;
+    const retry = !analyzing ? `<button class="btn sm primary" id="anRetry">${icon('refresh')}${t('reanalyze')}</button>` : '';
+    const failed = an.failed ? `<div class="banner err mb">${icon('x')}<div class="grow"><b>${t('ap_failed')}</b><div class="small">${esc(an.failed.message)}</div></div></div>` : '';
+    return `<div class="card mb" id="anCard"><div class="card-head"><h3>${t('an_title')}</h3>${retry}</div>${failed}${rows}</div>`;
+  }
+  // Starts the analysis again for every document of the project and shows the progress page.
+  async function retryAnalysis(btn, p) {
+    const r = await busy(btn, () => api('POST', `/api/projects/${p.id}/analyze`));
+    if (r) window.PM.projectView(p.id, 'review', new URLSearchParams());
   }
 
   const CHECK_CHIP = { Pass: 'green', Warn: 'amber', Fail: 'red' };
@@ -96,7 +103,7 @@
     const fin = an.finished && !p.analyzing;
     const cf = an.confidence || {};
     const rows = (an.stages || []).map((st, i) => {
-      const ic = st.status === 'done' ? `<span class="ap-ic done">${icon('check')}</span>` : st.status === 'active' ? '<span class="ap-ic act"><span class="spinner" style="width:14px;height:14px;border-width:2px"></span></span>' : `<span class="ap-ic">${i + 1}</span>`;
+      const ic = st.status === 'done' ? `<span class="ap-ic done">${icon('check')}</span>` : st.status === 'active' ? '<span class="ap-ic act"><span class="spinner" style="width:14px;height:14px;border-width:2px"></span></span>' : st.status === 'failed' ? `<span class="ap-ic fail">${icon('x')}</span>` : `<span class="ap-ic">${i + 1}</span>`;
       return `<div class="ap-step ${st.status}">${ic}<div class="grow"><b>${t('stage_' + st.key)}</b>${st.detail ? `<div class="small muted">${esc(st.detail)}</div>` : ''}</div></div>`;
     }).join('');
     const kinds = [['info', 'kind_field'], ['deliverable', 'kind_deliverable'], ['requirement', 'kind_requirement'], ['payment', 'kind_milestone'], ['schedule', 'kind_schedule'], ['risk', 'kind_risk']];
@@ -107,17 +114,22 @@
       return `<div class="list-item"><div class="grow"><b>${esc(d.filename)}</b>${detail ? `<div class="small muted">${esc(detail)}</div>` : ''}</div><span class="chip ${AN_CHIP[d.status] || ''}">${d.status === 'reading' ? '<span class="spinner" style="width:12px;height:12px;border-width:2px"></span>' : ''}${t(AN_KEY[d.status] || 'an_waiting')}</span></div>`;
     }).join('');
     const f = an.filled;
-    const done = fin ? `<div class="card mb ap-done"><div class="card-head"><h3>${t('ap_done')}</h3></div>
+    const total = (an.docs || []).reduce((n, d) => n + (d.counts ? d.counts.deliverable + d.counts.requirement + d.counts.risk + d.counts.milestone + d.counts.schedule + d.counts.field : 0), 0);
+    const bad = fin && (an.failed || !total);
+    const badCard = bad ? `<div class="card mb ap-done"><div class="card-head"><h3>${an.failed ? t('ap_failed') : t('ap_empty_h')}</h3></div>
+      <p>${esc(an.failed ? an.failed.message : t('ap_empty_p'))}</p>
+      <div class="row gap"><button class="btn primary" id="apRetry">${icon('refresh')}${t('reanalyze')}</button><button class="btn" id="apReview">${icon('check')}${t('ap_review')}</button></div></div>` : '';
+    const done = fin && !bad ? `<div class="card mb ap-done"><div class="card-head"><h3>${t('ap_done')}</h3></div>
       <p>${f ? t('ap_filled', { a: f.confirmed, b: f.review }) : ''}</p>
       ${an.synthesis && an.synthesis.summary ? `<p class="small">${esc(an.synthesis.summary)}</p>` : ''}
       ${f && f.conflicts && f.conflicts.length ? `<ul class="small muted">${f.conflicts.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>` : ''}
       <div class="row gap"><button class="btn primary" id="apReview">${icon('check')}${t('ap_review')}</button><a class="btn" href="#/p/${p.id}/schedule" id="apSched">${icon('cal')}${t('open_schedule')}</a></div></div>` : '';
     return `<div class="page">
-      <div class="card mb"><div class="card-head"><h3>${fin ? t('ap_done') : t('ap_title')}</h3><span class="small muted">${esc(p.name)}</span></div>
+      <div class="card mb"><div class="card-head"><h3>${fin ? (bad ? (an.failed ? t('ap_failed') : t('ap_empty_h')) : t('ap_done')) : t('ap_title')}</h3><span class="small muted">${esc(p.name)}</span></div>
         <div class="ap-grid"><div class="ap-steps">${rows}</div>
           <div class="ap-conf"><div class="small muted">${t('ap_conf')}</div><div class="ap-big conf ${CONF_CLS(cf.overall)}">${pct(cf.overall)}</div>
             ${cf.coverage != null ? `<div class="small muted mb">${t('ap_cov', { n: Math.round(cf.coverage * 100) })}</div>` : ''}${bars}</div></div></div>
-      ${done}
+      ${done}${badCard}
       <div class="card"><div class="card-head"><h3>${t('an_title')}</h3></div>${files}</div></div>`;
   }
 
@@ -130,6 +142,8 @@
         root.innerHTML = analysisPage(pp);
         const go = $('#apReview', root);
         if (go) go.onclick = () => { try { sessionStorage.setItem(seenKey, '1'); } catch (e) { /* ignore */ } window.PM.projectView(p.id, 'review', new URLSearchParams()); };
+        const ar = $('#apRetry', root);
+        if (ar) ar.onclick = () => retryAnalysis(ar, p);
         const sc = $('#apSched', root);
         if (sc) sc.addEventListener('click', () => { try { sessionStorage.setItem(seenKey, '1'); } catch (e) { /* ignore */ } });
       };
@@ -221,6 +235,7 @@
       };
       const add = $('#addItem', root); if (add) add.onclick = () => editItem({ kind, title: '', description: '', data: {}, isNew: true });
       const wb = $('#wizBtn', root); if (wb) wb.onclick = () => startWizard(p, reload);
+      const rt = $('#anRetry', root); if (rt) rt.onclick = () => retryAnalysis(rt, p);
     }
 
     function editItem(it) {

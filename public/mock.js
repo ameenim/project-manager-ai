@@ -3,7 +3,13 @@
    report generator and rule based document reader, so behavior matches the product. */
 (function () {
   'use strict';
-  const S = window.__Sched, R = window.__Reports, AI = window.__AI, Pipe = window.__Pipe;
+  const S = window.__Sched, R = window.__Reports, AI = window.__AI; let Pipe = window.__Pipe;
+  // If the analysis module is missing from the page it is loaded when the analysis starts.
+  async function ensurePipe() {
+    if (window.__Pipe) { Pipe = window.__Pipe; return; }
+    await new Promise((ok) => { const sc = document.createElement('script'); sc.src = 'extract2.js?r=' + Date.now(); sc.onload = ok; sc.onerror = ok; document.head.appendChild(sc); });
+    Pipe = window.__Pipe || null;
+  }
   // The demo follows the real calendar: today is the viewer's date, and the sample project dates move with it in whole weeks so working days stay aligned.
   const RAW = window.DEMO_SEED;
   const TODAY = new Date().toLocaleDateString('en-CA');
@@ -389,7 +395,10 @@
     badjson: 'The AI reply could not be read. Use Reanalyze to try again. Only a basic rule based reading was done.',
     cutoff: 'The AI reply could not be read. Use Reanalyze to try again. Only a basic rule based reading was done.',
     upstream: 'The AI service could not be reached. Use Reanalyze to try again. Only a basic rule based reading was done.',
+    timeout: 'The AI took too long to answer. Use Analyze again to try again.',
   };
+  // Plain language reason for a run that stopped before it finished.
+  const failText = (e) => (e && e.code === 'pipe' ? 'The analysis module did not load in this browser tab. Refresh the page and use Analyze again.' : e && AI_REASON[e.code] ? AI_REASON[e.code] : `The analysis stopped before it finished${e && e.message ? ` (${String(e.message).slice(0, 160)})` : ''}. Use Analyze again.`);
   // ---------- analysis pipeline ----------
   // Six visible stages. The Review tab shows them while P.p.analyzing is on.
   const STAGES = [['ingest', 'Ingestion and Parsing'], ['retrieve', 'Retrieval'], ['context', 'Contextual Analysis'], ['analyze', 'Analyzing'], ['generate', 'Response Generation'], ['fill', 'Filling project data']];
@@ -410,6 +419,8 @@
     P.p.analyzing = 1;
     const rowOf = (d) => run.docs.find((r) => r.id === d.id);
     try {
+      await ensurePipe();
+      if (!Pipe || !Pipe.detectRole || !AI || !AI.splitParts) throw Object.assign(new Error('analysis module missing'), { code: 'pipe' });
       // 1. Ingestion and parsing
       setStage(P, 'ingest', 'active', `Reading ${docs.length} file${docs.length === 1 ? '' : 's'}`);
       let n = 0;
@@ -517,11 +528,19 @@
       refreshConfidence(P);
       run.filled = filled;
       setStage(P, 'fill', 'done', `${filled.confirmed} items filled in, ${filled.review} left for your review`);
+    } catch (e) {
+      // Never end silently. The person sees what stopped and gets an Analyze again button.
+      console.error('analysis failed', e);
+      const message = failText(e);
+      run.failed = { message, detail: String((e && e.message) || e) };
+      for (const st of run.stages) if (st.status === 'active') { st.status = 'failed'; st.detail = message; }
+      for (const d of run.docs) if (d.status === 'waiting' || d.status === 'reading') { d.status = 'failed'; d.progress = ''; d.message = message; }
+      try { audit(P, 'AI', 'analysis_failed', { summary: `Analysis stopped. ${message}` }); } catch (x) { /* audit is best effort */ }
     } finally {
       P.p.analyzing = 0;
       run.finished = true;
       run.show_summary = true;
-      for (const st of run.stages) if (st.status === 'active' || st.status === 'waiting') st.status = st.status === 'active' ? 'done' : 'skipped';
+      for (const st of run.stages) if (st.status === 'active') st.status = 'done'; else if (st.status === 'waiting') st.status = 'skipped';
     }
   }
 
@@ -806,7 +825,7 @@
   });
   on('POST', '/api/projects/(\\d+)/analyze', async (m) => {
     const P = P_(m[1]);
-    analyzeDocs(P, P.documents.filter((d) => ['proposal', 'contract', 'po', 'other'].includes(d.kind))).catch((e) => console.error(e));
+    analyzeDocs(P, P.documents.slice()).catch((e) => console.error(e));
     return { results: [] };
   });
 

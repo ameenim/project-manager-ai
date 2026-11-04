@@ -205,6 +205,7 @@ async function callClaude(payload) {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
       body,
+      signal: AbortSignal.timeout(280000),
     });
     if (r.ok) {
       const j = await r.json();

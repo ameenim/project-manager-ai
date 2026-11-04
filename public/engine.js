@@ -1177,8 +1177,9 @@ async function claudeRaw(system, user, maxTokens = 4000) {
   if (!aiState.configured) return null;
   let res;
   try {
-    res = await fetch('/srv/ai', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ system, user, max_tokens: maxTokens }) });
-  } catch (e) {
+    res = await fetch('/srv/ai', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ system, user, max_tokens: maxTokens }), signal: AbortSignal.timeout(300000) });
+  } catch (err) {
+    if (err && (err.name === 'TimeoutError' || err.name === 'AbortError')) throw Object.assign(new Error('The AI took too long to answer'), { code: 'timeout' });
     throw Object.assign(new Error('Could not reach the server'), { code: 'network' });
   }
   let j = null;
