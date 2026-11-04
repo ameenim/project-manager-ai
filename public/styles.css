@@ -1098,3 +1098,14 @@ input.te-name { font-size: var(--fs-heading); font-weight: 650; padding: 10px 12
 .gt-dropline { position: fixed; height: 3px; border-radius: 2px; background: var(--primary); z-index: 90; pointer-events: none; box-shadow: 0 0 0 2px var(--primary-soft); }
 .gt-dropline[hidden] { display: none; }
 body.gt-dnd, body.gt-dnd * { cursor: grabbing !important; user-select: none; }
+
+/* AI help in the schedule check */
+.asst { display: flex; gap: 12px; align-items: center; background: var(--violet-soft); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin: 14px 0; }
+.asst-ic { color: var(--violet); display: inline-flex; } .asst-ic svg { width: 20px; height: 20px; }
+.asst-sec { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin: 12px 0; background: var(--surface); }
+.asst-sec.ok { border-inline-start: 3px solid var(--success); }
+.asst-h { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.asst-row { display: flex; gap: 12px; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--border); font-size: var(--fs-body); }
+.asst-row:first-of-type { border-top: 0; }
+.asst-acts { display: flex; gap: 6px; flex: none; }
+@media (max-width: 600px) { .asst-row, .asst { flex-wrap: wrap; } .asst-acts { width: 100%; } }

@@ -133,10 +133,13 @@
       over_contract: 'overall', late: 'overall', overdue: 'overall', not_started: 'overall', no_baseline: 'overall', too_critical: 'overall', no_owner: 'overall' };
     const chkText = (key, i) => { const k = key + i.code, v = t(k, i.params || {}); return v === k ? null : v; };
     async function validateDialog(cat = 'all') {
-      const r = await busy(null, () => api('GET', `${base}/schedule/validate`));
+      let r = await busy(null, () => api('GET', `${base}/schedule/validate`));
       if (!r) return;
-      const st = r.stats || { coverage: {} }, sev = { error: 'red', warn: 'amber', info: 'blue' };
+      let ai = null, running = false; const dismissed = new Set();
+      const sev = { error: 'red', warn: 'amber', info: 'blue' };
       const catOf = (i) => CHK_CAT[i.code] || 'overall';
+      const buildTiles = () => {
+      const st = r.stats || { coverage: {} };
       const counts = { all: r.issues.length, logic: 0, links: 0, overall: 0 };
       r.issues.forEach((i) => { counts[catOf(i)]++; });
       const score = st.score ?? 100, band = score >= 85 ? 'good' : score >= 65 ? 'mid' : 'bad';
@@ -144,8 +147,31 @@
       const tiles = `<div class="chk-tiles"><div class="chk-score ${band}" style="--v:${score}"><b>${score}</b></div>
         <div class="grow"><div style="font-weight:600">${t('chk_band_' + band)}</div><div class="small muted">${t('validate_summary', { e: r.errors, w: r.warnings })}${st.finish ? ` &middot; ${t('chk_finish', { d: st.finish })}${st.contract_end ? ` ${t('chk_vs_contract', { d: st.contract_end })}` : ''}` : ''}</div></div></div>
         <div class="chk-tiles four"><button type="button" class="chk-tile" data-cat="logic"><span class="small muted">${t('chk_logic')}</span><b>${st.logic_ok ?? 100}%</b><div class="progress"><i style="width:${st.logic_ok ?? 100}%"></i></div></button>${cov('deliverable', 'kind_deliverable')}${cov('milestone', 'kind_milestone')}${cov('requirement', 'kind_requirement')}</div>`;
+        counts_ = counts; return tiles;
+      };
+      let counts_ = null;
       const m = modal({ title: t('validate_title'), size: 'lg', body: '', footer: `<button class="btn primary" data-close>${t('close')}</button>` });
+      const aiAction = (a) => {
+        const nm = (x) => `<b>${esc(x)}</b>`;
+        if (a.type === 'link') return t('asst_a_link', { kind: t('asst_k_' + a.kind), item: nm(a.item_title), tasks: (a.task_names || []).map(nm).join(', ') });
+        if (a.type === 'dep') return t('asst_a_dep', { task: nm(a.task_name), pred: nm(a.pred_name) });
+        if (a.type === 'close') return t('asst_a_close', { item: nm(a.item_title) });
+        if (a.type === 'duration') return t('asst_a_duration', { task: nm(a.task_name) });
+        return t('asst_a_unlink', { task: nm(a.task_name) });
+      };
+      const confChip = (c) => `<span class="conf ${c >= 0.85 ? 'hi' : c >= 0.7 ? 'mid' : 'lo'}">${t(c >= 0.85 ? 'rv_c_hi' : c >= 0.7 ? 'rv_c_mid' : 'rv_c_lo')} · ${Math.round(c * 100)}%</span>`;
+      const aiHtml = () => {
+        if (running) return `<div class="asst"><span class="spinner"></span><div class="grow"><b>${t('asst_running')}</b><div class="small muted">${t('asst_running_hint')}</div></div></div>`;
+        if (!ai) return `<div class="asst"><span class="asst-ic">${icon('spark')}</span><div class="grow"><b>${t('asst_title')}</b><div class="small muted">${t('asst_hint')}</div></div><button class="btn primary" id="asstRun">${icon('spark')}${t('asst_btn')}</button></div>`;
+        const sugg = ai.suggestions.filter((x) => !dismissed.has(x.key));
+        const warn = ai.note ? `<div class="banner mb">${icon('x')}<div class="grow small">${t(ai.note === 'budget' || ai.note === 'bad_key' ? 'asst_note_key' : 'asst_note_rules')}</div></div>` : '';
+        const done = ai.applied.length ? `<div class="asst-sec ok"><div class="asst-h"><span class="chip green">${icon('check')}${t('asst_applied_h', { n: ai.applied.length })}</span><span class="grow"></span>${ai.token ? `<button class="btn sm" id="asstUndo">${t('asst_undo')}</button>` : ''}</div>${ai.applied.slice(0, 12).map((a) => `<div class="asst-row"><div class="grow">${aiAction(a)}<div class="small muted">${esc(a.reason || '')}</div></div></div>`).join('')}${ai.applied.length > 12 ? `<div class="small muted">+${ai.applied.length - 12}</div>` : ''}</div>` : '';
+        const sg = sugg.length ? `<div class="asst-sec"><div class="asst-h"><b>${t('asst_sugg_h', { n: sugg.length })}</b><span class="grow"></span><button class="btn sm primary" id="asstAll">${t('asst_apply_all')}</button></div>${sugg.map((a) => `<div class="asst-row"><div class="grow">${aiAction(a)}<div class="small muted">${esc(a.reason || '')}${a.moves ? ` ${t('asst_moves', { d: esc(a.start_from || '') })}` : ''}</div><div>${confChip(a.confidence)}</div></div><div class="asst-acts"><button class="btn sm primary" data-apply="${a.key}">${t('asst_apply')}</button><button class="btn sm ghost" data-dismiss="${a.key}">${t('asst_dismiss')}</button></div></div>`).join('')}</div>` : (!ai.applied.length ? `<div class="asst-sec"><div class="small muted">${t('asst_none')}</div></div>` : '');
+        return `${warn}${done}${sg}<div class="row" style="margin:8px 0"><button class="btn sm ghost" id="asstRun">${icon('refresh')}${t('asst_again')}</button></div>`;
+      };
+      const refresh = async (res) => { if (res && res.tasks) { data = res; g.setData(res); } r = await api('GET', `${base}/schedule/validate`); draw(); };
       const draw = () => {
+        const tiles = buildTiles(); const counts = counts_;
         const list = r.issues.filter((i) => cat === 'all' || catOf(i) === cat);
         const byCode = new Map(); list.forEach((i) => { if (!byCode.has(i.code)) byCode.set(i.code, []); byCode.get(i.code).push(i); });
         const grp = [...byCode.entries()].map(([code, arr]) => {
@@ -158,9 +184,25 @@
           };
           return `<div class="chk-grp"><div class="chk-h"><span class="chip ${sev[top.severity]}">${t('sev_' + top.severity)}</span><b class="grow">${esc(chkText('chk_t_', top) || top.message)}</b><span class="small muted">${arr.length}</span></div>${shown.map(row).join('')}${arr.length > shown.length ? `<div class="small muted" style="padding:6px 2px">${t('chk_more', { n: arr.length - shown.length })}</div>` : ''}</div>`;
         }).join('');
-        m.setBody(`${tiles}<div class="chk-tabs" role="tablist">${['all', 'logic', 'links', 'overall'].map((k) => `<button type="button" class="filter-chip ${cat === k ? 'on' : ''}" data-cat="${k}">${t('chk_cat_' + k)} <b>${counts[k]}</b></button>`).join('')}</div>
+        m.setBody(`${tiles}<div class="asst-wrap">${aiHtml()}</div><div class="chk-tabs" role="tablist">${['all', 'logic', 'links', 'overall'].map((k) => `<button type="button" class="filter-chip ${cat === k ? 'on' : ''}" data-cat="${k}">${t('chk_cat_' + k)} <b>${counts[k]}</b></button>`).join('')}</div>
           ${list.length ? grp : `<div class="empty"><div class="big">&#10003;</div><p>${t('validate_ok')}</p></div>`}`);
         m.$$('[data-cat]').forEach((el) => (el.onclick = () => { cat = el.dataset.cat; draw(); }));
+        const run = m.$('#asstRun');
+        if (run) run.onclick = async () => { running = true; dismissed.clear(); draw(); try { ai = await api('POST', `${base}/schedule/assist`); } catch (e) { toast(e.message, 'err'); ai = null; } running = false; await refresh(ai); };
+        const undo = m.$('#asstUndo');
+        if (undo) undo.onclick = async () => { const res = await busy(undo, () => api('POST', `${base}/schedule/assist/undo`, { token: ai.token })); if (res) { toast(t('asst_undone'), 'ok'); ai = null; await refresh(res); } };
+        const applyKeys = async (keys, btn) => {
+          const acts = ai.suggestions.filter((x) => keys.includes(x.key));
+          const res = await busy(btn, () => api('POST', `${base}/schedule/assist/apply`, { actions: acts }));
+          if (!res) return;
+          toast(t('asst_done', { n: res.applied }), 'ok');
+          ai.suggestions = ai.suggestions.filter((x) => !keys.includes(x.key));
+          if (res.token) { ai.token = res.token; ai.applied = [...ai.applied, ...acts]; }
+          await refresh(res);
+        };
+        m.$$('[data-apply]').forEach((el) => (el.onclick = () => applyKeys([el.dataset.apply], el)));
+        m.$$('[data-dismiss]').forEach((el) => (el.onclick = () => { dismissed.add(el.dataset.dismiss); draw(); }));
+        const all = m.$('#asstAll'); if (all) all.onclick = () => applyKeys(ai.suggestions.filter((x) => !dismissed.has(x.key)).map((x) => x.key), all);
         m.$$('[data-pick]').forEach((el) => (el.onclick = (e) => { if (e.target.closest('button')) return; m.close(); g.goTo(Number(el.dataset.pick)); }));
         m.$$('[data-fix]').forEach((el) => (el.onclick = () => { m.close(); editDialog(g.tasks.find((x) => x.id === Number(el.dataset.fix))); }));
         m.$$('[data-link-item]').forEach((el) => (el.onclick = () => { m.close(); itemLinkDialog(data.items.find((x) => x.id === Number(el.dataset.linkItem)), () => validateDialog(cat)); }));

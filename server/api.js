@@ -1037,6 +1037,186 @@ module.exports = function createApi(store, auth, connectors) {
     const P = P_(m[1]);
     return S.checkSchedule(P.tasks, rawProject(P), { items: linkItems(P), today: TODAY(), hasBaseline: P.tasks.some((t) => t.b_start) });
   });
+  // ----- AI assistant for the schedule check -----
+  // It reads the open findings, applies what it is sure about and suggests the rest. Every applied change can be undone.
+  const AUTO_AT = 0.85;
+  const ASSIST_SYSTEM = `You are a senior project manager repairing the traceability of a project schedule.
+You get unlinked contract items (deliverables, payment milestones, requirements, risks), tasks that have no predecessor or successor, and the list of leaf tasks.
+Return one JSON object: {"links":[{"item_id":number,"task_ids":[number],"confidence":number,"reason":string}],"deps":[{"task_id":number,"pred_id":number,"confidence":number,"reason":string}]}
+Rules:
+- links: tie each item to the task or tasks that deliver or complete it. A payment milestone belongs to the task that triggers the payment (acceptance, approval, go live, handover, delivery) and its due date should be close to that task finish. A deliverable belongs to the tasks that produce or hand it over. A requirement belongs to the tasks that build or verify it. A risk belongs to a task that mitigates it or the phase it threatens.
+- deps: only for the listed tasks that lack a predecessor or a successor. pred_id must be a task that really has to finish first (same phase, earlier step, matching hand over). Never invent a link just to fill the gap. No loops. Never link a task to itself.
+- confidence is 0 to 1. Use 0.85 or more only when the names clearly match and the dates agree. Use 0.5 to 0.84 when it is a sensible guess. Skip anything below 0.5.
+- reason is one short plain sentence a project manager can check. Do not use dashes or semicolons.
+- Use only ids from the input. Use US English.`;
+  const assistTokens = (s) => new Set(String(s || '').toLowerCase().replace(/[^a-z0-9؀-ۿ ]+/g, ' ').split(/\s+/).filter((w) => w.length > 2));
+  const assistSim = (a, b) => { const A = assistTokens(a), B = assistTokens(b); if (!A.size || !B.size) return 0; let n = 0; A.forEach((w) => B.has(w) && n++); return n / Math.min(A.size, B.size); };
+  function assistWbs(P) {
+    const ids = new Set(P.tasks.map((x) => x.id)); const by = new Map();
+    for (const x of P.tasks) { const k = x.parent_id && ids.has(x.parent_id) ? x.parent_id : 0; if (!by.has(k)) by.set(k, []); by.get(k).push(x); }
+    for (const a of by.values()) a.sort((p, q) => (p.position ?? 0) - (q.position ?? 0) || p.id - q.id);
+    const map = new Map(); const walk = (pid, pre) => (by.get(pid) || []).forEach((x, i) => { const w = pre ? `${pre}.${i + 1}` : `${i + 1}`; map.set(x.id, w); walk(x.id, w); }); walk(0, '');
+    return map;
+  }
+  function assistState(P) {
+    const comp = S.schedule(P.tasks, rawProject(P)); const by = new Map(comp.map((t) => [t.id, t])); const wbs = assistWbs(P);
+    const phaseOf = (t) => { let c = P.tasks.find((x) => x.id === t.parent_id), top = null; while (c) { top = c; c = P.tasks.find((x) => x.id === c.parent_id); } return top ? top.name : ''; };
+    return { comp, by, wbs, phaseOf, leaves: comp.filter((t) => !t.summary) };
+  }
+  function assistView(P, a, st) {
+    const tn = (id) => { const t = st.by.get(id); return t ? t.name : '?'; };
+    const o = { ...a };
+    if (a.item_id) { const it = P.items.find((x) => x.id === a.item_id); o.item_title = it ? it.title : ''; o.kind = it ? it.kind : ''; }
+    if (a.task_ids) o.task_names = a.task_ids.map(tn);
+    if (a.task_id) o.task_name = tn(a.task_id);
+    if (a.pred_id) o.pred_name = tn(a.pred_id);
+    return o;
+  }
+  // Applies one action. Returns the undo record, or null when it is no longer valid.
+  function assistApply(P, a) {
+    if (a.type === 'link') {
+      const it = P.items.find((x) => x.id === a.item_id && x.status !== 'ignored'); if (!it) return null;
+      const rec = { type: 'link', tasks: [] };
+      for (const id of a.task_ids || []) {
+        const t = P.tasks.find((x) => x.id === id); if (!t) continue;
+        const had = t.deliverable_id === it.id || (Array.isArray(t.links) && t.links.includes(it.id)); if (had) continue;
+        rec.tasks.push({ id: t.id, deliverable_id: t.deliverable_id || null, links: Array.isArray(t.links) ? [...t.links] : [] });
+        if (it.kind === 'deliverable' && !t.deliverable_id) t.deliverable_id = it.id; else t.links = [...(Array.isArray(t.links) ? t.links : []), it.id];
+      }
+      if (!rec.tasks.length) return null;
+      audit(P, ACTOR(), 'ai_link', { summary: `AI linked ${it.kind} "${it.title}" to ${rec.tasks.length} task${rec.tasks.length > 1 ? 's' : ''}` });
+      return rec;
+    }
+    if (a.type === 'dep') {
+      const t = P.tasks.find((x) => x.id === a.task_id), p = P.tasks.find((x) => x.id === a.pred_id); if (!t || !p || t.id === p.id) return null;
+      if ((t.deps || []).some((d) => d.id === p.id)) return null;
+      const nd = [...(t.deps || []), { id: p.id, type: 'FS', lag: 0 }];
+      if (wouldLoop(P.tasks, t.id, nd) || S.validateLinks(P.tasks, t.id, nd).length) return null;
+      const rec = { type: 'dep', id: t.id, deps: clone(t.deps || []), start: t.start }; t.deps = nd;
+      audit(P, ACTOR(), 'ai_dep', { summary: `AI made "${t.name}" follow "${p.name}"` });
+      return rec;
+    }
+    if (a.type === 'close') {
+      const it = P.items.find((x) => x.id === a.item_id); if (!it || it.state === 'closed') return null;
+      const rec = { type: 'close', id: it.id, state: it.state }; it.state = 'closed';
+      audit(P, ACTOR(), 'ai_close', { summary: `AI closed ${it.kind} "${it.title}"` }); return rec;
+    }
+    if (a.type === 'duration') {
+      const t = P.tasks.find((x) => x.id === a.task_id); if (!t || !(t.duration > 0)) return null;
+      const rec = { type: 'duration', id: t.id, duration: t.duration }; t.duration = 0;
+      audit(P, ACTOR(), 'ai_duration', { summary: `AI set milestone "${t.name}" to zero days` }); return rec;
+    }
+    if (a.type === 'unlink') {
+      const t = P.tasks.find((x) => x.id === a.task_id); if (!t) return null; const ids = new Set(P.items.map((x) => x.id));
+      const rec = { type: 'unlink', tasks: [{ id: t.id, deliverable_id: t.deliverable_id || null, links: Array.isArray(t.links) ? [...t.links] : [] }] };
+      if (t.deliverable_id && !ids.has(t.deliverable_id)) t.deliverable_id = null;
+      t.links = (t.links || []).filter((x) => ids.has(x));
+      if (rec.tasks[0].deliverable_id === (t.deliverable_id || null) && rec.tasks[0].links.length === t.links.length) return null;
+      audit(P, ACTOR(), 'ai_unlink', { summary: `AI removed a broken link from "${t.name}"` }); return rec;
+    }
+    return null;
+  }
+  function assistUndo(P, recs) {
+    for (const r of recs.slice().reverse()) {
+      if (r.type === 'link' || r.type === 'unlink') for (const x of r.tasks) { const t = P.tasks.find((y) => y.id === x.id); if (t) { t.deliverable_id = x.deliverable_id; t.links = x.links; } }
+      else if (r.type === 'dep') { const t = P.tasks.find((y) => y.id === r.id); if (t) { t.deps = r.deps; if (r.start) t.start = r.start; } }
+      else if (r.type === 'close') { const it = P.items.find((y) => y.id === r.id); if (it) it.state = r.state; }
+      else if (r.type === 'duration') { const t = P.tasks.find((y) => y.id === r.id); if (t) t.duration = r.duration; }
+    }
+    recalc(P);
+  }
+  async function assistPlan(P) {
+    const st = assistState(P);
+    const chk = S.checkSchedule(P.tasks, rawProject(P), { items: linkItems(P), today: TODAY(), hasBaseline: P.tasks.some((t) => t.b_start) });
+    const out = []; let engine = 'rules', note = null;
+    for (const i of chk.issues) {
+      if (i.code === 'ready_to_close' && i.item_id) out.push({ type: 'close', item_id: i.item_id, confidence: 0.95, reason: 'Every task behind it is 100 percent done.' });
+      else if (i.code === 'milestone_duration' && i.task_id) out.push({ type: 'duration', task_id: i.task_id, confidence: 0.95, reason: 'A milestone has no duration.' });
+      else if (i.code === 'broken_link' && i.task_id && !out.some((o) => o.type === 'unlink' && o.task_id === i.task_id)) out.push({ type: 'unlink', task_id: i.task_id, confidence: 0.95, reason: 'The linked item no longer exists.' });
+    }
+    const unl = chk.issues.filter((i) => i.item_id && ['del_unlinked', 'pay_unlinked', 'req_unlinked', 'risk_unlinked'].includes(i.code)).slice(0, 40);
+    const need = chk.issues.filter((i) => ['isolated', 'no_pred', 'no_succ'].includes(i.code) && i.task_id).slice(0, 40);
+    const leaves = st.leaves.slice(0, 260);
+    const itemRows = unl.map((i) => { const it = P.items.find((x) => x.id === i.item_id); const d = (it && it.data) || {}; return { item_id: i.item_id, kind: i.kind, title: i.item_title, description: String((it && it.description) || '').slice(0, 220), due_date: d.due_date || null, amount: d.amount ?? null, percent: d.percent ?? null }; });
+    const needRows = need.map((i) => ({ task_id: i.task_id, lacks: i.code === 'no_succ' ? 'successor' : i.code === 'no_pred' ? 'predecessor' : 'predecessor and successor' }));
+    let ai = null;
+    if ((itemRows.length || needRows.length) && leaves.length) {
+      const taskRows = leaves.map((t) => ({ id: t.id, wbs: st.wbs.get(t.id), name: t.name, phase: st.phaseOf(t), start: t.start, finish: t.finish, milestone: !!t.is_milestone }));
+      const user = `Project: ${P.p.name}. Contract end: ${P.p.end_date || 'unknown'}.\nUnlinked items:\n${JSON.stringify(itemRows)}\nTasks needing a link:\n${JSON.stringify(needRows)}\nLeaf tasks:\n${JSON.stringify(taskRows)}`;
+      try { ai = await AI.claudeJSON(ASSIST_SYSTEM, user, 12000); if (ai) engine = 'claude'; else note = 'unavailable'; }
+      catch (e) { note = ['bad_key', 'budget'].includes(e.code) ? e.code : 'unavailable'; }
+    }
+    const leafIds = new Set(leaves.map((t) => t.id));
+    const unlIds = new Set(itemRows.map((r) => r.item_id));
+    const seenItem = new Set(), seenDep = new Set();
+    const conf = (c) => Math.max(0, Math.min(1, Number(c) || 0));
+    if (ai) {
+      for (const l of ai.links || []) {
+        const ids = [...new Set((l.task_ids || []).map(Number))].filter((id) => leafIds.has(id));
+        if (!unlIds.has(Number(l.item_id)) || !ids.length || seenItem.has(Number(l.item_id)) || conf(l.confidence) < 0.5) continue;
+        seenItem.add(Number(l.item_id)); out.push({ type: 'link', item_id: Number(l.item_id), task_ids: ids.slice(0, 4), confidence: conf(l.confidence), reason: String(l.reason || '').slice(0, 240) });
+      }
+      const needIds = new Set(needRows.map((r) => r.task_id));
+      for (const d of ai.deps || []) {
+        const tid = Number(d.task_id), pid = Number(d.pred_id), k = tid + ':' + pid;
+        if (!needIds.has(tid) || !leafIds.has(pid) || tid === pid || seenDep.has(k) || conf(d.confidence) < 0.5) continue;
+        seenDep.add(k); out.push({ type: 'dep', task_id: tid, pred_id: pid, confidence: conf(d.confidence), reason: String(d.reason || '').slice(0, 240) });
+      }
+    } else {
+      // without the AI only name matching is used, and it is always a suggestion
+      for (const r of itemRows) {
+        let best = null; const dv = (P.items.find((x) => x.id === r.item_id).data || {}).deliverable_id;
+        for (const t of leaves) { const sc = assistSim(r.title + ' ' + r.description, t.name); if (!best || sc > best.sc) best = { t, sc }; }
+        if (best && best.sc >= 0.5) out.push({ type: 'link', item_id: r.item_id, task_ids: [best.t.id], confidence: Math.min(0.78, 0.5 + best.sc * 0.3), reason: 'The names are similar.' });
+        else if (dv) { const lt = leaves.filter((t) => t.deliverable_id === Number(dv) || (t.links || []).includes(Number(dv))).sort((a, b) => (b.finish || '').localeCompare(a.finish || ''))[0]; if (lt) out.push({ type: 'link', item_id: r.item_id, task_ids: [lt.id], confidence: 0.7, reason: 'It belongs to the deliverable these tasks produce.' }); }
+      }
+      for (const r of needRows) {
+        if (r.lacks === 'successor') continue;
+        const t = st.by.get(r.task_id); const sibs = leaves.filter((x) => x.parent_id === t.parent_id && x.id !== t.id && (x.position ?? 0) < (t.position ?? 0)).sort((a, b) => (b.position ?? 0) - (a.position ?? 0));
+        if (sibs[0]) out.push({ type: 'dep', task_id: t.id, pred_id: sibs[0].id, confidence: 0.6, reason: 'It is the step right before it in the same phase.' });
+      }
+    }
+    // a new predecessor must be valid, and it is only applied alone when it does not move any date
+    for (const a of out.slice()) {
+      if (a.type !== 'dep') continue;
+      const t = P.tasks.find((x) => x.id === a.task_id), p = P.tasks.find((x) => x.id === a.pred_id);
+      const nd = [...(t.deps || []), { id: p.id, type: 'FS', lag: 0 }];
+      if (wouldLoop(P.tasks, t.id, nd) || S.validateLinks(P.tasks, t.id, nd).length) { out.splice(out.indexOf(a), 1); continue; }
+      const pf = (st.by.get(p.id) || {}).finish, ts = (st.by.get(t.id) || {}).start;
+      if (pf && ts && pf >= ts) { a.moves = true; a.confidence = Math.min(a.confidence, 0.8); a.start_from = ts; }
+    }
+    // a payment due before the task it is tied to finishes needs a person
+    for (const a of out) {
+      if (a.type !== 'link') continue;
+      const it = P.items.find((x) => x.id === a.item_id), due = it && it.data && it.data.due_date;
+      if (it && it.kind === 'milestone' && due) { const fin = a.task_ids.map((id) => (st.by.get(id) || {}).finish).filter(Boolean).sort().pop(); if (fin && fin > due) { a.confidence = Math.min(a.confidence, 0.8); a.reason = (a.reason + ` The task finishes ${fin}, after the payment due date ${due}.`).trim(); } }
+    }
+    return { out, engine, note };
+  }
+  const assistStore = (P, recs) => { const token = String(nid()); P.assist_undo = P.assist_undo || {}; P.assist_undo[token] = recs; const ks = Object.keys(P.assist_undo); if (ks.length > 10) delete P.assist_undo[ks[0]]; return token; };
+  on('POST', '/api/projects/(\\d+)/schedule/assist', async (m) => {
+    const P = P_(m[1]);
+    const plan = await assistPlan(P);
+    const auto = plan.out.filter((a) => a.confidence >= AUTO_AT), rest = plan.out.filter((a) => a.confidence < AUTO_AT);
+    const recs = [], applied = [];
+    for (const a of auto) { const r = assistApply(P, a); if (r) { recs.push(r); applied.push(a); } }
+    let token = null;
+    if (recs.length) { recalc(P); recordVersion(P, 'edit'); token = assistStore(P, recs); }
+    const st = assistState(P);
+    return { engine: plan.engine, note: plan.note, token, applied: applied.map((a) => assistView(P, a, st)), suggestions: rest.sort((a, b) => b.confidence - a.confidence).map((a, i) => ({ ...assistView(P, a, st), key: 's' + i })), ...scheduleResponse(P) };
+  });
+  on('POST', '/api/projects/(\\d+)/schedule/assist/apply', async (m, q, b) => {
+    const P = P_(m[1]); const recs = [];
+    for (const a of (b.actions || []).slice(0, 100)) { const r = assistApply(P, a); if (r) recs.push(r); }
+    let token = null;
+    if (recs.length) { recalc(P); recordVersion(P, 'edit'); token = assistStore(P, recs); }
+    return { applied: recs.length, token, ...scheduleResponse(P) };
+  });
+  on('POST', '/api/projects/(\\d+)/schedule/assist/undo', async (m, q, b) => {
+    const P = P_(m[1]); const recs = (P.assist_undo || {})[String(b.token)]; if (!recs) throw err(404, 'Nothing to undo');
+    assistUndo(P, recs); delete P.assist_undo[String(b.token)]; recordVersion(P, 'edit'); audit(P, ACTOR(), 'ai_undo', { summary: 'Undid the AI schedule fixes' });
+    return scheduleResponse(P);
+  });
   on('GET', '/api/projects/(\\d+)/schedule/versions', async (m) => ({ versions: listVersions(P_(m[1])) }));
   on('POST', '/api/projects/(\\d+)/schedule/versions', async (m, q, b) => {
     const P = P_(m[1]); const label = String((b && b.label) || '').trim().slice(0, 80); if (!label) throw err(400, 'Name this version');
