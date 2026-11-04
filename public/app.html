@@ -44,7 +44,11 @@
     try { localStorage.setItem('pm_token', tk); } catch (e) { /* storage blocked */ }
     PM.state.token = tk;
     PM.download = function () { PM.toast('Downloads are turned off in the demo. The full app exports Word, Excel and PowerPoint files.', ''); return Promise.resolve(); };
-    document.getElementById('demoReset').onclick = function () { try { PM.onboard.reset(); } catch (e) { /* nothing stored yet */ } location.hash = '#/'; location.reload(); };
+    document.getElementById('demoReset').onclick = function () {
+      if (!window.confirm('Reset the demo? Every project you created will be removed and the sample data comes back.')) return;
+      try { PM.onboard.reset(); } catch (e) { /* nothing stored yet */ }
+      Promise.resolve(window.__pmResetWorkspace && window.__pmResetWorkspace()).then(function () { location.hash = '#/'; location.reload(); });
+    };
     if (sess.id === 'demo') try { document.getElementById('demoDate').textContent = 'Demo data, dated ' + new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); } catch (e) { /* keep default */ }
     PM.start();
   })();

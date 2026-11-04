@@ -22,6 +22,12 @@ Long documents are split into parts and every part is read. A fact is kept only 
 
 Server routes (not part of the demo API): `POST /srv/extract` reads a file, `POST /srv/ai` forwards a request to Claude, `GET /srv/ai/status` reports whether the key is set.
 
+## Saved work and who can delete a project
+
+Projects are saved in the browser (IndexedDB) for the signed in account, so a refresh or a new session never loses them. Nothing is removed automatically. A project is deleted only when its project manager deletes it from the project Settings screen, or when anyone presses Reset demo, which asks for confirmation first. The delete route answers 403 for anyone who is not the project manager of that project, and the Settings screen hides the delete button for them.
+
+If you refresh while a document is still being analyzed, the project stays and the Review tab asks you to upload the file again. The browser also warns before closing the page during an analysis.
+
 ## Run on Replit
 
 Import this repository into Replit and press Run. The `.replit` file already points to `npm start`. To go live, use the Deploy button.

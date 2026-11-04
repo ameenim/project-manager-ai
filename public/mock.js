@@ -167,7 +167,7 @@
     const end = sched.reduce((mx, t) => (t.finish && t.finish > mx ? t.finish : mx), '');
     return { progress: m.actualPct, planned: m.plannedPct, spi: m.spi, overdue: m.overdue, tasks: m.taskCount, pendingItems, pendingInbox, health, forecast_end: end || null, today: TODAY };
   }
-  const projectView = (P) => ({ ...clone(P.p), stats: stats(P), analysis: P.analysis ? clone(P.analysis) : null });
+  const projectView = (P) => ({ ...clone(P.p), stats: stats(P), analysis: P.analysis ? clone(P.analysis) : null, can_delete: canDelete(P) });
 
   function sanitizeChange(ch) {
     const o = {};
@@ -760,6 +760,70 @@
 
   const fileToDataUrl = (f) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
 
+  // ---------- roles ----------
+  // Everyone who signs in to a workspace is its project manager. Only the project manager who owns a project can delete it.
+  DB.user.role = DB.user.role || 'project_manager';
+  const canDelete = (P) => DB.user.role === 'project_manager' && String(P.p.owner_id) === String(DB.user.id);
+
+  // ---------- persistence ----------
+  // Projects are saved in the browser (IndexedDB, which has room for large documents) under the signed in account,
+  // so a refresh, a closed tab or a new session never loses them. Nothing is ever removed except by the project manager
+  // or by the Reset demo button.
+  const STORE = (function () {
+    let sess = null; try { sess = JSON.parse(localStorage.getItem('pm_session') || 'null'); } catch (e) { /* storage blocked */ }
+    const KEY = 'db:' + ((sess && sess.id) || 'demo');
+    const open = () => new Promise((ok, no) => {
+      try {
+        const rq = indexedDB.open('pm_ai_workspace', 1);
+        rq.onupgradeneeded = () => { if (!rq.result.objectStoreNames.contains('kv')) rq.result.createObjectStore('kv'); };
+        rq.onsuccess = () => ok(rq.result); rq.onerror = () => no(rq.error);
+      } catch (e) { no(e); }
+    });
+    const run = (mode, fn) => open().then((db) => new Promise((ok, no) => {
+      const tx = db.transaction('kv', mode), out = fn(tx.objectStore('kv'));
+      tx.oncomplete = () => { db.close(); ok(out && out.result); }; tx.onerror = tx.onabort = () => { db.close(); no(tx.error); };
+    }));
+    let dirty = false, timer = null, saving = false, resetting = false, wasBusy = false;
+    const analyzing = () => DB.order.some((id) => DB.projects[id] && DB.projects[id].p.analyzing);
+    const snapshot = () => JSON.stringify({ v: 1, seq, saved_at: Date.now(), user: DB.user, templates: DB.templates, order: DB.order, projects: DB.projects }, (k, v) => (k === '_files' ? undefined : v));
+    async function save() {
+      if (resetting || saving) { dirty = true; return; }
+      saving = true; dirty = false;
+      try { const data = snapshot(); await run('readwrite', (s) => s.put(data, KEY)); } catch (e) { dirty = true; console.warn('Could not save the workspace', e); } finally { saving = false; }
+    }
+    const touch = () => { dirty = true; if (!timer) timer = setTimeout(() => { timer = null; save(); }, 500); };
+    // A refresh during an analysis stops it. The project stays, and the Review tab says what to do.
+    function settleInterrupted(P) {
+      if (!P.p.analyzing && !(P.analysis && !P.analysis.finished)) return;
+      P.p.analyzing = 0;
+      const run = P.analysis; if (!run) return;
+      const message = 'The page was refreshed while this file was being read. Upload the file again to analyze it.';
+      run.finished = true; run.show_summary = true; run.pct = 100; run.failed = run.failed || { message, detail: 'interrupted' };
+      for (const st of run.stages || []) { if (st.status === 'active') { st.status = 'failed'; st.detail = message; } else if (st.status === 'waiting') st.status = 'skipped'; }
+      for (const d of run.docs || []) if (d.status === 'waiting' || d.status === 'reading') { d.status = 'failed'; d.progress = ''; d.message = message; }
+    }
+    async function restore() {
+      let raw = null; try { raw = await run('readonly', (s) => s.get(KEY)); } catch (e) { console.warn('Could not read the saved workspace', e); }
+      if (!raw) return;
+      let data; try { data = JSON.parse(raw); } catch (e) { console.warn('The saved workspace could not be read and a new one is started', e); return; }
+      if (!data || data.v !== 1 || !data.projects || !Array.isArray(data.order)) return;
+      DB.projects = data.projects; DB.order = data.order.filter((id) => DB.projects[id]);
+      if (Array.isArray(data.templates)) DB.templates = data.templates;
+      if (data.user) { const keep = { role: DB.user.role }; Object.assign(DB.user, data.user, keep); }
+      seq = Math.max(seq, Number(data.seq) || 0, ...DB.order.map((id) => Number(id) || 0));
+      for (const id of DB.order) settleInterrupted(DB.projects[id]);
+    }
+    const ready = Promise.race([restore().catch((e) => console.warn(e)), new Promise((ok) => setTimeout(ok, 4000))]);
+    window.addEventListener('pm:analysis', touch);
+    setInterval(() => { const b = analyzing(); if (dirty || b || wasBusy) { wasBusy = b; touch(); } }, 2000);
+    const flush = () => { if (dirty && !resetting) save(); };
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
+    window.addEventListener('pagehide', flush);
+    window.addEventListener('beforeunload', (e) => { if (analyzing()) { e.preventDefault(); e.returnValue = ''; } });
+    window.__pmResetWorkspace = async () => { resetting = true; if (timer) { clearTimeout(timer); timer = null; } try { await run('readwrite', (s) => s.delete(KEY)); } catch (e) { /* nothing saved */ } };
+    return { ready, touch };
+  })();
+
   // ---------- routes ----------
   const routes = [];
   const on = (method, re, fn) => routes.push([method, new RegExp('^' + re + '$'), fn]);
@@ -839,7 +903,11 @@
     return { project: projectView(P) };
   });
   on('POST', '/api/projects/(\\d+)/logo', async (m, q, b) => { const P = P_(m[1]); const f = b.get('file'); if (!f) throw err(400, 'No image received'); P.p.client_logo = await fileToDataUrl(f); return { project: clone(P.p) }; });
-  on('DELETE', '/api/projects/(\\d+)', async (m) => { const id = Number(m[1]); P_(id); delete DB.projects[id]; DB.order = DB.order.filter((x) => x !== id); return { ok: true }; });
+  on('DELETE', '/api/projects/(\\d+)', async (m) => {
+    const id = Number(m[1]), P = P_(id);
+    if (!canDelete(P)) throw err(403, 'Only the project manager can delete a project');
+    delete DB.projects[id]; DB.order = DB.order.filter((x) => x !== id); return { ok: true };
+  });
 
   on('GET', '/api/projects/(\\d+)/documents', async (m) => ({ documents: P_(m[1]).documents.map(clone) }));
   on('POST', '/api/projects/(\\d+)/documents', async (m, q, fd) => {
@@ -1127,6 +1195,7 @@
   window.fetch = async function (input, init) {
     const url = typeof input === 'string' ? input : input.url;
     if (!/^\/api\//.test(url)) return realFetch(input, init);
+    await STORE.ready; // the saved workspace is loaded before the first answer
     const [path, qs] = url.split('?');
     const query = Object.fromEntries(new URLSearchParams(qs || ''));
     const method = ((init && init.method) || 'GET').toUpperCase();
@@ -1137,7 +1206,7 @@
       if (mth !== method) continue;
       const m = path.match(re);
       if (!m) continue;
-      try { return json(200, await fn(m, query, body)); }
+      try { const out = await fn(m, query, body); if (method !== 'GET') STORE.touch(); return json(200, out); }
       catch (e) { if (!e.status) console.error(e); return json(e.status || 500, { error: e.message || 'Something went wrong' }); }
     }
     return json(404, { error: 'Not available in the demo' });

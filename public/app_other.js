@@ -303,7 +303,7 @@
           <div class="mt"><div class="small muted" style="margin-bottom:6px">${t('webhooks')}</div>
           ${[['Teams, Outlook, Power Automate', `${hooks}/message?key=${key}`], ['Jira webhook', `${hooks}/jira?key=${key}`]].map(([l, u]) => `<div class="row" style="margin-bottom:6px"><span class="small muted" style="width:190px">${l}</span><input type="text" readonly value="${esc(u)}" style="font-family:ui-monospace,monospace;font-size:var(--fs-small)"><button class="btn sm" data-copy="${esc(u)}">${icon('copy')}</button></div>`).join('')}<div class="row"><button class="btn sm" id="newKey">${icon('refresh')}${t('regen_key')}</button><span class="small faint">${t('webhook_body_hint')}</span></div></div>
           <div class="row mt"><button class="btn primary" id="saveInt">${t('save')}</button></div></div>
-        <div class="card"><div class="card-head"><h3 style="color:var(--danger)">${t('danger_zone')}</h3></div><div class="row"><div class="grow small muted">${t('delete_project_hint')}</div><button class="btn danger" id="delProj">${icon('trash')}${t('delete_project')}</button></div></div></div></div>`;
+        <div class="card"><div class="card-head"><h3 style="color:var(--danger)">${t('danger_zone')}</h3></div><div class="row"><div class="grow small muted">${proj.can_delete === false ? t('delete_project_pm_only') : t('delete_project_hint')}</div>${proj.can_delete === false ? '' : `<button class="btn danger" id="delProj">${icon('trash')}${t('delete_project')}</button>`}</div></div></div></div>`;
       bind();
     }
     function bind() {
@@ -319,7 +319,8 @@
       $('#newKey', root).onclick = async () => { if (!(await confirmDlg({ title: t('regen_key'), message: t('regen_key_q'), ok: t('regen_key') }))) return; const r = await busy(null, () => api('POST', '/api/me/ingest-key')); if (r) { S.user.ingest_key = r.ingest_key; PM.projectView(p.id, 'settings', new URLSearchParams()); } };
       $('#r_add', root).onclick = async () => { const name = v('r_name').trim(); if (!name) { $('#r_name', root).focus(); return; } const r = await busy($('#r_add', root), () => api('POST', `/api/projects/${p.id}/resources`, { name, role: v('r_role'), email: v('r_email'), teams_name: v('r_teams'), jira_account: v('r_jira') })); if (r) { team = (await api('GET', `/api/projects/${p.id}/resources`)).resources; draw(); } };
       $$('[data-rdel]', root).forEach((b) => (b.onclick = async () => { await busy(null, () => api('DELETE', `/api/projects/${p.id}/resources/${b.dataset.rdel}`)); team = (await api('GET', `/api/projects/${p.id}/resources`)).resources; draw(); }));
-      $('#delProj', root).onclick = async () => { if (await confirmDlg({ title: t('delete_project'), message: t('confirm_delete_project', { name: esc(proj.name) }), ok: t('delete_project'), danger: true })) { await busy(null, () => api('DELETE', `/api/projects/${p.id}`)); location.hash = '#/projects'; } };
+      const delBtn = $('#delProj', root);
+      if (delBtn) delBtn.onclick = async () => { if (await confirmDlg({ title: t('delete_project'), message: t('confirm_delete_project', { name: esc(proj.name) }), ok: t('delete_project'), danger: true })) { const r = await busy(null, () => api('DELETE', `/api/projects/${p.id}`)); if (r) location.hash = '#/projects'; } };
     }
     draw();
   };
