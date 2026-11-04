@@ -527,7 +527,7 @@
       grip.setPointerCapture(e.pointerId);
       const scroller = (() => { let n = grid; while (n && n !== document.body) { const o = getComputedStyle(n).overflowY; if ((o === 'auto' || o === 'scroll') && n.scrollHeight > n.clientHeight) return n; n = n.parentElement; } return document.scrollingElement; })();
       let raf = 0, last = e;
-      const place = (ev) => {
+      const placeOld = (ev) => {
         const under = document.elementsFromPoint(ev.clientX, ev.clientY).find((n) => n.classList && n.classList.contains('dw') && n !== el);
         if (!under) return;
         const b = under.getBoundingClientRect();
@@ -535,6 +535,62 @@
         const before = sameRow ? ev.clientX < b.left + b.width / 2 : ev.clientY < b.top + b.height / 2;
         if (before ? under.previousElementSibling === ph : under.nextElementSibling === ph) return;
         flip(() => { if (before) grid.insertBefore(ph, under); else under.after(ph); });
+      };
+
+      // Row snapping (desktop): drop on the middle of a row to join it, on its top or bottom edge to start a new row.
+      // A row holds at most three widgets and they share the width equally: 1 is full, 2 is half, 3 is a third.
+      const multi = innerWidth > 1180;
+      const DRAG = '__drag', sizeFor = (n) => (n >= 3 ? 's' : n === 2 ? 'm' : 'l');
+      const base = [];
+      let curKey = '', applied = null;
+      if (multi) {
+        let lastTop = null;
+        for (const n of [...grid.children]) {
+          if (n === el || !(n.classList.contains('dw') || n === ph)) continue;
+          const tp = n.getBoundingClientRect().top;
+          if (lastTop === null || Math.abs(tp - lastTop) > 4) { base.push({ ids: [], src: false }); lastTop = tp; }
+          const row = base[base.length - 1];
+          if (n === ph) row.src = true; else row.ids.push(n.dataset.w);
+        }
+        for (let k = base.length - 1; k >= 0; k--) if (!base[k].ids.length) base.splice(k, 1);
+      }
+      const origSz = new Map($$('.dw, .dw-ph', grid).map((n) => [n, (n.className.match(/sz-\w/) || ['sz-l'])[0]]));
+      const nodeOf = (id) => (id === DRAG ? ph : $(`.dw[data-w="${id}"]`, grid));
+      const apply = (rows) => {
+        const sizes = {};
+        for (const r of rows) if (r.src || r.tgt) { const sz = sizeFor(r.ids.length); r.ids.forEach((id) => { sizes[id] = sz; }); }
+        flip(() => {
+          const order = rows.flatMap((r) => r.ids);
+          origSz.forEach((c, n) => { if (n !== el) n.className = n.className.replace(/sz-\w/, c); });
+          order.forEach((id) => { const n = nodeOf(id); if (!n) return; grid.appendChild(n); if (sizes[id]) n.className = n.className.replace(/sz-\w/, 'sz-' + sizes[id]); });
+        });
+        applied = sizes;
+      };
+      let pendKey = '', pendTimer = 0;
+      const place = (ev) => {
+        if (!multi) return placeOld(ev);
+        const hits = document.elementsFromPoint(ev.clientX, ev.clientY);
+        if (hits.includes(ph)) { clearTimeout(pendTimer); pendKey = ''; return; }
+        const under = hits.find((n) => n.classList && n.classList.contains('dw') && n !== el);
+        if (!under) return;
+        const ri = base.findIndex((r) => r.ids.includes(under.dataset.w));
+        if (ri < 0) return;
+        const b = under.getBoundingClientRect(), edge = Math.min(48, b.height * 0.25), dy = ev.clientY - b.top;
+        const mode = dy < edge ? 'above' : dy > b.height - edge ? 'below' : base[ri].ids.length < 3 ? 'into' : dy < b.height / 2 ? 'above' : 'below';
+        let idx = 0;
+        if (mode === 'into') idx = base[ri].ids.filter((id) => { const n = nodeOf(id); const q = n && n.getBoundingClientRect(); return q && (document.documentElement.dir === 'rtl' ? ev.clientX < q.left + q.width / 2 : ev.clientX > q.left + q.width / 2); }).length;
+        const key = mode + ri + ':' + idx;
+        if (key === curKey) { clearTimeout(pendTimer); pendKey = ''; return; }
+        if (key === pendKey) return;
+        pendKey = key; clearTimeout(pendTimer);
+        // wait a moment so passing over a widget does not rearrange the page
+        pendTimer = setTimeout(() => {
+          curKey = key; pendKey = '';
+          const rows = base.map((r) => ({ ids: r.ids.slice(), src: r.src, tgt: false }));
+          if (mode === 'into') { rows[ri].ids.splice(idx, 0, DRAG); rows[ri].tgt = true; }
+          else rows.splice(mode === 'above' ? ri : ri + 1, 0, { ids: [DRAG], src: false, tgt: true });
+          apply(rows);
+        }, 130);
       };
       const move = (ev) => {
         last = ev;
@@ -546,7 +602,7 @@
         if (dy) { const loop = () => { scroller.scrollBy(0, dy); place(last); raf = requestAnimationFrame(loop); }; raf = requestAnimationFrame(loop); }
       };
       const up = () => {
-        cancelAnimationFrame(raf);
+        cancelAnimationFrame(raf); clearTimeout(pendTimer);
         grip.removeEventListener('pointermove', move); grip.removeEventListener('pointerup', up); grip.removeEventListener('pointercancel', up);
         const from = el.getBoundingClientRect();
         el.classList.remove('dragging'); el.style.cssText = '';
@@ -556,7 +612,10 @@
         const ids = $$('.dw', grid).map((n) => n.dataset.w);
         const hidden = L.order.filter((id) => L.hidden.includes(id));
         L.order = [...ids, ...hidden];
+        const changed = [];
+        if (applied) for (const [id0, sz] of Object.entries(applied)) { const id = id0 === DRAG ? el.dataset.w : id0; if (sizeOf(id) !== sz) { L.size[id] = sz; changed.push(id); } }
         persist(); chips(); $('#dwReset', host).hidden = false;
+        changed.forEach((id) => { const n = $(`.dw[data-w="${id}"]`, grid); if (n) n.className = n.className.replace(/sz-\w/, 'sz-' + sizeOf(id)); rerender(id); });
       };
       grip.addEventListener('pointermove', move); grip.addEventListener('pointerup', up); grip.addEventListener('pointercancel', up);
     });
