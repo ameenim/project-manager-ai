@@ -6,6 +6,8 @@
   const FIELD_INPUT = { start_date: 'date', end_date: 'date', value: 'number', currency: 'text', client: 'text' };
 
   Object.assign(window.PM.I18N.en, {
+    it_owner: 'Owner', it_review: 'Review date', it_status: 'Status', it_title_risk: 'Risk details', it_title_deliverable: 'Deliverable details', it_title_milestone: 'Payment details', it_title_requirement: 'Requirement details', it_title_schedule: 'Task details', it_title_field: 'Project detail',
+    it_source: 'Where the AI found it', it_page: 'Open in project', it_notfound: 'This item no longer exists.', it_conf: 'AI confidence',
     rv_hide: 'Minimize', rv_show: 'Expand', rv_title: 'Review the extracted data', rv_sub: 'The AI filled in what it was sure about. Check the rest, then confirm, edit or ignore each item.',
     rv_extracted: 'Extracted', rv_filled: 'Filled by the AI', rv_toreview: 'Needs your review', rv_conf: 'Confidence',
     rv_start: 'Start guided review', rv_confirm_hi: 'Confirm {n} high confidence items', rv_done_all: 'Everything is reviewed. The project is up to date.',
@@ -34,6 +36,8 @@
     ap_eta_short: 'This can take a few minutes. You can keep working on other screens or projects. A pop-up will tell you when {name} is ready for review.', ap_keep: 'Keep working', ap_total: 'Overall progress',
   });
   Object.assign(window.PM.I18N.ar, {
+    it_owner: 'المسؤول', it_review: 'تاريخ المراجعة', it_status: 'الحالة', it_title_risk: 'تفاصيل الخطر', it_title_deliverable: 'تفاصيل المخرج', it_title_milestone: 'تفاصيل الدفعة', it_title_requirement: 'تفاصيل المتطلب', it_title_schedule: 'تفاصيل المهمة', it_title_field: 'تفصيل المشروع',
+    it_source: 'أين وجده الذكاء الاصطناعي', it_page: 'فتح في المشروع', it_notfound: 'هذا العنصر لم يعد موجودا.', it_conf: 'ثقة الذكاء الاصطناعي',
     rv_hide: 'تصغير', rv_show: 'توسيع', rv_title: 'مراجعة البيانات المستخرجة', rv_sub: 'عبأ الذكاء الاصطناعي ما كان متأكدا منه. راجع الباقي ثم أكد كل عنصر أو عدله أو تجاهله.',
     rv_extracted: 'المستخرج', rv_filled: 'عبأه الذكاء الاصطناعي', rv_toreview: 'بانتظار مراجعتك', rv_conf: 'مستوى الثقة',
     rv_start: 'ابدأ المراجعة الموجهة', rv_confirm_hi: 'أكد {n} عنصر عالي الثقة', rv_done_all: 'تمت مراجعة كل شيء. المشروع محدث.',
@@ -75,7 +79,7 @@
     if (kind === 'field') return `<div class="form-grid">${f('f_value', t('fld_' + d.field), d.value, FIELD_INPUT[d.field] || 'text', 'full')}</div>`;
     if (kind === 'deliverable') return `<div class="form-grid">${f('f_title', t('title'), it.title, 'text', 'full')}${ta('f_desc', t('description'), it.description)}${f('f_due', t('due_date'), d.due_date, 'date')}</div>`;
     if (kind === 'requirement') return `<div class="form-grid">${ta('f_desc', t('requirement'), it.description || it.title)}<label class="f">${t('priority')}${sel('f_prio', ['Must', 'Should', 'Could'], d.priority || 'Should')}</label></div>`;
-    if (kind === 'risk') return `<div class="form-grid">${f('f_title', t('risk'), it.title, 'text', 'full')}<label class="f">${t('probability')}${sel('f_prob', ['Low', 'Medium', 'High'], d.probability || 'Medium', 'lv_')}</label><label class="f">${t('impact')}${sel('f_imp', ['Low', 'Medium', 'High'], d.impact || 'Medium', 'lv_')}</label>${ta('f_mit', t('mitigation'), d.mitigation)}</div>`;
+    if (kind === 'risk') return `<div class="form-grid">${f('f_title', t('risk'), it.title, 'text', 'full')}<label class="f">${t('probability')}${sel('f_prob', ['Low', 'Medium', 'High'], d.probability || 'Medium', 'lv_')}</label><label class="f">${t('impact')}${sel('f_imp', ['Low', 'Medium', 'High'], d.impact || 'Medium', 'lv_')}</label>${f('f_owner', t('it_owner'), d.owner)}${f('f_review', t('it_review'), d.due_date, 'date')}${ta('f_mit', t('mitigation'), d.mitigation)}</div>`;
     if (kind === 'milestone') return `<div class="form-grid">${f('f_title', t('milestone'), it.title, 'text', 'full')}${f('f_pct', t('share_pct'), d.percent, 'number')}${f('f_amt', t('amount'), d.amount, 'number')}${f('f_due', t('due_date'), d.due_date, 'date')}</div>`;
     if (kind === 'schedule') return `<div class="form-grid">${f('f_title', t('task'), it.title, 'text', 'full')}${f('f_start', t('start'), d.start, 'date')}${f('f_end', t('finish'), d.end, 'date')}${f('f_days', t('duration_days'), d.duration_days, 'number')}</div>`;
     return '';
@@ -88,7 +92,7 @@
     if (kind === 'field') { d.value = it.data.field === 'value' ? num(v('f_value')) : v('f_value'); title = it.title; }
     if (kind === 'deliverable') { title = v('f_title'); description = v('f_desc'); d.due_date = v('f_due') || null; }
     if (kind === 'requirement') { description = v('f_desc'); title = (description || '').slice(0, 120); d.priority = v('f_prio'); }
-    if (kind === 'risk') { title = v('f_title'); d.probability = v('f_prob'); d.impact = v('f_imp'); d.mitigation = v('f_mit'); }
+    if (kind === 'risk') { title = v('f_title'); d.probability = v('f_prob'); d.impact = v('f_imp'); d.mitigation = v('f_mit'); d.owner = v('f_owner') || null; d.due_date = v('f_review') || null; }
     if (kind === 'milestone') { title = v('f_title'); d.percent = num(v('f_pct')); d.amount = num(v('f_amt')); d.due_date = v('f_due') || null; }
     if (kind === 'schedule') { title = v('f_title'); d.start = v('f_start') || null; d.end = v('f_end') || null; d.duration_days = num(v('f_days')); }
     return { title, description, data: d };
@@ -540,5 +544,26 @@
     }
     show();
   }
+
+  // Details dialog for any item, opened from outside the review page (risk radar, calendar, lists).
+  async function openItem(itemId, projectId, done) {
+    let it;
+    try { it = ((await api('GET', `/api/projects/${projectId}/items`)).items || []).find((x) => x.id === Number(itemId)); } catch (e) { return toast(e.message, 'err'); }
+    if (!it) return toast(t('it_notfound'), 'err');
+    const states = STATES[it.kind];
+    const stField = states ? `<label class="f it-state">${t('it_status')}${sel('f_state', states, it.state || states[0], 'state_')}</label>` : '';
+    const src = it.quote ? `<div class="it-src small muted"><b>${t('it_source')}</b><br>${esc(it.quote)}${it.doc_name ? ` <span>(${esc(it.doc_name)})</span>` : ''}</div>` : '';
+    const body = `<div class="it-body">${stField ? `<div class="form-grid">${stField}</div>` : ''}${formFields(it.kind, it)}${src}${it.confidence != null ? `<div class="small muted">${t('it_conf')} ${conf(it.confidence)}</div>` : ''}</div>`;
+    const m = modal({ title: t('it_title_' + it.kind), size: 'lg', body, footer: `<a class="btn ghost" href="#/p/${projectId}/review" data-close>${t('it_page')}</a><span class="grow"></span><button class="btn" data-close>${t('cancel')}</button><button class="btn primary" id="itSave">${t('save')}</button>` });
+    m.$('#itSave').onclick = async () => {
+      const v = readForm(m.el, it.kind, it);
+      if (it.kind !== 'field' && !String(v.title || v.description || '').trim()) { toast(t('title_required'), 'err'); return; }
+      const st = m.$('#f_state');
+      if (st && st.value !== it.state) v.state = st.value;
+      const r = await busy(m.$('#itSave'), () => api('PUT', `/api/items/${it.id}`, v));
+      if (r) { m.close(); toast(t('saved'), 'ok'); if (done) done(r.item); }
+    };
+  }
+  window.PM.openItem = openItem;
   window.PM.startWizard = startWizard;
 })();

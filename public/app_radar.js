@@ -111,9 +111,9 @@
         case 'progress': return progressDialog(x);
         case 'schedule': return PM.act.peek(pid, 'schedule');
         case 'report': return PM.act.report(pid);
-        case 'openReview': return PM.act.peek(pid, 'attention');
+        case 'openReview': return x.item_id && PM.openItem ? PM.openItem(x.item_id, pid, refresh) : PM.act.peek(pid, 'attention');
         case 'inbox': return PM.act.peek(pid, 'attention');
-        case 'overview': return PM.act.peek(pid);
+        case 'overview': return x.item_id && PM.openItem ? PM.openItem(x.item_id, pid, refresh) : PM.act.peek(pid);
       }
     }
 
