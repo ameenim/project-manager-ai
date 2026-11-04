@@ -484,11 +484,11 @@
           <div class="row mt"><button class="btn primary" id="saveLinks">${t('save')}</button><span class="small muted">${t('pl_conn_note')} <a href="#/account">${t('pl_conn_go')}</a></span></div></div>
         <div class="card"><div class="card-head"><h3>${t('integrations')}</h3></div><div class="form-grid"><label class="f">${t('jira_key')}<input type="text" id="s_jira" value="${esc(proj.jira_key || '')}" placeholder="PROJ"></label><label class="f">${t('teams_channel')}<input type="text" id="s_teams" value="${esc(proj.teams_channel || '')}" placeholder="teamId/channelId"></label></div>
           <div class="row mt" style="gap:16px"><label class="switch"><input type="checkbox" id="s_auto" ${proj.auto_apply ? 'checked' : ''}><span></span></label><div class="grow"><b>${t('auto_apply')}</b><div class="small muted">${t('auto_apply_hint')}</div></div><label class="f" style="width:130px">${t('threshold')} %<input type="number" id="s_thr" min="50" max="100" value="${Math.round((proj.auto_threshold || 0.9) * 100)}"></label></div>
-          <div class="mt"><div class="small muted" style="margin-bottom:6px">${t('webhooks')}</div>
-          ${[['Teams, Outlook, Power Automate', `${hooks}/message?key=${key}`], ['Jira webhook', `${hooks}/jira?key=${key}`]].map(([l, u]) => `<div class="row" style="margin-bottom:6px"><span class="small muted" style="width:190px">${l}</span><input type="text" readonly value="${esc(u)}" style="font-family:ui-monospace,monospace;font-size:var(--fs-small)"><button class="btn sm" data-copy="${esc(u)}">${icon('copy')}</button></div>`).join('')}<div class="row"><button class="btn sm" id="newKey">${icon('refresh')}${t('regen_key')}</button><span class="small faint">${t('webhook_body_hint')}</span></div></div>
           <div class="row mt"><button class="btn primary" id="saveInt">${t('save')}</button></div></div>
+        ${PM.data.projectCards(proj)}
         <div class="card"><div class="card-head"><h3 style="color:var(--danger)">${t('danger_zone')}</h3></div><div class="row"><div class="grow small muted">${proj.can_delete === false ? t('delete_project_pm_only') : t('delete_project_hint')}</div>${proj.can_delete === false ? '' : `<button class="btn danger" id="delProj">${icon('trash')}${t('delete_project')}</button>`}</div></div></div></div>`;
       bind();
+      PM.data.bindProject(root, proj);
     }
     function bind() {
       const v = (id) => $('#' + id, root).value;
@@ -499,8 +499,6 @@
       $('#holAdd', root).onclick = async () => { const d = v('holNew'); if (!d) return; const r = await save({ holidays: [...proj.holidays, d] }); if (r) draw(); };
       $$('[data-rmh]', root).forEach((a) => (a.onclick = async (e) => { e.preventDefault(); const r = await save({ holidays: proj.holidays.filter((h) => h !== a.dataset.rmh) }); if (r) draw(); }));
       $('#saveInt', root).onclick = (e) => save({ jira_key: v('s_jira'), teams_channel: v('s_teams'), auto_apply: $('#s_auto', root).checked, auto_threshold: Number(v('s_thr')) / 100 }, e.currentTarget);
-      $$('[data-copy]', root).forEach((b) => (b.onclick = () => { navigator.clipboard && navigator.clipboard.writeText(b.dataset.copy); toast(t('copied'), 'ok'); }));
-      $('#newKey', root).onclick = async () => { if (!(await confirmDlg({ title: t('regen_key'), message: t('regen_key_q'), ok: t('regen_key') }))) return; const r = await busy(null, () => api('POST', '/api/me/ingest-key')); if (r) { S.user.ingest_key = r.ingest_key; PM.projectView(p.id, 'settings', new URLSearchParams()); } };
       $('#r_add', root).onclick = async () => { const name = v('r_name').trim(); if (!name) { $('#r_name', root).focus(); return; } const r = await busy($('#r_add', root), () => api('POST', `/api/projects/${p.id}/resources`, { name, role: v('r_role'), email: v('r_email'), teams_name: v('r_teams'), jira_account: v('r_jira') })); if (r) { team = (await api('GET', `/api/projects/${p.id}/resources`)).resources; draw(); } };
       $$('[data-rdel]', root).forEach((b) => (b.onclick = async () => { await busy(null, () => api('DELETE', `/api/projects/${p.id}/resources/${b.dataset.rdel}`)); team = (await api('GET', `/api/projects/${p.id}/resources`)).resources; draw(); }));
       const delBtn = $('#delProj', root);

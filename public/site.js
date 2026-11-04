@@ -268,7 +268,6 @@
       sub.textContent = m === 'in' ? 'Sign in to your project workspace.' : '15 days free. No card needed.';
       submit.textContent = m === 'in' ? 'Sign in' : 'Create account';
       passF.querySelector('input').autocomplete = m === 'in' ? 'current-password' : 'new-password';
-      $('#demoNote').hidden = m !== 'in';
       okBox.hidden = true; card.hidden = false;
       clearErrors();
     }
@@ -280,63 +279,41 @@
     tabIn.addEventListener('click', function () { setMode('in'); location.hash = 'signin'; });
     tabUp.addEventListener('click', function () { setMode('up'); location.hash = 'create'; });
     [tabIn, tabUp].forEach(function (t) { t.addEventListener('keydown', function (e) { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { (mode === 'in' ? tabUp : tabIn).click(); (mode === 'in' ? tabIn : tabUp).focus(); } }); });
-    $('#fillDemo').addEventListener('click', function () {
-      $('input', emailF).value = 'pm@example.com'; $('input', passF).value = 'demo1234'; clearErrors(); submit.focus();
-    });
     var eye = $('#eyeBtn');
     eye.addEventListener('click', function () {
       var inp = $('input', passF), show = inp.type === 'password';
       inp.type = show ? 'text' : 'password';
       eye.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
     });
-    var DEMO_EMAIL = 'pm@example.com', DEMO_PW = 'demo1234';
-    function users() { try { return JSON.parse(localStorage.getItem('pm_users') || '{}') || {}; } catch (e) { return {}; } }
-    function hashPw(salt, pw) {
-      if (window.crypto && window.crypto.subtle && window.TextEncoder) {
-        return window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(salt + ':' + pw)).then(function (b) {
-          return Array.prototype.map.call(new Uint8Array(b), function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
-        });
-      }
-      return Promise.resolve('p' + salt + pw);
-    }
-    function openSession(s) {
-      try { localStorage.setItem('pm_session', JSON.stringify(s)); localStorage.removeItem('pm_token'); } catch (e) { /* checked below */ }
-      try { return JSON.parse(localStorage.getItem('pm_session') || 'null'); } catch (e) { return null; }
-    }
+    var submitting = false;
     form.addEventListener('submit', function (e) {
       e.preventDefault();
+      if (submitting) return;
       var bad = false;
       if (mode === 'up' && !$('input', nameF).value.trim()) { fieldErr(nameF, 'Enter your name.'); bad = true; } else fieldErr(nameF, '');
       var em = $('input', emailF).value.trim();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) { fieldErr(emailF, 'Enter a valid email address, for example name@company.com.'); bad = true; } else fieldErr(emailF, '');
       if ($('input', passF).value.length < 8) { fieldErr(passF, 'Use at least 8 characters.'); bad = true; } else fieldErr(passF, '');
       if (bad) { var first = $('.bad input', form); if (first) first.focus(); return; }
-      var emailKey = em.toLowerCase(), pw = $('input', passF).value, all = users(), nm = $('input', nameF).value.trim();
-      var done = function (s) {
-        if (!openSession(s)) { fieldErr(passF, 'Your browser is blocking storage, so the demo cannot keep you signed in.'); return; }
-        showOk();
-      };
-      if (mode === 'in') {
-        if (emailKey === DEMO_EMAIL) {
-          if (pw !== DEMO_PW) { fieldErr(passF, 'Email or password is not correct.'); return; }
-          done({ id: 'demo', name: 'Demo Project Manager', email: DEMO_EMAIL });
-        } else {
-          var u = all[emailKey];
-          if (!u) { fieldErr(emailF, 'No account found for this email. Create an account first.'); return; }
-          hashPw(u.salt, pw).then(function (h) {
-            if (h !== u.hash) { fieldErr(passF, 'Email or password is not correct.'); return; }
-            done({ id: u.id, name: u.name, email: u.email });
-          });
-        }
-      } else {
-        if (emailKey === DEMO_EMAIL || all[emailKey]) { fieldErr(emailF, 'An account with this email already exists. Sign in instead.'); return; }
-        var salt = Math.random().toString(36).slice(2), id = 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-        hashPw(salt, pw).then(function (h) {
-          all[emailKey] = { id: id, name: nm, email: em, salt: salt, hash: h };
-          try { localStorage.setItem('pm_users', JSON.stringify(all)); } catch (er) { /* checked in done */ }
-          done({ id: id, name: nm, email: em });
-        });
-      }
+      submitting = true; submit.disabled = true;
+      var label = submit.textContent; submit.textContent = 'Please wait';
+      fetch('/api/auth/' + (mode === 'in' ? 'login' : 'register'), {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: $('input', nameF).value.trim(), email: em, password: $('input', passF).value }),
+      }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, status: r.status, d: d }; }); })
+        .then(function (res) {
+          if (!res.ok) {
+            var msg = (res.d && res.d.error) || 'Something went wrong. Try again.';
+            if (res.status === 409) fieldErr(emailF, msg); else fieldErr(passF, msg);
+            return;
+          }
+          var saved = false;
+          try { localStorage.setItem('pm_token', res.d.token); localStorage.setItem('pm_session', JSON.stringify({ id: res.d.user.id, name: res.d.user.name, email: res.d.user.email })); saved = localStorage.getItem('pm_token') === res.d.token; } catch (er) { /* checked below */ }
+          if (!saved) { fieldErr(passF, 'Your browser is blocking storage, so you cannot stay signed in.'); return; }
+          showOk();
+        })
+        .catch(function () { fieldErr(passF, 'Could not reach the server. Check your connection and try again.'); })
+        .then(function () { submitting = false; submit.disabled = false; submit.textContent = label; });
     });
     function showOk() {
       card.hidden = true; okBox.hidden = false;

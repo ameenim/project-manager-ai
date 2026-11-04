@@ -63,7 +63,7 @@
   }
 
   // ---------------- widgets ----------------
-  const csvOf = (rows) => rows.map((r) => r.map((c) => { const s = c == null ? '' : String(c); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }).join(',')).join('\r\n');
+  const csvOf = (rows) => rows.map((r) => r.map((c) => { let s = c == null ? '' : String(c); if (/^[=+\-@\t\r]/.test(s) && !/^[-+]?\d+([.,]\d+)?$/.test(s)) s = "'" + s; return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }).join(',')).join('\r\n');
 
   const WIDGETS = {
     kpi: {
@@ -202,7 +202,7 @@
     portfolio: {
       size: 'l', title: 'portfolio',
       render(body, d) {
-        if (!d.projects.length) { body.innerHTML = `<div class="empty"><div class="big">📁</div><p>${t('empty_projects')}</p><button class="btn primary" data-newproj>${icon('plus')}${t('new_project')}</button></div>`; return { csv: () => [] }; }
+        if (!d.projects.length) { body.innerHTML = PM.data.emptyState(); PM.data.bindEmpty(body); return { csv: () => [] }; }
         const rows = d.projects.map((p) => `<tr style="cursor:pointer" data-go="#/p/${p.id}/overview"><td><div style="font-weight:600">${esc(p.name)}</div><div class="small muted">${esc(p.client || '')}</div></td><td>${PM.healthChip(p.stats.health)}</td>
           <td style="min-width:150px"><div class="row small"><span class="grow">${p.stats.progress}%</span>${p.stats.planned != null ? `<span class="muted">${t('planned')} ${p.stats.planned}%</span>` : ''}</div><div class="progress"><i style="width:${p.stats.progress}%"></i></div></td>
           <td class="nowrap">${p.stats.forecast_end || '-'}</td><td>${p.stats.overdue ? `<span class="chip red">${p.stats.overdue}</span>` : '<span class="muted">0</span>'}</td>
@@ -269,12 +269,7 @@
   }
 
   // ---------------- export ----------------
-  const demo = () => !!window.DEMO_SEED;
   function fileOut(name, blob, text) {
-    if (demo()) {
-      const m = PM.modal({ title: name, size: 'lg', body: `<p class="small muted" style="margin-top:0">${t('msp_demo_note')}</p><textarea readonly style="width:100%;height:260px;font-family:monospace;font-size:var(--fs-small)">${esc(text || '')}</textarea>`, footer: `<button class="btn primary" data-close>${t('close')}</button>` });
-      return m;
-    }
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = name;
     document.body.appendChild(a); a.click(); a.remove();
@@ -290,7 +285,6 @@
   function exportPng(id, body, cfg) {
     const svg = $('svg.viz', body);
     if (!svg) return;
-    if (demo()) { toast(t('png_demo_note')); return; }
     const clone = svg.cloneNode(true);
     const src = [svg, ...svg.querySelectorAll('*')], dst = [clone, ...clone.querySelectorAll('*')];
     src.forEach((el, i) => { const cs = getComputedStyle(el); let css = ''; for (const p of STYLE_PROPS) css += `${p}:${cs.getPropertyValue(p)};`; dst[i].setAttribute('style', css); dst[i].removeAttribute('class'); });

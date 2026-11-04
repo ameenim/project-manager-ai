@@ -1,45 +1,74 @@
 # Project Manager AI
 
-A bilingual (English and Arabic) project management app with schedules, Gantt charts, risk radar, portfolio dashboards and a brand kit. This version runs on demo data and needs no database.
+A bilingual (English and Arabic) project management app with schedules, Gantt charts, risk radar, portfolio dashboards and a brand kit. It has a Node back end, a Postgres database, real accounts with roles, and import and export of projects.
 
 ## Run locally
 
 Install Node 18 or newer, then run:
 
+    npm install
     npm start
 
-Open http://localhost:5000
+Open http://localhost:5000 and create an account. Without a `DATABASE_URL` the server uses an embedded Postgres that stores its files in the `data` folder, so local work needs no database setup.
+
+## Settings (environment variables)
+
+1. `DATABASE_URL` is the Postgres connection string. On Replit, create a Postgres database and this value is provided for you. Tables are created automatically on start.
+2. `ANTHROPIC_API_KEY` turns on AI reading of documents. Optional `ANTHROPIC_MODEL` changes the model. Without a key a rule based reading is used.
+3. `APP_TZ` sets the time zone used for "today" (default Asia/Dubai).
+4. `SITE_URL` sets the public address used in the sitemap.
+5. `DEMO_ACCOUNT=1` creates a demo account (pm@example.com with password demo1234) with sample projects. Leave it off in production.
+6. `PORT` sets the port (default 5000).
+
+## Accounts and roles
+
+Sign up and sign in use the server. Passwords are hashed with scrypt, sessions are random tokens stored as hashes and expire after 30 days, and repeated failed sign ins are rate limited. Every project has members with one of three roles:
+
+1. Project manager owns the project, manages access and is the only role that can delete it.
+2. Editor changes content such as tasks, documents and reports.
+3. Viewer can read everything and change nothing.
+
+A person only ever sees projects they belong to. The manager adds people by email from the project Settings screen (the person must already have an account). The last manager of a project cannot be removed.
+
+## Saved work
+
+Every change is saved to Postgres before the server answers, so a refresh, a new device or a server restart never loses work. Nothing is removed automatically. A project is deleted only when its project manager deletes it. If the server restarts while a document is being analyzed, the project stays and the Review tab offers Reanalyze.
+
+## Import and export
+
+1. Project backup: Settings, Export this project downloads a `.pmai.json` file (optionally with the original documents).
+2. Workspace backup: Account, Backup and restore exports every project you can edit.
+3. Import: Projects, Import project (or Account) reads either kind of backup. Imported projects get new ids and are added next to existing ones, never replacing them. The importer validates the file, drops broken links and reports what it fixed.
+4. Schedule: Settings, Export this project, or the Gantt screen, gives CSV and Excel. Reports from the Reports tab download as Word, Excel, PowerPoint and Markdown. Microsoft Project XML import and export is on the Gantt screen.
 
 ## Reading documents with AI
 
-When a project is created or a document is uploaded, PDF, Word and Excel files are read by the server and the full text is analyzed by Claude. The browser never sees the API key.
+When a project is created or a document is uploaded, PDF, Word, PowerPoint and Excel files are read by the server and analyzed by Claude. The browser never sees the API key. Long documents are split into parts and every part is read. A fact is kept only when its source quote is found in the document text. If the key is missing, rejected or out of credit, or a file cannot be read, the Review tab says so for that file and a basic rule based reading is used instead. Progress is polled from `GET /api/analysis/events`.
 
-1. Add a secret named `ANTHROPIC_API_KEY` in Replit (Tools, Secrets). Optionally add `ANTHROPIC_MODEL` to change the model.
-2. Run `npm install` once (Replit does this on deploy). The server needs `pdf-parse`, `mammoth` and `xlsx`.
-3. Create a project and attach the contract, proposal or purchase order. The Review tab shows progress for each file, then the deliverables, schedule, payment milestones, requirements and risks found.
+## Tests
 
-Long documents are split into parts and every part is read. A fact is kept only when its source quote is found in the document text. If the key is missing, rejected or out of credit, or a file cannot be read (for example a scanned PDF), the Review tab says so for that file and a basic rule based reading is used instead.
+    npm test
 
-Server routes (not part of the demo API): `POST /srv/extract` reads a file, `POST /srv/ai` forwards a request to Claude, `GET /srv/ai/status` reports whether the key is set.
-
-## Saved work and who can delete a project
-
-Projects are saved in the browser (IndexedDB) for the signed in account, so a refresh or a new session never loses them. Nothing is removed automatically. A project is deleted only when its project manager deletes it from the project Settings screen, or when anyone presses Reset demo, which asks for confirmation first. The delete route answers 403 for anyone who is not the project manager of that project, and the Settings screen hides the delete button for them.
-
-If you refresh while a document is still being analyzed, the project stays and the Review tab asks you to upload the file again. The browser also warns before closing the page during an analysis.
+The suite starts the real server on an in memory Postgres and covers accounts, roles, persistence across restart, analysis, import and export, spreadsheet and report formats, and request hardening.
 
 ## Run on Replit
 
-Import this repository into Replit and press Run. The `.replit` file already points to `npm start`. To go live, use the Deploy button.
+Import this repository into Replit, add a Postgres database, add the secrets above and press Run. The `.replit` file points to `npm start`. To go live, use the Deploy button.
 
 ## Structure
 
-The `public` folder holds the whole app: `index.html`, `styles.css`, the JavaScript modules and the `brand` logo files. `server.js` is a small static server with no dependencies.
+1. `public` holds the front end: HTML, CSS and the JavaScript modules.
+2. `server.js` starts the server. `server/app.js` is the HTTP layer, `server/api.js` holds the routes, `server/store.js` and `server/db.js` handle Postgres, `server/auth.js` handles accounts, and `server/exporter.js` and `server/importer.js` handle backups and files.
+3. `test` holds the automated tests.
 
-## Notes
+## Generated documents
 
-The demo data lives in `public/seed.js` and the in browser API in `public/mock.js`. Downloads work in the demo. Generated documents are built in the browser as Word, Excel or PowerPoint files with the platform logo, client, project, date, charts and shapes, using the libraries in `public/vendor/` (see its README). The format is chosen first and the download always uses that same format. The Reports tab has a folder view where documents can be dragged into folders and renamed. Source documents download only when uploaded in the current session. To connect a real backend, replace the mock API calls in `mock.js` with real endpoints.
+Reports are written by the server and kept with the project. Word, Excel and PowerPoint files are built in the browser with the platform logo, client, project, date and charts, using the libraries in `public/vendor/` (see its README). The format is chosen first and the download uses that same format. The Reports tab has a folder view where documents can be dragged into folders and renamed. The server can also produce the same formats at `/api/generated/:id/docx`, `xlsx`, `pptx` and `md`.
 
+## Known limits
+
+1. The trial and billing screens and the onboarding tour keep their state in the browser.
+2. Webhook intake from Teams, Outlook and Jira is not part of this version.
 
 ## How documents are analyzed
 
@@ -51,4 +80,4 @@ The demo data lives in `public/seed.js` and the in browser API in `public/mock.j
 6. Filling project data. Items with confidence of 0.8 or more from AI reading are confirmed. The rest wait in the Review tab. The rule based fallback is never filled in automatically.
 
 
-The prompts live in public/extract2.js (document roles, extraction, risks) and public/engine.js (schedule synthesis). They are written for a principal project manager persona and ask for references, prices, acceptance events, payment terms, durations and owners.
+The prompts live in server/extract2.js (document roles, extraction, risks) and public/engine.js (schedule synthesis). They are written for a principal project manager persona and ask for references, prices, acceptance events, payment terms, durations and owners.

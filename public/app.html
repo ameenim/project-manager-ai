@@ -5,20 +5,12 @@
 <link rel="stylesheet" href="onboard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
 <style>
-  #demoBadge { position: fixed; z-index: 60; left: 50%; transform: translateX(-50%); bottom: max(10px, env(safe-area-inset-bottom, 0px)); white-space: nowrap; display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--muted); font-size: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.12); }
-  #demoBadge button { border: 1px solid var(--border); background: var(--surface-2); color: var(--text); border-radius: 999px; padding: 3px 10px; font: inherit; cursor: pointer; }
-  #demoBadge button:hover { border-color: var(--primary); }
-  @media (max-width: 700px) { #demoBadge span { display: none; } }
 </style>
 <div id="app"><div style="display:grid;place-items:center;height:100vh"><span class="spinner"></span></div></div>
-<div id="demoBadge"><span id="demoDate">Demo data, dated today</span><button type="button" id="demoReset">Reset demo</button></div>
 <script src="i18n.js"></script>
 <script src="logo.js"></script>
 <script src="engine.js"></script>
-<script src="seed.js"></script>
-<script src="extract2.js"></script>
 <script src="visuals.js"></script>
-<script src="mock.js"></script>
 <script src="gantt.js"></script>
 <script src="app.js"></script>
 <script src="export.js"></script>
@@ -26,6 +18,7 @@
 <script src="app_board.js"></script>
 <script src="app_schedule.js"></script>
 <script src="app_other.js"></script>
+<script src="app_data.js"></script>
 <script src="app_radar.js"></script>
 <script src="fx.js"></script>
 <script src="app_dash.js"></script>
@@ -38,19 +31,10 @@
 <script src="tips.js"></script>
 <script>
   (function () {
-    var sess = null;
-    try { sess = JSON.parse(localStorage.getItem('pm_session') || 'null'); } catch (e) { /* storage blocked */ }
-    if (!sess || !sess.id) { location.replace('login.html'); return; }
-    var tk = 'demo-token' + (sess.id === 'demo' ? '' : '-' + sess.id);
-    if (sess.id !== 'demo') { var dd = document.getElementById('demoDate'); if (dd) dd.textContent = 'Your own workspace'; }
-    try { localStorage.setItem('pm_token', tk); } catch (e) { /* storage blocked */ }
+    var tk = null;
+    try { tk = localStorage.getItem('pm_token'); } catch (e) { /* storage blocked */ }
+    if (!tk) { location.replace('login.html'); return; }
     PM.state.token = tk;
-    document.getElementById('demoReset').onclick = function () {
-      if (!window.confirm('Reset the demo? Every project you created will be removed and the sample data comes back.')) return;
-      try { PM.onboard.reset(); } catch (e) { /* nothing stored yet */ }
-      Promise.resolve(window.__pmResetWorkspace && window.__pmResetWorkspace()).then(function () { location.hash = '#/'; location.reload(); });
-    };
-    if (sess.id === 'demo') try { document.getElementById('demoDate').textContent = 'Demo data, dated ' + new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); } catch (e) { /* keep default */ }
     PM.start();
   })();
 </script>

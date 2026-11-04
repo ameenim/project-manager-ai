@@ -42,15 +42,16 @@
 
     function draw(keepFocus) {
       const list = view();
-      $('#pjBody').innerHTML = !all.length ? `<div class="card empty"><div class="big">📁</div><p>${t('empty_projects')}</p></div>` : !list.length ? `<div class="card empty"><p>${t('pf_none_match')}</p><button class="btn" id="pjClear">${t('pf_clear')}</button></div>` : mode === 'grid' ? grid(list) : `<div class="grid g3 pj-cards">${list.map(card).join('')}</div>`;
+      $('#pjBody').innerHTML = !all.length ? PM.data.emptyState() : !list.length ? `<div class="card empty"><p>${t('pf_none_match')}</p><button class="btn" id="pjClear">${t('pf_clear')}</button></div>` : mode === 'grid' ? grid(list) : `<div class="grid g3 pj-cards">${list.map(card).join('')}</div>`;
       $('#pjCount').textContent = t('pf_shown', { a: list.length, b: all.length });
+      PM.data.bindEmpty($('#pjBody'));
       $$('#pjBody [data-go]').forEach((r) => (r.onclick = () => (location.hash = r.dataset.go)));
       $$('#pjBody [data-sort]').forEach((h) => { const go = () => { if (Q.sort === h.dataset.sort) Q.dir *= -1; else { Q.sort = h.dataset.sort; Q.dir = 1; } draw(); }; h.onclick = go; h.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } }; });
       const c = $('#pjClear'); if (c) c.onclick = () => { Object.assign(Q, { q: '', health: 'all', cur: 'all' }); $('#pjQ').value = ''; $('#pjHealth').value = 'all'; $('#pjCur').value = 'all'; draw(); };
       $$('#pjMode button').forEach((b) => { b.classList.toggle('on', b.dataset.mode === mode); b.setAttribute('aria-pressed', b.dataset.mode === mode); });
     }
 
-    $('#content').innerHTML = `<div class="page"><div class="page-head"><h1>${t('nav_projects')}</h1><button class="btn primary" id="newProj">${icon('plus')}${t('new_project')}</button></div>
+    $('#content').innerHTML = `<div class="page"><div class="page-head"><h1>${t('nav_projects')}</h1><div class="row"><button class="btn" id="impProj">${icon('upload')}${t('dt_import_btn')}</button><button class="btn primary" id="newProj">${icon('plus')}${t('new_project')}</button></div></div>
       <div class="pj-bar"><input type="search" id="pjQ" placeholder="${t('pf_search')}" value="${esc(Q.q)}" aria-label="${t('pf_search')}">
         <select id="pjHealth" aria-label="${t('pf_status')}"><option value="all">${t('pf_all_status')}</option><option value="green">${t('health_green')}</option><option value="amber">${t('health_amber')}</option><option value="red">${t('health_red')}</option></select>
         <select id="pjCur" aria-label="${t('currency')}"><option value="all">${t('pf_all_cur')}</option>${currencies.map((c) => `<option>${esc(c)}</option>`).join('')}</select>
@@ -59,6 +60,7 @@
       <div id="pjBody"></div></div>`;
     $('#pjHealth').value = Q.health; $('#pjCur').value = Q.cur;
     $('#newProj').onclick = PM.newProjectDialog;
+    $('#impProj').onclick = PM.data.importDialog;
     $('#pjQ').oninput = (e) => { Q.q = e.target.value; draw(); };
     $('#pjHealth').onchange = (e) => { Q.health = e.target.value; draw(); };
     $('#pjCur').onchange = (e) => { Q.cur = e.target.value; draw(); };

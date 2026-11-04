@@ -78,5 +78,27 @@
     if (m && cards.has(Number(m[1]))) { cards.delete(Number(m[1])); resetTitle(); paint(); }
   });
 
+  // The server runs the analysis. The browser asks it for progress every couple of seconds.
+  let seq = 0, first = true, timer = null;
+  async function poll() {
+    timer = null;
+    if (!PM.state.token) return;
+    try {
+      const r = await PM.api('GET', `/api/analysis/events?since=${seq}`);
+      let list = r.events || [];
+      if (first) {
+        // after a refresh, only analyses that are still running are shown again
+        const last = new Map(); list.forEach((e) => last.set(Number(e.id), e));
+        list = [...last.values()].filter((e) => e.type !== 'done');
+        first = false;
+      }
+      seq = Math.max(seq, r.seq || 0);
+      list.forEach((e) => window.dispatchEvent(new CustomEvent('pm:analysis', { detail: e })));
+    } catch (e) { /* the next poll tries again */ }
+    timer = setTimeout(poll, running.size ? 1500 : document.visibilityState === 'visible' ? 4000 : 15000);
+  }
+  PM.pollAnalysis = () => { if (!timer) poll(); };
+  setTimeout(poll, 500);
+
   PM.analysisRunning = (id) => running.has(Number(id));
 })();

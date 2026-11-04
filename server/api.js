@@ -1,45 +1,101 @@
-/* In-browser stand-in for the Project Manager AI server.
-   It answers the same /api routes from memory and reuses the real scheduling engine,
-   report generator and rule based document reader, so behavior matches the product. */
-(function () {
-  'use strict';
-  const S = window.__Sched, R = window.__Reports, AI = window.__AI; let Pipe = window.__Pipe;
-  // If the analysis module is missing from the page it is loaded when the analysis starts.
-  async function ensurePipe() {
-    if (window.__Pipe) { Pipe = window.__Pipe; return; }
-    await new Promise((ok) => { const sc = document.createElement('script'); sc.src = 'extract2.js?r=' + Date.now(); sc.onload = ok; sc.onerror = ok; document.head.appendChild(sc); });
-    Pipe = window.__Pipe || null;
-  }
-  // The demo follows the real calendar: today is the viewer's date, and the sample project dates move with it in whole weeks so working days stay aligned.
-  const RAW = window.DEMO_SEED;
-  const TODAY = new Date().toLocaleDateString('en-CA');
-  const DAYMS = 86400000, dnum = (d) => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10)) / DAYMS;
-  const SHIFT = Math.round((dnum(TODAY) - dnum(RAW.today)) / 7) * 7;
-  const dstr = (n) => new Date(n * DAYMS).toISOString().slice(0, 10);
-  const moveDates = (v) => {
-    if (typeof v === 'string') return /^\d{4}-\d{2}-\d{2}(?:[ T].{0,13})?$/.test(v) ? dstr(dnum(v) + SHIFT) + v.slice(10) : v;
-    if (Array.isArray(v)) return v.map(moveDates);
-    if (v && typeof v === 'object') { const o = {}; for (const k in v) o[k] = k === 'docTexts' || k === 'skeletons' || k === 'templates' ? v[k] : moveDates(v[k]); return o; }
-    return v;
-  };
-  const SEED = moveDates(RAW);
-  SEED.today = TODAY;
-  window.DEMO_TODAY = TODAY;
-  const clone = (x) => JSON.parse(JSON.stringify(x));
-  let seq = 5000;
-  const nid = () => ++seq;
-  const nowTs = () => `${TODAY} ${new Date().toTimeString().slice(0, 5)}`;
-  const ACTOR = SEED.user.name;
-  const err = (status, message) => { const e = new Error(message); e.status = status; return e; };
+'use strict';
+// The project API. This is the scheduling, document analysis, review, reporting and dashboard logic of the app,
+// running on the server with real storage, accounts and roles. Every request runs with the signed in person's own
+// view of the data: only the projects they are a member of exist for them, and what they may change depends on
+// their role in each project (manager, editor, viewer).
+const vm = require('vm');
+const fs = require('fs');
+const path = require('path');
+const { AsyncLocalStorage } = require('async_hooks');
+const { extractText } = require('./extract');
+const { callClaude, MODEL } = require('./claude');
+const { RANK } = require('./store');
+const exporter = require('./exporter');
+const importer = require('./importer');
 
-  const DB = { user: clone(SEED.user), templates: clone(SEED.templates), projects: {}, order: [] };
+const PUB = path.join(__dirname, '..', 'public');
+const TZ = process.env.APP_TZ || 'Asia/Dubai';
+const als = new AsyncLocalStorage();
+const ctx = () => { const c = als.getStore(); if (!c) throw new Error('No request context'); return c; };
+const err = (status, message) => { const e = new Error(message); e.status = status; return e; };
+const clone = (x) => JSON.parse(JSON.stringify(x));
+const dateIn = (d = new Date()) => d.toLocaleDateString('en-CA', { timeZone: TZ });
+const TODAY = () => dateIn();
+const nowTs = () => `${TODAY()} ${new Date().toLocaleTimeString('en-GB', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false })}`;
+
+// A result that is a file instead of JSON (downloads).
+class FileResult { constructor(buffer, type, filename) { this.buffer = buffer; this.type = type; this.filename = filename; } }
+
+// The browser bundles (scheduling engine, report writer, AI helpers, document analysis) run here unchanged.
+function loadBundles() {
+  const win = { console, setTimeout, clearTimeout, setInterval, clearInterval, URL, URLSearchParams, TextDecoder, TextEncoder, AbortSignal, Date, JSON, Math, Promise, Intl, Buffer, structuredClone };
+  win.window = win; win.self = win;
+  win.addEventListener = () => {}; win.dispatchEvent = () => {}; win.removeEventListener = () => {};
+  win.CustomEvent = class { constructor(type, o) { this.type = type; this.detail = o && o.detail; } };
+  const res = (status, data) => ({ ok: status >= 200 && status < 300, status, json: async () => data, text: async () => JSON.stringify(data) });
+  // the AI helpers ask "/srv/ai", which is answered here in process, with the key that only the server holds
+  win.fetch = async (url, init) => {
+    if (url === '/srv/ai/status') return res(200, { configured: !!process.env.ANTHROPIC_API_KEY, model: MODEL });
+    if (url === '/srv/ai') {
+      if (!process.env.ANTHROPIC_API_KEY) return res(503, { error: 'ANTHROPIC_API_KEY is not set on the server', code: 'no_key' });
+      let payload; try { payload = JSON.parse(init.body); } catch (e) { return res(400, { error: 'Invalid request' }); }
+      payload.max_tokens = Math.min(Math.max(parseInt(payload.max_tokens, 10) || 4000, 200), 32000);
+      try { return res(200, await callClaude(payload)); } catch (e) {
+        const code = e.status === 401 ? 'bad_key' : e.status === 429 ? 'rate' : e.status === 400 && /credit|billing|balance/i.test(e.message) ? 'budget' : 'upstream';
+        return res(502, { error: code === 'bad_key' ? 'The Anthropic API key was rejected' : code === 'budget' ? 'The Anthropic account has no credit left' : 'Claude could not be reached', code, status: e.status || null });
+      }
+    }
+    return res(404, { error: 'Not found' });
+  };
+  vm.createContext(win);
+  for (const [dir, f] of [[PUB, 'engine.js'], [PUB, 'visuals.js'], [__dirname, 'seed.js'], [__dirname, 'extract2.js']]) vm.runInContext(fs.readFileSync(path.join(dir, f), 'utf8'), win, { filename: f });
+  return win;
+}
+const win = loadBundles();
+
+module.exports = function createApi(store, auth) {
+  const S = win.__Sched, R = win.__Reports, AI = win.__AI, Pipe = win.__Pipe;
+  const RAW = win.DEMO_SEED;
+  const nid = () => store.nid();
+  const ensurePipe = async () => {};
+  const ACTOR = () => ctx().DB.user.name;
+  const running = new Set(); // projects whose analysis is running in this process
+
+  // ---------- the signed in person's view of the data ----------
+  const DB = new Proxy({}, { get: (_, k) => ctx().DB[k], set: (_, k, v) => { ctx().DB[k] = v; return true; } });
+  const CONN = new Proxy({}, { get: (_, k) => (ctx().DB.connections || {})[k] || null, set: (_, k, v) => { const c = ctx().DB; c.connections = c.connections || {}; c.connections[k] = v; return true; } });
+  const need = (P, level) => {
+    const role = ctx().roles[P.id];
+    if (!role) throw err(404, 'Project not found');
+    if (RANK[role] < RANK[level]) throw err(403, level === 'manager' ? 'Only the project manager can do this' : 'You have view only access to this project');
+  };
+  const touch = (P) => ctx().touched.add(P);
+  const roleOf = (P) => ctx().roles[P.id] || null;
+  const canDelete = (P) => roleOf(P) === 'manager';
+
+  // ---------- sample data (dates move to the current week so the demo always looks current) ----------
+  const DAYMS = 86400000, dnum = (d) => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10)) / DAYMS;
+  const dstr = (n) => new Date(n * DAYMS).toISOString().slice(0, 10);
+  function seedData() {
+    const today = TODAY();
+    const shift = Math.round((dnum(today) - dnum(RAW.today)) / 7) * 7;
+    const move = (v) => {
+      if (typeof v === 'string') return /^\d{4}-\d{2}-\d{2}(?:[ T].{0,13})?$/.test(v) ? dstr(dnum(v) + shift) + v.slice(10) : v;
+      if (Array.isArray(v)) return v.map(move);
+      if (v && typeof v === 'object') { const o = {}; for (const k in v) o[k] = k === 'docTexts' || k === 'skeletons' || k === 'templates' ? v[k] : move(v[k]); return o; }
+      return v;
+    };
+    const SEED = move(RAW); SEED.today = today; return SEED;
+  }
 
   // ---------- project containers ----------
   function makeProject(id, p) {
-    return { id, p, items: [], tasks: [], resources: [], inbox: [], documents: [], texts: {}, _kept: {}, generated: [], folders: [], audit: [] };
+    return { id, p, items: [], tasks: [], resources: [], inbox: [], documents: [], texts: {}, generated: [], folders: [], audit: [] };
   }
-  (function seedFirst() {
-    const P = makeProject(1, clone(SEED.project));
+
+  function seedFirst(ownerId) {
+    const SEED = seedData();
+    const P = makeProject(1, clone(SEED.project)); P.p.owner_id = ownerId;
     delete P.p.stats;
     P.p.sharepoint_url = P.p.sharepoint_url || 'https://contoso.sharepoint.com/sites/chatbot'; P.p.jira_url = P.p.jira_url || 'https://contoso.atlassian.net/browse/CHAT';
     P.items = clone(SEED.items);
@@ -67,18 +123,18 @@
     [[6, 1], [7, 2], [8, 3], [9, 4], [10, 5], [11, 6]].forEach(([d, t]) => { TK(t).deliverable_id = d; });
     [[28, 6], [29, 7], [30, 8], [31, 9], [32, 11]].forEach(([m, d]) => { IT(m).data.deliverable_id = d; });
     [[2, 12], [3, 13], [5, 14], [3, 17]].forEach(([t, i]) => { TK(t).links = [...(TK(t).links || []), i]; });
-    DB.projects[1] = P; DB.order.push(1);
-  })();
+    return P;
+  }
 
-
-  const P_ = (id) => { const P = DB.projects[Number(id)]; if (!P) throw err(404, 'Project not found'); if (!P.folders) P.folders = []; if (!P.generated) P.generated = []; return P; };
+  const P_ = (id, level) => { const P = DB.projects[Number(id)]; if (!P) throw err(404, 'Project not found'); need(P, level || ctx().level); if (!P.folders) P.folders = []; if (!P.generated) P.generated = []; touch(P); return P; };
   const rawProject = (P) => ({ ...P.p, work_days: JSON.stringify(P.p.work_days), holidays: JSON.stringify(P.p.holidays) });
 
   // ---------- five more projects, one per currency ----------
-  (function seedPortfolio() {
-    window.__Portfolio.build(TODAY).forEach((spec) => {
+  function seedPortfolio(ownerId) {
+    const out = [];
+    win.__Portfolio.build(TODAY()).forEach((spec) => {
       const id = nid();
-      const P = makeProject(id, { id, owner_id: 1, name: spec.name, code: spec.code, client: spec.client, client_logo: null, currency: spec.currency, value: spec.value, start_date: spec.start, end_date: spec.end, work_days: [1, 2, 3, 4, 5], work_start: '08:00', work_end: '17:00', holidays: [], status: 'active', wizard_done: 1, analyzing: 0, impact_check: 1, auto_apply: 0, auto_threshold: 0.9, jira_key: spec.code || null, sharepoint_url: spec.code ? `https://contoso.sharepoint.com/sites/${String(spec.code).toLowerCase()}` : null, jira_url: spec.code ? `https://contoso.atlassian.net/browse/${spec.code}` : null, teams_channel: null, created_at: `${TODAY} 08:00:00` });
+      const P = makeProject(id, { id, owner_id: ownerId, name: spec.name, code: spec.code, client: spec.client, client_logo: null, currency: spec.currency, value: spec.value, start_date: spec.start, end_date: spec.end, work_days: [1, 2, 3, 4, 5], work_start: '08:00', work_end: '17:00', holidays: [], status: 'active', wizard_done: 1, analyzing: 0, impact_check: 1, auto_apply: 0, auto_threshold: 0.9, jira_key: spec.code || null, sharepoint_url: spec.code ? `https://contoso.sharepoint.com/sites/${String(spec.code).toLowerCase()}` : null, jira_url: spec.code ? `https://contoso.atlassian.net/browse/${spec.code}` : null, teams_channel: null, created_at: `${TODAY()} 08:00:00` });
       const ids = {};
       spec.tasks.forEach((t, i) => { ids[t.lid] = nid(); });
       spec.tasks.forEach((t, i) => {
@@ -86,16 +142,16 @@
       });
       S.schedule(P.tasks, rawProject(P)).forEach((c) => { const t = P.tasks.find((x) => x.id === c.id); t.start = c.start; t.b_start = c.start; t.b_end = c.finish; });
       P.resources = spec.team.map(([name, role]) => ({ id: nid(), project_id: id, name, email: `${name.split(' ')[0].toLowerCase()}@example.com`, role, jira_account: null, teams_name: name }));
-      const item = (kind, title, description, data, state) => P.items.push({ id: nid(), project_id: id, kind, title, description, data, status: 'confirmed', state, confidence: 0.9, doc_id: null, quote: '', evidence_doc_id: null, created_at: `${TODAY} 08:00:00`, doc_name: null, evidence_name: null });
+      const item = (kind, title, description, data, state) => P.items.push({ id: nid(), project_id: id, kind, title, description, data, status: 'confirmed', state, confidence: 0.9, doc_id: null, quote: '', evidence_doc_id: null, created_at: `${TODAY()} 08:00:00`, doc_name: null, evidence_name: null });
       const tk = (lid) => P.tasks.find((t) => t.id === ids[lid]);
       const dids = [];
       spec.deliverables.forEach((x) => { item('deliverable', x.title, '', { due_date: x.due }, x.state); const it = P.items[P.items.length - 1]; dids.push(it.id); if (x.task && tk(x.task)) tk(x.task).deliverable_id = it.id; });
       spec.payments.forEach((x) => { item('milestone', x.title, '', { percent: x.percent, amount: x.amount, due_date: x.due, ...(x.deliv != null ? { deliverable_id: dids[x.deliv] } : {}) }, x.state); const it = P.items[P.items.length - 1]; if (x.task && tk(x.task)) (tk(x.task).links = tk(x.task).links || []).push(it.id); });
       spec.risks.forEach((x) => { item('risk', x.title, `${x.title} (${x.probability}). Mitigation: ${x.mitigation}`, { probability: x.probability, impact: x.impact, mitigation: x.mitigation }, 'open'); const it = P.items[P.items.length - 1]; if (x.task && tk(x.task)) (tk(x.task).links = tk(x.task).links || []).push(it.id); });
-      DB.projects[id] = P; DB.order.push(id);
+      out.push(P);
     });
-  })();
-
+    return out;
+  }
 
   const audit = (P, actor, action, detail) => P.audit.unshift({ id: nid(), project_id: P.id, actor, action, detail, ts: nowTs() });
   const docName = (P, id) => { const d = P.documents.find((x) => x.id === id); return d ? d.filename : null; };
@@ -119,7 +175,7 @@
     return {
       tasks: computed.map(taskView),
       calendar: { work_days: P.p.work_days, holidays: P.p.holidays },
-      impact_check: !!P.p.impact_check, today: TODAY, has_baseline: computed.some((t) => t.b_start),
+      impact_check: !!P.p.impact_check, today: TODAY(), has_baseline: computed.some((t) => t.b_start),
       deliverables: P.items.filter((i) => i.kind === 'deliverable' && i.status !== 'ignored').map((i) => ({ id: i.id, title: i.title })),
       items: linkItems(P),
       resources: P.resources.map((r) => r.name),
@@ -130,18 +186,18 @@
       .map((i) => { const d = i.data || {}; return { id: i.id, kind: i.kind, title: i.title, state: i.state, status: i.status, data: { due_date: d.due_date || null, amount: d.amount ?? null, percent: d.percent ?? null, deliverable_id: d.deliverable_id || null } }; });
   }
   // ---------- schedule versions ----------
-  const V = window.__Versions;
+  const V = win.__Versions;
   const projEnd = (P) => S.schedule(P.tasks, rawProject(P)).reduce((m, t) => (!t.summary && t.finish && (!m || t.finish > m) ? t.finish : m), null);
   const vmeta = (d, a, b, names) => ({ added: d.added.length, removed: d.removed.length, changed: d.changed.length, reordered: d.reordered, end_from: a, end_to: b, names });
   function ensureVersion(P) {
     P.versions = P.versions || [];
     if (P.versions.length || !P.tasks.length) return;
-    P.versions.push({ id: nid(), version: 'v1.0.0', level: 'major', source: 'initial', label: null, meta: { added: P.tasks.length, removed: 0, changed: 0 }, author: 'System', project_end: projEnd(P), task_count: P.tasks.length, snapshot: V.snap(P.tasks), created_at: `${TODAY} 08:00:00` });
+    P.versions.push({ id: nid(), version: 'v1.0.0', level: 'major', source: 'initial', label: null, meta: { added: P.tasks.length, removed: 0, changed: 0 }, author: 'System', project_end: projEnd(P), task_count: P.tasks.length, snapshot: V.snap(P.tasks), created_at: `${TODAY()} 08:00:00` });
   }
   function recordVersion(P, source = 'edit', label = null) {
     ensureVersion(P);
     const last = P.versions[P.versions.length - 1], now = V.snap(P.tasks), end = projEnd(P);
-    if (!last) { if (!P.tasks.length) return; P.versions.push({ id: nid(), version: 'v1.0.0', level: 'major', source: 'initial', label, meta: { added: P.tasks.length, removed: 0, changed: 0 }, author: ACTOR, project_end: end, task_count: P.tasks.length, snapshot: now, created_at: nowTs() }); return; }
+    if (!last) { if (!P.tasks.length) return; P.versions.push({ id: nid(), version: 'v1.0.0', level: 'major', source: 'initial', label, meta: { added: P.tasks.length, removed: 0, changed: 0 }, author: ACTOR(), project_end: end, task_count: P.tasks.length, snapshot: now, created_at: nowTs() }); return; }
     const d = V.diff(last.snapshot, now);
     if (!d.count && !label) return;
     const level = label && !d.count ? 'patch' : V.levelFor(d, last.project_end, end, source);
@@ -151,13 +207,13 @@
       Object.assign(last, { meta: vmeta(d2, before.project_end, end, [...d2.added, ...d2.removed, ...d2.changed].slice(0, 3).map((x) => x.name)), project_end: end, task_count: P.tasks.length, snapshot: now, created_at: nowTs() });
       return;
     }
-    P.versions.push({ id: nid(), version: V.nextVersion(last.version, level), level, source, label, meta: vmeta(d, last.project_end, end, names), author: ACTOR, project_end: end, task_count: P.tasks.length, snapshot: now, created_at: nowTs() });
+    P.versions.push({ id: nid(), version: V.nextVersion(last.version, level), level, source, label, meta: vmeta(d, last.project_end, end, names), author: ACTOR(), project_end: end, task_count: P.tasks.length, snapshot: now, created_at: nowTs() });
     if (P.versions.length > 60) P.versions.splice(1, 1);
   }
   const versionView = (v, cur) => { const { snapshot, ...o } = v; return { ...clone(o), current: v.id === cur }; };
   const listVersions = (P) => { ensureVersion(P); const cur = P.versions.length ? P.versions[P.versions.length - 1].id : null; return P.versions.slice().reverse().map((v) => versionView(v, cur)); };
   function stats(P) {
-    const m = S.progressMetrics(P.tasks, rawProject(P), TODAY);
+    const m = S.progressMetrics(P.tasks, rawProject(P), TODAY());
     const pendingItems = P.items.filter((i) => i.status === 'proposed').length;
     const pendingInbox = P.inbox.filter((r) => r.status === 'pending').length;
     let health = 'green';
@@ -165,9 +221,9 @@
     if (m.overdue >= 3) health = 'red'; else if (m.overdue >= 1 && health === 'green') health = 'amber';
     const sched = S.schedule(P.tasks, rawProject(P));
     const end = sched.reduce((mx, t) => (t.finish && t.finish > mx ? t.finish : mx), '');
-    return { progress: m.actualPct, planned: m.plannedPct, spi: m.spi, overdue: m.overdue, tasks: m.taskCount, pendingItems, pendingInbox, health, forecast_end: end || null, today: TODAY };
+    return { progress: m.actualPct, planned: m.plannedPct, spi: m.spi, overdue: m.overdue, tasks: m.taskCount, pendingItems, pendingInbox, health, forecast_end: end || null, today: TODAY() };
   }
-  const projectView = (P) => ({ ...clone(P.p), stats: stats(P), analysis: P.analysis ? clone(P.analysis) : null, can_delete: canDelete(P) });
+  const projectView = (P) => ({ ...clone(P.p), stats: stats(P), analysis: P.analysis ? clone(P.analysis) : null, role: roleOf(P), can_delete: canDelete(P), can_edit: !!roleOf(P) && RANK[roleOf(P)] >= RANK.editor });
 
   function sanitizeChange(ch) {
     const o = {};
@@ -219,7 +275,7 @@
       const anchor = P.p.start_date || P.p.award_date || null;
       let s0 = d.start || null, e0 = d.end || null;
       if (!s0 && d.start_week && anchor) { const w = AI.weeksToDates(anchor, d.start_week, d.end_week); s0 = w.start; e0 = e0 || w.end; }
-      const start = S.nextWork(s0 || P.p.start_date || TODAY, c);
+      const start = S.nextWork(s0 || P.p.start_date || TODAY(), c);
       let dur = d.duration_days || 1;
       if (s0 && e0) dur = Math.max(1, S.countWork(s0, e0, c));
       if (d.level === 'milestone') dur = 1;
@@ -316,7 +372,7 @@
     return r ? r.name : hint || null;
   }
   function addInbox(P, o) {
-    const row = { id: nid(), owner_id: 1, project_id: P.id, source: o.source, ext_id: null, sender: o.sender || null, subject: o.subject || null, body: (o.body || '').slice(0, 4000), resource: o.resource || null, action: o.action || null, summary: o.summary || null, confidence: o.confidence ?? null, status: o.status || 'pending', doc_id: o.doc_id ?? null, created_at: nowTs(), applied_at: null };
+    const row = { id: nid(), owner_id: DB.user.id, project_id: P.id, source: o.source, ext_id: null, sender: o.sender || null, subject: o.subject || null, body: (o.body || '').slice(0, 4000), resource: o.resource || null, action: o.action || null, summary: o.summary || null, confidence: o.confidence ?? null, status: o.status || 'pending', doc_id: o.doc_id ?? null, created_at: nowTs(), applied_at: null };
     P.inbox.unshift(row);
     if (row.status === 'pending' && P.p.auto_apply && row.action && row.action.type !== 'flag_issue' && (row.confidence ?? 0) >= (P.p.auto_threshold ?? 0.9)) {
       try { const r = applyAction(P, row.action, `AI (${row.source})`, row.doc_id); row.status = 'auto_applied'; row.action = { ...row.action, prev: r.prev, summary: r.summary }; } catch (e) { /* stays pending */ }
@@ -437,7 +493,9 @@
   function announce(P, type) {
     try {
       const run = P.analysis || {};
-      window.dispatchEvent(new CustomEvent('pm:analysis', { detail: { type, id: P.p.id, name: P.p.name, pct: type === 'done' ? 100 : progressOf(P), stage: run.stage, eta: run.eta || null, failed: !!run.failed, warning: run.warning || null, filled: run.filled || null } }));
+      const detail = { type, id: P.p.id, name: P.p.name, pct: type === 'done' ? 100 : progressOf(P), stage: run.stage, eta: run.eta || null, failed: !!run.failed, warning: run.warning || null, filled: run.filled || null };
+      store.pushEvent(null, P.id, detail);
+      store.saveSoon(P, type === 'done' ? 0 : 700);
     } catch (e) { /* notifications are best effort */ }
   }
   const countIn = (c) => c.deliverable + c.requirement + c.risk + c.milestone + c.schedule + c.field;
@@ -445,7 +503,7 @@
   async function analyzeDocs(P, docs) {
     const run = { at: nowTs(), finished: false, show_summary: false, stage: 'ingest', stages: STAGES.map(([key, label]) => ({ key, label, status: 'waiting', detail: '' })), confidence: { overall: null, by: {}, coverage: null }, filled: null, docs: docs.map((d) => ({ id: d.id, filename: d.filename, status: 'waiting', message: '', counts: null, coverage: null, engine: null, progress: '', role: null, role_label: null })) };
     P.analysis = run;
-    P.p.analyzing = 1;
+    P.p.analyzing = 1; running.add(P.id);
     announce(P, 'start');
     const rowOf = (d) => run.docs.find((r) => r.id === d.id);
     try {
@@ -456,16 +514,16 @@
       let n = 0;
       for (const doc of docs) {
         const st = rowOf(doc);
-        const f = P._files && P._files[doc.id];
+        const f = doc.unread ? await store.getFile(P.id, doc.id) : null;
         if (f) {
           st.status = 'reading'; st.progress = 'reading the file';
-          const r = await readFile(f);
+          const r = await readFile({ name: doc.filename, buffer: f.buffer });
           P.texts[doc.id] = r.text || '';
           doc.chars = (r.text || '').length; doc.pages = r.pages || null; doc.read_error = r.error || null; doc.ocr = !!r.ocr;
           doc.kind = AI.classify(doc.filename, r.text || '');
-          delete P._files[doc.id];
-          audit(P, ACTOR, 'document_uploaded', { summary: `Uploaded ${doc.filename} (${doc.kind})` });
-        }
+          doc.unread = false;
+          audit(P, ACTOR(), 'document_uploaded', { summary: `Uploaded ${doc.filename} (${doc.kind})` });
+        } else if (doc.unread) { doc.unread = false; doc.read_error = doc.read_error || 'The original file is no longer stored. Upload it again.'; }
         n++;
         run.stages[0].detail = `${n} of ${docs.length} files read${doc.pages ? `, ${doc.pages} pages` : ''}`;
         const text = P.texts[doc.id] || '';
@@ -570,7 +628,7 @@
       for (const d of run.docs) if (d.status === 'waiting' || d.status === 'reading') { d.status = 'failed'; d.progress = ''; d.message = message; }
       try { audit(P, 'AI', 'analysis_failed', { summary: `Analysis stopped. ${message}` }); } catch (x) { /* audit is best effort */ }
     } finally {
-      P.p.analyzing = 0;
+      P.p.analyzing = 0; running.delete(P.id);
       run.finished = true;
       run.show_summary = true;
       run.pct = 100;
@@ -679,16 +737,16 @@
   // Returns { text, error, pages, ocr }. Plain text and XML are read here. Everything else is read by the server.
   async function readFile(f) {
     const n = (f.name || '').toLowerCase();
-    if (/\.(txt|md|csv|tsv|json|eml|html?|xml)$/.test(n)) return { text: await f.text() };
+    if (/\.(txt|md|csv|tsv|json|eml|html?|xml)$/.test(n)) return { text: f.buffer.toString('utf8') };
     if (/\.(pdf|docx|pptx|xlsx|xls|png|jpe?g|webp|gif|mpp|doc|ppt)$/.test(n)) {
       try {
-        const r = await fetch('/srv/extract?name=' + encodeURIComponent(f.name), { method: 'POST', body: f });
-        let j = null;
-        try { j = await r.json(); } catch (e) { /* not json */ }
-        if (!r.ok) return { text: '', error: (j && j.error) || `The server could not read this file (${r.status}).` };
-        return { text: (j && j.text) || '', pages: (j && j.pages) || null, ocr: !!(j && j.ocr) };
+        const out = await extractText(f.buffer, f.name);
+        const text = String(out.text || '').replace(/\u0000/g, '').trim();
+        if (!text) return { text: '', error: out.ocr ? 'The AI could not find any readable text in this file.' : 'No text found in this file.' };
+        return { text, pages: out.pages || out.slides || null, ocr: !!out.ocr };
       } catch (e) {
-        return { text: '', error: 'The server could not be reached to read this file.' };
+        const missing = e && e.code === 'MODULE_NOT_FOUND';
+        return { text: '', error: missing ? 'File reading is not installed on the server. Run npm install.' : `Could not read ${f.name || 'the file'}: ${e.message}` };
       }
     }
     return { text: '', error: 'This file type is not supported. Use PDF, Word, PowerPoint, Excel, pictures, Project XML or text files.' };
@@ -699,8 +757,9 @@
       const r = await readFile(f);
       const text = r.text || '';
       const kind = AI.classify(f.name, text);
-      const d = { id: nid(), filename: f.name, kind, summary: '', uploaded_by: ACTOR, created_at: nowTs(), chars: text.length, pages: r.pages || null, read_error: r.error || null };
-      P.documents.push(d); P.texts[d.id] = text; (P._kept = P._kept || {})[d.id] = f; docs.push(d);
+      const d = { id: nid(), filename: f.name, kind, summary: '', uploaded_by: ACTOR(), created_at: nowTs(), chars: text.length, pages: r.pages || null, read_error: r.error || null };
+      P.documents.push(d); P.texts[d.id] = text; docs.push(d);
+      await store.putFile(P.id, d.id, f); // the original is kept so it can be downloaded again
     }
     return docs;
   }
@@ -727,20 +786,20 @@
   function dashboard() {
     const projects = DB.order.map((id) => DB.projects[id]).filter((P) => P.p.status !== 'archived').reverse();
     const cards = [], payments = [], overdue = [], radarEntries = [];
-    const next60 = S.addDays(TODAY, 60);
+    const next60 = S.addDays(TODAY(), 60);
     let pendingInbox = 0, pendingItems = 0;
     for (const P of projects) {
       const st = stats(P); pendingInbox += st.pendingInbox; pendingItems += st.pendingItems;
       cards.push({ ...clone(P.p), stats: st });
-      radarEntries.push({ p: { ...clone(P.p), id: P.id }, stats: st, items: P.items.filter((i) => i.kind === 'risk' || i.kind === 'milestone' || i.kind === 'deliverable').map((i) => ({ ...i, data: i.data || {} })), rows: S.progressMetrics(P.tasks, rawProject(P), TODAY).rows, sched: S.schedule(P.tasks, rawProject(P)) });
+      radarEntries.push({ p: { ...clone(P.p), id: P.id }, stats: st, items: P.items.filter((i) => i.kind === 'risk' || i.kind === 'milestone' || i.kind === 'deliverable').map((i) => ({ ...i, data: i.data || {} })), rows: S.progressMetrics(P.tasks, rawProject(P), TODAY()).rows, sched: S.schedule(P.tasks, rawProject(P)) });
       for (const m of P.items.filter((i) => i.kind === 'milestone' && i.status !== 'ignored' && i.state !== 'paid')) {
         const d = m.data;
         if (d.due_date) {
           const amount = d.amount ?? (d.percent != null && P.p.value ? Math.round((P.p.value * d.percent) / 100) : null);
-          payments.push({ item_id: m.id, project_id: P.id, project: P.p.name, currency: P.p.currency, title: m.title, due: d.due_date, amount, state: m.state, late: d.due_date < TODAY && m.state === 'pending' });
+          payments.push({ item_id: m.id, project_id: P.id, project: P.p.name, currency: P.p.currency, title: m.title, due: d.due_date, amount, state: m.state, late: d.due_date < TODAY() && m.state === 'pending' });
         }
       }
-      const mm = S.progressMetrics(P.tasks, rawProject(P), TODAY);
+      const mm = S.progressMetrics(P.tasks, rawProject(P), TODAY());
       for (const r of mm.rows) if (r.overdue) overdue.push({ task_id: r.id, project_id: P.id, project: P.p.name, task: r.name, finish: r.finish, progress: r.progress, assignee: r.assignee });
     }
     payments.sort((a, b) => a.due.localeCompare(b.due));
@@ -753,85 +812,23 @@
     const totalValue = {};
     for (const P of projects) if (P.p.value) totalValue[P.p.currency] = (totalValue[P.p.currency] || 0) + P.p.value;
     return {
-      today: TODAY, radar: window.__Radar.buildRadar(radarEntries, TODAY), analytics: window.__Analytics.buildAnalytics(radarEntries, TODAY), projects: cards, payments: shown.slice(0, 10), overdue: overdue.slice(0, 12), activity: activity.slice(0, 12), pendingInbox, pendingItems, totalValue, unassigned: 0,
+      today: TODAY(), radar: win.__Radar.buildRadar(radarEntries, TODAY()), analytics: win.__Analytics.buildAnalytics(radarEntries, TODAY()), projects: cards, payments: shown.slice(0, 10), overdue: overdue.slice(0, 12), activity: activity.slice(0, 12), pendingInbox, pendingItems, totalValue, unassigned: 0,
       counts: { active: projects.filter((p) => p.p.status === 'active').length, red: cards.filter((c) => c.stats.health === 'red').length, amber: cards.filter((c) => c.stats.health === 'amber').length, green: cards.filter((c) => c.stats.health === 'green').length },
     };
   }
 
-  const fileToDataUrl = (f) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
-
-  // ---------- roles ----------
-  // Everyone who signs in to a workspace is its project manager. Only the project manager who owns a project can delete it.
-  DB.user.role = DB.user.role || 'project_manager';
-  const canDelete = (P) => DB.user.role === 'project_manager' && String(P.p.owner_id) === String(DB.user.id);
-
-  // ---------- persistence ----------
-  // Projects are saved in the browser (IndexedDB, which has room for large documents) under the signed in account,
-  // so a refresh, a closed tab or a new session never loses them. Nothing is ever removed except by the project manager
-  // or by the Reset demo button.
-  const STORE = (function () {
-    let sess = null; try { sess = JSON.parse(localStorage.getItem('pm_session') || 'null'); } catch (e) { /* storage blocked */ }
-    const KEY = 'db:' + ((sess && sess.id) || 'demo');
-    const open = () => new Promise((ok, no) => {
-      try {
-        const rq = indexedDB.open('pm_ai_workspace', 1);
-        rq.onupgradeneeded = () => { if (!rq.result.objectStoreNames.contains('kv')) rq.result.createObjectStore('kv'); };
-        rq.onsuccess = () => ok(rq.result); rq.onerror = () => no(rq.error);
-      } catch (e) { no(e); }
-    });
-    const run = (mode, fn) => open().then((db) => new Promise((ok, no) => {
-      const tx = db.transaction('kv', mode), out = fn(tx.objectStore('kv'));
-      tx.oncomplete = () => { db.close(); ok(out && out.result); }; tx.onerror = tx.onabort = () => { db.close(); no(tx.error); };
-    }));
-    let dirty = false, timer = null, saving = false, resetting = false, wasBusy = false;
-    const analyzing = () => DB.order.some((id) => DB.projects[id] && DB.projects[id].p.analyzing);
-    const snapshot = () => JSON.stringify({ v: 1, seq, saved_at: Date.now(), user: DB.user, templates: DB.templates, order: DB.order, projects: DB.projects }, (k, v) => (k === '_files' || k === '_kept' ? undefined : v));
-    async function save() {
-      if (resetting || saving) { dirty = true; return; }
-      saving = true; dirty = false;
-      try { const data = snapshot(); await run('readwrite', (s) => s.put(data, KEY)); } catch (e) { dirty = true; console.warn('Could not save the workspace', e); } finally { saving = false; }
-    }
-    const touch = () => { dirty = true; if (!timer) timer = setTimeout(() => { timer = null; save(); }, 500); };
-    // A refresh during an analysis stops it. The project stays, and the Review tab says what to do.
-    function settleInterrupted(P) {
-      if (!P.p.analyzing && !(P.analysis && !P.analysis.finished)) return;
-      P.p.analyzing = 0;
-      const run = P.analysis; if (!run) return;
-      const message = 'The page was refreshed while this file was being read. Upload the file again to analyze it.';
-      run.finished = true; run.show_summary = true; run.pct = 100; run.failed = run.failed || { message, detail: 'interrupted' };
-      for (const st of run.stages || []) { if (st.status === 'active') { st.status = 'failed'; st.detail = message; } else if (st.status === 'waiting') st.status = 'skipped'; }
-      for (const d of run.docs || []) if (d.status === 'waiting' || d.status === 'reading') { d.status = 'failed'; d.progress = ''; d.message = message; }
-    }
-    async function restore() {
-      let raw = null; try { raw = await run('readonly', (s) => s.get(KEY)); } catch (e) { console.warn('Could not read the saved workspace', e); }
-      if (!raw) return;
-      let data; try { data = JSON.parse(raw); } catch (e) { console.warn('The saved workspace could not be read and a new one is started', e); return; }
-      if (!data || data.v !== 1 || !data.projects || !Array.isArray(data.order)) return;
-      DB.projects = data.projects; DB.order = data.order.filter((id) => DB.projects[id]);
-      if (Array.isArray(data.templates)) DB.templates = data.templates;
-      if (data.user) { const keep = { role: DB.user.role }; Object.assign(DB.user, data.user, keep); }
-      seq = Math.max(seq, Number(data.seq) || 0, ...DB.order.map((id) => Number(id) || 0));
-      for (const id of DB.order) settleInterrupted(DB.projects[id]);
-    }
-    const ready = Promise.race([restore().catch((e) => console.warn(e)), new Promise((ok) => setTimeout(ok, 4000))]);
-    window.addEventListener('pm:analysis', touch);
-    setInterval(() => { const b = analyzing(); if (dirty || b || wasBusy) { wasBusy = b; touch(); } }, 2000);
-    const flush = () => { if (dirty && !resetting) save(); };
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
-    window.addEventListener('pagehide', flush);
-    window.addEventListener('beforeunload', (e) => { if (analyzing()) { e.preventDefault(); e.returnValue = ''; } });
-    window.__pmResetWorkspace = async () => { resetting = true; if (timer) { clearTimeout(timer); timer = null; } try { await run('readwrite', (s) => s.delete(KEY)); } catch (e) { /* nothing saved */ } };
-    return { ready, touch };
-  })();
+  const fileToDataUrl = async (f, maxBytes = 1.5 * 1024 * 1024) => {
+    if (!/^image\/(png|jpe?g|webp|gif|svg\+xml)$/.test(f.type || '')) throw err(400, 'Choose a picture in PNG, JPG, WebP, GIF or SVG format');
+    if (f.buffer.length > maxBytes) throw err(413, 'The picture is too large. Use one under 1.5 MB.');
+    return `data:${f.type};base64,${f.buffer.toString('base64')}`;
+  };
 
   // ---------- routes ----------
   const routes = [];
   const on = (method, re, fn) => routes.push([method, new RegExp('^' + re + '$'), fn]);
 
-  on('POST', '/api/auth/(login|register)', async () => ({ token: 'demo-token', user: DB.user }));
-  const CONN = { jira: null, outlook: null };
   const connView = () => ({ jira: { connected: !!CONN.jira, label: CONN.jira, managed: false }, outlook: { connected: !!CONN.outlook, label: CONN.outlook, managed: false } });
-  on('GET', '/api/me', async () => ({ user: DB.user, status: { ...SEED.status, jira: !!CONN.jira, graph: !!CONN.outlook } }));
+  on('GET', '/api/me', async () => ({ user: DB.user, status: { jira: !!CONN.jira, graph: !!CONN.outlook, claude: !!process.env.ANTHROPIC_API_KEY, model: MODEL } }));
   on('GET', '/api/connections', async () => ({ connections: connView() }));
   on('POST', '/api/connections/(jira|outlook)', async (mm, q, body) => {
     if (mm[1] === 'jira') {
@@ -840,26 +837,34 @@
       CONN.jira = `${body.email} at ${body.base_url.replace(/^https:\/\//, '').replace(/\/$/, '')}`;
     } else {
       if (!body.token || body.token.length < 20) throw err(400, 'Paste the access token from Microsoft Graph');
-      CONN.outlook = 'demo.user@company.com';
+      CONN.outlook = ctx().user.email;
     }
+    await saveUser();
     return { connections: connView() };
   });
-  on('DELETE', '/api/connections/(jira|outlook)', async (mm) => { CONN[mm[1]] = null; return { connections: connView() }; });
-  on('PUT', '/api/me', async (m, q, b) => { if (b.language) DB.user.language = b.language; if (b.theme) DB.user.theme = b.theme; if (b.name) DB.user.name = b.name; if ('dash_layout' in b) DB.user.dash_layout = b.dash_layout; return { user: DB.user }; });
-  on('POST', '/api/me/avatar', async (m, q, b) => { const f = b.get('file'); if (!f) throw err(400, 'No image received'); DB.user.avatar = await fileToDataUrl(f); return { user: DB.user }; });
-  on('POST', '/api/me/password', async (m, q, b) => { if (!b.next || b.next.length < 8) throw err(400, 'New password must be at least 8 characters'); return { ok: true }; });
-  on('POST', '/api/me/ingest-key', async () => { DB.user.ingest_key = Math.random().toString(16).slice(2).padEnd(32, 'a').slice(0, 32); return { ingest_key: DB.user.ingest_key }; });
+  on('DELETE', '/api/connections/(jira|outlook)', async (mm) => { CONN[mm[1]] = null; await saveUser(); return { connections: connView() }; });
+  on('PUT', '/api/me', async (m, q, b) => {
+    if (b.language) { if (!['en', 'ar'].includes(b.language)) throw err(400, 'Choose English or Arabic'); DB.user.language = b.language; }
+    if (b.theme) { if (!['light', 'dark'].includes(b.theme)) throw err(400, 'Choose a light or dark theme'); DB.user.theme = b.theme; }
+    if ('name' in b) { const n = String(b.name || '').trim(); if (!n) throw err(400, 'Enter your name'); if (n.length > 120) throw err(400, 'The name is too long'); DB.user.name = n; }
+    if ('dash_layout' in b) DB.user.dash_layout = b.dash_layout;
+    await saveUser();
+    return { user: DB.user };
+  });
+  on('POST', '/api/me/avatar', async (m, q, b) => { const f = b.get('file'); if (!f) throw err(400, 'No image received'); DB.user.avatar = await fileToDataUrl(f, 600 * 1024); await saveUser(); return { user: DB.user }; });
+  on('POST', '/api/me/password', async (m, q, b) => { const token = await ctx().auth.changePassword(ctx().user.id, b.current, b.next); return { ok: true, token }; });
+  on('POST', '/api/me/ingest-key', async () => { DB.user.ingest_key = require('crypto').randomBytes(16).toString('hex'); await saveUser(); return { ingest_key: DB.user.ingest_key }; });
 
 
   on('GET', '/api/calendar', async () => {
     const tasks = [], payments = [], list = DB.order.map((id) => DB.projects[id]).filter((P) => P.p.status !== 'archived');
     for (const P of list) {
       for (const t of S.schedule(P.tasks, rawProject(P))) {
-        tasks.push({ id: t.id, project_id: P.id, summary: !!t.summary, name: t.name, start: t.start, finish: t.finish, progress: t.progress || 0, milestone: !!t.is_milestone, assignee: t.assignee || null, late: (t.progress || 0) < 100 && t.finish < TODAY });
+        tasks.push({ id: t.id, project_id: P.id, summary: !!t.summary, name: t.name, start: t.start, finish: t.finish, progress: t.progress || 0, milestone: !!t.is_milestone, assignee: t.assignee || null, late: (t.progress || 0) < 100 && t.finish < TODAY() });
       }
       for (const i of P.items) if (i.kind === 'milestone' && i.status !== 'ignored' && i.data && i.data.due_date) payments.push({ id: i.id, project_id: P.id, title: i.title, due: i.data.due_date, state: i.state, amount: i.data.amount != null ? i.data.amount : null });
     }
-    return { today: TODAY, projects: list.map((P) => ({ id: P.id, name: P.p.name, currency: P.p.currency })), tasks, payments };
+    return { today: TODAY(), projects: list.map((P) => ({ id: P.id, name: P.p.name, currency: P.p.currency })), tasks, payments };
   });
   on('GET', '/api/dashboard', async () => dashboard());
   // one project's dashboard: radar, schedule and critical path, deliverables, payments and cash flow
@@ -867,25 +872,30 @@
     const P = P_(mm[1]), raw = rawProject(P), st = stats(P);
     const sched = S.schedule(P.tasks, raw);
     const items = P.items.map((i) => ({ ...i, data: i.data || {} }));
-    const entry = { p: { ...clone(P.p), id: P.id }, stats: st, items: items.filter((i) => i.status !== 'ignored' && ['risk', 'milestone', 'deliverable'].includes(i.kind)), rows: S.progressMetrics(P.tasks, raw, TODAY).rows, sched };
+    const entry = { p: { ...clone(P.p), id: P.id }, stats: st, items: items.filter((i) => i.status !== 'ignored' && ['risk', 'milestone', 'deliverable'].includes(i.kind)), rows: S.progressMetrics(P.tasks, raw, TODAY()).rows, sched };
     const audit = P.audit.slice(0, 12).map((a) => ({ ...a, detail: a.detail || {} }));
-    return { project: { ...projectView(P) }, radar: window.__Radar.buildRadar([entry], TODAY), analytics: window.__Analytics.buildAnalytics([entry], TODAY),
-      ...window.__ProjDash.buildProjectDash({ project: raw, tasks: sched, items, inbox: P.inbox, audit, today: TODAY }) };
+    return { project: { ...projectView(P) }, radar: win.__Radar.buildRadar([entry], TODAY()), analytics: win.__Analytics.buildAnalytics([entry], TODAY()),
+      ...win.__ProjDash.buildProjectDash({ project: raw, tasks: sched, items, inbox: P.inbox, audit, today: TODAY() }) };
   });
   on('GET', '/api/projects', async () => ({ projects: DB.order.map((id) => DB.projects[id]).reverse().map(projectView) }));
   on('POST', '/api/projects', async (m, q, fd) => {
-    const name = String(fd.get('name') || '').trim();
+    const get = (k) => (typeof fd.get === 'function' ? fd.get(k) : fd[k]);
+    const files = (typeof fd.getAll === 'function' ? fd.getAll('files') : []).filter((f) => f && f.name);
+    const name = String(get('name') || '').trim();
     if (!name) throw err(400, 'Give the project a name');
+    if (name.length > 200) throw err(400, 'The project name is too long');
+    if (files.length > 12) throw err(400, 'Attach at most 12 files when creating a project');
     const id = nid();
-    const P = makeProject(id, { id, owner_id: 1, name, code: null, client: null, client_logo: null, currency: null, value: null, start_date: null, end_date: null, work_days: [1, 2, 3, 4, 5], work_start: '08:00', work_end: '17:00', holidays: [], status: 'active', wizard_done: 0, analyzing: 0, impact_check: 1, auto_apply: 0, auto_threshold: 0.9, jira_key: null, teams_channel: null, created_at: nowTs() });
-    DB.projects[id] = P; DB.order.push(id);
-    let files = fd.getAll('files').filter((f) => f && f.name);
-    let docs;
-    if (files.length) { docs = []; P._files = {}; for (const f of files) { const d = { id: nid(), filename: f.name, kind: AI.classify(f.name, ''), summary: '', uploaded_by: ACTOR, created_at: nowTs(), chars: 0, pages: null, read_error: null }; P.documents.push(d); P.texts[d.id] = ''; P._files[d.id] = f; docs.push(d); } }
-    else { docs = []; for (const n of ['Proposal_Smart_Portal.txt', 'Contract_Smart_Portal.txt', 'PO_4500123.txt']) { const d = { id: nid(), filename: n, kind: AI.classify(n, SEED.docTexts[n]), summary: '', uploaded_by: ACTOR, created_at: nowTs(), chars: SEED.docTexts[n].length }; P.documents.push(d); P.texts[d.id] = SEED.docTexts[n]; docs.push(d); } }
-    audit(P, ACTOR, 'project_created', { summary: `Project "${name}" created with ${docs.length} document${docs.length === 1 ? '' : 's'}` });
-    analyzeDocs(P, docs).catch((e) => console.error(e));
-    return { project: clone(P.p) };
+    const P = makeProject(id, { id, owner_id: DB.user.id, name, code: null, client: null, client_logo: null, currency: null, value: null, start_date: null, end_date: null, work_days: [1, 2, 3, 4, 5], work_start: '08:00', work_end: '17:00', holidays: [], status: 'active', wizard_done: 0, analyzing: 0, impact_check: 1, auto_apply: 0, auto_threshold: 0.9, jira_key: null, teams_channel: null, created_at: nowTs() });
+    P.p.wizard_done = files.length ? 0 : 1; // a project with no documents has nothing to review yet
+    const docs = [];
+    for (const f of files) { const d = { id: nid(), filename: f.name, kind: AI.classify(f.name, ''), summary: '', uploaded_by: ACTOR(), created_at: nowTs(), chars: 0, pages: null, read_error: null, unread: true }; P.documents.push(d); P.texts[d.id] = ''; docs.push([d, f]); }
+    audit(P, ACTOR(), 'project_created', { summary: `Project "${name}" created with ${docs.length} document${docs.length === 1 ? '' : 's'}` });
+    await store.create(P, DB.user.id);
+    for (const [d, f] of docs) await store.putFile(P.id, d.id, f);
+    DB.projects[id] = P; DB.order.push(id); ctx().roles[id] = 'manager'; touch(P);
+    if (docs.length) analyzeDocs(P, docs.map((x) => x[0])).catch((e) => console.error('analysis failed', e));
+    return { project: projectView(P) };
   });
   on('GET', '/api/projects/(\\d+)', async (m) => ({ project: projectView(P_(m[1])) }));
   on('PUT', '/api/projects/(\\d+)', async (m, q, b) => {
@@ -899,23 +909,27 @@
     if ('work_days' in b) { const d = (b.work_days || []).map(Number).filter((n) => n >= 0 && n <= 6); if (!d.length) throw err(400, 'Choose at least one working day'); P.p.work_days = [...new Set(d)].sort(); }
     if ('holidays' in b) P.p.holidays = [...new Set((b.holidays || []).filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x)))].sort();
     if ('work_days' in b || 'holidays' in b) recalc(P);
-    audit(P, ACTOR, 'settings_changed', { summary: 'Project settings updated' });
+    audit(P, ACTOR(), 'settings_changed', { summary: 'Project settings updated' });
     return { project: projectView(P) };
   });
   on('POST', '/api/projects/(\\d+)/logo', async (m, q, b) => { const P = P_(m[1]); const f = b.get('file'); if (!f) throw err(400, 'No image received'); P.p.client_logo = await fileToDataUrl(f); return { project: clone(P.p) }; });
   on('DELETE', '/api/projects/(\\d+)', async (m) => {
-    const id = Number(m[1]), P = P_(id);
-    if (!canDelete(P)) throw err(403, 'Only the project manager can delete a project');
-    delete DB.projects[id]; DB.order = DB.order.filter((x) => x !== id); return { ok: true };
+    const id = Number(m[1]);
+    P_(id, 'manager'); // only a project manager of this project may delete it
+    await store.remove(id);
+    delete DB.projects[id]; DB.order = DB.order.filter((x) => x !== id); delete ctx().roles[id];
+    ctx().touched.clear();
+    return { ok: true };
   });
 
   on('GET', '/api/projects/(\\d+)/documents', async (m) => ({ documents: P_(m[1]).documents.map(clone) }));
   on('POST', '/api/projects/(\\d+)/documents', async (m, q, fd) => {
     const P = P_(m[1]); const mode = fd.get('purpose') || 'auto';
     const files = fd.getAll('files').filter((f) => f && f.name);
+    if (!files.length) throw err(400, 'Choose at least one file to upload');
     const out = [], src = [];
     for (const d of await addDocuments(P, files)) {
-      audit(P, ACTOR, 'document_uploaded', { summary: `Uploaded ${d.filename} (${d.kind})` });
+      audit(P, ACTOR(), 'document_uploaded', { summary: `Uploaded ${d.filename} (${d.kind})` });
       if (d.read_error) { out.push({ id: d.id, filename: d.filename, kind: d.kind, handled: 'failed', error: d.read_error }); continue; }
       const asSource = mode === 'source' || (mode === 'auto' && ['proposal', 'contract', 'po'].includes(d.kind));
       if (asSource) { src.push(d); out.push({ id: d.id, filename: d.filename, kind: d.kind, handled: 'extraction' }); }
@@ -924,20 +938,14 @@
     if (src.length) analyzeDocs(P, src).catch((e) => console.error(e));
     return { results: out };
   });
-  on('GET', '/api/projects/(\\d+)/documents/(\\d+)/file', async (m) => {
-    const P = P_(m[1]); const d = P.documents.find((x) => x.id === Number(m[2]));
-    const f = d && P._kept && P._kept[d.id];
-    if (!f) throw err(404, 'The original file is not kept for sample documents. Upload your own file to download it again.');
-    return new Response(f, { status: 200, headers: { 'content-type': f.type || 'application/octet-stream' } });
-  });
   on('POST', '/api/projects/(\\d+)/documents/(\\d+)/link', async (m, q, b) => {
     const P = P_(m[1]); const d = P.documents.find((x) => x.id === Number(m[2])); const it = P.items.find((x) => x.id === Number(b.deliverable_id) && x.kind === 'deliverable');
     if (!d || !it) throw err(404, 'Document or deliverable not found');
-    return { ok: true, summary: applyAction(P, { type: 'close_deliverable', deliverable_id: it.id }, ACTOR, d.id).summary };
+    return { ok: true, summary: applyAction(P, { type: 'close_deliverable', deliverable_id: it.id }, ACTOR(), d.id).summary };
   });
   on('DELETE', '/api/projects/(\\d+)/documents/(\\d+)', async (m) => {
     const P = P_(m[1]); const id = Number(m[2]);
-    P.documents = P.documents.filter((d) => d.id !== id); delete P.texts[id]; if (P._kept) delete P._kept[id];
+    P.documents = P.documents.filter((d) => d.id !== id); delete P.texts[id]; await store.deleteFiles(P.id, id);
     for (const i of P.items) { if (i.doc_id === id) i.doc_id = null; if (i.evidence_doc_id === id) i.evidence_doc_id = null; }
     return { ok: true };
   });
@@ -961,28 +969,28 @@
     if (!['deliverable', 'requirement', 'risk', 'milestone'].includes(b.kind)) throw err(400, 'Unsupported item type');
     if (!String(b.title || '').trim()) throw err(400, 'A title is required');
     const it = { id: nid(), project_id: P.id, kind: b.kind, title: b.title.trim(), description: b.description || '', data: b.data || {}, status: 'confirmed', state: b.state || (b.kind === 'milestone' ? 'pending' : 'open'), confidence: null, doc_id: null, quote: '', evidence_doc_id: null, created_at: nowTs() };
-    P.items.push(it); audit(P, ACTOR, 'item_added', { summary: `Added ${b.kind} "${it.title}"` });
+    P.items.push(it); audit(P, ACTOR(), 'item_added', { summary: `Added ${b.kind} "${it.title}"` });
     return { item: itemView(P, it) };
   });
   on('POST', '/api/projects/(\\d+)/items/bulk', async (m, q, b) => {
     const P = P_(m[1]);
     if (!Array.isArray(b.ids) || !['confirm', 'ignore'].includes(b.action)) throw err(400, 'Provide ids and an action');
     let n = 0;
-    for (const id of b.ids) { const it = P.items.find((x) => x.id === Number(id)); if (!it) continue; if (b.action === 'confirm') confirmItem(P, it, ACTOR); else it.status = 'ignored'; n++; }
+    for (const id of b.ids) { const it = P.items.find((x) => x.id === Number(id)); if (!it) continue; if (b.action === 'confirm') confirmItem(P, it, ACTOR()); else it.status = 'ignored'; n++; }
     return { changed: n };
   });
-  const findItem = (id) => { for (const k of DB.order) { const P = DB.projects[k]; const it = P && P.items.find((x) => x.id === Number(id)); if (it) return [P, it]; } throw err(404, 'Not found'); };
+  const findItem = (id) => { for (const k of DB.order) { const P = DB.projects[k]; const it = P && P.items.find((x) => x.id === Number(id)); if (it) { need(P, ctx().level); touch(P); return [P, it]; } } throw err(404, 'Not found'); };
   on('PUT', '/api/items/(\\d+)', async (m, q, b) => {
     const [P, it] = findItem(m[1]);
     if (b.title != null) it.title = b.title; if (b.description != null) it.description = b.description;
     it.data = { ...it.data, ...(b.data || {}) };
-    if (b.state && b.state !== it.state) { it.state = b.state; audit(P, ACTOR, 'item_state', { summary: `${it.kind} "${it.title}" set to ${b.state}` }); }
+    if (b.state && b.state !== it.state) { it.state = b.state; audit(P, ACTOR(), 'item_state', { summary: `${it.kind} "${it.title}" set to ${b.state}` }); }
     return { item: itemView(P, it) };
   });
   on('POST', '/api/items/(\\d+)/(confirm|ignore|reopen)', async (m) => {
     const [P, it] = findItem(m[1]);
-    if (m[2] === 'confirm') confirmItem(P, it, ACTOR);
-    else { it.status = m[2] === 'ignore' ? 'ignored' : 'proposed'; audit(P, ACTOR, 'item_' + m[2], { summary: `${m[2] === 'ignore' ? 'Ignored' : 'Reopened'} ${it.kind} "${it.title}"` }); }
+    if (m[2] === 'confirm') confirmItem(P, it, ACTOR());
+    else { it.status = m[2] === 'ignore' ? 'ignored' : 'proposed'; audit(P, ACTOR(), 'item_' + m[2], { summary: `${m[2] === 'ignore' ? 'Ignored' : 'Reopened'} ${it.kind} "${it.title}"` }); }
     return { item: itemView(P, it), project: clone(P.p) };
   });
   on('DELETE', '/api/items/(\\d+)', async (m) => { const [P, it] = findItem(m[1]); P.items = P.items.filter((x) => x !== it); return { ok: true }; });
@@ -1008,7 +1016,7 @@
   on('GET', '/api/projects/(\\d+)/schedule', async (m) => { const P = P_(m[1]); ensureVersion(P); return scheduleResponse(P); });
   on('GET', '/api/projects/(\\d+)/schedule/validate', async (m) => {
     const P = P_(m[1]);
-    return S.checkSchedule(P.tasks, rawProject(P), { items: linkItems(P), today: TODAY, hasBaseline: P.tasks.some((t) => t.b_start) });
+    return S.checkSchedule(P.tasks, rawProject(P), { items: linkItems(P), today: TODAY(), hasBaseline: P.tasks.some((t) => t.b_start) });
   });
   on('GET', '/api/projects/(\\d+)/schedule/versions', async (m) => ({ versions: listVersions(P_(m[1])) }));
   on('POST', '/api/projects/(\\d+)/schedule/versions', async (m, q, b) => {
@@ -1026,7 +1034,7 @@
     recordVersion(P, 'edit');
     P.tasks = clone(v.snapshot).map((t) => ({ ...t, start: t.start, finish: undefined, progress: t.progress || 0 }));
     P.tasks.sort((a, z) => (a.position ?? 0) - (z.position ?? 0) || a.id - z.id);
-    recalc(P); audit(P, ACTOR, 'schedule_restore', { summary: `Restored schedule ${v.version}` });
+    recalc(P); audit(P, ACTOR(), 'schedule_restore', { summary: `Restored schedule ${v.version}` });
     recordVersion(P, 'restore', v.version);
     return { ...scheduleResponse(P), versions: listVersions(P) };
   });
@@ -1037,13 +1045,13 @@
     assignUids(P);
     const uid = new Map(P.tasks.map((t) => [t.id, t.ext_uid]));
     const computed = S.schedule(P.tasks, rawProject(P)).map((t) => ({ ...t, ext_uid: uid.get(t.id) }));
-    audit(P, ACTOR, 'msproject_export', { summary: `Exported ${computed.length} tasks to Microsoft Project XML` });
-    return { xml: window.__MSP.toXml(rawProject(P), computed), filename: `${P.p.name.replace(/[^\w .-]/g, '_')}.xml` };
+    audit(P, ACTOR(), 'msproject_export', { summary: `Exported ${computed.length} tasks to Microsoft Project XML` });
+    return { xml: win.__MSP.toXml(rawProject(P), computed), filename: `${P.p.name.replace(/[^\w .-]/g, '_')}.xml` };
   });
   on('POST', '/api/projects/(\\d+)/msproject/import', async (m, q, b) => {
     const P = P_(m[1]); const mode = b.mode === 'merge' ? 'merge' : 'replace';
-    let parsed; try { parsed = window.__MSP.parse(b.xml); } catch (e) { throw err(400, e.message); }
-    const plan = window.__MSP.plan(P.tasks, parsed, mode);
+    let parsed; try { parsed = win.__MSP.parse(b.xml); } catch (e) { throw err(400, e.message); }
+    const plan = win.__MSP.plan(P.tasks, parsed, mode);
     if (b.preview) return { summary: plan.summary, mode, missing: plan.missing.map((t) => t.name).slice(0, 20) };
     const idOf = new Map();
     if (mode === 'replace') P.tasks = [];
@@ -1058,7 +1066,7 @@
     if (mode === 'replace' && parsed.calendar) { P.p.work_days = parsed.calendar.work_days; P.p.holidays = parsed.calendar.holidays; }
     P.tasks.sort((a, z) => (a.position ?? 0) - (z.position ?? 0) || a.id - z.id);
     recalc(P);
-    audit(P, ACTOR, 'msproject_import', { summary: `Microsoft Project ${mode === 'merge' ? 'sync' : 'import'}: ${plan.summary.added} added, ${plan.summary.updated} updated` });
+    audit(P, ACTOR(), 'msproject_import', { summary: `Microsoft Project ${mode === 'merge' ? 'sync' : 'import'}: ${plan.summary.added} added, ${plan.summary.updated} updated` });
     const issues = S.validateSchedule(P.tasks, rawProject(P)).filter((i) => i.severity === 'error');
     return { ...scheduleResponse(P), summary: plan.summary, issues };
   });
@@ -1075,7 +1083,7 @@
       const t = P.tasks.find((x) => x.id === Number(id)); if (!t) continue;
       if (ch.deleted) {
         for (const o of P.tasks) { if (o.parent_id === t.id) o.parent_id = t.parent_id ?? null; o.deps = o.deps.filter((d) => d.id !== t.id); }
-        P.tasks = P.tasks.filter((x) => x !== t); audit(P, ACTOR, 'task_deleted', { summary: `Deleted task "${t.name}"` }); continue;
+        P.tasks = P.tasks.filter((x) => x !== t); audit(P, ACTOR(), 'task_deleted', { summary: `Deleted task "${t.name}"` }); continue;
       }
       const bits = [];
       if (ch.start && ch.start !== t.start) bits.push(`start ${t.start} to ${ch.start}`);
@@ -1084,7 +1092,7 @@
       for (const k of TASK_FIELDS) if (k in ch) t[k] = ch[k];
       if ('deps' in ch) t.deps = ch.deps;
       if (ch._asap) t.start = ch._asap;
-      if (bits.length) audit(P, ACTOR, 'task_update', { summary: `Task "${t.name}": ${bits.join(', ')}` });
+      if (bits.length) audit(P, ACTOR(), 'task_update', { summary: `Task "${t.name}": ${bits.join(', ')}` });
     }
     P.tasks.sort((a, b) => (a.position ?? 0) - (b.position ?? 0) || a.id - b.id);
     recalc(P); recordVersion(P, 'edit');
@@ -1095,7 +1103,7 @@
     if (!String(b.name || '').trim()) throw err(400, 'Task name is required');
     const c = S.calendar(rawProject(P));
     let start = b.start;
-    if (!start) { const last = P.tasks.slice().sort((a, z) => z.start.localeCompare(a.start))[0]; start = P.p.start_date || (last && last.start) || TODAY; }
+    if (!start) { const last = P.tasks.slice().sort((a, z) => z.start.localeCompare(a.start))[0]; start = P.p.start_date || (last && last.start) || TODAY(); }
     start = S.nextWork(start, c);
     let position;
     if (b.after_id) { const a = P.tasks.find((x) => x.id === Number(b.after_id)); position = (a ? a.position : 0) + 1; for (const t of P.tasks) if ((t.position ?? 0) >= position) t.position = (t.position ?? 0) + 1; }
@@ -1104,7 +1112,7 @@
     const id = nid();
     P.tasks.push({ id, parent_id: b.parent_id ? Number(b.parent_id) : null, position, name: b.name.trim(), start, duration: dur, progress: 0, assignee: b.assignee || null, deps: b.deps || [], deliverable_id: b.deliverable_id || null, b_start: null, b_end: null, notes: null, is_milestone: b.is_milestone ? 1 : 0, jira_key: null, color: null, mode: b.mode === 'manual' ? 'manual' : 'auto', flag: 0 });
     P.tasks.sort((a, z) => (a.position ?? 0) - (z.position ?? 0) || a.id - z.id);
-    recalc(P); audit(P, ACTOR, 'task_added', { summary: `Added task "${b.name.trim()}"` }); recordVersion(P, 'edit');
+    recalc(P); audit(P, ACTOR(), 'task_added', { summary: `Added task "${b.name.trim()}"` }); recordVersion(P, 'edit');
     return { ...scheduleResponse(P), created: id };
   });
   on('POST', '/api/projects/(\\d+)/schedule/reorder', async (m, q, b) => {
@@ -1122,19 +1130,19 @@
   on('POST', '/api/projects/(\\d+)/schedule/baseline', async (m) => {
     const P = P_(m[1]); const computed = S.schedule(P.tasks, rawProject(P));
     for (const c of computed) { const t = P.tasks.find((x) => x.id === c.id); if (t) { t.b_start = c.start; t.b_end = c.finish; } }
-    audit(P, ACTOR, 'baseline_set', { summary: `Baseline set for ${computed.length} tasks` });
+    audit(P, ACTOR(), 'baseline_set', { summary: `Baseline set for ${computed.length} tasks` });
     recordVersion(P, 'baseline');
     return scheduleResponse(P);
   });
 
   on('GET', '/api/projects/(\\d+)/inbox', async (m) => { const P = P_(m[1]); return { inbox: P.inbox.map((r) => inboxView(P, r)) }; });
   on('GET', '/api/inbox/unassigned', async () => ({ inbox: [] }));
-  const findRow = (id) => { for (const k of DB.order) { const P = DB.projects[k]; const r = P && P.inbox.find((x) => x.id === Number(id)); if (r) return [P, r]; } throw err(404, 'Not found'); };
+  const findRow = (id) => { for (const k of DB.order) { const P = DB.projects[k]; const r = P && P.inbox.find((x) => x.id === Number(id)); if (r) { need(P, ctx().level); touch(P); return [P, r]; } } throw err(404, 'Not found'); };
   on('POST', '/api/inbox/(\\d+)/apply', async (m, q, b) => {
     const [P, r] = findRow(m[1]);
     if (r.status !== 'pending') throw err(400, 'This suggestion was already handled');
     const action = { ...(r.action || {}), ...((b && b.override) || {}) };
-    const out = applyAction(P, action, ACTOR, r.doc_id);
+    const out = applyAction(P, action, ACTOR(), r.doc_id);
     r.status = 'applied'; r.applied_at = nowTs(); r.action = { ...action, prev: out.prev, summary: out.summary };
     return { ok: true, summary: out.summary };
   });
@@ -1159,21 +1167,25 @@
   });
   on('POST', '/api/projects/(\\d+)/sync', async () => ({ report: {}, errors: { demo: 'Teams, Outlook and Jira are not connected in this demo. In the real app you set the connection keys in Settings, or push messages to the webhook URLs.' } }));
 
-  on('GET', '/api/doc-types', async () => ({ types: SEED.docTypes }));
+  on('GET', '/api/doc-types', async () => ({ types: RAW.docTypes }));
   on('GET', '/api/templates', async () => ({ templates: DB.templates.map((t) => ({ id: t.id, doc_type: t.doc_type, name: t.name, created_at: t.created_at })) }));
-  on('GET', '/api/templates/skeleton/([a-z_]+)', async (m) => { if (!SEED.skeletons[m[1]]) throw err(404, 'Unknown document type'); return { body: SEED.skeletons[m[1]] }; });
+  on('GET', '/api/templates/skeleton/([a-z_]+)', async (m) => { if (!RAW.skeletons[m[1]]) throw err(404, 'Unknown document type'); return { body: RAW.skeletons[m[1]] }; });
   on('POST', '/api/templates', async (m, q, fd) => {
     const name = fd.get('name'), doc_type = fd.get('doc_type');
-    if (!name || !SEED.skeletons[doc_type]) throw err(400, 'Choose a document type and give the template a name');
+    if (!name || !RAW.skeletons[doc_type]) throw err(400, 'Choose a document type and give the template a name');
     let body = fd.get('body') || '';
     const f = fd.get('file');
-    if (f && f.name) { if (/\.(md|txt)$/i.test(f.name)) body = await f.text(); else throw err(400, 'The demo reads Markdown or text templates. The full app also reads Word files.'); }
+    if (f && f.name) {
+      if (/\.(md|txt)$/i.test(f.name)) body = await f.text();
+      else if (/\.docx$/i.test(f.name)) { try { body = (await extractText(f.buffer, f.name)).text || ''; } catch (e) { throw err(400, `Could not read the Word file: ${e.message}`); } }
+      else throw err(400, 'Upload a Markdown, text or Word (.docx) template');
+    }
     if (!R.parseTemplate(body).length) throw err(400, 'No section headings found. Use lines starting with "# " in text.');
-    const t = { id: nid(), owner_id: 1, doc_type, name: String(name).trim(), body, created_at: nowTs() };
-    DB.templates.push(t);
+    const t = { id: nid(), owner_id: DB.user.id, doc_type, name: String(name).trim(), body, created_at: nowTs() };
+    DB.templates.push(t); await saveUser();
     return { template: { id: t.id, doc_type, name: t.name, created_at: t.created_at }, sections: R.parseTemplate(body).map((s) => s.heading) };
   });
-  on('DELETE', '/api/templates/(\\d+)', async (m) => { DB.templates = DB.templates.filter((t) => t.id !== Number(m[1])); return { ok: true }; });
+  on('DELETE', '/api/templates/(\\d+)', async (m) => { DB.templates = DB.templates.filter((t) => t.id !== Number(m[1])); await saveUser(); return { ok: true }; });
 
   const FORMATS = ['docx', 'xlsx', 'pptx'];
   const cleanName = (v, max) => String(v == null ? '' : v).replace(/[\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -1182,13 +1194,13 @@
   function snapshot(P, type, today, periodDays) {
     const ctx = R.buildContext(reportInputs(P, today, periodDays));
     const progress = R.DEFAULTS[type] ? type.startsWith('progress') : false;
-    return { ctx, visuals: window.__Visuals ? window.__Visuals.fromContext(ctx, progress) : null };
+    return { ctx, visuals: win.__Visuals ? win.__Visuals.fromContext(ctx, progress) : null };
   }
   // Documents made before formats existed get a format and chart data the first time they are read
   function complete(P, g) {
     if (!g.format) g.format = 'docx';
-    if (!g.meta) g.meta = docMeta(P, String(g.created_at || TODAY).slice(0, 10));
-    if (!g.visuals && R.DEFAULTS[g.doc_type]) g.visuals = snapshot(P, g.doc_type, TODAY, R.DEFAULTS[g.doc_type].period || 7).visuals;
+    if (!g.meta) g.meta = docMeta(P, String(g.created_at || TODAY()).slice(0, 10));
+    if (!g.visuals && R.DEFAULTS[g.doc_type]) g.visuals = snapshot(P, g.doc_type, TODAY(), R.DEFAULTS[g.doc_type].period || 7).visuals;
     return g;
   }
   const folderOk = (P, id) => id == null || id === '' || P.folders.some((f) => f.id === Number(id));
@@ -1201,17 +1213,17 @@
     const tpl = b.template_id ? DB.templates.find((t) => t.id === Number(b.template_id)) : null;
     if (b.template_id && !tpl) throw err(404, 'Template not found');
     if (!folderOk(P, b.folder_id)) throw err(404, 'Folder not found');
-    const today = b.as_of && /^\d{4}-\d{2}-\d{2}$/.test(b.as_of) ? b.as_of : TODAY;
+    const today = b.as_of && /^\d{4}-\d{2}-\d{2}$/.test(b.as_of) ? b.as_of : TODAY();
     const periodDays = Number(b.period_days) || def.period || 7;
     const snap = snapshot(P, b.type, today, periodDays);
     const out = await R.generate({ type: b.type, templateBody: tpl ? tpl.body : null, templateName: tpl ? tpl.name : null, ctx: snap.ctx, useAI: false });
     const g = { id: nid(), project_id: P.id, doc_type: b.type, title: cleanName(b.title, 120) || out.title, template: out.template, content: out.markdown, created_at: nowTs(), format, folder_id: b.folder_id ? Number(b.folder_id) : null, meta: docMeta(P, today), visuals: snap.visuals };
     P.generated.unshift(g);
-    audit(P, ACTOR, 'document_generated', { summary: `Generated ${g.title}${tpl ? ` from template "${tpl.name}"` : ''}` });
+    audit(P, ACTOR(), 'document_generated', { summary: `Generated ${g.title}${tpl ? ` from template "${tpl.name}"` : ''}` });
     return { generated: clone(g), engine: out.engine, unconfirmed: snap.ctx.unconfirmed };
   });
   on('GET', '/api/projects/(\\d+)/generated', async (m) => ({ generated: P_(m[1]).generated.map(gSummary) }));
-  const findGen = (id) => { for (const k of DB.order) { const P = DB.projects[k]; const g = P && P.generated.find((x) => x.id === Number(id)); if (g) return [P, g]; } throw err(404, 'Not found'); };
+  const findGen = (id) => { for (const k of DB.order) { const P = DB.projects[k]; const g = P && P.generated.find((x) => x.id === Number(id)); if (g) { need(P, ctx().level); touch(P); return [P, g]; } } throw err(404, 'Not found'); };
   on('GET', '/api/generated/(\\d+)', async (m) => { const [P, g] = findGen(m[1]); return { generated: clone(complete(P, g)) }; });
   on('PUT', '/api/generated/(\\d+)', async (m, q, b) => {
     const [P, g] = findGen(m[1]);
@@ -1238,36 +1250,171 @@
     return { folder: folderRow(P, f) };
   });
   on('PUT', '/api/folders/(\\d+)', async (m, q, b) => {
-    for (const k of DB.order) { const P = DB.projects[k]; const f = P && P.folders.find((x) => x.id === Number(m[1])); if (f) { f.name = folderName(P, b.name, f.id); return { folder: folderRow(P, f) }; } }
+    for (const k of DB.order) { const P = DB.projects[k]; const f = P && P.folders && P.folders.find((x) => x.id === Number(m[1])); if (f) { need(P, ctx().level); touch(P); f.name = folderName(P, b.name, f.id); return { folder: folderRow(P, f) }; } }
     throw err(404, 'Folder not found');
   });
   // Documents in a deleted folder move to Unfiled. They are never deleted.
   on('DELETE', '/api/folders/(\\d+)', async (m) => {
-    for (const k of DB.order) { const P = DB.projects[k]; const f = P && P.folders.find((x) => x.id === Number(m[1])); if (f) { const moved = P.generated.filter((g) => g.folder_id === f.id).map((g) => g.id); P.generated.forEach((g) => { if (g.folder_id === f.id) g.folder_id = null; }); P.folders = P.folders.filter((x) => x !== f); return { ok: true, moved }; } }
+    for (const k of DB.order) { const P = DB.projects[k]; const f = P && P.folders && P.folders.find((x) => x.id === Number(m[1])); if (f) { need(P, ctx().level); touch(P); const moved = P.generated.filter((g) => g.folder_id === f.id).map((g) => g.id); P.generated.forEach((g) => { if (g.folder_id === f.id) g.folder_id = null; }); P.folders = P.folders.filter((x) => x !== f); return { ok: true, moved }; } }
     throw err(404, 'Folder not found');
   });
   on('GET', '/api/projects/(\\d+)/audit', async (m) => ({ audit: P_(m[1]).audit.slice(0, 200).map(clone) }));
 
-  // ---------- fetch override ----------
-  const realFetch = window.fetch.bind(window);
-  const json = (status, data) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
-  window.fetch = async function (input, init) {
-    const url = typeof input === 'string' ? input : input.url;
-    if (!/^\/api\//.test(url)) return realFetch(input, init);
-    await STORE.ready; // the saved workspace is loaded before the first answer
-    const [path, qs] = url.split('?');
-    const query = Object.fromEntries(new URLSearchParams(qs || ''));
-    const method = ((init && init.method) || 'GET').toUpperCase();
-    let body = init && init.body;
-    if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }
-    else if (body == null) body = {};
-    for (const [mth, re, fn] of routes) {
-      if (mth !== method) continue;
-      const m = path.match(re);
-      if (!m) continue;
-      try { const out = await fn(m, query, body); if (method !== 'GET') STORE.touch(); return out instanceof Response ? out : json(200, out); }
-      catch (e) { if (!e.status) console.error(e); return json(e.status || 500, { error: e.message || 'Something went wrong' }); }
+
+  // ---------- members ----------
+  const memberView = (m) => ({ user_id: m.user_id, name: m.name, email: m.email, role: m.role });
+  on('GET', '/api/projects/(\\d+)/members', async (m) => { const P = P_(m[1]); return { members: (await store.members(P.id)).map(memberView), role: roleOf(P) }; });
+  on('POST', '/api/projects/(\\d+)/members', async (m, q, b) => {
+    const P = P_(m[1], 'manager');
+    const u = await store.userByEmail(b.email);
+    if (!u) throw err(404, 'No account found for this email. Ask them to create an account first.');
+    if (await store.roleOf(P.id, u.id)) throw err(409, 'That person is already on this project');
+    await store.setMember(P.id, u.id, b.role || 'editor');
+    audit(P, ACTOR(), 'member_added', { summary: `Added ${u.name} as ${b.role || 'editor'}` });
+    return { members: (await store.members(P.id)).map(memberView) };
+  });
+  on('PUT', '/api/projects/(\\d+)/members/(\\d+)', async (m, q, b) => {
+    const P = P_(m[1], 'manager');
+    if (!(await store.roleOf(P.id, Number(m[2])))) throw err(404, 'That person is not on this project');
+    await store.setMember(P.id, Number(m[2]), b.role);
+    audit(P, ACTOR(), 'member_role_changed', { summary: `Changed a member role to ${b.role}` });
+    return { members: (await store.members(P.id)).map(memberView) };
+  });
+  on('DELETE', '/api/projects/(\\d+)/members/(\\d+)', async (m) => {
+    const P = P_(m[1], Number(m[2]) === ctx().user.id ? 'viewer' : 'manager'); // anyone may leave a project
+    await store.removeMember(P.id, Number(m[2]));
+    return { members: (await store.members(P.id)).map(memberView) };
+  });
+
+  // ---------- sample projects ----------
+  on('POST', '/api/workspace/sample', async () => {
+    if (DB.user.sample_loaded) throw err(409, 'The sample projects are already in your workspace');
+    const made = [seedFirst(DB.user.id), ...seedPortfolio(DB.user.id)];
+    const created = [];
+    for (const P of made) {
+      const oldId = P.id, id = nid();
+      P.id = id; P.p.id = id;
+      for (const k of ['items', 'resources', 'inbox', 'audit', 'documents', 'generated']) for (const r of P[k] || []) if (r && r.project_id === oldId) r.project_id = id;
+      await store.create(P, DB.user.id);
+      DB.projects[id] = P; DB.order.push(id); ctx().roles[id] = 'manager';
+      created.push(id);
     }
-    return json(404, { error: 'Not available in the demo' });
-  };
-})();
+    DB.user.sample_loaded = true; await saveUser();
+    return { projects: created.length };
+  });
+
+  // ---------- export and import ----------
+  on('GET', '/api/projects/(\\d+)/export', async (m, q) => {
+    const P = P_(m[1]);
+    const files = q.files === '1' ? await store.filesOf(P.id) : [];
+    const out = exporter.projectBackup(P, { files, by: DB.user.email });
+    return new FileResult(Buffer.from(JSON.stringify(out)), 'application/json', `${safeName(P.p.name)}.pmai.json`);
+  });
+  on('GET', '/api/workspace/export', async () => {
+    const list = [];
+    for (const id of DB.order) { const P = DB.projects[id]; if (RANK[roleOf(P)] >= RANK.editor) list.push(exporter.projectBackup(P, { by: DB.user.email })); }
+    const out = { format: 'pmai-workspace', version: exporter.VERSION, exported_at: new Date().toISOString(), projects: list, templates: DB.templates };
+    return new FileResult(Buffer.from(JSON.stringify(out)), 'application/json', 'project-manager-ai-workspace.pmai.json');
+  });
+  async function importOne(backup) {
+    const checked = importer.prepare(backup, nid, { S });
+    const P = checked.P;
+    const clash = DB.order.some((id) => DB.projects[id].p.name === P.p.name);
+    if (clash) P.p.name = `${P.p.name} (imported)`;
+    P.p.owner_id = DB.user.id; P.p.status = P.p.status === 'archived' ? 'archived' : 'active'; P.p.analyzing = 0; P.analysis = null;
+    await store.create(P, DB.user.id);
+    for (const f of checked.files) { const d = P.documents.find((x) => x.id === f.doc_id); if (d) await store.putFile(P.id, d.id, { name: f.filename, type: f.mime, buffer: f.buffer }); }
+    DB.projects[P.id] = P; DB.order.push(P.id); ctx().roles[P.id] = 'manager';
+    audit(P, ACTOR(), 'project_imported', { summary: `Imported from a backup made ${checked.exported_at || 'earlier'}` });
+    touch(P);
+    return { id: P.id, name: P.p.name, tasks: P.tasks.length, items: P.items.length, documents: P.documents.length, warnings: checked.warnings };
+  }
+  on('POST', '/api/projects/import', async (m, q, b) => {
+    let data = b;
+    if (b && typeof b.get === 'function') { const f = b.get('file'); if (!f || !f.name) throw err(400, 'Choose a backup file to import'); try { data = JSON.parse(f.buffer.toString('utf8')); } catch (e) { throw err(400, 'This file is not a valid backup. It could not be read as JSON.'); } }
+    if (data && data.format === 'pmai-workspace') {
+      if (!Array.isArray(data.projects) || !data.projects.length) throw err(400, 'The workspace backup has no projects');
+      if (data.projects.length > 200) throw err(400, 'The workspace backup has too many projects');
+      const results = [];
+      for (const one of data.projects) results.push(await importOne(one));
+      if (Array.isArray(data.templates)) for (const t of data.templates.slice(0, 100)) if (t && t.name && RAW.skeletons[t.doc_type] && typeof t.body === 'string') DB.templates.push({ id: nid(), owner_id: DB.user.id, doc_type: t.doc_type, name: String(t.name).slice(0, 120), body: t.body, created_at: nowTs() });
+      await saveUser();
+      return { imported: results };
+    }
+    return { imported: [await importOne(data)] };
+  });
+  const safeName = (n) => String(n || 'project').replace(/[^\w .-]+/g, '_').trim().slice(0, 80) || 'project';
+  on('GET', '/api/projects/(\\d+)/schedule/export', async (m, q) => {
+    const P = P_(m[1]);
+    const computed = S.schedule(P.tasks, rawProject(P));
+    const fmt = q.format === 'csv' ? 'csv' : 'xlsx';
+    const buf = fmt === 'csv' ? exporter.scheduleCsv(P, computed) : exporter.scheduleXlsx(P, computed);
+    return new FileResult(buf, fmt === 'csv' ? 'text/csv; charset=utf-8' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', `${safeName(P.p.name)} schedule.${fmt}`);
+  });
+  on('GET', '/api/generated/(\\d+)/(docx|xlsx|pptx|md)', async (m) => {
+    const [P, g] = findGen(m[1]);
+    const { buffer, type } = await exporter.report(g, P, m[2]);
+    return new FileResult(buffer, type, `${safeName(g.title || 'report')}.${m[2]}`);
+  });
+  on('GET', '/api/projects/(\\d+)/documents/(\\d+)/file', async (m) => {
+    const P = P_(m[1]);
+    const d = P.documents.find((x) => x.id === Number(m[2]));
+    if (!d) throw err(404, 'Document not found');
+    const f = await store.getFile(P.id, d.id);
+    if (f) return new FileResult(f.buffer, f.mime || 'application/octet-stream', d.filename);
+    // files added before originals were kept still have their text
+    return new FileResult(Buffer.from(P.texts[d.id] || '', 'utf8'), 'text/plain; charset=utf-8', `${d.filename}.txt`);
+  });
+
+  // ---------- analysis progress, polled by the browser ----------
+  on('GET', '/api/analysis/events', async (m, q) => {
+    const since = Number(q.since) || 0;
+    return { events: store.eventsFor(DB.order, since).map((e) => ({ seq: e.seq, ...e.detail })), seq: store.evSeq };
+  });
+
+  // ---------- dispatcher ----------
+  // A project left "analyzing" by a server restart can never finish, so it is settled with a clear message.
+  function settleInterrupted(P) {
+    if (running.has(P.id)) return;
+    if (!P.p.analyzing && !(P.analysis && !P.analysis.finished)) return;
+    P.p.analyzing = 0;
+    const run = P.analysis; if (!run) { store.saveSoon(P); return; }
+    const message = 'The server restarted while this file was being read. Use Reanalyze to run it again.';
+    run.finished = true; run.show_summary = true; run.pct = 100; run.failed = run.failed || { message, detail: 'interrupted' };
+    for (const st of run.stages || []) { if (st.status === 'active') { st.status = 'failed'; st.detail = message; } else if (st.status === 'waiting') st.status = 'skipped'; }
+    for (const d of run.docs || []) if (d.status === 'waiting' || d.status === 'reading') { d.status = 'failed'; d.progress = ''; d.message = message; }
+    store.saveSoon(P);
+  }
+
+  const userView = (u) => ({ id: u.id, name: u.name, email: u.email, language: (u.prefs && u.prefs.language) || 'en', theme: (u.prefs && u.prefs.theme) || 'light', avatar: u.avatar || null, ingest_key: (u.prefs && u.prefs.ingest_key) || null, dash_layout: (u.prefs && u.prefs.dash_layout) || null, sample_loaded: !!(u.prefs && u.prefs.sample_loaded) });
+  async function saveUser() {
+    const c = ctx(), u = c.DB.user;
+    const prefs = { ...(c.user.prefs || {}), language: u.language, theme: u.theme, dash_layout: u.dash_layout || null, ingest_key: u.ingest_key || null, templates: c.DB.templates, connections: c.DB.connections || {}, sample_loaded: !!u.sample_loaded };
+    c.user.prefs = prefs; c.user.name = u.name; c.user.avatar = u.avatar;
+    await store.db.query('UPDATE users SET name = $2, avatar = $3, prefs = $4::jsonb WHERE id = $1', [u.id, u.name, u.avatar, JSON.stringify(prefs)]);
+  }
+
+  async function handle({ user, method, path: p, query, body }) {
+    const { projects, roles, order } = await store.forUser(user.id);
+    for (const id of order) settleInterrupted(projects[id]);
+    const prefs = user.prefs || {};
+    const view = userView(user);
+    if (!view.ingest_key) view.ingest_key = require('crypto').randomBytes(16).toString('hex');
+    const c = { user, store, auth, roles, touched: new Set(), level: method === 'GET' ? 'viewer' : 'editor', DB: { user: view, templates: Array.isArray(prefs.templates) ? prefs.templates : [], connections: prefs.connections || {}, projects, order: order.slice() } };
+    return als.run(c, async () => {
+      for (const [mth, re, fn] of routes) {
+        if (mth !== method) continue;
+        const m = p.match(re);
+        if (!m) continue;
+        const out = await fn(m, query || {}, body == null ? {} : body);
+        // a change is saved before the answer is sent, so "saved" on screen always means saved in the database
+        if (method !== 'GET') for (const P of c.touched) if (c.DB.projects[P.id]) await store.save(P);
+        return out;
+      }
+      throw err(404, 'Not found');
+    });
+  }
+
+  return { handle, FileResult, userView, saveUserFor: null, running, TODAY };
+};
+module.exports.FileResult = FileResult;

@@ -171,13 +171,13 @@
       <h2 style="margin:6px 0 4px">${mode === 'login' ? t('sign_in') : t('create_account')}</h2><p class="muted" style="margin:0 0 ${mode === 'register' ? '8px' : '16px'}">${t('auth_sub')}</p>${mode === 'register' ? `<p class="small" style="margin:0 0 16px;color:var(--primary-600);font-weight:600">${t('ob_trial_note')}</p>` : ''}
       <form id="authForm" class="col">
         ${mode === 'register' ? `<label class="f">${t('name')}<input type="text" name="name" required autocomplete="name"></label>` : ''}
-        <label class="f">${t('email')}<input type="email" name="email" required autocomplete="email" ${mode === 'login' ? 'value="pm@example.com"' : ''}></label>
-        <label class="f">${t('password')}<input type="password" name="password" required minlength="8" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}" ${mode === 'login' ? 'value="demo1234"' : ''}></label>
+        <label class="f">${t('email')}<input type="email" name="email" required autocomplete="email"></label>
+        <label class="f">${t('password')}<input type="password" name="password" required minlength="8" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}"></label>
         <div id="authErr" class="small" style="color:var(--danger);min-height:18px"></div>
         <button class="btn primary" style="justify-content:center">${mode === 'login' ? t('sign_in') : t('create_account')}</button>
       </form>
       <p class="small muted" style="margin:14px 0 0;text-align:center">${mode === 'login' ? `${t('no_account')} <a href="#/register">${t('create_account')}</a>` : `${t('have_account')} <a href="#/login">${t('sign_in')}</a>`}</p>
-      ${mode === 'login' ? `<p class="small faint" style="margin:10px 0 0;text-align:center">${t('demo_hint')}</p>` : ''}</div></div>`;
+</div></div>`;
     $('#authForm').onsubmit = async (e) => {
       e.preventDefault();
       const fd = Object.fromEntries(new FormData(e.target));
@@ -348,13 +348,15 @@
         <label class="f">${t('appearance')}<select id="acTheme"><option value="light" ${S.theme === 'light' ? 'selected' : ''}>${t('light')}</option><option value="dark" ${S.theme === 'dark' ? 'selected' : ''}>${t('dark')}</option></select></label></div>
         <div class="row mt"><button class="btn primary" id="acSave">${t('save')}</button></div></div>
       ${PM.onboard ? PM.onboard.accountCards() : ''}
+      ${PM.data ? PM.data.accountCard() : ''}
       <div class="card mt"><div class="card-head"><h3>${t('change_password')}</h3></div><div class="form-grid"><label class="f">${t('current_password')}<input type="password" id="pwCur" autocomplete="current-password"></label><label class="f">${t('new_password')}<input type="password" id="pwNew" autocomplete="new-password" minlength="8"></label></div><div class="row mt"><button class="btn" id="pwSave">${t('update_password')}</button></div></div>
       <div class="card mt"><div class="card-head"><h3>${t('cw_connections')}</h3></div><div class="small muted mb">${t('cw_connections_hint')}</div><div id="connHost" class="conn-list"></div></div>
       <div class="card mt"><div class="card-head"><h3>${t('ai_engine')}</h3></div><div class="row wrap"><span class="chip ${S.status.claude ? 'green' : 'amber'}">${S.status.claude ? `${t('ai_on')} (${esc(S.status.model)})` : t('ai_rules')}</span><span class="chip ${S.status.jira ? 'green' : ''}">Jira ${S.status.jira ? t('connected') : t('not_configured')}</span><span class="chip ${S.status.graph ? 'green' : ''}">Microsoft 365 ${S.status.graph ? t('connected') : t('not_configured')}</span></div><p class="small muted" style="margin-bottom:0">${t('ai_engine_hint')}</p></div></div>`;
     if ($('#connHost') && PM.connect) PM.connect.mountRows($('#connHost'));
     if (PM.onboard) PM.onboard.bindAccount($('#content'));
+    if (PM.data) PM.data.bindAccount($('#content'));
     $('#acSave').onclick = () => busy($('#acSave'), async () => { const pe = PM.onboard ? PM.onboard.savePhone($('#acPhone').value) : ''; if (pe) { toast(pe, 'err'); $('#acPhone').focus(); return; } await api('PUT', '/api/me', { name: $('#acName').value.trim() || u.name, language: $('#acLang').value, theme: $('#acTheme').value }).then((r) => setUser(r.user)); toast(t('saved'), 'ok'); route(); });
-    $('#pwSave').onclick = () => busy($('#pwSave'), async () => { await api('POST', '/api/me/password', { current: $('#pwCur').value, next: $('#pwNew').value }); $('#pwCur').value = ''; $('#pwNew').value = ''; toast(t('saved'), 'ok'); });
+    $('#pwSave').onclick = () => busy($('#pwSave'), async () => { const pr = await api('POST', '/api/me/password', { current: $('#pwCur').value, next: $('#pwNew').value }); if (pr && pr.token) { S.token = pr.token; localStorage.setItem('pm_token', pr.token); } $('#pwCur').value = ''; $('#pwNew').value = ''; toast(t('saved'), 'ok'); });
     $('#avFile').onchange = async (e) => { const f = e.target.files[0]; if (!f) return; const fd = new FormData(); fd.append('file', f); const r = await busy(null, () => api('POST', '/api/me/avatar', fd)); if (r) { setUser(r.user); toast(t('saved'), 'ok'); route(); } };
   };
 

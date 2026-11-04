@@ -309,12 +309,11 @@
       return Math.max(0, Math.min(100, Math.round(100 * (n - a + 86400000) / (b - a + 86400000))));
     };
     function exportCsv() {
-      const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+      const q = (v) => { let x = String(v ?? ''); if (/^[=+\-@\t\r]/.test(x) && !/^[-+]?\d+([.,]\d+)?$/.test(x)) x = "'" + x; return `"${x.replace(/"/g, '""')}"`; };
       const wb = g._wbsAll || new Map();
       const head = [t('g_wbs'), t('g_task'), t('start'), t('g_finish'), t('duration_days'), t('progress'), t('g_owner'), t('predecessors'), t('g_mode'), t('g_link_items')];
       const rows = g.tasks.slice().sort((a, b2) => String(wb.get(a.id)).localeCompare(String(wb.get(b2.id)), undefined, { numeric: true })).map((x) => [wb.get(x.id), x.name, x.start, x.finish, x.duration, x.progress, x.assignee, (x.deps || []).map((d) => wb.get(d.id)).join(' '), x.mode, g.linkIds(x).map((id) => (g.itemMap.get(id) || {}).title).join(' | ')]);
       const csv = '﻿' + [head, ...rows].map((r) => r.map(q).join(',')).join('\r\n');
-      if (window.DEMO_SEED) { modal({ title: t('g_csv'), size: 'lg', body: `<p class="small muted" style="margin-top:0">${t('msp_demo_note')}</p><textarea readonly style="width:100%;height:240px;font-family:monospace;font-size:var(--fs-micro)">${esc(csv)}</textarea>`, footer: `<button class="btn primary" data-close>${t('close')}</button>` }); return; }
       const a2 = document.createElement('a'); a2.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a2.download = `${(p.code || 'schedule').replace(/[^\w-]+/g, '_')}-schedule.csv`;
       document.body.appendChild(a2); a2.click(); a2.remove(); setTimeout(() => URL.revokeObjectURL(a2.href), 5000);
       toast(t('csv_exported'), 'ok');
@@ -322,7 +321,6 @@
 
     // ----- Microsoft Project exchange -----
     function msDialog() {
-      const demo = !!window.DEMO_SEED;
       const m = modal({
         title: t('msp_title'), size: 'lg',
         body: `<p class="muted" style="margin-top:0">${t('msp_intro')}</p>
@@ -356,10 +354,6 @@
       m.$('#mspExp').onclick = async () => {
         const r = await busy(m.$('#mspExp'), () => api('GET', `${base}/msproject/export?format=json`));
         if (!r) return;
-        if (demo) {
-          m.$('#mspXml').innerHTML = `<p class="small muted mt">${t('msp_demo_note')}</p><textarea readonly style="width:100%;height:160px;font-family:monospace;font-size:var(--fs-micro)">${esc(r.xml)}</textarea>`;
-          return;
-        }
         const a2 = document.createElement('a');
         a2.href = URL.createObjectURL(new Blob([r.xml], { type: 'application/xml' }));
         a2.download = r.filename;
