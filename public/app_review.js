@@ -6,7 +6,7 @@
   const FIELD_INPUT = { start_date: 'date', end_date: 'date', value: 'number', currency: 'text', client: 'text' };
 
   Object.assign(window.PM.I18N.en, {
-    rv_title: 'Review the extracted data', rv_sub: 'The AI filled in what it was sure about. Check the rest, then confirm, edit or ignore each item.',
+    rv_hide: 'Minimize', rv_show: 'Expand', rv_title: 'Review the extracted data', rv_sub: 'The AI filled in what it was sure about. Check the rest, then confirm, edit or ignore each item.',
     rv_extracted: 'Extracted', rv_filled: 'Filled by the AI', rv_toreview: 'Needs your review', rv_conf: 'Confidence',
     rv_start: 'Start guided review', rv_confirm_hi: 'Confirm {n} high confidence items', rv_done_all: 'Everything is reviewed. The project is up to date.',
     rv_f_review: 'Needs review', rv_f_conf: 'Confirmed', rv_f_ign: 'Ignored', rv_f_all: 'All',
@@ -22,7 +22,7 @@
     ap_eta_short: 'This can take a few minutes. You can keep working on other screens or projects. A pop-up will tell you when {name} is ready for review.', ap_keep: 'Keep working', ap_total: 'Overall progress',
   });
   Object.assign(window.PM.I18N.ar, {
-    rv_title: 'مراجعة البيانات المستخرجة', rv_sub: 'عبأ الذكاء الاصطناعي ما كان متأكدا منه. راجع الباقي ثم أكد كل عنصر أو عدله أو تجاهله.',
+    rv_hide: 'تصغير', rv_show: 'توسيع', rv_title: 'مراجعة البيانات المستخرجة', rv_sub: 'عبأ الذكاء الاصطناعي ما كان متأكدا منه. راجع الباقي ثم أكد كل عنصر أو عدله أو تجاهله.',
     rv_extracted: 'المستخرج', rv_filled: 'عبأه الذكاء الاصطناعي', rv_toreview: 'بانتظار مراجعتك', rv_conf: 'مستوى الثقة',
     rv_start: 'ابدأ المراجعة الموجهة', rv_confirm_hi: 'أكد {n} عنصر عالي الثقة', rv_done_all: 'تمت مراجعة كل شيء. المشروع محدث.',
     rv_f_review: 'بانتظار المراجعة', rv_f_conf: 'مؤكد', rv_f_ign: 'متجاهل', rv_f_all: 'الكل',
@@ -73,6 +73,9 @@
   // ---------- document reading status ----------
   const AN_KEY = { waiting: 'an_waiting', reading: 'an_reading', done: 'an_done', partial: 'an_partial', basic: 'an_basic', empty: 'an_empty', failed: 'an_failed' };
   const AN_CHIP = { waiting: '', reading: 'blue', done: 'green', partial: 'amber', basic: 'amber', empty: 'amber', failed: 'red' };
+  // Cards that can be minimized. The choice is remembered for the session, closed by default once the analysis is done.
+  const foldOpen = (key, dflt) => { try { const v = sessionStorage.getItem('fold_' + key); return v == null ? dflt : v === '1'; } catch (e) { return dflt; } };
+  const foldBtn = (key, open, label, extra) => `<button type="button" class="fold-btn" data-fold="${key}" aria-expanded="${open}" data-tip="${open ? t('rv_hide') : t('rv_show')}"><span class="fold-ic ${open ? 'open' : ''}">${icon('back')}</span><h3>${label}</h3>${extra || ''}</button>`;
   function analysisCard(an, analyzing, itemCount) {
     if (!an || !an.docs || !an.docs.length) return '';
     const issues = an.docs.some((d) => !['done'].includes(d.status));
@@ -86,7 +89,9 @@
     }).join('');
     const retry = !analyzing ? `<button class="btn sm primary" id="anRetry">${icon('refresh')}${t('reanalyze')}</button>` : '';
     const failed = an.failed ? `<div class="banner err mb">${icon('x')}<div class="grow"><b>${t('ap_failed')}</b><div class="small">${esc(an.failed.message)}</div></div></div>` : '';
-    return `<div class="card mb" id="anCard"><div class="card-head"><h3>${t('an_title')}</h3>${retry}</div>${failed}${rows}</div>`;
+    const open = analyzing || foldOpen('docs', false);
+    const bad = an.docs.filter((d) => d.status !== 'done').length;
+    return `<div class="card mb" id="anCard"><div class="card-head">${analyzing ? `<h3>${t('an_title')}</h3>` : foldBtn('docs', open, t('an_title'), bad ? `<span class="chip amber">${bad}</span>` : `<span class="chip green">${an.docs.length}</span>`)}${open ? retry : ''}</div><div class="fold-body" ${open ? '' : 'hidden'}>${failed}${rows}</div></div>`;
   }
   // Starts the analysis again for every document of the project and shows the progress page.
   async function retryAnalysis(btn, p) {
@@ -101,10 +106,11 @@
     const checks = (sy.checks || []).map((c) => `<div class="list-item"><div class="grow"><b>${esc(c.title)}</b><div class="small muted">${esc(c.detail)}</div></div><span class="chip ${CHECK_CHIP[c.status] || ''}">${t('chk_' + c.status)}</span></div>`).join('');
     const notes = (sy.notes || []).map((n) => `<li>${esc(n)}</li>`).join('');
     const basis = sy.anchor ? t('plan_anchor', { date: sy.anchor, basis: sy.anchor_basis || '' }) : t('plan_no_anchor');
-    return `<div class="card mb" id="planCard"><div class="card-head"><h3>${t('plan_title')}</h3>${proposedSched ? `<button class="btn primary" id="applySched">${icon('cal')}${t('apply_schedule', { n: proposedSched })}</button>` : ''}</div>
-      ${sy.summary ? `<p>${esc(sy.summary)}</p>` : ''}<div class="small muted mb">${basis}</div>
+    const open = foldOpen('plan', false);
+    return `<div class="card mb" id="planCard"><div class="card-head">${foldBtn('plan', open, t('plan_title'))}${proposedSched ? `<button class="btn primary" id="applySched">${icon('cal')}${t('apply_schedule', { n: proposedSched })}</button>` : ''}</div>
+      <div class="fold-body" ${open ? '' : 'hidden'}>${sy.summary ? `<p>${esc(sy.summary)}</p>` : ''}<div class="small muted mb">${basis}</div>
       ${notes ? `<div class="mb"><b>${t('plan_notes')}</b><ul class="small">${notes}</ul></div>` : ''}
-      ${checks ? `<div><b>${t('plan_checks')}</b>${checks}</div>` : ''}</div>`;
+      ${checks ? `<div><b>${t('plan_checks')}</b>${checks}</div>` : ''}</div></div>`;
   }
 
   // ---------- loading page shown while documents are analyzed ----------
@@ -287,6 +293,11 @@
     }
 
     function bind() {
+      $$('[data-fold]', root).forEach((b) => (b.onclick = () => {
+        const card = b.closest('.card'); const body = $('.fold-body', card); const open = body.hidden;
+        body.hidden = !open; b.setAttribute('aria-expanded', open); $('.fold-ic', b).classList.toggle('open', open);
+        try { sessionStorage.setItem('fold_' + b.dataset.fold, open ? '1' : '0'); } catch (e) { /* ignore */ }
+      }));
       $$('[data-kind]', root).forEach((b) => (b.onclick = () => { kind = b.dataset.kind; picked.clear(); sessionStorage.setItem('rv_kind', kind); draw(); }));
       $$('[data-status]', root).forEach((b) => (b.onclick = () => { status = b.dataset.status; sessionStorage.setItem('rv_f', status); draw(); }));
       const si = $('#rvSearch', root); if (si) si.oninput = () => { search = si.value; const pos = si.selectionStart; draw(); const n = $('#rvSearch', root); n.focus(); n.setSelectionRange(pos, pos); };

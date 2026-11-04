@@ -980,3 +980,14 @@ input.te-name { font-size: var(--fs-heading); font-weight: 650; padding: 10px 12
 @media (max-width: 600px) { .modal-foot { flex-wrap: wrap; } }
 .wz2 > .wz-finish { grid-column: 1 / -1; }
 .rv-stats.center .rv-stat span { overflow-wrap: anywhere; }
+
+/* minimizable cards */
+.fold-btn { display: inline-flex; align-items: center; gap: 10px; background: none; border: 0; padding: 0; color: var(--text); cursor: pointer; text-align: start; }
+.fold-btn h3 { margin: 0; }
+.fold-ic { display: inline-flex; transition: transform .2s var(--ease); transform: rotate(180deg); color: var(--muted); }
+.fold-ic.open { transform: rotate(-90deg); }
+[dir="rtl"] .fold-ic { transform: none; } [dir="rtl"] .fold-ic.open { transform: rotate(90deg); }
+.card:has(> .card-head .fold-btn):has(> .fold-body[hidden]) > .card-head { margin-bottom: 0; }
+.fold-body[hidden] { display: none; }
+.card:has(> .card-head .fold-btn) .fold-body:not([hidden]) { margin-top: 12px; }
+@media (prefers-reduced-motion: reduce) { .fold-ic { transition: none; } }
