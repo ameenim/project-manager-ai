@@ -43,7 +43,7 @@
       this.cal = { days: new Set([1, 2, 3, 4, 5]), holidays: new Set() };
       this.today = F(new Date());
       this.ui = { zoom: 'week', critical: true, baseline: true, compact: false, z: 1, selected: null, collapsed: new Set(), legend: true, filter: 'all', q: '', tab: 'task', ribbon: true };
-      try { const sv = localStorage.getItem('pm_rb_tab'); if (sv) this.ui.tab = sv; if (localStorage.getItem('pm_rb_open') === '0') this.ui.ribbon = false; } catch (e) { /* storage blocked */ }
+      try { const sv = localStorage.getItem('pm_rb_tab'); if (sv) this.ui.tab = sv; if (localStorage.getItem('pm_rb_open') === '0') this.ui.ribbon = false; const lw = Number(localStorage.getItem('pm_gt_leftw')); if (lw >= 160) this.ui.leftW = lw; } catch (e) { /* storage blocked */ }
       this.items = [];
       this.impactOn = true;
       this.canUndo = false;
@@ -79,11 +79,21 @@
     }
 
     // ---------- layout ----------
-    cols() {
+    baseCols() {
       const c = this.ui.compact;
       return c ? [['num', 'wbs', 58], ['md', 'mode', 34], ['nm', 'task', 250]] : [['num', 'wbs', 64], ['md', 'mode', 36], ['nm', 'task', 260], ['pd', 'pred', 104], ['dt', 'start', 102], ['du', 'dur', 48], ['dt', 'finish', 102], ['pc', 'pct', 48], ['ow', 'owner', 100]];
     }
-    leftW() { return this.cols().reduce((s, c) => s + c[2], 0); }
+    // The width of the table can be dragged. Extra width goes to the task column, and a narrower table clips the right hand columns.
+    cols() {
+      const base = this.baseCols().map((c) => c.slice());
+      if (this.ui.leftW) {
+        const nat = base.reduce((a, c) => a + c[2], 0), i = base.findIndex((c) => c[0] === 'nm');
+        base[i][2] = Math.max(120, base[i][2] + this.leftTarget() - nat);
+      }
+      return base;
+    }
+    leftTarget() { return Math.max(160, Math.min(Number(this.ui.leftW) || 0, Math.max(240, (this.scroll ? this.scroll.clientWidth : 1200) - 160))); }
+    leftW() { return this.ui.leftW ? this.leftTarget() : this.baseCols().reduce((s, c) => s + c[2], 0); }
 
     rows() {
       const ids = new Set(this.tasks.map((t) => t.id));
@@ -239,7 +249,8 @@
       this.root.addEventListener('click', (e) => this.onToolbar(e));
       // Ctrl or Cmd with the mouse wheel zooms the timeline around the pointer
       this.root.querySelector('.gt-scroll').addEventListener('wheel', (e) => { if (!(e.ctrlKey || e.metaKey)) return; e.preventDefault(); this.setZoom(this.ui.z * (e.deltaY < 0 ? 1.1 : 0.9)); }, { passive: false });
-      this.scroll.addEventListener('keydown', (e) => this.onKey(e));
+      this.scroll.addEventListener('keydown', (e) => { if (this.onSplitKey(e)) return; this.onKey(e); });
+      this.root.addEventListener('pointerdown', (e) => { if (e.target.closest && e.target.closest('.gt-split')) this.onSplitDown(e); });
       this.root.addEventListener('change', (e) => { const s = e.target.closest('select[data-g="level"]'); if (s) this.showLevel(Number(s.value)); const f = e.target.closest('select[data-g="filter"]'); if (f) this.setFilter(f.value); });
       this.root.addEventListener('input', (e) => { const q = e.target.closest('input[data-g="q"]'); if (q) { clearTimeout(this._qt); this._qt = setTimeout(() => this.setFilter(undefined, q.value), 180); } });
       this.root.addEventListener('dblclick', (e) => { const tb = e.target.closest('[data-tab]'); if (tb) { this.ui.ribbon = !this.ui.ribbon; try { localStorage.setItem('pm_rb_open', this.ui.ribbon ? '1' : '0'); } catch (er) { /* ignore */ } this.updateToolbar(); } });
@@ -374,10 +385,10 @@
       this.inner.style.height = `${HEAD + bodyH}px`;
       this.inner.innerHTML = `
         <div class="gt-head" style="height:${HEAD}px">
-          <div class="gt-head-left" style="width:${LW}px;height:${HEAD}px">${headLeft}</div>
+          <div class="gt-head-left" style="width:${LW}px;height:${HEAD}px">${headLeft}${this.splitHtml()}</div>
           <div class="gt-head-right" style="width:${totalW}px"><div class="gt-h1">${h1}</div><div class="gt-h2">${h2}</div></div>
         </div>
-        <div class="gt-left" style="width:${LW}px;height:${bodyH}px">${dl}${cells}</div>
+        <div class="gt-left" style="width:${LW}px;height:${bodyH}px">${dl}${cells}${this.splitHtml()}</div>
         <div class="gt-layer" style="left:${LW}px;top:${HEAD}px;width:${totalW}px;height:${bodyH}px">${layer}${lines}${bars}</div>`;
       this.layer = this.inner.querySelector('.gt-layer');
       this.svg = this.inner.querySelector('.gt-svg');
@@ -593,6 +604,41 @@
     legend() {
       const L = (c, k) => `<span><i style="background:var(${c})"></i>${this.t(k)}</span>`;
       this.legendEl.innerHTML = `${L('--g-todo', 'g_l_todo')}${L('--g-prog', 'g_l_prog')}${L('--g-done', 'g_l_done')}${L('--g-late', 'g_l_late')}${L('--g-ms', 'g_l_ms')}${L('--g-sum', 'g_l_sum')}<span><i style="background:transparent;outline:2px solid var(--g-crit)"></i>${this.t('g_l_crit')}</span><span><i style="background:var(--faint);height:4px;vertical-align:2px"></i>${this.t('g_l_base')}</span><span><i class="gt-lg-manual"></i>${this.t('g_mode_manual')}</span><span><i style="background:var(--g-today);width:3px"></i>${this.t('g_today')}</span>`;
+    }
+
+    // ---------- draggable divider between the table and the timeline ----------
+    splitHtml() { return `<div class="gt-split" role="separator" aria-orientation="vertical" tabindex="0" title="${esc(this.t('g_split'))}" aria-label="${esc(this.t('g_split'))}"></div>`; }
+    setLeftW(w, save) {
+      this.ui.leftW = w == null ? null : Math.round(w);
+      if (save) { try { if (w == null) localStorage.removeItem('pm_gt_leftw'); else localStorage.setItem('pm_gt_leftw', String(this.ui.leftW)); } catch (e) { /* storage blocked */ } }
+      this.render();
+    }
+    onSplitDown(e) {
+      const h = e.target.closest('.gt-split'); if (!h || e.button > 0) return;
+      e.preventDefault();
+      const now = Date.now();
+      if (this._splitAt && now - this._splitAt < 400) { this._splitAt = 0; this.setLeftW(null, true); return; } // double click or double tap resets
+      this._splitAt = now;
+      const rtl = getComputedStyle(this.root).direction === 'rtl';
+      const x0 = e.clientX, w0 = this.LW; let raf = 0, next = w0;
+      this.root.classList.add('gt-resizing'); document.body.style.cursor = 'col-resize';
+      let moved = false;
+      const move = (ev) => { moved = true; next = w0 + (rtl ? x0 - ev.clientX : ev.clientX - x0); if (!raf) raf = requestAnimationFrame(() => { raf = 0; this.ui.leftW = next; this.render(); }); };
+      const up = () => {
+        window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+        this.root.classList.remove('gt-resizing'); document.body.style.cursor = '';
+        if (raf) cancelAnimationFrame(raf);
+        if (!moved) return;
+        this.setLeftW(Math.max(160, Math.min(next, Math.max(240, this.scroll.clientWidth - 160))), true);
+      };
+      window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+    }
+    onSplitKey(e) {
+      if (!e.target.closest || !e.target.closest('.gt-split')) return false;
+      const step = e.shiftKey ? 80 : 20, rtl = getComputedStyle(this.root).direction === 'rtl';
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { const d = (e.key === 'ArrowRight' ? 1 : -1) * (rtl ? -1 : 1); this.setLeftW(Math.max(160, this.LW + d * step), true); const hh = this.root.querySelector('.gt-left .gt-split'); if (hh) hh.focus(); e.preventDefault(); return true; }
+      if (e.key === 'Home' || e.key === 'Enter') { this.setLeftW(null, true); e.preventDefault(); return true; }
+      return false;
     }
 
     scrollToDate(d, center) {
