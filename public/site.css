@@ -672,3 +672,18 @@ img, svg, video { max-width: 100%; }
   .show-copy .ticks { align-items: center; }
   .show-copy .ticks li { justify-content: center; text-align: start; }
 }
+
+/* ===== QA fixes: contrast and touch targets ===== */
+.m-cell .lab { opacity: 1; }
+.m-cell.lo .lab { color: color-mix(in srgb, var(--success) 72%, var(--text)); }
+.m-cell.md .lab { color: color-mix(in srgb, var(--warning) 72%, var(--text)); }
+.m-cell.hi .lab { color: color-mix(in srgb, var(--danger) 72%, var(--text)); }
+.mini-btn { min-height: 32px; padding-inline: 12px; }
+@media (pointer: coarse) {
+  .mini-btn { min-height: 40px; padding-inline: 14px; }
+  .brand { min-height: 44px; }
+  .q button, .tabs button { min-height: 44px; }
+}
+.chip.info { color: color-mix(in srgb, var(--primary) 78%, var(--text)); }
+.site-footer nav a { display: inline-block; padding: 6px 4px; }
+.fmt .ext, .nav a.active { color: color-mix(in srgb, var(--primary) 78%, var(--text)); }

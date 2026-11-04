@@ -280,6 +280,26 @@ http.createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/srv/ai/status') return send(res, 200, { configured: !!process.env.ANTHROPIC_API_KEY, model: MODEL });
   if (url.pathname.startsWith('/srv/')) return send(res, 404, { error: 'Not found' });
 
+  // SEO routes: origin comes from SITE_URL or the request host, so it works on any domain.
+  const proto = String(req.headers['x-forwarded-proto'] || 'http').split(',')[0].trim();
+  const origin = (process.env.SITE_URL || (proto + '://' + (req.headers['x-forwarded-host'] || req.headers.host || 'localhost'))).replace(/\/+$/, '');
+  if (req.method === 'GET' && url.pathname === '/robots.txt') {
+    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-cache' });
+    return res.end('User-agent: *\nAllow: /\nDisallow: /app.html\nDisallow: /srv/\n\nSitemap: ' + origin + '/sitemap.xml\n');
+  }
+  if (req.method === 'GET' && url.pathname === '/sitemap.xml') {
+    res.writeHead(200, { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'no-cache' });
+    return res.end('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>' + origin + '/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>\n</urlset>\n');
+  }
+  if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
+    return fs.readFile(path.join(ROOT, 'index.html'), 'utf8', (err, html) => {
+      if (err) { res.writeHead(404, { 'Content-Type': 'text/plain' }); return res.end('Not found'); }
+      const tags = '<link rel="canonical" href="' + origin + '/">\n<meta property="og:url" content="' + origin + '/">\n<meta property="og:image" content="' + origin + '/brand/mark-512.png">\n<meta name="twitter:image" content="' + origin + '/brand/mark-512.png">\n';
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
+      res.end(html.replace('</head>', tags + '</head>'));
+    });
+  }
+
   const urlPath = decodeURIComponent(url.pathname);
   const file = path.normalize(path.join(ROOT, urlPath === '/' ? 'index.html' : urlPath));
   if (!file.startsWith(ROOT)) { res.writeHead(403); return res.end('Forbidden'); }
