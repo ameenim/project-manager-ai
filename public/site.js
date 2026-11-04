@@ -303,7 +303,9 @@
       }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, status: r.status, d: d }; }); })
         .then(function (res) {
           if (!res.ok) {
-            var msg = (res.d && res.d.error) || 'Something went wrong. Try again.';
+            var msg = (res.d && res.d.error) || (res.status === 404 || res.status === 405 || res.status === 501
+              ? 'The server is running an older version of the app. Stop and run the app again, then retry.'
+              : 'The server did not answer correctly (HTTP ' + res.status + '). Check that the app is running and the database is connected, then retry.');
             if (res.status === 409) fieldErr(emailF, msg); else fieldErr(passF, msg);
             return;
           }
