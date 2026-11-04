@@ -133,3 +133,31 @@ test('generated reports download as Word, Excel, PowerPoint and Markdown', async
   const other = await s.user();
   assert.equal((await s.call('GET', `/api/generated/${id}/docx`, null, other.token)).status, 404);
 });
+
+test('report folders, formats and names work and respect roles', async () => {
+  const mgr = await s.user(), vw = await s.user(); const p = await ready(mgr, 'Folders');
+  await s.call('POST', `/api/projects/${p.id}/members`, { email: vw.email, role: 'viewer' }, mgr.token);
+  const f = await s.call('POST', `/api/projects/${p.id}/folders`, { name: 'Weekly' }, mgr.token);
+  assert.equal(f.status, 200);
+  assert.equal((await s.call('POST', `/api/projects/${p.id}/folders`, { name: 'weekly' }, mgr.token)).status, 409);
+  assert.equal((await s.call('POST', `/api/projects/${p.id}/folders`, { name: 'Nope' }, vw.token)).status, 403);
+  const g = await s.call('POST', `/api/projects/${p.id}/generate`, { type: 'progress_weekly', format: 'pptx', title: '  My   report ', folder_id: f.data.folder.id }, mgr.token);
+  assert.equal(g.status, 200, JSON.stringify(g.data));
+  assert.equal(g.data.generated.format, 'pptx'); assert.equal(g.data.generated.title, 'My report'); assert.ok(g.data.generated.meta.project); assert.ok(g.data.generated.visuals, 'chart data is stored with the document');
+  assert.equal((await s.call('GET', `/api/projects/${p.id}/folders`, null, vw.token)).data.folders[0].count, 1);
+  assert.equal((await s.call('PUT', `/api/generated/${g.data.generated.id}`, { title: 'x' }, vw.token)).status, 403);
+  assert.equal((await s.call('PUT', `/api/folders/${f.data.folder.id}`, { name: 'Renamed' }, vw.token)).status, 403);
+  assert.equal((await s.call('PUT', `/api/generated/${g.data.generated.id}`, { folder_id: 999 }, mgr.token)).status, 404);
+  const del = await s.call('DELETE', `/api/folders/${f.data.folder.id}`, null, mgr.token);
+  assert.deepEqual(del.data.moved, [g.data.generated.id]);
+  assert.equal((await s.call('GET', `/api/projects/${p.id}/generated`, null, mgr.token)).data.generated.length, 1, 'documents are kept when a folder is deleted');
+  const other = await s.user();
+  assert.equal((await s.call('DELETE', `/api/folders/${f.data.folder.id}`, null, other.token)).status, 404);
+  // folders and their documents come back through a backup
+  const g2 = await s.call('POST', `/api/projects/${p.id}/folders`, { name: 'Keep' }, mgr.token);
+  await s.call('POST', `/api/projects/${p.id}/generate`, { type: 'progress_weekly', folder_id: g2.data.folder.id }, mgr.token);
+  const backup = JSON.parse((await s.call('GET', `/api/projects/${p.id}/export`, null, mgr.token)).buf.toString());
+  const im = await s.call('POST', '/api/projects/import', backup, mgr.token);
+  const folders = (await s.call('GET', `/api/projects/${im.data.imported[0].id}/folders`, null, mgr.token)).data.folders;
+  assert.equal(folders.length, 1); assert.equal(folders[0].count, 1);
+});
