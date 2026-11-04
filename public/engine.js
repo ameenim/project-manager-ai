@@ -1172,9 +1172,25 @@ const aiReady = (typeof window !== 'undefined' && typeof fetch === 'function')
   : Promise.resolve();
 const hasKey = () => aiState.configured;
 
-async function claudeRaw(system, user, maxTokens = 4000) {
-  await aiReady;
-  if (!aiState.configured) return null;
+// Only a few AI requests run at the same time, so a big project does not flood the server or the browser.
+const AI_SLOTS = 5;
+let aiActive = 0;
+const aiQueue = [];
+const aiStats = { active: 0, queued: 0, done: 0 };
+function takeSlot() {
+  return new Promise((ok) => {
+    const go = () => { aiActive++; aiStats.active = aiActive; ok(); };
+    if (aiActive < AI_SLOTS) go(); else { aiQueue.push(go); aiStats.queued = aiQueue.length; }
+  });
+}
+function freeSlot() {
+  aiActive--; aiStats.active = aiActive; aiStats.done++;
+  const n = aiQueue.shift(); aiStats.queued = aiQueue.length;
+  if (n) n();
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function claudeOnce(system, user, maxTokens) {
   let res;
   try {
     res = await fetch('/srv/ai', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ system, user, max_tokens: maxTokens }), signal: AbortSignal.timeout(660000) });
@@ -1183,9 +1199,27 @@ async function claudeRaw(system, user, maxTokens = 4000) {
     throw Object.assign(new Error('Could not reach the server'), { code: 'network' });
   }
   let j = null;
-  try { j = await res.json(); } catch (e) { /* not json */ }
-  if (!res.ok || (j && j.failed)) throw Object.assign(new Error((j && j.error) || `Claude request failed (${res.status})`), { code: (j && j.code) || 'upstream' });
+  try { j = await res.json(); } catch (e) { /* not json, or the connection dropped while the answer was coming */ if (res.ok) throw Object.assign(new Error('The connection dropped before the answer arrived'), { code: 'network' }); }
+  if (!res.ok || (j && j.failed)) throw Object.assign(new Error((j && j.error) || `Claude request failed (${res.status})`), { code: (j && j.code) || (res.status >= 500 ? 'network' : 'upstream') });
   return { text: (j && j.text) || '', stop: (j && j.stop_reason) || null };
+}
+
+// One call with automatic retries. A restart of the server, a dropped connection or a busy moment is retried quietly.
+async function claudeRaw(system, user, maxTokens = 4000) {
+  await aiReady;
+  if (!aiState.configured) return null;
+  await takeSlot();
+  try {
+    const waits = [2000, 6000, 15000];
+    for (let attempt = 0; ; attempt++) {
+      try { return await claudeOnce(system, user, maxTokens); }
+      catch (e) {
+        const again = ['network', 'rate'].includes(e.code) || (e.code === 'upstream' && attempt < 1);
+        if (!again || attempt >= waits.length) throw e;
+        await sleep(waits[attempt]);
+      }
+    }
+  } finally { freeSlot(); }
 }
 
 async function claude(system, user, maxTokens = 4000) {
@@ -1908,7 +1942,7 @@ Use only ids from the lists. A BOQ, delivery note, handover or acceptance record
   return { updates, engine: 'rules' };
 }
 
-module.exports = { hasKey, claude, claudeJSON, splitParts, quoteFound, normQuote, ready: () => aiReady, extractText, classify, analyzeDocument, runChecks, synthesizeSchedule, weeksToDates, interpretMessage, interpretEvidence, similarity, tokens, parseDate, parseAmount, findCurrency, MODEL };
+module.exports = { aiStats, hasKey, claude, claudeJSON, splitParts, quoteFound, normQuote, ready: () => aiReady, extractText, classify, analyzeDocument, runChecks, synthesizeSchedule, weeksToDates, interpretMessage, interpretEvidence, similarity, tokens, parseDate, parseAmount, findCurrency, MODEL };
 ;return module.exports})();
 window.__Reports=(function(){var module={exports:{}};var exports=module.exports;var process={env:{}};var require=function(n){if(n==='./schedule')return window.__Sched;if(n==='./ai')return window.__AI;if(n==='docx')return new Proxy({},{get:function(){return function(){}}});return {}};
 // Report and document generation: default and custom templates, progress reports

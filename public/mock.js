@@ -223,7 +223,10 @@
       let dur = d.duration_days || 1;
       if (s0 && e0) dur = Math.max(1, S.countWork(s0, e0, c));
       if (d.level === 'milestone') dur = 1;
-      const topName = (nm) => [...P.tasks].reverse().find((t) => similarity(t.name, nm) >= 0.9 && similarity(nm, t.name) >= 0.9);
+      // Tasks are matched by their exact name. A looser match would treat "UAT planning" as the phase "UAT".
+      const nrm = (x) => String(x || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+      const sameName = (a, b) => nrm(a) === nrm(b) || AI.tokens(a).sort().join(' ') === AI.tokens(b).sort().join(' ') && AI.tokens(a).length > 0;
+      const topName = (nm) => [...P.tasks].reverse().find((t) => sameName(t.name, nm));
       const mkTask = (o) => { const t = { id: nid(), parent_id: null, position: P.tasks.reduce((m, x) => Math.max(m, x.position ?? 0), 0) + 1, name: '', start, duration: 1, progress: 0, assignee: null, deps: [], deliverable_id: null, b_start: null, b_end: null, notes: null, is_milestone: 0, jira_key: null, color: null, ...o }; P.tasks.push(t); return t; };
       let parent = null;
       if (d.phase) parent = topName(d.phase) || mkTask({ name: d.phase, duration: 1 });
@@ -232,7 +235,7 @@
       if (dupe) { t.start = start; t.duration = dur; }
       const deps = [];
       for (const nm of d.depends_on || []) {
-        const pred = P.tasks.find((x) => x.id !== t.id && similarity(x.name, nm) >= 0.85 && similarity(nm, x.name) >= 0.85);
+        const pred = [...P.tasks].reverse().find((x) => x.id !== t.id && sameName(x.name, nm));
         if (pred && !deps.some((x) => x.id === pred.id) && !wouldLoop(P.tasks, t.id, [{ id: pred.id }])) deps.push({ id: pred.id, lag: 0, type: 'FS' });
       }
       t.deps = deps;
@@ -408,15 +411,42 @@
     if (!st) return;
     st.status = status;
     if (detail != null) st.detail = detail;
-    if (status === 'active') { st.started = Date.now(); P.analysis.stage = key; }
+    if (status === 'active') { st.started = Date.now(); P.analysis.stage = key; st.frac = 0.1; }
+    P.analysis.pct = progressOf(P);
+    announce(P, 'progress');
+  }
+  // How long the run will take, shown to the person so they can keep working meanwhile.
+  function etaFor(chars, docs) {
+    const lo = Math.max(2, Math.round(chars / 45000) + 2);
+    return { low: lo, high: lo + 3, docs, chars };
   }
   const refreshConfidence = (P) => { P.analysis.confidence = Pipe.confidence(P.items, P.analysis.docs); };
+  // Share of the run each stage stands for. The Analyzing and Response Generation stages take most of the time.
+  const STAGE_W = { ingest: 4, retrieve: 2, context: 8, analyze: 46, generate: 34, fill: 6 };
+  function progressOf(P) {
+    const run = P.analysis; if (!run) return 0;
+    let sum = 0;
+    for (const st of run.stages) {
+      const w = STAGE_W[st.key] || 0;
+      if (st.status === 'done' || st.status === 'skipped' || st.status === 'failed') sum += w;
+      else if (st.status === 'active') sum += w * Math.max(0, Math.min(0.95, st.frac || 0.1));
+    }
+    return Math.min(99, Math.round(sum));
+  }
+  // The rest of the app listens to this to show a progress chip and a ready for review pop-up on any screen.
+  function announce(P, type) {
+    try {
+      const run = P.analysis || {};
+      window.dispatchEvent(new CustomEvent('pm:analysis', { detail: { type, id: P.p.id, name: P.p.name, pct: type === 'done' ? 100 : progressOf(P), stage: run.stage, eta: run.eta || null, failed: !!run.failed, warning: run.warning || null, filled: run.filled || null } }));
+    } catch (e) { /* notifications are best effort */ }
+  }
   const countIn = (c) => c.deliverable + c.requirement + c.risk + c.milestone + c.schedule + c.field;
 
   async function analyzeDocs(P, docs) {
     const run = { at: nowTs(), finished: false, show_summary: false, stage: 'ingest', stages: STAGES.map(([key, label]) => ({ key, label, status: 'waiting', detail: '' })), confidence: { overall: null, by: {}, coverage: null }, filled: null, docs: docs.map((d) => ({ id: d.id, filename: d.filename, status: 'waiting', message: '', counts: null, coverage: null, engine: null, progress: '', role: null, role_label: null })) };
     P.analysis = run;
     P.p.analyzing = 1;
+    announce(P, 'start');
     const rowOf = (d) => run.docs.find((r) => r.id === d.id);
     try {
       await ensurePipe();
@@ -443,6 +473,7 @@
         else st.status = 'waiting';
       }
       const readable = docs.filter((d) => (P.texts[d.id] || '').trim());
+      run.eta = etaFor(readable.reduce((a, d) => a + (d.chars || 0), 0), readable.length);
       setStage(P, 'ingest', 'done', `${readable.length} of ${docs.length} files read, ${readable.reduce((a, d) => a + (d.chars || 0), 0).toLocaleString('en-US')} characters`);
 
       // 2. Retrieval: decide what each document may supply and pull out the passages that matter
@@ -478,10 +509,10 @@
       // 4. Analyzing: read every part of every document with the prompt that fits its role
       setStage(P, 'analyze', 'active', 'Reading every page');
       let docNo = 0;
-      for (const doc of readable) {
+      // Every document is read at the same time. The shared request limit keeps the load sensible.
+      await Promise.all(readable.map(async (doc) => {
         const st = rowOf(doc);
         const text = P.texts[doc.id];
-        docNo++;
         st.status = 'reading';
         try {
           let a, scope = Pipe.SCOPE[doc.role] || Pipe.SCOPE.other;
@@ -490,7 +521,7 @@
             a = { engine: 'msp', fields: [m.start ? { field: 'start_date', value: m.start, confidence: 0.98, quote: m.items[0].quote } : null, m.end ? { field: 'end_date', value: m.end, confidence: 0.98, quote: m.items[m.items.length - 1].quote } : null].filter(Boolean), schedule: m.items, deliverables: [], requirements: [], milestones: [], coverage: { chars_total: text.length, chars_sent: text.length, parts: 1, parts_read: 1, parts_failed: 0, dropped_no_quote: 0 } };
             doc.summary = `Microsoft Project schedule with ${m.items.length} tasks, ${m.start} to ${m.end}.`;
           } else if (aiOn && !aiError) {
-            a = await Pipe.extractDoc({ text, filename: doc.filename, role: doc.role, onProgress: (p) => { st.progress = `part ${p.done} of ${p.total}`; } });
+            a = await Pipe.extractDoc({ text, filename: doc.filename, role: doc.role, onProgress: (p) => { st.progress = `part ${p.done} of ${p.total}`; st.pd = p.done; st.pt = p.total; const tot = run.docs.reduce((n, d) => n + (d.pt || 1), 0); const dn = run.docs.reduce((n, d) => n + (d.status === 'done' || d.status === 'partial' || d.status === 'failed' ? (d.pt || 1) : (d.pd || 0)), 0); const as = run.stages[3]; as.frac = tot ? dn / tot : 0.1; run.pct = progressOf(P); announce(P, 'progress'); } });
           } else {
             a = await AI.analyzeDocument({ text, filename: doc.filename, onProgress: () => {} });
             const keep = { deliverables: 'deliverables', requirements: 'requirements', milestones: 'payments', schedule: 'schedule', fields: 'info' };
@@ -507,7 +538,7 @@
           else if (!found && !c.merged) { st.status = 'empty'; st.message = 'The document was read in full but nothing it is allowed to supply was found in it.'; }
           else st.status = 'done';
           refreshConfidence(P);
-          run.stages[3].detail = `Document ${docNo} of ${readable.length}: ${P.items.filter((i) => i.status !== 'ignored').length} items found so far`;
+          docNo++; run.stages[3].detail = `Document ${docNo} of ${readable.length}: ${P.items.filter((i) => i.status !== 'ignored').length} items found so far`;
           audit(P, 'AI', 'document_analyzed', { summary: `Analyzed ${doc.filename} as ${Pipe.ROLE_LABEL[doc.role]}: ${c.deliverable} deliverables, ${c.requirement} requirements, ${c.milestone} payment milestones, ${c.schedule} schedule lines${a.coverage ? `. Read ${a.coverage.chars_sent.toLocaleString('en-US')} of ${a.coverage.chars_total.toLocaleString('en-US')} characters` : ''}` });
         } catch (e) {
           console.error(e);
@@ -515,11 +546,11 @@
           st.message = e.code && AI_REASON[e.code] ? AI_REASON[e.code] : 'Something went wrong while analyzing this file. Use Reanalyze to try again.';
           audit(P, 'AI', 'document_failed', { summary: `Analysis failed for ${doc.filename}` });
         }
-      }
+      }));
       setStage(P, 'analyze', 'done', `${P.items.filter((i) => i.status !== 'ignored').length} items extracted from ${readable.length} documents`);
 
       // 5. Response generation: one schedule, project risks, consistency checks
-      setStage(P, 'generate', 'active', 'Building the schedule');
+      setStage(P, 'generate', 'active', 'Building the schedule and analyzing risks');
       try { if (readable.length) await reconcile(P); } catch (e) { console.error('reconcile failed', e); }
       refreshConfidence(P);
       setStage(P, 'generate', 'done', P.analysis.synthesis ? `${P.analysis.synthesis.checks.length} checks run, ${P.analysis.synthesis.phases} phases planned` : 'Checks run');
@@ -542,7 +573,9 @@
       P.p.analyzing = 0;
       run.finished = true;
       run.show_summary = true;
+      run.pct = 100;
       for (const st of run.stages) if (st.status === 'active') st.status = 'done'; else if (st.status === 'waiting') st.status = 'skipped';
+      announce(P, 'done');
     }
   }
 
@@ -593,10 +626,10 @@
     for (const i of P.items) if (i.data && i.data.superseded && i.status === 'ignored') { i.status = 'proposed'; delete i.data.superseded; }
     const hasSchedFile = docs.some((d) => d.role === 'schedule');
     // The schedule and the risk analysis are independent, so both AI calls run at the same time.
-    const synP = hasSchedFile ? Promise.resolve(null) : AI.synthesizeSchedule({ docs, items: view(), anchor, project: proj() }).catch((e) => ({ failed: true, reason: (e && e.message) || 'unknown', plan: [], notes: [], summary: '' }));
+    const gen = P.analysis.stages.find((x) => x.key === 'generate');
+    const synP = hasSchedFile ? Promise.resolve(null) : Pipe.buildSchedule({ docs, items: view(), anchor, project: proj(), texts: P.texts, onProgress: (label, frac) => { gen.detail = label; if (frac != null) gen.frac = frac; P.analysis.pct = progressOf(P); announce(P, 'progress'); } }).catch((e) => ({ failed: true, reason: (e && e.message) || 'unknown', plan: [], notes: [], summary: '' }));
     let riskP = Promise.resolve(null);
     if (AI.hasKey() && docs.length) {
-      P.analysis.stages.find((x) => x.key === 'generate').detail = 'Building the schedule and analyzing risks';
       const preChecks = AI.runChecks({ items: view(), project: proj(), docs: (P.analysis && P.analysis.docs) || [] });
       const rdocs = docs.map((d) => ({ id: d.id, filename: d.filename, role: d.role, summary: d.summary }));
       riskP = Pipe.analyzeRisks({ project: proj(), docs: rdocs, items: view(), text: P.texts, checks: preChecks }).catch((e) => { console.error('risk analysis', e); return []; });

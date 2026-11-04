@@ -179,7 +179,7 @@ Rate probability and impact honestly. A payment worth a third of the contract he
   async function extractDoc({ text, filename, role, onProgress }) {
     const allowed = SCOPE[role] || SCOPE.other;
     const system = buildPrompt(role);
-    const parts = AI.splitParts(text);
+    const parts = AI.splitParts(text, 22000);
     const results = new Array(parts.length);
     let next = 0, done = 0, lastError = null, lastCode = null;
     const worker = async () => {
@@ -192,7 +192,7 @@ Rate probability and impact honestly. A payment worth a third of the contract he
         if (onProgress) onProgress({ done, total: parts.length });
       }
     };
-    await Promise.all(Array.from({ length: Math.min(3, parts.length) }, worker));
+    await Promise.all(Array.from({ length: Math.min(6, parts.length) }, worker));
     const out = { fields: [], deliverables: [], requirements: [], milestones: [], schedule: [], risks: [] };
     let ok = 0, failed = 0, dropped = 0, charsSent = 0;
     const seen = new Set();
@@ -274,6 +274,167 @@ Rate probability and impact honestly. A payment worth a third of the contract he
     return { items, name: parsed.name, start: dates[0] || null, end: dates[dates.length - 1] || null, warnings: parsed.warnings };
   }
 
+  // ---------- schedule builder ----------
+  // The plan is built in two steps. First an outline of phases and the delivery approach, then every phase is expanded
+  // into detailed tasks at the same time. Code then places the tasks on working days, so dates and links stay consistent.
+  const PLAN_HEAD = /project management|methodolog|delivery (approach|model|plan)|implementation (approach|plan)|approach|governance|work ?plan|project plan|timeline|schedule|phase|sprint|agile|waterfall|scope of (work|services)|deliverable|testing|uat|acceptance|training|deployment|go.?live|handover|hand over|hypercare|support|maintenance|raci|roles and responsibilities|communication|quality|change (control|management)|reporting|resources|team structure|milestone|cutover|migration|onboarding|kick.?off|transition/i;
+  const PLAN_TOP = /project management|methodolog|delivery (approach|model|plan)|implementation (approach|plan)|governance|work ?plan|project plan|timeline|phase|sprint/i;
+  // Pulls the sections of a document that describe how the work is delivered.
+  function planSections(text, limit) {
+    const lines = String(text).split('\n');
+    const heads = [];
+    let pos = 0;
+    lines.forEach((l, i) => {
+      const t = l.trim();
+      if (t.length >= 4 && t.length <= 100 && /^(#{1,3}\s|\d+(\.\d+){0,3}\.?\s+[A-Z])/.test(t) && !/\.{4,}/.test(t) && !/\|/.test(t)) heads.push({ i, pos, t });
+      pos += l.length + 1;
+    });
+    const secs = [];
+    heads.forEach((h, k) => {
+      const end = k + 1 < heads.length ? heads[k + 1].pos : String(text).length;
+      const body = String(text).slice(h.pos, end).trim();
+      if (body.length < 120 || (body.match(/\.{4,}/g) || []).length > 3) return;
+      if (!PLAN_HEAD.test(h.t)) return;
+      secs.push({ head: h.t, body: body.slice(0, 4200), top: PLAN_TOP.test(h.t) ? 1 : 0 });
+    });
+    secs.sort((a, b) => b.top - a.top);
+    const out = []; let size = 0;
+    for (const x of secs) { if (size + x.body.length > limit) continue; out.push(x); size += x.body.length; }
+    return out;
+  }
+
+  const OUTLINE_SYSTEM = `You are a principal project manager with more than twenty years of delivery experience on government and enterprise technology programs. You hold PMP and PRINCE2 qualifications and work to PMBOK and ISO 21502. You are planning the delivery of a project from its proposal, award and price documents before the kick off.
+
+You receive numbered items already extracted from the documents (phases, tasks, deliverables with prices, payment milestones) and the sections of the documents that describe scope, methodology, project management and governance. Produce the OUTLINE of the delivery plan only. Another step will expand every phase into tasks.
+
+Decide the delivery methodology from the documents: agile, waterfall, hybrid or unknown. Say what in the text shows it, such as sprints, iterations, stage gates or a work breakdown. If the text gives a sprint length, environments, ceremonies, governance bodies or reporting rhythm, record them.
+
+Return JSON: {"summary":"3 to 5 sentences: what is delivered, for whom, the contract value, the duration and the main risk to the dates","methodology":{"approach":"agile|waterfall|hybrid|unknown","basis":"stated|implied","evidence":"one sentence","cadence":"for example two week sprints or null","environments":["development","staging","production"],"governance":["weekly status meeting","monthly steering committee"]},"phases":[{"name":"","objective":"one sentence","start_week":number or null,"end_week":number or null,"duration_days":number,"basis":"stated|implied","refs":[item numbers],"deliverables":["deliverable names from the items that finish in this phase"],"activities":["key activities the documents state for this phase"],"gates":["client approvals and acceptance gates in this phase"],"recurring":false}],"notes":["one line per conflict, gap or assumption the project manager must resolve"]}
+
+Rules. Use 4 to 9 phases in delivery order. Keep every stated phase and its weeks. Add the phases a real project needs that the documents leave out, such as mobilization and contract setup, requirements and design, testing and acceptance, go live and hypercare, training and handover, closure. Give the last phase the name Project governance and reporting with recurring true. It holds the weekly and monthly meetings and the reports. Every phase cites at least one item in refs, so cite the deliverable or task it supports. A phase with week numbers keeps them, week 1 starts on the anchor date. Never invent calendar dates. Estimate duration_days as working days. Documents rank: award letter, then financial offer, then technical proposal. Where documents disagree schedule the higher ranked one and note it. Write plain sentences without dashes or semicolons.`;
+
+  const PHASE_SYSTEM = `You are a principal project manager with more than twenty years of delivery experience on government and enterprise technology programs. You are expanding ONE phase of a delivery plan into the detailed task list you would enter in MS Project.
+
+You receive the methodology, the outline of this phase, the other phases for context, the extracted items and the sections of the documents that describe scope and project management. Work to the delivery methodology. For agile work include backlog refinement, sprint planning, each sprint build, sprint demo and review, retrospectives, a release plan and release reviews. For waterfall work include requirements, design, build, integration, test and acceptance. Always add the steps a real project needs even when the documents do not list them: draft and prepare each deliverable, internal quality review, client review, client approval or sign off as its own line, the invoice trigger when a payment depends on an approval, environment setup, security and architecture reviews, system and integration testing, performance and security testing, UAT planning, UAT cycles, defect fixing, CAB or change approval, cutover plan, deployment rehearsal, deployment, go live verification, hypercare, training, handover, lessons learned and final acceptance. Use only the ones that belong in this phase.
+
+Return JSON: {"rows":[{"name":"","type":"task|review|approval|milestone|meeting","duration_days":number,"depends_on":["names of earlier rows in this phase"],"owner":"role or party","basis":"stated|implied","assumption":"for implied rows one short sentence on why it is needed and where the duration comes from","refs":[item numbers],"span":false}]}
+
+Rules. Give 12 to 28 rows, or 6 to 12 rows for a recurring governance phase. List rows so that a predecessor always appears before its successors. The first row has an empty depends_on. Every other row names at least one earlier row in depends_on. Rows that can run in parallel name the same predecessor. Each row name is unique, under 60 characters and starts with a verb or a clear noun. Give a realistic duration in working days. Use typical durations unless the documents state one: client review of plans and governance 3 days, requirements workshop 5 days, design 3 days, security architecture review 4 days, sprint 10 days, sprint demo and review 2 days, UAT cycle 5 to 8 days, CAB review 2 days, approval 1 day after each review. Reviews and approvals are separate rows owned by the client. A milestone has duration_days 0. In a recurring governance phase use meeting rows with span true, which means they run across the whole project, and ordinary rows for reports. Stated rows come from the documents and cite their items in refs. Implied rows cite the item of the deliverable or phase they support. Write plain sentences without dashes or semicolons.`;
+
+  async function buildSchedule({ docs, items, anchor, project, texts, onProgress }) {
+    await AI.ready();
+    if (!AI.hasKey()) return null;
+    const rows = items.filter((i) => i.status !== 'ignored' && ['schedule', 'deliverable', 'milestone'].includes(i.kind));
+    if (!rows.length) return null;
+    const list = rows.slice(0, 220).map((i, n) => ({ n: n + 1, kind: i.kind, doc: i.doc_name || '', ref: i.data.ref || null, name: i.title, level: i.data.level || null, type: i.data.type || null, phase: i.data.phase || null, owner: i.data.owner || null, start: i.data.start || i.data.due_date || null, end: i.data.end || null, start_week: i.data.start_week ?? null, end_week: i.data.end_week ?? null, days: i.data.duration_days ?? null, amount: i.data.amount ?? null, percent: i.data.percent ?? null, trigger: i.data.trigger || null, acceptance: i.data.acceptance || null, depends_on: i.data.depends_on || null }));
+    // The sections that describe how the work is delivered. The technical proposal and contract come first.
+    const order = { technical: 0, contract: 1, other: 2, award: 3, financial: 4 };
+    const secs = [];
+    for (const d of [...docs].sort((a, b) => (order[a.role] ?? 5) - (order[b.role] ?? 5))) for (const x of planSections((texts || {})[d.id] || '', 16000)) secs.push(`[${d.filename}] ${x.head}\n${x.body}`);
+    let excerpt = ''; for (const x of secs) { if (excerpt.length + x.length > 34000) break; excerpt += x + '\n\n'; }
+    const head = `Anchor date for Week 1: ${anchor || 'unknown'}\nProject: ${JSON.stringify({ value: project.value, currency: project.currency, award_date: project.award_date || null, start_date: project.start_date || null, end_date: project.end_date || null })}\nDocuments: ${JSON.stringify(docs.map((d) => ({ file: d.filename, kind: d.kind, summary: d.summary })))}\nItems: ${JSON.stringify(list)}`;
+    const tail = `\n\nSections of the documents about scope, methodology and project management:\n${excerpt || '(none found)'}`;
+    const step = (label, frac) => { if (onProgress) onProgress(label, frac); };
+    let outline;
+    try {
+      step('Planning the phases and the delivery approach', 0.05);
+      outline = await AI.claudeJSON(OUTLINE_SYSTEM, head + tail, 9000);
+    } catch (e) {
+      console.error('Outline failed:', e.message);
+      return { failed: true, reason: e.message, code: e.code || null, plan: [], notes: [], summary: '' };
+    }
+    const phases = (outline && Array.isArray(outline.phases) ? outline.phases : []).filter((p) => p && String(p.name || '').trim()).slice(0, 10);
+    if (!phases.length) return { failed: true, reason: 'The AI did not return any phases', code: 'badjson', plan: [], notes: [], summary: '' };
+    const meth = outline.methodology || {};
+    const methText = JSON.stringify({ approach: meth.approach || 'unknown', evidence: meth.evidence || null, cadence: meth.cadence || null, environments: meth.environments || [], governance: meth.governance || [] });
+    const phaseList = phases.map((p) => ({ name: p.name, objective: p.objective, start_week: p.start_week ?? null, end_week: p.end_week ?? null, duration_days: p.duration_days ?? null, recurring: !!p.recurring }));
+    let doneN = 0;
+    const expand = async (p, k) => {
+      const mine = { ...p };
+      const user = `Methodology: ${methText}\nThis phase: ${JSON.stringify(mine)}\nAll phases in order: ${JSON.stringify(phaseList)}\n${head}${tail}`;
+      let j = null; let err = null;
+      for (let a = 0; a < 2 && !j; a++) {
+        try { j = await AI.claudeJSON(PHASE_SYSTEM, user, 14000); } catch (e) { err = e; if (e.code === 'cutoff' && e.text) { const arr = salvageRows(e.text); if (arr) j = { rows: arr }; } if (['bad_key', 'budget'].includes(e.code)) throw e; }
+      }
+      doneN++; step(`Detailing the phases, ${doneN} of ${phases.length} done`, 0.3 + 0.65 * (doneN / phases.length));
+      return { j, err };
+    };
+    step(`Detailing the phases, 0 of ${phases.length} done`, 0.3);
+    const expanded = await Promise.all(phases.map(expand));
+
+    // ----- place the tasks on working days -----
+    const plan = []; const notes = Array.isArray(outline.notes) ? outline.notes.map(String).filter(Boolean) : [];
+    const refsOf = (arr, fallback) => { const r = (Array.isArray(arr) ? arr : []).map((n) => rows[Number(n) - 1]).filter(Boolean); return r.length ? r : fallback; };
+    const globalRefs = [rows.find((r) => r.kind === 'deliverable') || rows[0]];
+    const used = new Set();
+    const uniq = (n) => { let x = String(n).trim().slice(0, 140) || 'Task'; let k = 2; const base = x; while (used.has(x.toLowerCase())) x = `${base} (${k++})`; used.add(x.toLowerCase()); return x; };
+    let cursor = 1; let lastName = null; let projectEnd = 1;
+    const recurring = [];
+    phases.forEach((p, k) => {
+      const ex = expanded[k];
+      const prefs = refsOf(p.refs, globalRefs);
+      const phaseName = uniq(p.name);
+      if (p.recurring) { recurring.push({ p, ex, prefs, phaseName }); return; }
+      if (!ex.j || !Array.isArray(ex.j.rows) || !ex.j.rows.length) { notes.push(`The tasks of the phase ${p.name} could not be generated (${(ex.err && ex.err.message) || 'no reply'}). Use Analyze again.`); }
+      let pStart = p.start_week > 0 ? (Math.round(p.start_week) - 1) * 5 + 1 : cursor;
+      if (!(p.start_week > 0)) pStart = cursor;
+      const slot = new Map(); const out = []; let pEnd = pStart;
+      const rws = ex.j && Array.isArray(ex.j.rows) ? ex.j.rows.filter((r) => r && String(r.name || '').trim()).slice(0, 40) : [];
+      const nameKey = (n) => String(n || '').trim().toLowerCase();
+      const local = new Map();
+      rws.forEach((r, i) => {
+        const name = uniq(r.name);
+        local.set(nameKey(r.name), name);
+        const type = ['task', 'review', 'approval', 'milestone', 'meeting'].includes(r.type) ? r.type : 'task';
+        let deps = (Array.isArray(r.depends_on) ? r.depends_on : []).map((d) => local.get(nameKey(d))).filter(Boolean);
+        if (!deps.length && i > 0) deps = [out[i - 1].name];
+        const ends = deps.map((d) => slot.get(d)).filter((x) => x != null);
+        const isMs = type === 'milestone';
+        const dur = isMs ? 0 : Math.max(1, Math.round(Number(r.duration_days) || 1));
+        const start = ends.length ? (isMs ? Math.max(...ends) : Math.max(...ends) + 1) : pStart;
+        const end = isMs ? start : start + dur - 1;
+        slot.set(name, end);
+        if (end > pEnd) pEnd = end;
+        const implied = r.basis !== 'stated';
+        out.push({ level: isMs ? 'milestone' : 'task', type: type === 'meeting' ? 'task' : type, name, phase: phaseName, start: null, end: null, start_week: null, end_week: null, start_day: start, duration_days: isMs ? null : dur, owner: r.owner ? String(r.owner).slice(0, 80) : null, implied, assumption: implied && r.assumption ? String(r.assumption).slice(0, 240) : null, depends_on: deps, refs: refsOf(r.refs, prefs) });
+      });
+      if (out.length && lastName && !out[0].depends_on.length) out[0].depends_on = [lastName];
+      const sd = pStart; const dd = Math.max(1, pEnd - pStart + 1);
+      plan.push({ level: 'phase', type: 'task', name: phaseName, phase: null, start: null, end: null, start_week: p.start_week ?? null, end_week: p.end_week ?? null, start_day: sd, duration_days: dd, owner: null, implied: p.basis !== 'stated', assumption: p.basis !== 'stated' ? (p.objective || null) : null, depends_on: [], refs: prefs });
+      plan.push(...out);
+      if (out.length) lastName = out[out.length - 1].name;
+      cursor = Math.max(cursor, pEnd + 1);
+      if (pEnd > projectEnd) projectEnd = pEnd;
+    });
+    // Recurring governance runs across the whole project
+    for (const { p, ex, prefs, phaseName } of recurring) {
+      const rws = ex.j && Array.isArray(ex.j.rows) ? ex.j.rows.filter((r) => r && String(r.name || '').trim()).slice(0, 20) : [];
+      if (!rws.length) { notes.push(`The governance tasks could not be generated (${(ex.err && ex.err.message) || 'no reply'}). Use Analyze again.`); }
+      plan.push({ level: 'phase', type: 'task', name: phaseName, phase: null, start: null, end: null, start_week: null, end_week: null, start_day: 1, duration_days: projectEnd, owner: null, implied: p.basis !== 'stated', assumption: p.basis !== 'stated' ? (p.objective || null) : null, depends_on: [], refs: prefs });
+      let pos = 1;
+      for (const r of rws) {
+        const name = uniq(r.name);
+        const span = !!r.span || r.type === 'meeting';
+        const dur = span ? projectEnd : Math.max(1, Math.round(Number(r.duration_days) || 1));
+        const isMs = r.type === 'milestone';
+        const implied = r.basis !== 'stated';
+        plan.push({ level: isMs ? 'milestone' : 'task', type: ['review', 'approval', 'milestone'].includes(r.type) ? r.type : 'task', name, phase: phaseName, start: null, end: null, start_week: null, end_week: null, start_day: span ? 1 : Math.min(pos, projectEnd), duration_days: isMs ? null : dur, owner: r.owner ? String(r.owner).slice(0, 80) : null, implied, assumption: implied && r.assumption ? String(r.assumption).slice(0, 240) : null, depends_on: [], refs: refsOf(r.refs, prefs) });
+        if (!span) pos += dur;
+      }
+    }
+    const methLine = meth.approach && meth.approach !== 'unknown' ? `Delivery approach: ${meth.approach}${meth.cadence ? `, ${meth.cadence}` : ''}${meth.basis === 'stated' ? ', as stated in the documents' : ', assumed because the documents do not state it'}.` : '';
+    if (methLine) notes.unshift(methLine);
+    const result = plan.filter((r) => r.refs && r.refs.length).map((r) => ({ ...r, quote: ((r.refs[0] && r.refs[0].quote) || '').slice(0, 300), source_docs: [...new Set(r.refs.map((x) => x.doc_name).filter(Boolean))], refs: r.refs.map((x) => x.id) }));
+    return { summary: String(outline.summary || ''), plan: result, notes: notes.slice(0, 18), methodology: meth };
+  }
+  // A cut off reply still holds the rows that were complete. Keep them.
+  function salvageRows(txt) {
+    const a = txt.indexOf('"rows"'); if (a < 0) return null;
+    const open = txt.indexOf('[', a); if (open < 0) return null;
+    for (let i = txt.length; i > open; i--) { if (txt[i - 1] !== '}') continue; try { const arr = JSON.parse(txt.slice(open, i) + ']'); if (Array.isArray(arr) && arr.length >= 3) return arr; } catch (e) { /* keep scanning back */ } }
+    return null;
+  }
+
   // ---------- confidence ----------
   const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
   function confidence(items, docs) {
@@ -289,5 +450,5 @@ Rate probability and impact honestly. A payment worth a third of the contract he
     return { overall, by, coverage: cov };
   }
 
-  return { SCOPE, AUTHORITY, ROLE_LABEL, detectRole, isMspXml, context, extractDoc, analyzeRisks, scheduleFromMsp, confidence, passages };
+  return { SCOPE, AUTHORITY, ROLE_LABEL, detectRole, isMspXml, context, extractDoc, analyzeRisks, buildSchedule, planSections, scheduleFromMsp, confidence, passages };
 })();
