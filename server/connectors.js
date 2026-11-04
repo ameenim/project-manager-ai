@@ -4,7 +4,7 @@
 'use strict';
 const crypto = require('crypto');
 
-const err = (status, message) => Object.assign(new Error(message), { status });
+const err = (status, message) => Object.assign(new Error(message), { status, expose: true });
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const tenant = () => process.env.MICROSOFT_TENANT || 'common';
 
@@ -54,7 +54,29 @@ class Connectors {
   }
 
   // ----- what the screen needs -----
-  configured(kind) { const p = this.P[kind]; return !!(p && process.env[p.idEnv] && process.env[p.secretEnv]); }
+  // the owner can paste the app id and secret into the app, or set them as environment secrets
+  creds(kind) {
+    const p = this.P[kind]; if (!p) return null;
+    const c = this._cfg && this._cfg[kind];
+    if (c && c.id && c.secret) return c;
+    return process.env[p.idEnv] && process.env[p.secretEnv] ? { id: process.env[p.idEnv], secret: process.env[p.secretEnv] } : null;
+  }
+  async loadConfig() {
+    try {
+      const r = await this.db.query("SELECT key, value FROM app_secrets WHERE key LIKE 'oauth_%'");
+      const cfg = {};
+      for (const row of r.rows) { try { cfg[row.key.slice(6)] = await this.open(row.value); } catch { /* unreadable entry is ignored */ } }
+      this._cfg = cfg;
+    } catch { this._cfg = this._cfg || {}; }
+  }
+  async saveConfig(kind, id, secret) {
+    if (!this.P[kind]) throw err(404, 'Unknown service');
+    id = String(id || '').trim(); secret = String(secret || '').trim();
+    if (!id || !secret) throw err(400, 'Enter both the client ID and the client secret.');
+    await this.db.query('INSERT INTO app_secrets(key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value', ['oauth_' + kind, await this.seal({ id, secret })]);
+    this._cfg = { ...(this._cfg || {}), [kind]: { id, secret } };
+  }
+  configured(kind) { return !!this.creds(kind); }
   redirectUri(origin, kind) { return `${origin}/oauth/callback/${kind}`; }
   setupInfo(kind, origin) {
     const p = this.P[kind];
@@ -64,17 +86,19 @@ class Connectors {
   // ----- sign in at the service -----
   async begin(userId, kind, origin) {
     const p = this.P[kind]; if (!p) throw err(404, 'Unknown service');
+    await this.loadConfig();
     if (!this.configured(kind)) throw err(409, `${p.name} is not set up for this app yet. The app owner needs to finish the one time setup.`);
     const state = crypto.randomBytes(24).toString('hex'), redirect = this.redirectUri(origin, kind);
     await this.db.query('DELETE FROM oauth_states WHERE expires_at < now()');
     await this.db.query("INSERT INTO oauth_states(state_hash, user_id, kind, redirect_uri, expires_at) VALUES ($1, $2, $3, $4, now() + interval '10 minutes')", [sha(state), userId, kind, redirect]);
-    const q = new URLSearchParams({ client_id: process.env[p.idEnv], redirect_uri: redirect, response_type: 'code', scope: p.scope, state, ...p.extra });
+    const q = new URLSearchParams({ client_id: this.creds(kind).id, redirect_uri: redirect, response_type: 'code', scope: p.scope, state, ...p.extra });
     return `${p.authorize}?${q}`;
   }
 
   // called when the service sends the person back with a code
   async finish(kind, code, state) {
     const p = this.P[kind]; if (!p) throw err(404, 'Unknown service');
+    await this.loadConfig();
     if (!code || !state) throw err(400, 'The sign in was not completed.');
     const r = await this.db.query('DELETE FROM oauth_states WHERE state_hash = $1 AND expires_at > now() RETURNING user_id, kind, redirect_uri', [sha(String(state))]);
     const row = r.rows[0];
@@ -86,7 +110,8 @@ class Connectors {
   }
 
   async tokenRequest(p, params) {
-    const body = { client_id: process.env[p.idEnv], client_secret: process.env[p.secretEnv], ...params };
+    const kind = Object.keys(this.P).find((k) => this.P[k] === p), c = this.creds(kind) || {};
+    const body = { client_id: c.id, client_secret: c.secret, ...params };
     const res = await this.fetch(p.token, { method: 'POST', headers: p.json ? { 'content-type': 'application/json' } : { 'content-type': 'application/x-www-form-urlencoded' }, body: p.json ? JSON.stringify(body) : new URLSearchParams(body).toString(), signal: AbortSignal.timeout(15000) });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.access_token) throw err(502, `${p.name} did not accept the sign in${data.error_description ? ': ' + data.error_description : ''}. Try again.`);
@@ -136,6 +161,7 @@ class Connectors {
 
   // a saved connection is checked again, and its token renewed when it is about to expire
   async retest(sealed, kind) {
+    await this.loadConfig();
     const p = this.P[kind]; let secret = await this.open(sealed);
     if (secret.access && secret.expires_at && secret.expires_at - 60e3 < Date.now()) {
       if (!secret.refresh) throw err(409, `${p.name} needs you to sign in again. Disconnect and connect again.`);

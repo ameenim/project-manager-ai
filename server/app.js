@@ -188,7 +188,7 @@ async function createApp(opts = {}) {
       return serveStatic(req, res, url);
     } catch (e) {
       const status = e.status && e.status >= 400 && e.status < 600 ? e.status : 500;
-      if (status >= 500) { const id = crypto.randomBytes(4).toString('hex'); console.error(`[${id}] ${req.method} ${url.pathname}`, e); if (!res.headersSent) return json(res, 500, { error: `Something went wrong on the server (reference ${id}). Try again.` }); return res.end(); }
+      if (status >= 500 && !e.expose) { const id = crypto.randomBytes(4).toString('hex'); console.error(`[${id}] ${req.method} ${url.pathname}`, e); if (!res.headersSent) return json(res, 500, { error: `Something went wrong on the server (reference ${id}). Try again.` }); return res.end(); }
       if (!res.headersSent) return json(res, status, { error: e.message });
       res.end();
     }

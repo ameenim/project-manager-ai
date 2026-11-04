@@ -138,3 +138,16 @@ test('connections need a signed in user', async () => {
   assert.equal((await s.call('POST', '/api/connections/jira/start', {})).status, 401);
   assert.equal((await s.call('GET', '/api/connections')).status, 401);
 });
+
+test('the owner can paste the app id and secret in the app, no restart and no environment secrets', async () => {
+  clearEnv(); const u = await s.user();
+  assert.equal((await s.call('POST', '/api/connections/outlook/setup', { client_id: '', client_secret: '' }, u.token)).status, 400);
+  const r = await s.call('POST', '/api/connections/outlook/setup', { client_id: 'pasted-id', client_secret: 'pasted-secret-value' }, u.token);
+  assert.equal(r.status, 200); assert.equal(r.data.connections.outlook.configured, true);
+  assert.ok(!r.buf.toString().includes('pasted-secret-value'), 'the secret is never sent back');
+  const { url } = await connect(u, 'outlook');
+  assert.equal(url.searchParams.get('client_id'), 'pasted-id');
+  const row = await s.app.db.query("SELECT value FROM app_secrets WHERE key = 'oauth_outlook'");
+  assert.ok(!row.rows[0].value.includes('pasted-secret-value'), 'stored encrypted');
+  await s.app.db.query("DELETE FROM app_secrets WHERE key = 'oauth_outlook'");
+});

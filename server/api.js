@@ -834,7 +834,9 @@ module.exports = function createApi(store, auth, connectors) {
     return out;
   };
   on('GET', '/api/me', async () => ({ user: DB.user, status: { jira: !!CONN.jira, graph: !!CONN.outlook, claude: !!process.env.ANTHROPIC_API_KEY, model: MODEL } }));
-  on('GET', '/api/connections', async () => ({ connections: connView() }));
+  on('GET', '/api/connections', async () => { await connectors.loadConfig(); return { connections: connView() }; });
+  // the owner pastes the app id and secret once, so nobody has to edit secrets or restart
+  on('POST', '/api/connections/(jira|outlook)/setup', async (mm, q, b) => { await connectors.saveConfig(mm[1], b.client_id, b.client_secret); return { connections: connView() }; });
   // starts the sign in at the service. The browser opens the returned address in a new window.
   on('POST', '/api/connections/(jira|outlook)/start', async (mm) => ({ url: await connectors.begin(ctx().user.id, mm[1], ctx().origin) }));
   // saves a finished connection into this request's view of the person's settings

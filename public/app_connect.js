@@ -19,14 +19,14 @@
       if (e.data.ok) arrived(); else draw({ text: e.data.msg || t('cx_failed') });
     };
     const dots = () => `<ol class="cw-steps" aria-label="${esc(t('cw_progress'))}">${STEPS.map((s, i) => `<li class="${i === step ? 'on' : i < step ? 'done' : ''}" ${i === step ? 'aria-current="step"' : ''}><i>${i < step ? icon('check') : i + 1}</i><span>${t(s)}</span></li>`).join('')}</ol>`;
-    const frame = (body, msg) => `${dots()}<div class="cw-body">${body}</div><div class="cw-msg ${msg && msg.ok ? 'ok' : 'bad'}" role="status" ${msg ? '' : 'hidden'}>${msg ? esc(msg.text) : ''}</div>`;
+    const frame = (body, msg) => `${view === 'token' || view === 'setup' || (!info.configured && step === 0 && kind !== 'jira') ? '' : dots()}<div class="cw-body">${body}</div><div class="cw-msg ${msg && msg.ok ? 'ok' : 'bad'}" role="status" ${msg ? '' : 'hidden'}>${msg ? esc(msg.text) : ''}</div>`;
     const foot = (html) => m.setFooter(html);
 
     async function load() { info = (await api('GET', '/api/connections')).connections[kind]; return info; }
 
     // step 1: what will happen, or what the app owner still has to do once
     function drawStart(msg) {
-      if (!info.configured) return drawSetup(msg);
+      if (!info.configured) { if (kind === 'jira') { view = 'token'; return drawToken(msg); } return drawOff(msg); }
       m.setBody(frame(`<p style="margin-top:0">${t('cx_start_intro', { name: K.name })}</p>
         <div class="cw-sum"><div class="muted small">${t('cx_can_title', { name: K.name })}</div><ul class="cw-list">${K.can.map((c) => `<li>${t(c)}</li>`).join('')}</ul></div>
         <p class="small muted">${t('cx_safe')}</p>`, msg));
@@ -34,17 +34,32 @@
       m.$('#cxGo').onclick = () => { step = 1; draw(); };
       m.$('#cxTok') && (m.$('#cxTok').onclick = () => { view = 'token'; step = 1; draw(); });
     }
+    // email is not switched on yet: say so in plain words and let the owner switch it on in one form
+    function drawOff(msg) {
+      m.setBody(frame(`<div class="cx-off">${icon(K.icon)}<h3>${t('cx_off_h', { name: K.name })}</h3><p class="muted">${t('cx_off_p', { name: K.name })}</p></div>`, msg));
+      foot(`<button class="btn" data-close>${t('cancel')}</button><button class="btn primary" id="cxOwner">${t('cx_owner_btn')}</button>`);
+      m.$('#cxOwner').onclick = () => { view = 'setup'; draw(); };
+    }
+    // owner only: paste the two values from the service, the app saves them, no restart needed
     function drawSetup(msg) {
       const s = info.setup;
-      m.setBody(frame(`<p style="margin-top:0"><b>${t('cx_setup_title')}</b></p><p class="muted">${t('cx_setup_intro', { name: K.name })}</p>
+      m.setBody(frame(`<p style="margin-top:0">${t('cx_owner_intro', { name: K.name })}</p>
+        <div class="form-grid"><label class="f full">${t('cx_cid')}<input id="cxCid" autocomplete="off" spellcheck="false"></label>
+        <label class="f full">${t('cx_csecret')}<input id="cxCsec" type="password" autocomplete="off"></label></div>
+        <details class="cx-how"><summary>${t('cx_how')}</summary>
         <ol class="cw-list"><li>${t('cx_setup_1', { name: K.name })} <a target="_blank" rel="noopener" href="${esc(s.url || K.console)}">${t('cx_setup_open')}</a></li>
-        <li>${t('cx_setup_2')}<div class="cx-copy"><code id="cxUri">${esc(s.redirect_uri)}</code><button class="btn sm" id="cxCopy">${t('cx_copy')}</button></div></li>
-        <li>${t('cx_setup_3')} <code>${esc(s.id_env)}</code> ${t('cx_and')} <code>${esc(s.secret_env)}</code></li>
-        <li>${t('cx_setup_4')}</li></ol>`, msg));
-      foot(`<button class="btn" data-close>${t('cancel')}</button>${kind === 'jira' ? `<button class="btn ghost" id="cxTok">${t('cx_use_token')}</button>` : ''}<button class="btn primary" id="cxAgain">${t('cx_check_again')}</button>`);
+        <li>${t('cx_setup_2')}<div class="cx-copy"><code id="cxUri">${esc(s.redirect_uri)}</code><button class="btn sm" id="cxCopy" type="button">${t('cx_copy')}</button></div></li>
+        <li>${t('cx_how_3')}</li></ol></details>`, msg));
+      foot(`<button class="btn" id="cxBack">${t('cw_back')}</button><button class="btn primary" id="cxSaveCfg">${icon('check')}${t('cx_save_cont')}</button>`);
+      m.$('#cxCid').focus();
+      m.$('#cxBack').onclick = () => { view = 'main'; draw(); };
       m.$('#cxCopy').onclick = async () => { try { await navigator.clipboard.writeText(s.redirect_uri); toast(t('cx_copied')); } catch { const r = document.createRange(); r.selectNodeContents(m.$('#cxUri')); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); } };
-      m.$('#cxTok') && (m.$('#cxTok').onclick = () => { view = 'token'; step = 1; draw(); });
-      m.$('#cxAgain').onclick = () => busy(m.$('#cxAgain'), async () => { try { await load(); } catch (e) { return draw({ text: e.message }); } draw(info.configured ? { ok: true, text: t('cx_ready') } : { text: t('cx_still_missing') }); });
+      m.$('#cxSaveCfg').onclick = () => busy(m.$('#cxSaveCfg'), async () => {
+        const id = m.$('#cxCid').value.trim(), sec = m.$('#cxCsec').value.trim();
+        if (!id || !sec) return drawSetup({ text: t('cx_cfg_missing') });
+        try { await api('POST', `/api/connections/${kind}/setup`, { client_id: id, client_secret: sec }); await load(); } catch (e) { return drawSetup({ text: e.message }); }
+        view = 'main'; step = 0; draw({ ok: true, text: t('cx_ready') });
+      });
     }
 
     // step 2: sign in at the service in a separate window
@@ -96,17 +111,25 @@
       await refreshStatus();
     }
 
-    // Jira alternative: an API token, checked live
+    // Jira without any owner setup: the person's own API token, checked live
     function drawToken(msg) {
-      m.setBody(frame(`<p style="margin-top:0">${t('cx_tok_intro')}</p><p><a class="btn sm" target="_blank" rel="noopener" href="https://id.atlassian.com/manage-profile/security/api-tokens">${icon('link')}${t('cw_open_atlassian')}</a></p>
-        <div class="form-grid"><label class="f full">${t('cw_jira_site')}<input type="url" id="cxBase" placeholder="https://yourcompany.atlassian.net" autocomplete="off" inputmode="url"></label>
+      m.setBody(frame(`<p style="margin-top:0">${t('cx_tok_lead')}</p>
+        <ol class="cx-steps">
+          <li><div><b>${t('cx_tok_s1')}</b><div class="small muted">${t('cx_tok_s1h')}</div></div><a class="btn sm" target="_blank" rel="noopener" href="https://id.atlassian.com/manage-profile/security/api-tokens">${icon('link')}${t('cw_open_atlassian')}</a></li>
+          <li><div><b>${t('cx_tok_s2')}</b></div></li></ol>
+        <div class="form-grid"><label class="f full">${t('cw_jira_site')}<input type="text" id="cxBase" placeholder="yourcompany.atlassian.net" autocomplete="off" inputmode="url" spellcheck="false"></label>
         <label class="f full">${t('cw_jira_email')}<input type="email" id="cxEmail" autocomplete="off"></label>
-        <label class="f full">${t('cw_jira_token')}<input type="password" id="cxToken" autocomplete="off"></label></div>`, msg));
-      foot(`<button class="btn" id="cxBack">${t('cw_back')}</button><button class="btn primary" id="cxSave">${icon('check')}${t('cw_connect_now')}</button>`);
+        <label class="f full">${t('cw_jira_token')}<input type="password" id="cxToken" autocomplete="off"></label></div>
+        <p class="small muted">${t('cx_tok_safe')}</p>${info.configured ? '' : `<p class="small"><a href="#" id="cxOwnerLink">${t('cx_owner_link')}</a></p>`}`, msg));
+      foot(`<button class="btn" data-close>${t('cancel')}</button>${info.configured ? `<button class="btn ghost" id="cxBack">${t('cw_back')}</button>` : ''}<button class="btn primary" id="cxSave">${icon('check')}${t('cw_connect_now')}</button>`);
       m.$('#cxBase').focus();
-      m.$('#cxBack').onclick = () => { view = 'main'; step = 0; draw(); };
+      m.$('#cxBack') && (m.$('#cxBack').onclick = () => { view = 'main'; step = 0; draw(); });
+      m.$('#cxOwnerLink') && (m.$('#cxOwnerLink').onclick = (e) => { e.preventDefault(); view = 'setup'; draw(); });
       const save = () => busy(m.$('#cxSave'), async () => {
-        const body = { base_url: m.$('#cxBase').value.trim(), email: m.$('#cxEmail').value.trim(), token: m.$('#cxToken').value.trim() };
+        // accept "yourcompany", "yourcompany.atlassian.net" or the full address
+        let site = m.$('#cxBase').value.trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '');
+        if (site && !site.includes('.')) site += '.atlassian.net';
+        const body = { base_url: site ? 'https://' + site : '', email: m.$('#cxEmail').value.trim(), token: m.$('#cxToken').value.trim() };
         if (!/^https:\/\/.+\..+/.test(body.base_url)) return drawToken({ text: t('cw_err_site') });
         if (!body.email || !body.token) return drawToken({ text: t('cw_err_creds') });
         try { await api('POST', '/api/connections/jira/token', body); } catch (e) { return drawToken({ text: e.message }); }
@@ -120,6 +143,7 @@
     function draw(msg) {
       if (!info) return;
       if (view === 'token') return drawToken(msg);
+      if (view === 'setup') return drawSetup(msg);
       if (step === 0) return drawStart(msg);
       if (step === 1) return drawSignin(msg, false);
       return drawDone(msg);

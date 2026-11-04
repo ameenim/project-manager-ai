@@ -1119,3 +1119,10 @@ body.gt-dnd, body.gt-dnd * { cursor: grabbing !important; user-select: none; }
 /* item details dialog */
 .it-body { display: grid; gap: 14px; } .it-src { border-inline-start: 3px solid var(--border-strong); padding-inline-start: 10px; }
 .it-body .it-state select { width: 100%; }
+
+/* connect wizard: plain steps, no developer screens */
+.cx-steps { list-style: none; counter-reset: cxs; margin: 0 0 14px; padding: 0; display: grid; gap: 10px; }
+.cx-steps li { counter-increment: cxs; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
+.cx-steps li > div { flex: 1; min-width: 0; } .cx-steps li::before { content: counter(cxs); flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--primary-soft); color: var(--primary); font-size: var(--fs-small); font-weight: 600; }
+.cx-off { text-align: center; padding: 18px 8px; } .cx-off > svg { width: 32px; height: 32px; color: var(--primary); } .cx-off h3 { margin: 10px 0 6px; font-size: var(--fs-heading); }
+.cx-how { margin-top: 12px; } .cx-how summary { cursor: pointer; color: var(--primary); font-size: var(--fs-small); font-weight: 600; }
