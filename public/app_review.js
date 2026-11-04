@@ -2,7 +2,7 @@
 (function () {
   const { esc, t, icon, money, $, $$, api, toast, modal, confirmDlg, busy, state: S } = window.PM;
   const KINDS = ['field', 'deliverable', 'requirement', 'milestone', 'risk', 'schedule'];
-  const STATES = { deliverable: ['open', 'closed'], milestone: ['pending', 'invoiced', 'paid'], risk: ['open', 'mitigated', 'closed'] };
+  const STATES = { deliverable: ['open', 'progress', 'closed'], requirement: ['open', 'progress', 'closed'], milestone: ['pending', 'invoiced', 'paid'], risk: ['open', 'mitigated', 'transferred', 'closed'] };
   const FIELD_INPUT = { start_date: 'date', end_date: 'date', value: 'number', currency: 'text', client: 'text' };
 
   Object.assign(window.PM.I18N.en, {
@@ -215,7 +215,7 @@
   };
   function rowHtml(kind, i, p, picked, compact) {
     const proposed = i.status === 'proposed';
-    const stSel = STATES[kind] && i.status === 'confirmed' ? `<select data-state="${i.id}" class="rv-state">${STATES[kind].map((s) => `<option value="${s}" ${i.state === s ? 'selected' : ''}>${t('state_' + s)}</option>`).join('')}</select>` : '';
+    const stSel = STATES[kind] && i.status === 'confirmed' ? `<select data-state="${i.id}" class="rv-state">${STATES[kind].map((s) => `<option value="${s}" ${i.state === s ? 'selected' : ''}>${window.PM.logLabel ? window.PM.logLabel(kind, s) : t('state_' + s)}</option>`).join('')}</select>` : '';
     const dl = i.evidence_name ? `<a href="#" class="small" data-dl="${i.evidence_doc_id}" data-name="${esc(i.evidence_name)}">${icon('file')} ${esc(i.evidence_name)}</a>` : '';
     const acts = proposed
       ? `<button class="btn sm primary" data-confirm="${i.id}">${icon('check')}${t('confirm')}</button><button class="btn sm icon ghost" data-edit="${i.id}" aria-label="${t('edit')}" data-tip="${t('edit')}">${icon('edit')}</button><button class="btn sm icon ghost" data-ignore="${i.id}" aria-label="${t('ignore')}" data-tip="${t('ignore')}">${icon('x')}</button>`
@@ -545,25 +545,5 @@
     show();
   }
 
-  // Details dialog for any item, opened from outside the review page (risk radar, calendar, lists).
-  async function openItem(itemId, projectId, done) {
-    let it;
-    try { it = ((await api('GET', `/api/projects/${projectId}/items`)).items || []).find((x) => x.id === Number(itemId)); } catch (e) { return toast(e.message, 'err'); }
-    if (!it) return toast(t('it_notfound'), 'err');
-    const states = STATES[it.kind];
-    const stField = states ? `<label class="f it-state">${t('it_status')}${sel('f_state', states, it.state || states[0], 'state_')}</label>` : '';
-    const src = it.quote ? `<div class="it-src small muted"><b>${t('it_source')}</b><br>${esc(it.quote)}${it.doc_name ? ` <span>(${esc(it.doc_name)})</span>` : ''}</div>` : '';
-    const body = `<div class="it-body">${stField ? `<div class="form-grid">${stField}</div>` : ''}${formFields(it.kind, it)}${src}${it.confidence != null ? `<div class="small muted">${t('it_conf')} ${conf(it.confidence)}</div>` : ''}</div>`;
-    const m = modal({ title: t('it_title_' + it.kind), size: 'lg', body, footer: `<a class="btn ghost" href="#/p/${projectId}/review" data-close>${t('it_page')}</a><span class="grow"></span><button class="btn" data-close>${t('cancel')}</button><button class="btn primary" id="itSave">${t('save')}</button>` });
-    m.$('#itSave').onclick = async () => {
-      const v = readForm(m.el, it.kind, it);
-      if (it.kind !== 'field' && !String(v.title || v.description || '').trim()) { toast(t('title_required'), 'err'); return; }
-      const st = m.$('#f_state');
-      if (st && st.value !== it.state) v.state = st.value;
-      const r = await busy(m.$('#itSave'), () => api('PUT', `/api/items/${it.id}`, v));
-      if (r) { m.close(); toast(t('saved'), 'ok'); if (done) done(r.item); }
-    };
-  }
-  window.PM.openItem = openItem;
   window.PM.startWizard = startWizard;
 })();

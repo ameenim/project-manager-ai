@@ -361,7 +361,7 @@
   };
 
   // ---------- project shell ----------
-  const TABS = [['overview', 'chart'], ['review', 'check'], ['schedule', 'cal'], ['inbox', 'inbox'], ['documents', 'file'], ['reports', 'spark'], ['settings', 'gear']];
+  const TABS = [['overview', 'chart'], ['review', 'check'], ['schedule', 'cal'], ['logs', 'list'], ['inbox', 'inbox'], ['documents', 'file'], ['reports', 'spark'], ['settings', 'gear']];
   const projLinks = (p) => [['sharepoint_url', 'folder', 'pl_open_sp'], ['jira_url', 'link', 'pl_open_jira']].filter(([k]) => p[k]).map(([k, ic, tip]) => `<a class="btn sm ghost" href="${esc(p[k])}" target="_blank" rel="noopener noreferrer" data-tip="${t(tip)}">${icon(ic)}${t(tip)}</a>`).join('');
   PM.projectView = async function (id, tab, query) {
     if (!S.project || S.project.id !== id) shell('', `<div class="page"><div class="empty"><span class="spinner"></span></div></div>`);

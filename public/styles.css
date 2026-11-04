@@ -1126,3 +1126,25 @@ body.gt-dnd, body.gt-dnd * { cursor: grabbing !important; user-select: none; }
 .cx-steps li > div { flex: 1; min-width: 0; } .cx-steps li::before { content: counter(cxs); flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--primary-soft); color: var(--primary); font-size: var(--fs-small); font-weight: 600; }
 .cx-off { text-align: center; padding: 18px 8px; } .cx-off > svg { width: 32px; height: 32px; color: var(--primary); } .cx-off h3 { margin: 10px 0 6px; font-size: var(--fs-heading); }
 .cx-how { margin-top: 12px; } .cx-how summary { cursor: pointer; color: var(--primary); font-size: var(--fs-small); font-weight: 600; }
+
+/* logs tab */
+.lg-head { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 14px; } .lg-head h2 { margin: 0 0 4px; font-size: var(--fs-title); }
+.lg-filters { display: grid; gap: 12px; margin-bottom: 14px; } .lg-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.lg-search { flex: 1 1 260px; display: flex; align-items: center; gap: 8px; border: 1px solid var(--border-strong); border-radius: 8px; padding: 0 10px; background: var(--surface); min-width: 0; }
+.lg-search input { border: 0; outline: 0; background: transparent; padding: 8px 0; flex: 1; min-width: 0; color: var(--text); font: inherit; } .lg-search:focus-within { outline: 2px solid var(--primary); outline-offset: 1px; }
+.lg-kinds { display: flex; gap: 6px; flex-wrap: wrap; } .lg-sels { align-items: flex-end; } .lg-sels .f { min-width: 140px; flex: 1 1 140px; }
+.lg-card { padding: 0; overflow: hidden; } .lg-t th { position: sticky; top: 0; background: var(--surface-2); z-index: 1; } .lg-t td { vertical-align: middle; }
+.lg-sort { background: none; border: 0; padding: 0; font: inherit; color: inherit; font-weight: 600; cursor: pointer; display: inline-flex; gap: 4px; align-items: center; } .lg-sort.on { color: var(--primary); } .lg-sort span { font-size: var(--fs-micro); }
+.lg-item { min-width: 260px; max-width: 460px; } .lg-title { font-weight: 600; cursor: pointer; } .lg-title:hover { color: var(--primary); } .lg-desc { margin-top: 2px; } .lg-item .chip { margin-top: 4px; }
+.lg-sel { border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); color: var(--text); padding: 5px 8px; font: inherit; font-size: var(--fs-small); max-width: 150px; }
+.lg-sel.st.ok { background: var(--success-soft); color: var(--success); border-color: transparent; font-weight: 600; } .lg-sel.st.prog { background: var(--primary-soft); color: var(--primary); border-color: transparent; font-weight: 600; }
+.lg-acts .row { gap: 6px; flex-wrap: wrap; justify-content: flex-end; } .lg-ign td { opacity: .55; }
+.lg-pager { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--border); flex-wrap: wrap; } .lg-pages { display: flex; gap: 4px; align-items: center; }
+.lg-pages .dbl svg + svg { margin-inline-start: -10px; } .lg-pages .btn[disabled] { opacity: .4; cursor: default; } .lg-pp { display: flex; align-items: center; gap: 8px; }
+.lg-src { border-inline-start: 3px solid var(--border-strong); padding-inline-start: 10px; margin-top: 10px; } .lg-dyn { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; } .lg-dyn .full { grid-column: 1 / -1; }
+@media (max-width: 700px) { .lg-dyn { grid-template-columns: 1fr; } .lg-item { min-width: 200px; } }
+.lg-sel { max-width: none; } .lg-sel.st { min-width: 140px; } .lg-sel[data-f="probability"], .lg-sel[data-f="impact"] { min-width: 104px; } .lg-sels .f:last-of-type { flex-basis: 220px; }
+.lg-acts { min-width: 230px; }
+.lg-t td:nth-child(7) .chip { display: block; width: fit-content; margin-top: 2px; } .lg-item { max-width: 340px; min-width: 220px; } .lg-acts { min-width: 0; width: 1%; }
+.lg-t th:last-child, .lg-t td.lg-acts { position: sticky; inset-inline-end: 0; background: var(--surface); box-shadow: -1px 0 0 var(--border); } .lg-t th:last-child { background: var(--surface-2); } .lg-t tr:hover td.lg-acts { background: var(--surface-2); }
+.lg-acts .row { flex-wrap: nowrap; }

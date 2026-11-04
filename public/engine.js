@@ -398,7 +398,7 @@ function checkSchedule(tasks, project, ctx = {}) {
     let list = items.filter((i) => i.kind === kind);
     if (kind === 'milestone') list = list.filter((i) => i.state === 'pending');
     if (kind === 'deliverable') list = list.filter((i) => i.state !== 'closed');
-    if (kind === 'risk') list = list.filter((i) => i.state !== 'closed' && i.state !== 'mitigated');
+    if (kind === 'risk') list = list.filter((i) => i.state !== 'closed' && i.state !== 'mitigated' && i.state !== 'transferred');
     let ok = 0;
     for (const i of list) { if (covered(i)) ok++; else add(kind === 'risk' ? 'info' : 'warn', null, code, { title: i.title }, { item_id: i.id, item_title: i.title, kind }); }
     cov[kind] = { total: list.length, linked: ok };

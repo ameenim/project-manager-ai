@@ -3,7 +3,7 @@
   const PM = window.PM;
   const { esc, t, icon, money, $, $$, api, toast, modal, confirmDlg, busy, dropzone, state: S } = PM;
   const stale = (tk) => PM.stale(tk);
-  const stateChip = (s) => `<span class="chip ${['closed', 'paid', 'mitigated'].includes(s) ? 'green' : ['invoiced'].includes(s) ? 'blue' : ''}">${t('state_' + s)}</span>`;
+  const stateChip = (s) => `<span class="chip ${['closed', 'paid', 'mitigated', 'transferred'].includes(s) ? 'green' : ['invoiced'].includes(s) ? 'blue' : ''}">${t('state_' + s)}</span>`;
   const when = (ts) => esc(String(ts || '').replace('T', ' ').slice(0, 16));
 
   // ================= Overview =================
@@ -13,7 +13,7 @@
     const live = items.items.filter((i) => i.status !== 'ignored');
     const del = live.filter((i) => i.kind === 'deliverable');
     const ms = live.filter((i) => i.kind === 'milestone');
-    const risks = live.filter((i) => i.kind === 'risk' && i.state !== 'closed');
+    const risks = live.filter((i) => i.kind === 'risk' && i.state !== 'closed' && i.state !== 'transferred');
     const st = p.stats;
     const closed = del.filter((d) => d.state === 'closed').length;
     const phases = sched.tasks.filter((x) => !x.parent_id).slice(0, 10);
