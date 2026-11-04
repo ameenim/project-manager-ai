@@ -53,7 +53,7 @@ function loadBundles() {
 }
 const win = loadBundles();
 
-module.exports = function createApi(store, auth) {
+module.exports = function createApi(store, auth, connectors) {
   const S = win.__Sched, R = win.__Reports, AI = win.__AI, Pipe = win.__Pipe;
   const RAW = win.DEMO_SEED;
   const nid = () => store.nid();
@@ -827,22 +827,41 @@ module.exports = function createApi(store, auth) {
   const routes = [];
   const on = (method, re, fn) => routes.push([method, new RegExp('^' + re + '$'), fn]);
 
-  const connView = () => ({ jira: { connected: !!CONN.jira, label: CONN.jira, managed: false }, outlook: { connected: !!CONN.outlook, label: CONN.outlook, managed: false } });
+  const KINDS = ['jira', 'outlook'];
+  const connView = () => {
+    const out = {}, meta = (ctx().user.prefs || {}).conn_meta || {};
+    for (const k of KINDS) out[k] = { connected: !!CONN[k], label: CONN[k], managed: false, configured: connectors.configured(k), setup: connectors.configured(k) ? null : connectors.setupInfo(k, ctx().origin), sites: (meta[k] && meta[k].sites) || [], site_id: (meta[k] && meta[k].site_id) || null, token_ok: k === 'jira' };
+    return out;
+  };
   on('GET', '/api/me', async () => ({ user: DB.user, status: { jira: !!CONN.jira, graph: !!CONN.outlook, claude: !!process.env.ANTHROPIC_API_KEY, model: MODEL } }));
   on('GET', '/api/connections', async () => ({ connections: connView() }));
-  on('POST', '/api/connections/(jira|outlook)', async (mm, q, body) => {
-    if (mm[1] === 'jira') {
-      if (!/^https:\/\/[\w.-]+\.[a-z]{2,}/i.test(body.base_url || '')) throw err(400, 'Enter your Jira address, for example https://yourcompany.atlassian.net');
-      if (!body.email || !body.token) throw err(400, 'Enter the account email and the API token');
-      CONN.jira = `${body.email} at ${body.base_url.replace(/^https:\/\//, '').replace(/\/$/, '')}`;
-    } else {
-      if (!body.token || body.token.length < 20) throw err(400, 'Paste the access token from Microsoft Graph');
-      CONN.outlook = ctx().user.email;
-    }
+  // starts the sign in at the service. The browser opens the returned address in a new window.
+  on('POST', '/api/connections/(jira|outlook)/start', async (mm) => ({ url: await connectors.begin(ctx().user.id, mm[1], ctx().origin) }));
+  // saves a finished connection into this request's view of the person's settings
+  const keep = async (kind, result) => {
+    const c = ctx(); c.user.prefs = await connectors.apply(c.user.prefs, kind, result);
+    c.DB.connections = { ...(c.DB.connections || {}), [kind]: result.label };
     await saveUser();
+  };
+  on('POST', '/api/connections/jira/token', async (mm, q, b) => { await keep('jira', await connectors.identifyToken(b.base_url, b.email, b.token)); return { connections: connView() }; });
+  on('POST', '/api/connections/(jira|outlook)/test', async (mm) => {
+    const kind = mm[1], sealed = ((ctx().user.prefs || {}).conn_secrets || {})[kind];
+    if (!sealed) throw err(404, 'This service is not connected yet');
+    const r = await connectors.retest(sealed, kind); await keep(kind, r);
+    return { ok: true, label: r.label, connections: connView() };
+  });
+  on('POST', '/api/connections/jira/site', async (mm, q, b) => {
+    const sealed = ((ctx().user.prefs || {}).conn_secrets || {}).jira;
+    if (!sealed) throw err(404, 'Jira is not connected yet');
+    const secret = await connectors.open(sealed);
+    if (secret.basic) throw err(400, 'This connection uses one Jira address');
+    const r = await connectors.identify('jira', secret, String(b.site_id || '')); await keep('jira', r);
     return { connections: connView() };
   });
-  on('DELETE', '/api/connections/(jira|outlook)', async (mm) => { CONN[mm[1]] = null; await saveUser(); return { connections: connView() }; });
+  on('DELETE', '/api/connections/(jira|outlook)', async (mm) => {
+    const c = ctx(); c.user.prefs = connectors.remove(c.user.prefs, mm[1]); c.DB.connections = { ...(c.DB.connections || {}) }; delete c.DB.connections[mm[1]];
+    await saveUser(); return { connections: connView() };
+  });
   on('PUT', '/api/me', async (m, q, b) => {
     if (b.language) { if (!['en', 'ar'].includes(b.language)) throw err(400, 'Choose English or Arabic'); DB.user.language = b.language; }
     if (b.theme) { if (!['light', 'dark'].includes(b.theme)) throw err(400, 'Choose a light or dark theme'); DB.user.theme = b.theme; }
@@ -1394,13 +1413,13 @@ module.exports = function createApi(store, auth) {
     await store.db.query('UPDATE users SET name = $2, avatar = $3, prefs = $4::jsonb WHERE id = $1', [u.id, u.name, u.avatar, JSON.stringify(prefs)]);
   }
 
-  async function handle({ user, method, path: p, query, body }) {
+  async function handle({ user, method, path: p, query, body, origin }) {
     const { projects, roles, order } = await store.forUser(user.id);
     for (const id of order) settleInterrupted(projects[id]);
     const prefs = user.prefs || {};
     const view = userView(user);
     if (!view.ingest_key) view.ingest_key = require('crypto').randomBytes(16).toString('hex');
-    const c = { user, store, auth, roles, touched: new Set(), level: method === 'GET' ? 'viewer' : 'editor', DB: { user: view, templates: Array.isArray(prefs.templates) ? prefs.templates : [], connections: prefs.connections || {}, projects, order: order.slice() } };
+    const c = { origin: origin || 'http://localhost', user, store, auth, roles, touched: new Set(), level: method === 'GET' ? 'viewer' : 'editor', DB: { user: view, templates: Array.isArray(prefs.templates) ? prefs.templates : [], connections: prefs.connections || {}, projects, order: order.slice() } };
     return als.run(c, async () => {
       for (const [mth, re, fn] of routes) {
         if (mth !== method) continue;

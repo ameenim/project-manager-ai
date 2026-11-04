@@ -54,6 +54,22 @@ const MIGRATIONS = [
   );
   CREATE INDEX IF NOT EXISTS files_project_idx ON project_files(project_id, doc_id);
   `,
+  // 2: connections to other services (Jira, Outlook)
+  `
+  CREATE TABLE IF NOT EXISTS app_secrets (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE TABLE IF NOT EXISTS oauth_states (
+    state_hash TEXT PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    redirect_uri TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_at TIMESTAMPTZ NOT NULL
+  );
+  `,
 ];
 
 async function openPg(url) {

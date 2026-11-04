@@ -19,6 +19,19 @@ Open http://localhost:5000 and create an account. Without a `DATABASE_URL` the s
 4. `SITE_URL` sets the public address used in the sitemap.
 5. `DEMO_ACCOUNT=1` creates a demo account (pm@example.com with password demo1234) with sample projects. Leave it off in production.
 6. `PORT` sets the port (default 5000).
+7. `APP_SECRET` is a long random text used to encrypt saved connection tokens. If it is not set, a key is generated once and kept in the database.
+
+## Connecting Jira and Outlook
+
+People connect from Account settings, onboarding or project settings. The Connect button opens a step by step wizard: start, sign in and allow in a small window, then a live check and a Done screen. Tokens are encrypted and never sent to the browser.
+
+The app owner does a one time setup so that the Connect button can sign people in:
+
+1. Jira: create an OAuth 2.0 (3LO) app at https://developer.atlassian.com/console/myapps/ with the read scopes `read:me`, `read:jira-work`, `read:jira-user` and offline access. Add the callback `https://YOUR_SITE/oauth/callback/jira`. Set `ATLASSIAN_CLIENT_ID` and `ATLASSIAN_CLIENT_SECRET`.
+2. Outlook: register an app in Microsoft Entra (App registrations) with the web redirect `https://YOUR_SITE/oauth/callback/outlook` and the delegated permissions `User.Read` and `Mail.Read`. Create a client secret. Set `MICROSOFT_CLIENT_ID` and `MICROSOFT_CLIENT_SECRET`. Optional `MICROSOFT_TENANT` limits sign in to one company.
+3. Set `SITE_URL` to the public address so the redirect address is exact. The wizard shows the exact address to register while setup is missing. The Replit preview address and the published address are different, so register each one you use.
+
+Jira also has a simpler fallback in the wizard: a personal API token, checked live against Jira.
 
 ## Accounts and roles
 
@@ -68,7 +81,7 @@ Reports are written by the server and kept with the project. Word, Excel and Pow
 ## Known limits
 
 1. The trial and billing screens and the onboarding tour keep their state in the browser.
-2. Webhook intake from Teams, Outlook and Jira is not part of this version.
+2. Connections are verified and stored, but importing Jira issues or Outlook email into projects is not part of this version.
 
 ## How documents are analyzed
 

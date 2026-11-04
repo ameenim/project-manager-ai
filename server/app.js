@@ -9,6 +9,7 @@ const Busboy = require('busboy');
 const dbm = require('./db');
 const { Store } = require('./store');
 const authm = require('./auth');
+const { Connectors } = require('./connectors');
 const createApi = require('./api');
 const { MODEL } = require('./claude');
 
@@ -80,7 +81,8 @@ async function createApp(opts = {}) {
   const db = opts.db || (await dbm.open(opts.dbOptions || {}));
   const store = new Store(db); await store.init();
   const auth = authm.make(db);
-  const api = createApi(store, auth);
+  const connectors = new Connectors(db, opts.connectorOptions || {});
+  const api = createApi(store, auth, connectors);
   const apiLimit = limiter(Number(process.env.API_RATE || 900), 60e3);
   const signupLimit = limiter(30, 3600e3);
   const origin = (req) => { const proto = String(req.headers['x-forwarded-proto'] || 'http').split(',')[0].trim(); return (process.env.SITE_URL || `${proto}://${req.headers['x-forwarded-host'] || req.headers.host || 'localhost'}`).replace(/\/+$/, ''); };
@@ -126,13 +128,30 @@ async function createApp(opts = {}) {
         if (raw.length) { try { body = JSON.parse(raw.toString('utf8')); } catch (e) { return json(res, 400, { error: 'The request body is not valid JSON' }); } }
       }
     }
-    const out = await api.handle({ user, method, path: p, query: Object.fromEntries(url.searchParams), body });
+    const out = await api.handle({ user, method, path: p, query: Object.fromEntries(url.searchParams), body, origin: origin(req) });
     if (out instanceof api.FileResult) {
       const name = encodeURIComponent(out.filename).replace(/['()]/g, escape);
       res.writeHead(200, { 'Content-Type': out.type, 'Content-Length': out.buffer.length, 'Content-Disposition': `attachment; filename="download"; filename*=UTF-8''${name}`, 'Cache-Control': 'no-store', ...SECURITY });
       return res.end(out.buffer);
     }
     return json(res, 200, out);
+  }
+
+  // The service sends the person back here after they allow access. This page needs no sign in: the one time state
+  // value that was made when the connection started says who it belongs to.
+  async function oauthCallback(req, res, url) {
+    const kind = url.pathname.split('/')[3];
+    const back = (ok, msg) => { res.writeHead(302, { Location: `/oauth-done.html?kind=${kind}&ok=${ok ? 1 : 0}${msg ? '&msg=' + encodeURIComponent(msg) : ''}`, 'Cache-Control': 'no-store', ...SECURITY }); res.end(); };
+    if (apiLimit(clientIp(req))) return back(false, 'Too many attempts. Wait a moment and try again.');
+    if (url.searchParams.get('error')) return back(false, url.searchParams.get('error') === 'access_denied' ? 'Access was not allowed, so nothing was connected.' : 'The service did not complete the sign in.');
+    try {
+      const r = await connectors.finish(kind, url.searchParams.get('code'), url.searchParams.get('state'));
+      await connectors.saveFor(r.userId, kind, r);
+      return back(true);
+    } catch (e) {
+      if (!e.status || e.status >= 500) console.error('oauth callback', kind, e.message);
+      return back(false, e.status && e.status < 500 ? e.message : 'The connection could not be completed. Try again.');
+    }
   }
 
   function serveStatic(req, res, url) {
@@ -164,6 +183,7 @@ async function createApp(opts = {}) {
     try {
       if (url.pathname === '/healthz') { await db.query('SELECT 1'); return json(res, 200, { ok: true }); }
       if (req.method === 'GET' && url.pathname === '/srv/ai/status') return json(res, 200, { configured: !!process.env.ANTHROPIC_API_KEY, model: MODEL });
+      if (req.method === 'GET' && /^\/oauth\/callback\/(jira|outlook)$/.test(url.pathname)) return await oauthCallback(req, res, url);
       if (url.pathname.startsWith('/api/')) return await handleApi(req, res, url);
       return serveStatic(req, res, url);
     } catch (e) {
