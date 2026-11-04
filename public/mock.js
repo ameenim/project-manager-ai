@@ -71,7 +71,7 @@
   })();
 
 
-  const P_ = (id) => { const P = DB.projects[Number(id)]; if (!P) throw err(404, 'Project not found'); return P; };
+  const P_ = (id) => { const P = DB.projects[Number(id)]; if (!P) throw err(404, 'Project not found'); if (!P.folders) P.folders = []; if (!P.generated) P.generated = []; return P; };
   const rawProject = (P) => ({ ...P.p, work_days: JSON.stringify(P.p.work_days), holidays: JSON.stringify(P.p.holidays) });
 
   // ---------- five more projects, one per currency ----------
