@@ -405,23 +405,56 @@
 
     async function del(tk) {
       if (!tk) return;
+      const many = g.selTasks();
+      if (many.length > 1) {
+        const ok = await confirmDlg({ title: t('g_delete'), message: t('confirm_delete_many', { n: many.length }), ok: t('delete'), danger: true });
+        if (!ok) return;
+        const changes = {}; for (const x of many) changes[x.id] = { deleted: true };
+        g.select(null);
+        await applyChanges(changes, null);
+        return;
+      }
       const ok = await confirmDlg({ title: t('g_delete'), message: t(tk.summary ? 'confirm_delete_summary' : 'confirm_delete_task', { name: esc(tk.name) }), ok: t('delete'), danger: true });
       if (!ok) return;
-      g.ui.selected = null;
+      g.ui.selected = null; g.ui.multi = new Set();
       await applyChanges({ [tk.id]: { deleted: true } }, null);
     }
 
+    // Moves every selected task. The tasks are handled in the order they appear on screen.
     async function reorder(mutate, failKey) {
-      const tk = g.sel();
-      if (!tk) return;
+      const picked = g.selTasks();
+      if (!picked.length) return;
       const by = byParent();
       const ids = new Set(g.tasks.map((x) => x.id));
-      const k = key(tk, ids);
-      const sibs = by.get(k);
-      const i = sibs.indexOf(tk);
-      if (!mutate(by, sibs, i, tk, k, ids)) { toast(t(failKey), ''); return; }
-      try { data = await api('POST', `${base}/schedule/reorder`, { order: flatten(by) }); g.setData(data); } catch (e) { toast(e.message, 'err'); }
+      const chosen = new Set(picked.map((x) => x.id));
+      const parents = new Map(g.tasks.map((x) => [x, x.parent_id]));
+      const undo = () => parents.forEach((v, x) => { x.parent_id = v; });
+      if (!mutate(by, picked, chosen, ids)) { undo(); toast(t(failKey), ''); return; }
+      try { data = await api('POST', `${base}/schedule/reorder`, { order: flatten(by) }); g.setData(data); } catch (e) { undo(); toast(e.message, 'err'); }
     }
+    const sibsOf = (by, tk, ids) => by.get(key(tk, ids));
+    const moveUp = (by, picked, chosen, ids) => { let moved = false; for (const sibs of new Set(picked.map((x) => sibsOf(by, x, ids)))) for (let i = 1; i < sibs.length; i++) if (chosen.has(sibs[i].id) && !chosen.has(sibs[i - 1].id)) { [sibs[i - 1], sibs[i]] = [sibs[i], sibs[i - 1]]; moved = true; } return moved; };
+    const moveDown = (by, picked, chosen, ids) => { let moved = false; for (const sibs of new Set(picked.map((x) => sibsOf(by, x, ids)))) for (let i = sibs.length - 2; i >= 0; i--) if (chosen.has(sibs[i].id) && !chosen.has(sibs[i + 1].id)) { [sibs[i + 1], sibs[i]] = [sibs[i], sibs[i + 1]]; moved = true; } return moved; };
+    const indentAll = (by, picked, chosen, ids) => {
+      let moved = false;
+      for (const tk of picked) {
+        const sibs = by.get(key(tk, ids)), i = sibs.indexOf(tk);
+        if (i <= 0) continue;
+        const prev = sibs[i - 1]; sibs.splice(i, 1); by.set(prev.id, [...(by.get(prev.id) || []), tk]); tk.parent_id = prev.id; moved = true;
+      }
+      return moved;
+    };
+    const outdentAll = (by, picked, chosen, ids) => {
+      let moved = false; const placed = new Map();
+      for (const tk of picked) {
+        const k = key(tk, ids); if (!k) continue;
+        const parent = g.tasks.find((x) => x.id === k), gp = key(parent, ids), ps = by.get(gp), sibs = by.get(k);
+        sibs.splice(sibs.indexOf(tk), 1);
+        const n = placed.get(k) || 0; placed.set(k, n + 1);
+        ps.splice(ps.indexOf(parent) + 1 + n, 0, tk); tk.parent_id = gp || null; moved = true;
+      }
+      return moved;
+    };
 
     // the plus button between two rows: new task right there, name ready to type
     async function insertBetween(prev, next) {
@@ -441,10 +474,10 @@
     g = new window.Gantt($('#gt', root), {
       t, lang: S.lang, commit,
       onInsert: insertBetween, onAdd: () => addDialog(false), onAddMilestone: () => addDialog(true), onEdit: editDialog, onDelete: del,
-      onIndent: () => reorder((by, sibs, i, tk) => { if (i <= 0) return false; const prev = sibs[i - 1]; sibs.splice(i, 1); by.set(prev.id, [...(by.get(prev.id) || []), tk]); return true; }, 'cant_indent'),
-      onOutdent: () => reorder((by, sibs, i, tk, k, ids) => { if (!k) return false; const parent = g.tasks.find((x) => x.id === k); const gp = key(parent, ids); const ps = by.get(gp); sibs.splice(i, 1); ps.splice(ps.indexOf(parent) + 1, 0, tk); return true; }, 'cant_outdent'),
-      onUp: () => reorder((by, sibs, i) => { if (i <= 0) return false; [sibs[i - 1], sibs[i]] = [sibs[i], sibs[i - 1]]; return true; }, 'cant_move'),
-      onDown: () => reorder((by, sibs, i) => { if (i >= sibs.length - 1) return false; [sibs[i + 1], sibs[i]] = [sibs[i], sibs[i + 1]]; return true; }, 'cant_move'),
+      onIndent: () => reorder(indentAll, 'cant_indent'),
+      onOutdent: () => reorder(outdentAll, 'cant_outdent'),
+      onUp: () => reorder(moveUp, 'cant_move'),
+      onDown: () => reorder(moveDown, 'cant_move'),
       onUndo: async () => {
         const u = undoStack.pop();
         if (!u) return;
@@ -472,11 +505,19 @@
       },
       onEditDep: (pred, succ) => linkDialog(pred, succ),
       onValidate: () => validateDialog(),
-      onProgress: (n, tk) => tk && !tk.summary && commit({ [tk.id]: { progress: n } }, { label: 'progress' }),
-      onMode: (mode, tk) => tk && !tk.summary && (tk.mode || 'auto') !== mode && commit({ [tk.id]: { mode } }, { label: 'mode' }),
-      onMarkTrack: (tk) => { if (!tk || tk.summary) return; const n = plannedPct(tk); if (n === (tk.progress || 0)) return toast(t('g_on_track_same', { n }), ''); commit({ [tk.id]: { progress: n } }, { label: 'progress' }); },
-      onRelink: (tk) => { if (!tk || tk.summary) return; if (!(tk.deps || []).length) return toast(t('g_relink_none'), ''); commit({ [tk.id]: { mode: 'auto', deps: tk.deps.map((d) => ({ ...d })) } }, { label: 'mode' }); },
-      onFlag: (tk) => tk && commit({ [tk.id]: { flag: tk.flag ? 0 : 1 } }, { label: 'flag' }),
+      onProgress: (n, tk) => { const l = g.selTasks().filter((x) => !x.summary); if (!l.length) return; const c = {}; for (const x of l) if ((x.progress || 0) !== n) c[x.id] = { progress: n }; if (Object.keys(c).length) commit(c, { label: 'progress' }); },
+      onMode: (mode, tk) => { const l = g.selTasks().filter((x) => !x.summary && (x.mode || 'auto') !== mode); if (l.length) commit(Object.fromEntries(l.map((x) => [x.id, { mode }])), { label: 'mode' }); },
+      onMarkTrack: (tk) => {
+        const l = g.selTasks().filter((x) => !x.summary); if (!l.length) return;
+        const c = {}; for (const x of l) { const n = plannedPct(x); if (n !== (x.progress || 0)) c[x.id] = { progress: n }; }
+        if (!Object.keys(c).length) return toast(l.length === 1 ? t('g_on_track_same', { n: plannedPct(l[0]) }) : t('g_on_track_same_many'), '');
+        commit(c, { label: 'progress' });
+      },
+      onRelink: (tk) => {
+        const l = g.selTasks().filter((x) => !x.summary && (x.deps || []).length); if (!l.length) return toast(t('g_relink_none'), '');
+        commit(Object.fromEntries(l.map((x) => [x.id, { mode: 'auto', deps: x.deps.map((d) => ({ ...d })) }])), { label: 'mode' });
+      },
+      onFlag: (tk) => { const l = g.selTasks(); if (!l.length) return; const on = l.every((x) => x.flag) ? 0 : 1; commit(Object.fromEntries(l.map((x) => [x.id, { flag: on }])), { label: 'flag' }); },
       onLinkItems: (tk) => taskLinkDialog(tk || g.sel()),
       onLinkManager: () => linkManager(),
       onVersions: () => versionsDialog(),

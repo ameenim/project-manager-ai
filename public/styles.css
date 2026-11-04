@@ -1081,3 +1081,10 @@ input.te-name { font-size: var(--fs-heading); font-weight: 650; padding: 10px 12
 .gt-resizing { user-select: none; }
 .gt-resizing .gt-cells, .gt-resizing .gt-bar { pointer-events: none; }
 @media (pointer: coarse) { .gt-split { width: 18px; } }
+
+/* selecting many tasks */
+.rb-selcount { align-self: center; padding: 2px 9px; border-radius: 999px; background: var(--primary-soft); color: var(--primary); font-size: var(--fs-small); font-weight: 600; white-space: nowrap; }
+.gt-rowbar .rb-count { align-self: center; padding: 0 8px; font-size: var(--fs-small); font-weight: 600; color: var(--primary); white-space: nowrap; }
+.gt-cells.sel { box-shadow: inset 3px 0 0 var(--primary); }
+.gt-left { user-select: none; }
+.gt-left input, .gt-left select { user-select: text; }

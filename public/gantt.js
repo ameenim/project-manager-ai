@@ -42,7 +42,7 @@
       this.tasks = [];
       this.cal = { days: new Set([1, 2, 3, 4, 5]), holidays: new Set() };
       this.today = F(new Date());
-      this.ui = { zoom: 'week', critical: true, baseline: true, compact: false, z: 1, selected: null, collapsed: new Set(), legend: true, filter: 'all', q: '', tab: 'task', ribbon: true };
+      this.ui = { zoom: 'week', critical: true, baseline: true, compact: false, z: 1, selected: null, multi: new Set(), anchor: null, collapsed: new Set(), legend: true, filter: 'all', q: '', tab: 'task', ribbon: true };
       try { const sv = localStorage.getItem('pm_rb_tab'); if (sv) this.ui.tab = sv; if (localStorage.getItem('pm_rb_open') === '0') this.ui.ribbon = false; const lw = Number(localStorage.getItem('pm_gt_leftw')); if (lw >= 160) this.ui.leftW = lw; } catch (e) { /* storage blocked */ }
       this.items = [];
       this.impactOn = true;
@@ -70,6 +70,7 @@
       this.items = d.items || [];
       this.itemMap = new Map(this.items.map((i) => [i.id, i]));
       if (d.impact_check !== undefined) this.impactOn = d.impact_check;
+      { const have = new Set(this.tasks.map((x) => x.id)); for (const id of [...this.ui.multi]) if (!have.has(id)) this.ui.multi.delete(id); if (this.ui.selected != null && !have.has(this.ui.selected)) this.ui.selected = this.ui.multi.size ? [...this.ui.multi].pop() : null; if (this.ui.anchor != null && !have.has(this.ui.anchor)) this.ui.anchor = null; }
       // very large plans open collapsed to work package level, so the first view is fast and readable
       if (!this._auto && this.tasks.length > 400) {
         this._auto = true; this.ui.level = 3; this.ui.collapsed = new Set();
@@ -213,7 +214,7 @@
           </div>
           <div class="rb-body-wrap">
             <div class="rb-panel" data-panel="task">
-              ${grp(t('g_grp_tasks'), L('add', 'plus', t('g_add_task'), '', 'primary') + L('addms', 'diamond', t('g_add_milestone')) + col(Sm('edit', 'edit', t('g_edit')) + Sm('del', 'trash', t('g_delete'))))}
+              ${grp(t('g_grp_tasks'), L('add', 'plus', t('g_add_task'), '', 'primary') + L('addms', 'diamond', t('g_add_milestone')) + col(Sm('edit', 'edit', t('g_edit')) + Sm('del', 'trash', t('g_delete')) + '<span class="rb-selcount" data-selcount hidden></span>'))}
               ${grp(t('g_grp_outline'), col(Sm('indent', 'indent', t('g_indent_short'), t('g_indent')) + Sm('outdent', 'outdent', t('g_outdent_short'), t('g_outdent')) + Sm('expandall', 'expand', t('g_expand_all'))) + col(Sm('up', 'up', t('g_up_short'), t('g_move_up')) + Sm('down', 'down', t('g_down_short'), t('g_move_down')) + Sm('collapseall', 'collapse', t('g_collapse_all'))))}
               ${grp(t('g_grp_schedule'), `<div class="rb-stack"><div class="rb-seg" role="group" aria-label="${esc(t('progress'))}">${[0, 25, 50, 75, 100].map((n) => `<button type="button" class="rb chip" data-g="prog-${n}" data-tip="${esc(t('g_set_progress', { n }))}" aria-label="${esc(t('g_set_progress', { n }))}">${n}%</button>`).join('')}</div><div class="rb-row">${Sm('track', 'clock', t('g_on_track'), t('g_on_track_tip'))}${Sm('relink', 'refresh', t('g_respect_links'), t('g_respect_links_tip'))}</div></div>` + L('modemanual', 'pin', t('g_btn_manual'), t('g_mode_manual_tip')) + L('modeauto', 'auto', t('g_btn_auto'), t('g_mode_auto_tip')))}
               ${grp(t('g_grp_properties'), L('flag', 'star', t('g_hl_short'), t('g_highlight')) + L('link', 'link', t('g_link_items'), t('g_link_items_tip')))}
@@ -291,13 +292,17 @@
       const sb = $g('setbaseline')?.querySelector('span'); if (sb) sb.textContent = this.hasBaseline ? T('g_update_baseline') : T('g_set_baseline');
       this.legendEl.classList.toggle('hidden', !this.ui.legend);
       // selection
-      const sel = this.sel(), has = !!sel, leaf = has && !sel.summary;
-      for (const id of ['edit', 'del', 'outdent', 'indent', 'up', 'down', 'flag', 'link', 'goto']) { const el = $g(id); if (el) el.disabled = !has; }
+      const sel = this.sel(), has = !!sel, many = this.selCount() > 1, picked = this.selTasks();
+      const leafs = picked.filter((x) => !x.summary), leaf = leafs.length > 0;
+      for (const id of ['outdent', 'indent', 'up', 'down', 'flag', 'del']) { const el = $g(id); if (el) el.disabled = !has; }
+      for (const id of ['edit', 'link', 'goto']) { const el = $g(id); if (el) el.disabled = !has || many; }
       for (const id of ['prog-0', 'prog-25', 'prog-50', 'prog-75', 'prog-100', 'track', 'relink', 'modemanual', 'modeauto']) { const el = $g(id); if (el) el.disabled = !leaf; }
-      R.querySelectorAll('[data-g^="prog-"]').forEach((el) => el.classList.toggle('on', leaf && (sel.progress || 0) === Number(el.dataset.g.slice(5))));
-      set('modemanual', leaf && sel.mode === 'manual'); set('modeauto', leaf && sel.mode !== 'manual'); set('flag', has && sel.flag);
-      const fl = $g('flag')?.querySelector('span'); if (fl) fl.textContent = T(has && sel.flag ? 'g_unhl_short' : 'g_hl_short');
-      const lk = R.querySelectorAll('[data-g="link"] span'); lk.forEach((el) => { el.textContent = T('g_link_items') + (has && this.linkCount(sel) ? ` (${this.linkCount(sel)})` : ''); });
+      const same = (f) => leaf && leafs.every((x) => f(x));
+      R.querySelectorAll('[data-g^="prog-"]').forEach((el) => el.classList.toggle('on', same((x) => (x.progress || 0) === Number(el.dataset.g.slice(5)))));
+      set('modemanual', same((x) => x.mode === 'manual')); set('modeauto', same((x) => x.mode !== 'manual')); set('flag', has && picked.length > 0 && picked.every((x) => x.flag));
+      const fl = $g('flag')?.querySelector('span'); if (fl) fl.textContent = T(has && picked.length > 0 && picked.every((x) => x.flag) ? 'g_unhl_short' : 'g_hl_short');
+      const lk = R.querySelectorAll('[data-g="link"] span'); lk.forEach((el) => { el.textContent = T('g_link_items') + (has && !many && this.linkCount(sel) ? ` (${this.linkCount(sel)})` : ''); });
+      const sc = R.querySelector('[data-selcount]'); if (sc) { sc.hidden = !many; sc.textContent = many ? T('g_n_selected', { n: this.selCount() }) : ''; }
       // filter
       const fs = $g('filter'); if (fs && fs.value !== this.ui.filter) fs.value = this.ui.filter;
       const qi = $g('q'); if (qi && document.activeElement !== qi && qi.value !== (this.ui.q || '')) qi.value = this.ui.q || '';
@@ -347,6 +352,17 @@
     }
 
     sel() { return this.tasks.find((t) => t.id === this.ui.selected) || null; }
+    // ---------- selecting one or many tasks ----------
+    isSel(id) { return this.ui.selected != null && (this.ui.selected === id || this.ui.multi.has(id)); }
+    selTasks() { return (this.vis || this.tasks).filter((t) => this.isSel(t.id)); }
+    selCount() { return this.ui.selected == null ? 0 : Math.max(1, this.selTasks().length); }
+    paintSel() {
+      this.inner.querySelectorAll('.sel').forEach((el) => el.classList.remove('sel'));
+      for (const t of this.selTasks()) {
+        this.inner.querySelector(`.gt-cells[data-row="${t.id}"]`)?.classList.add('sel');
+        this.inner.querySelector(`.gt-bar[data-id="${t.id}"]`)?.classList.add('sel');
+      }
+    }
 
     // ---------- render ----------
     render() {
@@ -493,7 +509,7 @@
 
     rowHtml(t) {
       const cols = this.cols();
-      const sel = this.ui.selected === t.id ? 'sel' : '';
+      const sel = this.isSel(t.id) ? 'sel' : '';
       const caret = t.summary ? `<span class="gt-caret" data-caret="${t.id}">${ic(this.ui.collapsed.has(t.id) ? 'down' : 'up').replace('<svg', '<svg style="width:12px;height:12px;transform:rotate(' + (this.ui.collapsed.has(t.id) ? '-90' : '0') + 'deg)"')}</span>` : '<span class="gt-caret"></span>';
       const cell = (c) => {
         const w = `style="width:${c[2]}px"`;
@@ -528,7 +544,7 @@
       const g = this.barGeom(t);
       const st = this.status(t);
       const crit = this.ui.critical && t.critical && !t.summary ? 'crit' : '';
-      const sel = (this.ui.selected === t.id ? 'sel' : '') + (t.flag ? ' flagged' : '') + (t.mode === 'manual' && !t.summary ? ' manual' : '') + (t.conflict ? ' conflict' : '');
+      const sel = (this.isSel(t.id) ? 'sel' : '') + (t.flag ? ' flagged' : '') + (t.mode === 'manual' && !t.summary ? ' manual' : '') + (t.conflict ? ' conflict' : '');
       let html = '';
       if (this.ui.baseline && t.b_start && t.b_end) {
         html += `<div class="gt-base" style="left:${this.x(t.b_start)}px;width:${(diff(t.b_start, t.b_end) + 1) * this.ppd - 2}px;top:${i * ROW + ROW - 8}px"></div>`;
@@ -693,6 +709,7 @@
       if (e.target.matches('input,select,textarea')) return;
       const t = this.sel();
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); this.o.onUndo && this.o.onUndo(); return; }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); this.selectAll(); return; }
       if (!t) return;
       if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); this.o.onDelete && this.o.onDelete(t); }
       else if (e.key === 'Enter') { e.preventDefault(); this.o.onEdit && this.o.onEdit(t); }
@@ -703,18 +720,34 @@
         e.preventDefault();
         const i = this.rowIndex.get(t.id) + (e.key === 'ArrowDown' ? 1 : -1);
         const n = this.vis[i];
-        if (n) this.select(n.id);
+        if (n) { if (e.shiftKey) { if (this.ui.anchor == null) this.ui.anchor = t.id; this.select(n.id, { shiftKey: true }); } else this.select(n.id); }
       }
     }
 
-    select(id) {
-      const was = this.ui.selected;
-      this.ui.selected = id;
-      this.inner.querySelectorAll('.sel').forEach((el) => el.classList.remove('sel'));
-      this.inner.querySelector(`.gt-cells[data-row="${id}"]`)?.classList.add('sel');
-      this.inner.querySelector(`.gt-bar[data-id="${id}"]`)?.classList.add('sel');
+    // Plain click selects one task. Ctrl or Cmd click adds or removes one. Shift click selects the range from the last clicked task.
+    select(id, ev) {
+      const was = this.ui.selected, U = this.ui;
+      const ctrl = ev && (ev.ctrlKey || ev.metaKey), shift = ev && ev.shiftKey;
+      if (id == null) { U.selected = null; U.multi = new Set(); U.anchor = null; }
+      else if (shift && U.anchor != null && this.rowIndex.has(U.anchor) && this.rowIndex.has(id)) {
+        const a = this.rowIndex.get(U.anchor), b = this.rowIndex.get(id), lo = Math.min(a, b), hi = Math.max(a, b);
+        const set = ctrl ? new Set(U.multi) : new Set();
+        for (let i = lo; i <= hi; i++) set.add(this.vis[i].id);
+        U.multi = set; U.selected = id;
+      } else if (ctrl) {
+        const set = new Set(U.multi); if (U.selected != null) set.add(U.selected);
+        if (set.has(id) && set.size > 1) { set.delete(id); U.selected = [...set].pop(); } else set.add(id), U.selected = id;
+        U.multi = set; U.anchor = id;
+      } else if (U.multi.size > 1 && U.multi.has(id) && ev && ev.type === 'pointerdown') { U.selected = id; } // pressing a selected bar keeps the group
+      else { U.selected = id; U.multi = new Set([id]); U.anchor = id; }
+      this.paintSel();
       this.updateToolbar();
-      this.placeBar(was === id ? id : null);
+      this.placeBar(was === id && this.selCount() === 1 ? id : null);
+    }
+    selectAll() {
+      const ids = (this.vis || []).map((t) => t.id); if (!ids.length) return;
+      this.ui.multi = new Set(ids); this.ui.selected = ids[0]; this.ui.anchor = ids[0];
+      this.paintSel(); this.updateToolbar(); this.placeBar(null);
     }
 
     bind() {
@@ -725,7 +758,7 @@
         const md = e.target.closest('[data-mode]');
         if (md) { const x = this.tasks.find((k) => k.id === Number(md.dataset.mode)); if (x) this.o.commit({ [x.id]: { mode: x.mode === 'manual' ? 'auto' : 'manual' } }, { label: 'mode' }); return; }
         const row = e.target.closest('[data-row]');
-        if (row) this.select(Number(row.dataset.row));
+        if (row) this.select(Number(row.dataset.row), e);
       });
       this.bindInsert(left);
       left.addEventListener('dblclick', (e) => {
@@ -788,23 +821,28 @@
       const old = this.inner.querySelector('.gt-rowbar'); if (old) old.remove();
       const t = this.sel(); this._barFor = t ? t.id : null;
       if (!t || !this.rowIndex.has(t.id)) return;
-      const i = this.rowIndex.get(t.id), T = this.t;
+      const picked = this.selTasks(), many = picked.length > 1;
+      const first = many ? Math.min(...picked.map((x) => this.rowIndex.get(x.id))) : this.rowIndex.get(t.id);
+      const i = first, T = this.t;
       const A = (a, icn, tip, extra = '', dis = false) => `<button type="button" class="${extra}" data-a="${a}" data-tip="${esc(tip)}" aria-label="${esc(tip)}" ${dis ? 'disabled' : ''}>${ic(icn)}</button>`;
-      const done = (t.progress || 0) >= 100;
+      const leafs = picked.filter((x) => !x.summary);
+      const done = leafs.length > 0 && leafs.every((x) => (x.progress || 0) >= 100), flagged = picked.every((x) => x.flag);
+      const manual = leafs.length > 0 && leafs.every((x) => x.mode === 'manual');
       const el = document.createElement('div');
       el.className = 'gt-rowbar' + (i === 0 ? ' below' : '') + (prevFor === t.id ? ' still' : '');
       el.setAttribute('role', 'toolbar'); el.setAttribute('aria-label', T('g_row_actions'));
       el.style.top = (i === 0 ? (i + 1) * ROW + 4 : i * ROW - 42) + 'px';
-      el.innerHTML = A('edit', 'edit', T('g_edit')) + A('del', 'trash', T('g_delete'), 'danger') + '<i class="sp"></i>'
+      el.innerHTML = (many ? `<span class="rb-count">${esc(T('g_n_selected', { n: picked.length }))}</span>` : A('edit', 'edit', T('g_edit'))) + A('del', 'trash', T('g_delete'), 'danger') + '<i class="sp"></i>'
         + A('up', 'up', T('g_move_up')) + A('down', 'down', T('g_move_down')) + A('outdent', 'outdent', T('g_outdent')) + A('indent', 'indent', T('g_indent')) + '<i class="sp"></i>'
-        + A('links', 'link', T('g_link_items'), this.linkCount(t) ? 'on' : '') + A('flag', 'star', T(t.flag ? 'g_unhighlight' : 'g_highlight'), t.flag ? 'on' : '') + A('done', 'check', T(done ? 'g_reopen' : 'g_mark_done'), done ? 'on' : '', !!t.summary)
-        + A('mode', t.mode === 'manual' ? 'pin' : 'auto', T(t.mode === 'manual' ? 'g_mode_manual_tip' : 'g_mode_auto_tip'), t.mode === 'manual' ? 'on' : '', !!t.summary)
+        + (many ? '' : A('links', 'link', T('g_link_items'), this.linkCount(t) ? 'on' : '')) + A('flag', 'star', T(flagged ? 'g_unhighlight' : 'g_highlight'), flagged ? 'on' : '') + A('done', 'check', T(done ? 'g_reopen' : 'g_mark_done'), done ? 'on' : '', !leafs.length)
+        + A('mode', manual ? 'pin' : 'auto', T(manual ? 'g_mode_manual_tip' : 'g_mode_auto_tip'), manual ? 'on' : '', !leafs.length)
         + '<i class="sp"></i>' + A('close', 'x', T('close'));
       this.inner.querySelector('.gt-left').appendChild(el);
       el.addEventListener('click', (e) => {
         const b = e.target.closest('[data-a]'); if (!b || b.disabled) return;
         e.stopPropagation();
         const a = b.dataset.a, o = this.o, cur = this.sel(); if (!cur) return;
+        const pk = this.selTasks(), lf = pk.filter((x) => !x.summary);
         if (a === 'close') { this.select(null); return; }
         if (a === 'edit') o.onEdit && o.onEdit(cur);
         else if (a === 'del') o.onDelete && o.onDelete(cur);
@@ -813,9 +851,9 @@
         else if (a === 'indent') o.onIndent && o.onIndent(cur);
         else if (a === 'outdent') o.onOutdent && o.onOutdent(cur);
         else if (a === 'links') o.onLinkItems && o.onLinkItems(cur);
-        else if (a === 'flag') o.commit({ [cur.id]: { flag: cur.flag ? 0 : 1 } }, { label: 'flag' });
-        else if (a === 'done') o.commit({ [cur.id]: { progress: (cur.progress || 0) >= 100 ? 0 : 100 } }, { label: 'progress' });
-        else if (a === 'mode') o.commit({ [cur.id]: { mode: cur.mode === 'manual' ? 'auto' : 'manual' } }, { label: 'mode' });
+        else if (a === 'flag') { const on = pk.every((x) => x.flag) ? 0 : 1; o.commit(Object.fromEntries(pk.map((x) => [x.id, { flag: on }])), { label: 'flag' }); }
+        else if (a === 'done') { const open = lf.every((x) => (x.progress || 0) >= 100); o.commit(Object.fromEntries(lf.map((x) => [x.id, { progress: open ? 0 : 100 }])), { label: 'progress' }); }
+        else if (a === 'mode') { const to = lf.every((x) => x.mode === 'manual') ? 'auto' : 'manual'; o.commit(Object.fromEntries(lf.map((x) => [x.id, { mode: to }])), { label: 'mode' }); }
       });
     }
 
@@ -884,7 +922,7 @@
       const id = Number(bar.dataset.id);
       const t = this.tasks.find((x) => x.id === id);
       if (!t) return;
-      this.select(id);
+      this.select(id, e);
       this.scroll.focus({ preventScroll: true });
       if (t.summary) return;
       const handle = e.target.closest('[data-m]');
