@@ -176,6 +176,43 @@ class Connectors {
     return this.identify(kind, secret);
   }
 
+
+  // ----- reading mail and Jira work for the sync button -----
+  async fresh(prefs, kind) {
+    await this.loadConfig();
+    const sealed = prefs && prefs.conn_secrets && prefs.conn_secrets[kind];
+    if (!sealed) return null;
+    const p = this.P[kind]; let secret = await this.open(sealed), changed = false;
+    if (secret.access && secret.expires_at && secret.expires_at - 60e3 < Date.now()) {
+      if (!secret.refresh) throw err(409, `${p.name} needs you to sign in again. Disconnect and connect again.`);
+      secret = this.fromToken(await this.tokenRequest(p, { grant_type: 'refresh_token', refresh_token: secret.refresh }), secret); changed = true;
+    }
+    return { secret, changed };
+  }
+  async outlookMail(secret, sinceIso, limit = 50) {
+    const q = new URLSearchParams({ $top: String(limit), $orderby: 'receivedDateTime desc', $select: 'id,subject,from,receivedDateTime,bodyPreview,body', $filter: `receivedDateTime ge ${sinceIso}` });
+    const r = await this.call(`https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?${q}`, secret, { headers: { Prefer: 'outlook.body-content-type="text"' } });
+    if (r.status === 401 || r.status === 403) throw err(409, 'Outlook did not allow reading mail. Disconnect and connect again, and allow mail access.');
+    if (!r.ok) throw err(502, 'Outlook did not answer. Try again in a moment.');
+    const data = await r.json().catch(() => ({}));
+    return (data.value || []).map((m) => ({ ext_id: m.id, subject: m.subject || '', sender: (m.from && m.from.emailAddress && (m.from.emailAddress.name || m.from.emailAddress.address)) || null, body: String((m.body && m.body.content) || m.bodyPreview || '').replace(/\r/g, '').trim(), at: m.receivedDateTime }));
+  }
+  async jiraIssues(secret, key, days = 14, limit = 25) {
+    const base = secret.basic ? secret.base_url : `https://api.atlassian.com/ex/jira/${secret.cloud_id}`;
+    const q = new URLSearchParams({ jql: `project = "${String(key).replace(/[^A-Za-z0-9_]/g, '')}" AND updated >= -${days}d ORDER BY updated DESC`, fields: 'summary,status,comment,updated,assignee,reporter', maxResults: String(limit) });
+    const r = await this.call(`${base}/rest/api/3/search/jql?${q}`, secret);
+    if (r.status === 401 || r.status === 403) throw err(409, 'Jira did not allow reading issues. Disconnect and connect again.');
+    if (r.status === 400 || r.status === 404) throw err(404, `Jira could not find the project ${key}. Check the Jira link in the project settings.`);
+    if (!r.ok) throw err(502, 'Jira did not answer. Try again in a moment.');
+    const data = await r.json().catch(() => ({}));
+    const adf = (n) => (!n ? '' : typeof n === 'string' ? n : n.text || (n.content || []).map(adf).join(n.type === 'paragraph' ? '\n' : ''));
+    return (data.issues || []).map((i) => {
+      const f = i.fields || {}, cs = (f.comment && f.comment.comments) || [], last = cs[cs.length - 1];
+      return { ext_id: `${i.key}:${f.updated}`, subject: `${i.key} ${f.summary || ''}`.trim(), sender: (last && last.author && last.author.displayName) || (f.assignee && f.assignee.displayName) || (f.reporter && f.reporter.displayName) || null,
+        body: `Status: ${(f.status && f.status.name) || 'unknown'}${last ? `\nLatest comment: ${adf(last.body).trim()}` : ''}`, at: f.updated };
+    });
+  }
+
   // ----- what is kept in the person's settings -----
   async apply(prefs, kind, result) {
     const out = { ...(prefs || {}) };

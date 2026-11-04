@@ -150,10 +150,18 @@
     async function sync(btn) {
       const r = await busy(btn, () => api('POST', `/api/projects/${p.id}/sync`, {}));
       if (!r) return;
-      const done = Object.entries(r.report).filter(([, v]) => v != null).map(([k, v]) => `${k}: ${v}`).join(', ');
-      const errs = Object.entries(r.errors).map(([k, v]) => `${k}: ${v}`).join('\n');
-      toast(done ? t('sync_done', { d: done }) : t('sync_none'), done ? 'ok' : '');
-      if (errs && !done) modal({ title: t('sync_now'), body: `<p>${t('sync_help')}</p><pre style="white-space:pre-wrap;background:var(--surface-2);padding:10px;border-radius:8px">${esc(errs)}</pre><p class="small muted">${t('sync_webhook_hint')}</p>`, footer: `<button class="btn primary" data-close>${t('close')}</button>` });
+      const NAMES = { outlook: 'Outlook', jira: 'Jira' };
+      const got = Object.entries(r.report || {}).filter(([, v]) => v > 0).map(([k, v]) => `${NAMES[k] || k} ${v}`).join(', ');
+      const errs = Object.entries(r.errors || {}).filter(([k]) => k !== 'connect');
+      if (got) toast(t('sync_done', { d: got }), 'ok');
+      else if (!errs.length && !r.needs_connection) toast(t('sync_none'));
+      if (r.needs_connection) {
+        const m = modal({ title: t('sync_now'), body: `<p>${t('sync_connect_p')}</p>`, footer: `<button class="btn" data-close>${t('close')}</button><button class="btn" id="syJira">${icon('jira')}${t('sync_connect_jira')}</button><button class="btn primary" id="syOut">${icon('mail')}${t('sync_connect_outlook')}</button>` });
+        m.$('#syJira').onclick = () => { m.close(); PM.connect.wizard('jira', () => sync(btn)); };
+        m.$('#syOut').onclick = () => { m.close(); PM.connect.wizard('outlook', () => sync(btn)); };
+      } else if (errs.length) {
+        modal({ title: t('sync_now'), body: `<p>${t('sync_help')}</p><ul class="cw-list">${errs.map(([k, v]) => `<li><b>${esc(NAMES[k] || k)}</b>: ${esc(v)}</li>`).join('')}</ul>`, footer: `<button class="btn primary" data-close>${t('close')}</button>` });
+      }
       reload();
     }
     draw();

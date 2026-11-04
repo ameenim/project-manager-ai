@@ -16,8 +16,12 @@ async function fakeFetch(url, init = {}) {
   if (url === 'https://api.atlassian.com/oauth/token/accessible-resources') return reply(200, sites);
   if (/^https:\/\/api\.atlassian\.com\/ex\/jira\/(\w+)\/rest\/api\/3\/myself$/.test(url)) return reply(200, { displayName: 'Ann Jira' });
   if (url.startsWith('https://login.microsoftonline.com/')) return reply(200, { access_token: 'MS_ACCESS_SECRET', refresh_token: 'MS_REFRESH_SECRET', expires_in: 3600 });
-  if (url.startsWith('https://graph.microsoft.com/v1.0/me')) return reply(200, { displayName: 'Ann Mail', mail: 'ann@corp.com' });
+  if (url.startsWith('https://graph.microsoft.com/v1.0/me') && !url.includes('/mailFolders/')) return reply(200, { displayName: 'Ann Mail', mail: 'ann@corp.com' });
   if (url === 'https://acme.atlassian.net/rest/api/3/myself') return basicStatus === 200 ? reply(200, { displayName: 'Token Ann' }) : reply(basicStatus, {});
+  if (url.startsWith('https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages')) return reply(200, { value: [
+    { id: 'm1', subject: 'Re: Acme Portal delivery', from: { emailAddress: { name: 'Sam Lee', address: 'sam@x.com' } }, receivedDateTime: '2026-11-01T10:00:00Z', body: { content: 'Hi, the Acme Portal design sign off is done.' } },
+    { id: 'm2', subject: 'Lunch on Friday', from: { emailAddress: { name: 'Bob', address: 'b@x.com' } }, receivedDateTime: '2026-11-01T11:00:00Z', body: { content: 'Pizza?' } }] });
+  if (url.startsWith('https://api.atlassian.com/ex/jira/c1/rest/api/3/search/jql')) return reply(200, { issues: [{ key: 'ACME-7', fields: { summary: 'Design sign off', status: { name: 'Done' }, updated: '2026-11-02T09:00:00Z', comment: { comments: [{ author: { displayName: 'Ann Jira' }, body: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Finished and signed.' }] }] } }] } } }] });
   throw new Error('unexpected call ' + url);
 }
 let s;
@@ -150,4 +154,24 @@ test('the owner can paste the app id and secret in the app, no restart and no en
   const row = await s.app.db.query("SELECT value FROM app_secrets WHERE key = 'oauth_outlook'");
   assert.ok(!row.rows[0].value.includes('pasted-secret-value'), 'stored encrypted');
   await s.app.db.query("DELETE FROM app_secrets WHERE key = 'oauth_outlook'");
+});
+
+test('Sync now reads new mail and Jira work for the project and never repeats a message', async () => {
+  setEnv(); const u = await s.user();
+  const p = await s.project(u.token, 'Acme Portal');
+  const empty = await s.call('POST', `/api/projects/${p.id}/sync`, {}, u.token);
+  assert.equal(empty.data.needs_connection, true, 'nothing connected yet gives a friendly next step');
+  for (const kind of ['outlook', 'jira']) { const { state } = await connect(u, kind); assert.equal((await callback(kind, { code: 'C' + kind, state })).status, 302); }
+  await s.call('PUT', `/api/projects/${p.id}`, { jira_url: 'https://acme.atlassian.net/browse/ACME' }, u.token);
+  const r1 = await s.call('POST', `/api/projects/${p.id}/sync`, {}, u.token);
+  assert.equal(r1.status, 200, JSON.stringify(r1.data));
+  assert.deepEqual(r1.data.errors, {});
+  assert.ok(r1.data.report.outlook >= 1, 'only the mail that mentions the project is read');
+  assert.ok(r1.data.report.jira >= 1);
+  const rows = (await s.call('GET', `/api/projects/${p.id}/inbox`, null, u.token)).data.inbox;
+  assert.ok(rows.some((x) => x.source === 'outlook' && /Acme Portal/.test(x.subject)));
+  assert.ok(!rows.some((x) => /Lunch/.test(x.subject || '')), 'unrelated mail is ignored');
+  assert.ok(rows.some((x) => x.source === 'jira' && /ACME-7/.test(x.subject)));
+  const r2 = await s.call('POST', `/api/projects/${p.id}/sync`, {}, u.token);
+  assert.equal(r2.data.report.outlook, 0); assert.equal(r2.data.report.jira, 0);
 });

@@ -372,7 +372,7 @@ module.exports = function createApi(store, auth, connectors) {
     return r ? r.name : hint || null;
   }
   function addInbox(P, o) {
-    const row = { id: nid(), owner_id: DB.user.id, project_id: P.id, source: o.source, ext_id: null, sender: o.sender || null, subject: o.subject || null, body: (o.body || '').slice(0, 4000), resource: o.resource || null, action: o.action || null, summary: o.summary || null, confidence: o.confidence ?? null, status: o.status || 'pending', doc_id: o.doc_id ?? null, created_at: nowTs(), applied_at: null };
+    const row = { id: nid(), owner_id: DB.user.id, project_id: P.id, source: o.source, ext_id: o.ext_id || null, sender: o.sender || null, subject: o.subject || null, body: (o.body || '').slice(0, 4000), resource: o.resource || null, action: o.action || null, summary: o.summary || null, confidence: o.confidence ?? null, status: o.status || 'pending', doc_id: o.doc_id ?? null, created_at: nowTs(), applied_at: null };
     P.inbox.unshift(row);
     if (row.status === 'pending' && P.p.auto_apply && row.action && row.action.type !== 'flag_issue' && (row.confidence ?? 0) >= (P.p.auto_threshold ?? 0.9)) {
       try { const r = applyAction(P, row.action, `AI (${row.source})`, row.doc_id); row.status = 'auto_applied'; row.action = { ...row.action, prev: r.prev, summary: r.summary }; } catch (e) { /* stays pending */ }
@@ -1354,19 +1354,68 @@ Rules:
     if (!['applied', 'auto_applied'].includes(r.status)) throw err(400, 'Nothing to undo');
     undoAction(P, r.action || {}); r.status = 'undone'; return { ok: true };
   });
-  on('POST', '/api/projects/(\\d+)/messages', async (m, q, b) => {
-    const P = P_(m[1]);
-    if (!String(b.body || '').trim()) throw err(400, 'Paste the message text');
+  // one message in, suggestions out (used by pasted messages, webhooks and the sync button)
+  async function ingestMessage(P, b) {
     const text = `${b.subject || ''}\n${b.body}`.trim();
     const deliverables = P.items.filter((i) => i.kind === 'deliverable' && i.status !== 'ignored');
     const result = await AI.interpretMessage({ text, sender: b.sender, tasks: P.tasks, resources: P.resources, deliverables });
     const who = resolveResource(P, b.sender, result.resource);
-    const base = { source: b.source || 'manual', sender: b.sender || null, subject: b.subject || null, body: text, resource: who };
+    const base = { source: b.source || 'manual', sender: b.sender || null, subject: b.subject || null, body: text, resource: who, ext_id: b.ext_id || null };
     if (!result.updates.length) { addInbox(P, { ...base, status: 'no_action', summary: 'No project status information found in this message.' }); return { rows: 1 }; }
     for (const u of result.updates) addInbox(P, { ...base, action: u, summary: describeAction(P, u), confidence: u.confidence ?? 0.5 });
     return { rows: result.updates.length };
+  }
+  on('POST', '/api/projects/(\\d+)/messages', async (m, q, b) => {
+    const P = P_(m[1]);
+    if (!String(b.body || '').trim()) throw err(400, 'Paste the message text');
+    return ingestMessage(P, b);
   });
-  on('POST', '/api/projects/(\\d+)/sync', async () => ({ report: {}, errors: { demo: 'Teams, Outlook and Jira are not connected in this demo. In the real app you set the connection keys in Settings, or push messages to the webhook URLs.' } }));
+  // reads new mail and Jira work for this project from the connected accounts and turns each into suggestions
+  const projectKey = (P) => {
+    const u = String(P.p.jira_url || ''), m = /\/(?:browse|projects)\/([A-Za-z][A-Za-z0-9_]+)/.exec(u) || /[?&]projectKey=([A-Za-z][A-Za-z0-9_]+)/.exec(u);
+    if (m) return m[1].toUpperCase();
+    const counts = {}; for (const t of P.tasks) { const k = /^([A-Z][A-Z0-9_]+)-\d+/.exec(t.jira_key || ''); if (k) counts[k[1]] = (counts[k[1]] || 0) + 1; }
+    return Object.keys(counts).sort((x, y) => counts[y] - counts[x])[0] || null;
+  };
+  const mentions = (P, text) => {
+    const hay = String(text || '').toLowerCase(), name = String(P.p.name || '').toLowerCase().trim();
+    if (name.length >= 4 && hay.includes(name)) return true;
+    const code = String(P.p.code || '').toLowerCase().trim();
+    if (code.length >= 3 && hay.includes(code)) return true;
+    const toks = name.split(/[^a-z0-9؀-ۿ]+/).filter((w) => w.length > 3);
+    return toks.length >= 2 && toks.length <= 3 && toks.every((w) => hay.includes(w));
+  };
+  on('POST', '/api/projects/(\\d+)/sync', async (m) => {
+    const P = P_(m[1]), c = ctx(), report = {}, errors = {};
+    const prefs = c.user.prefs || {}, secrets = prefs.conn_secrets || {};
+    const kinds = ['outlook', 'jira'].filter((k) => secrets[k]);
+    if (!kinds.length) return { report, errors: { connect: 'Connect Outlook or Jira first. Then Sync now brings in new mail and Jira updates.' }, needs_connection: true };
+    P.sync = P.sync || {};
+    const known = new Set(P.inbox.map((r) => r.ext_id).filter(Boolean));
+    let changedPrefs = prefs;
+    for (const kind of kinds) {
+      try {
+        const f = await connectors.fresh(changedPrefs, kind);
+        if (f.changed) changedPrefs = await connectors.apply(changedPrefs, kind, { label: (prefs.connections || {})[kind], secret: f.secret, meta: (prefs.conn_meta || {})[kind] });
+        const since = P.sync[kind] || new Date(Date.now() - 14 * 864e5).toISOString();
+        let list;
+        if (kind === 'outlook') list = (await connectors.outlookMail(f.secret, since)).filter((x) => mentions(P, `${x.subject}\n${x.body.slice(0, 1500)}`));
+        else {
+          const key = projectKey(P);
+          if (!key) { errors.jira = 'Add the Jira project link in the project settings so we know which Jira project to read.'; continue; }
+          list = await connectors.jiraIssues(f.secret, key);
+        }
+        const fresh = list.filter((x) => !known.has(x.ext_id)).slice(0, 15);
+        let n = 0;
+        for (const x of fresh) { const r = await ingestMessage(P, { ...x, source: kind }); n += r.rows; known.add(x.ext_id); }
+        report[kind] = fresh.length ? n : 0;
+        P.sync[kind] = new Date().toISOString();
+      } catch (e) { errors[kind] = e.expose || e.status < 500 ? e.message : 'The sync could not finish. Try again in a moment.'; if (!e.status || e.status >= 500) console.error('sync', kind, e); }
+    }
+    if (changedPrefs !== prefs) { c.user.prefs = changedPrefs; await saveUser(); }
+    touch(P);
+    return { report, errors };
+  });
 
   on('GET', '/api/doc-types', async () => ({ types: RAW.docTypes }));
   on('GET', '/api/templates', async () => ({ templates: DB.templates.map((t) => ({ id: t.id, doc_type: t.doc_type, name: t.name, created_at: t.created_at })) }));
