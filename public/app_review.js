@@ -15,6 +15,18 @@
     rv_tasks_n: '{n} tasks', rv_meth: 'Delivery approach', rv_none_review: 'Nothing here needs review.', rv_price: 'Price', rv_due: 'Due', rv_phase: 'Phase', rv_accept: 'Acceptance', rv_verify: 'Verification',
     rv_share: 'Share', rv_amount: 'Amount', rv_terms: 'Payment terms', rv_days: '{n} days', rv_trigger: 'Trigger', rv_owner: 'Owner', rv_after: 'After', rv_dur: 'Duration', rv_prob: 'Probability', rv_imp: 'Impact', rv_mit: 'Mitigation',
     rv_conf_all_sec: 'Confirm all in this section', rv_open_wiz: 'Guided review', rv_progress: '{a} of {b} reviewed',
+    wz_why_h: 'Why the AI did not approve this automatically', wz_r_conf: 'The AI was {pct}% sure. It approves automatically at {min}% or higher.',
+    wz_r_basic: 'The document {doc} was only read with basic rules, so nothing from it is approved without you.', wz_r_noquote: 'No sentence in the documents states this directly.',
+    wz_r_implied: 'The AI added this itself because the documents imply it.', wz_r_conflict: 'The documents disagree on this value. Pick the one that is right.',
+    wz_r_similar: 'It looks like an item that is already approved: {name}. It may be a duplicate.', wz_r_missing: 'Not found in the document: {list}.',
+    wz_r_check: 'A cross check raised it: {title}.', wz_r_other: 'The AI could not tie it to a clear statement, so please check it.',
+    wz_ctx_h: 'Already approved in this section', wz_ctx_by_ai: 'by the AI', wz_ctx_by_you: 'by you', wz_ctx_none: 'Nothing is approved in this section yet.', wz_ctx_show: 'Show the approved items',
+    wz_sim_h: 'Similar items already approved', wz_proj_h: 'Project so far', wz_pay_total: 'Approved payments total {a} of {v} ({p}%).', wz_pay_after: 'With this payment the total becomes {a} ({p}%).',
+    wz_pay_over: 'That is more than the contract value.', wz_decide_h: 'How to decide', wz_h_field: 'Confirm the value that matches the signed contract. Ignore the others.',
+    wz_h_deliverable: 'Confirm it if the client expects to receive it. Ignore it if it is a general statement or already covered by another deliverable.',
+    wz_h_requirement: 'Confirm it if the team must meet it. Ignore it if it is background text or a duplicate.', wz_h_milestone: 'Confirm it if the client pays on this event. Check the share, the amount and the due date.',
+    wz_h_risk: 'Confirm it if it could really hurt the project and the mitigation is realistic. Edit the level if you disagree.', wz_h_schedule: 'Confirm it if the task, the duration and the order make sense for the delivery approach.',
+    wz_proj_val: 'Contract value', wz_proj_dates: 'Dates', wz_also: 'Also found in {docs}', wz_approved_n: '{n} approved',
     wz_item: 'Item {a} of {b}', wz_found: 'What the AI found', wz_edit: 'Edit details', wz_edit_done: 'Hide editing', wz_evidence: 'From the document',
     wz_tips: 'Tips: Enter confirms, S skips, X ignores, E edits, the left arrow goes back.', wz_hi_bulk: 'Confirm the {n} remaining high confidence items in this section',
     wz_saved: 'Your progress is saved as you go.', wz_sections: 'Sections', wz_stat_c: 'Confirmed', wz_stat_i: 'Ignored', wz_stat_s: 'Skipped', wz_choose: 'Choose the value to keep',
@@ -31,6 +43,18 @@
     rv_tasks_n: '{n} مهمة', rv_meth: 'منهجية التنفيذ', rv_none_review: 'لا شيء هنا بحاجة إلى مراجعة.', rv_price: 'السعر', rv_due: 'الاستحقاق', rv_phase: 'المرحلة', rv_accept: 'القبول', rv_verify: 'التحقق',
     rv_share: 'النسبة', rv_amount: 'المبلغ', rv_terms: 'شروط الدفع', rv_days: '{n} يوما', rv_trigger: 'المحفز', rv_owner: 'المسؤول', rv_after: 'بعد', rv_dur: 'المدة', rv_prob: 'الاحتمالية', rv_imp: 'الأثر', rv_mit: 'المعالجة',
     rv_conf_all_sec: 'تأكيد كل عناصر هذا القسم', rv_open_wiz: 'المراجعة الموجهة', rv_progress: 'تمت مراجعة {a} من {b}',
+    wz_why_h: 'لماذا لم يعتمد الذكاء الاصطناعي هذا العنصر تلقائيا', wz_r_conf: 'كان الذكاء الاصطناعي متأكدا بنسبة {pct}%. يعتمد تلقائيا عند {min}% أو أكثر.',
+    wz_r_basic: 'تمت قراءة المستند {doc} بقواعد بسيطة فقط، لذلك لا يعتمد أي شيء منه دون موافقتك.', wz_r_noquote: 'لا توجد جملة في المستندات تذكر هذا بشكل مباشر.',
+    wz_r_implied: 'أضاف الذكاء الاصطناعي هذا العنصر بنفسه لأن المستندات تدل عليه.', wz_r_conflict: 'المستندات غير متفقة على هذه القيمة. اختر القيمة الصحيحة.',
+    wz_r_similar: 'يشبه عنصرا معتمدا بالفعل: {name}. قد يكون مكررا.', wz_r_missing: 'غير موجود في المستند: {list}.',
+    wz_r_check: 'أثاره فحص التطابق: {title}.', wz_r_other: 'لم يستطع الذكاء الاصطناعي ربطه بعبارة واضحة، لذا يرجى مراجعته.',
+    wz_ctx_h: 'المعتمد سابقا في هذا القسم', wz_ctx_by_ai: 'بواسطة الذكاء الاصطناعي', wz_ctx_by_you: 'بواسطتك', wz_ctx_none: 'لا يوجد شيء معتمد في هذا القسم بعد.', wz_ctx_show: 'عرض العناصر المعتمدة',
+    wz_sim_h: 'عناصر مشابهة معتمدة بالفعل', wz_proj_h: 'المشروع حتى الآن', wz_pay_total: 'مجموع الدفعات المعتمدة {a} من {v} ({p}%).', wz_pay_after: 'مع هذه الدفعة يصبح المجموع {a} ({p}%).',
+    wz_pay_over: 'وهذا أكثر من قيمة العقد.', wz_decide_h: 'كيف تقرر', wz_h_field: 'اعتمد القيمة المطابقة للعقد الموقع وتجاهل البقية.',
+    wz_h_deliverable: 'اعتمده إذا كان العميل ينتظر استلامه. تجاهله إذا كان عبارة عامة أو مغطى بمخرج آخر.',
+    wz_h_requirement: 'اعتمده إذا كان على الفريق الالتزام به. تجاهله إذا كان نصا تمهيديا أو مكررا.', wz_h_milestone: 'اعتمدها إذا كان العميل يدفع عند هذا الحدث. راجع النسبة والمبلغ وتاريخ الاستحقاق.',
+    wz_h_risk: 'اعتمده إذا كان قادرا فعلا على الإضرار بالمشروع وكان التخفيف واقعيا. عدل المستوى إذا اختلفت.', wz_h_schedule: 'اعتمدها إذا كانت المهمة والمدة والترتيب منطقية لأسلوب التنفيذ.',
+    wz_proj_val: 'قيمة العقد', wz_proj_dates: 'التواريخ', wz_also: 'موجود أيضا في {docs}', wz_approved_n: '{n} معتمد',
     wz_item: 'العنصر {a} من {b}', wz_found: 'ما وجده الذكاء الاصطناعي', wz_edit: 'تعديل التفاصيل', wz_edit_done: 'إخفاء التعديل', wz_evidence: 'من المستند',
     wz_tips: 'نصائح: Enter للتأكيد وS للتخطي وX للتجاهل وE للتعديل والسهم الأيسر للعودة.', wz_hi_bulk: 'أكد العناصر المتبقية عالية الثقة في هذا القسم وعددها {n}',
     wz_saved: 'يتم حفظ تقدمك أولا بأول.', wz_sections: 'الأقسام', wz_stat_c: 'مؤكد', wz_stat_i: 'متجاهل', wz_stat_s: 'متخطى', wz_choose: 'اختر القيمة التي ستبقى',
@@ -356,11 +380,70 @@
     } else if (new URLSearchParams(location.hash.split('?')[1] || '').get('wizard') === '1' && Object.values(proposedBy()).some(Boolean)) startWizard(p, reload);
   };
 
+  // ---------- context for a decision in the wizard ----------
+  const AUTO_AT = { field: 0.7, schedule: 0.7 };
+  const autoAt = (kind) => AUTO_AT[kind] || 0.8;
+  const tokSet = (s) => new Set(String(s || '').toLowerCase().replace(/[^a-z0-9؀-ۿ ]+/g, ' ').split(/\s+/).filter((w) => w.length > 2));
+  const sim = (a, b) => { const A = tokSet(a), B = tokSet(b); if (!A.size || !B.size) return 0; let n = 0; A.forEach((w) => B.has(w) && n++); return n / Math.min(A.size, B.size); };
+  const MISSING = {
+    deliverable: [['due_date', 'rv_due'], ['acceptance', 'rv_accept']],
+    milestone: [['percent', 'rv_share'], ['due_date', 'rv_due'], ['trigger', 'rv_trigger']],
+    risk: [['mitigation', 'rv_mit']], requirement: [['verification', 'rv_verify']], schedule: [['start', 'start']],
+  };
+  function reasonsFor(it, c) {
+    const out = [];
+    const d = it.data || {};
+    const conf = it.confidence || 0;
+    if (conf < autoAt(it.kind)) out.push(t('wz_r_conf', { pct: Math.round(conf * 100), min: Math.round(autoAt(it.kind) * 100) }));
+    const doc = ((c.an && c.an.docs) || []).find((x) => x.filename === it.doc_name);
+    if (doc && doc.engine && doc.engine !== 'claude' && doc.engine !== 'msp') out.push(t('wz_r_basic', { doc: esc(doc.filename) }));
+    if (it.kind === 'field' && d.conflict) out.push(t('wz_r_conflict'));
+    if (!it.quote && !d.implied) out.push(t('wz_r_noquote'));
+    if (d.implied) out.push(t('wz_r_implied'));
+    const miss = (MISSING[it.kind] || []).filter(([k]) => d[k] == null || d[k] === '' || (k === 'percent' && d.amount != null && d.percent == null ? false : false)).filter(([k]) => !(k === 'percent' && d.amount != null)).filter(([k]) => !(k === 'trigger' && d.deliverable)).map(([, l]) => t(l));
+    if (miss.length) out.push(t('wz_r_missing', { list: miss.join(', ') }));
+    const sims = c.similar(it);
+    if (sims.length) out.push(t('wz_r_similar', { name: esc(sims[0].title) }));
+    const title = titleOf(it.kind, it).toLowerCase();
+    const chk = ((c.an && c.an.synthesis && c.an.synthesis.checks) || []).find((k) => k.status !== 'Pass' && title.length > 8 && String(k.detail || '').toLowerCase().includes(title.slice(0, 40)));
+    if (chk) out.push(t('wz_r_check', { title: esc(chk.title) }));
+    if (!out.length) out.push(t('wz_r_other'));
+    return out;
+  }
+  function contextHtml(it, c, p) {
+    const approved = c.all.filter((x) => x.kind === it.kind && x.status === 'confirmed');
+    const sims = c.similar(it);
+    const d = it.data || {};
+    const why = `<div class="wz-why"><div class="wz-box-h">${icon('spark')}${t('wz_why_h')}</div><ul>${reasonsFor(it, c).map((r) => `<li>${r}</li>`).join('')}</ul></div>`;
+    const how = t('wz_h_' + it.kind) !== 'wz_h_' + it.kind ? `<div class="wz-how"><b>${t('wz_decide_h')}</b> ${t('wz_h_' + it.kind)}</div>` : '';
+    const simBox = sims.length ? `<div class="wz-ctx"><div class="wz-box-h">${t('wz_sim_h')}</div>${sims.map((x) => `<div class="wz-mini"><b>${esc(titleOf(x.kind, x))}</b><span class="small muted">${facts(x.kind, x, p).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160)}</span></div>`).join('')}</div>` : '';
+    let proj = '';
+    const bits = [];
+    if (p.value) bits.push(`<span class="rv-fact"><span>${t('wz_proj_val')}</span><b>${money(p.value, p.currency)}</b></span>`);
+    if (p.start_date || p.end_date) bits.push(`<span class="rv-fact"><span>${t('wz_proj_dates')}</span><b>${esc(p.start_date || '?')} to ${esc(p.end_date || '?')}</b></span>`);
+    if (it.kind === 'milestone' && p.value) {
+      const val = (x) => (x.data.amount != null ? Number(x.data.amount) : x.data.percent != null ? (p.value * Number(x.data.percent)) / 100 : 0);
+      const sum = approved.reduce((a, x) => a + val(x), 0);
+      const mine = val(it);
+      const pc = (n) => Math.round((n / p.value) * 100);
+      bits.push(`<div class="small">${t('wz_pay_total', { a: money(Math.round(sum), p.currency), v: money(p.value, p.currency), p: pc(sum) })} ${mine ? t('wz_pay_after', { a: money(Math.round(sum + mine), p.currency), p: pc(sum + mine) }) : ''} ${sum + mine > p.value * 1.001 ? `<b class="neg">${t('wz_pay_over')}</b>` : ''}</div>`);
+    }
+    if (bits.length) proj = `<div class="wz-ctx"><div class="wz-box-h">${t('wz_proj_h')}</div><div class="rv-facts">${bits.join('')}</div></div>`;
+    const by = (x) => (x.decided_by === 'AI' ? t('wz_ctx_by_ai') : x.decided_by === 'user' ? t('wz_ctx_by_you') : '');
+    const list = approved.slice(0, 40).map((x) => `<div class="wz-mini"><b>${esc(titleOf(x.kind, x))}</b><span class="small muted">${by(x)}</span></div>`).join('');
+    const appr = `<details class="wz-ctx wz-appr"><summary><span class="wz-box-h">${t('wz_ctx_h')}</span> <span class="chip green">${t('wz_approved_n', { n: approved.length })}</span></summary>${approved.length ? `<div class="wz-list">${list}${approved.length > 40 ? `<div class="small muted">+${approved.length - 40}</div>` : ''}</div>` : `<div class="small muted">${t('wz_ctx_none')}</div>`}</details>`;
+    return why + how + simBox + proj + appr;
+  }
+
   // ---------- guided review ----------
   async function startWizard(p, onDone, startKind) {
     const w = await api('GET', `/api/projects/${p.id}/wizard`);
     const Q = w.items;
     if (!Q.length) { toast(t('all_reviewed'), 'ok'); return; }
+    const ctx = { all: (await api('GET', `/api/projects/${p.id}/items`)).items, an: p.analysis || null };
+    const pj = (await api('GET', `/api/projects/${p.id}`)).project; ctx.an = pj.analysis || ctx.an; p = pj;
+    ctx.similar = (it) => ctx.all.filter((x) => x.kind === it.kind && x.status === 'confirmed' && x.id !== it.id && sim(titleOf(x.kind, x), titleOf(it.kind, it)) >= 0.7 && it.kind !== 'field').sort((a, b) => sim(titleOf(b.kind, b), titleOf(it.kind, it)) - sim(titleOf(a.kind, a), titleOf(it.kind, it))).slice(0, 3);
+    const mark = (ids, st) => ids.forEach((id) => { const x = ctx.all.find((y) => y.id === id); if (x) { x.status = st; x.decided_by = 'user'; } });
     const done = new Set();
     const tally = { confirmed: 0, ignored: 0, skipped: 0 };
     let idx = startKind ? Math.max(0, Q.findIndex((x) => x.kind === startKind)) : 0;
@@ -404,6 +487,7 @@
           <div class="rv-facts big">${facts(it.kind, it, p)}</div>
           ${editing ? `<div class="wz-edit">${formFields(it.kind, it)}</div>` : ''}
           ${it.quote ? `<div class="wz-ev"><div class="small muted">${icon('file')} ${t('wz_evidence')}</div><div class="quote">${esc(it.quote)}</div></div>` : ''}
+          ${contextHtml(it, ctx, p)}
           ${bulk.length >= 2 ? `<button type="button" class="btn sm ghost" id="wzBulk">${icon('check')}${t('wz_hi_bulk', { n: bulk.length })}</button>` : ''}`;
       }
       $('#wz', m.el).innerHTML = `<aside class="wz-rail"><div class="small muted wz-rail-h">${t('wz_sections')}</div>${rail}<div class="small muted wz-saved">${t('wz_saved')}</div></aside>
@@ -420,14 +504,14 @@
         const ids = isGroup ? [Number(($('[data-opt].sel', m.el) || {}).dataset.opt)] : [it.id];
         await busy($('#wzIgnore', m.el), async () => { for (const id of ids) await api('POST', `/api/items/${id}/ignore`); });
         const all = isGroup ? group.map((g) => g.id) : ids;
-        all.forEach((id) => done.add(id)); tally.ignored++; history.push({ ids: all, kind: 'ignored' }); editing = false;
+        mark(all, 'ignored'); all.forEach((id) => done.add(id)); tally.ignored++; history.push({ ids: all, kind: 'ignored' }); editing = false;
         show();
       };
       const bb = $('#wzBulk', m.el);
       if (bb) bb.onclick = async () => {
         const ids = hiLeft(it.kind).map((x) => x.id);
         await busy(bb, () => api('POST', `/api/projects/${p.id}/items/bulk`, { ids, action: 'confirm' }));
-        ids.forEach((id) => done.add(id)); tally.confirmed += ids.length; history.push({ ids, kind: 'confirmed' }); editing = false;
+        mark(ids, 'confirmed'); ids.forEach((id) => done.add(id)); tally.confirmed += ids.length; history.push({ ids, kind: 'confirmed' }); editing = false;
         show();
       };
       $('#wzOk', m.el).onclick = async () => {
@@ -440,7 +524,7 @@
         });
         if (!ok) return;
         const ids = isGroup ? group.map((g) => g.id) : [it.id];
-        ids.forEach((id) => done.add(id)); tally.confirmed++; history.push({ ids, kind: 'confirmed' }); editing = false;
+        mark([chosen.id], 'confirmed'); ids.forEach((id) => done.add(id)); tally.confirmed++; history.push({ ids, kind: 'confirmed' }); editing = false;
         show();
       };
     };

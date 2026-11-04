@@ -245,7 +245,7 @@
     } else if (item.kind === 'milestone') {
       if (d.amount == null && d.percent != null && P.p.value) d.amount = Math.round((P.p.value * d.percent) / 100);
     }
-    item.status = 'confirmed';
+    item.status = 'confirmed'; item.decided_by = actor === 'AI' ? 'AI' : 'user';
     audit(P, actor, 'item_confirmed', { summary: note || `Confirmed ${item.kind} "${item.title}"`, id: item.id });
   }
 
