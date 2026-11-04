@@ -592,7 +592,18 @@
     P.items = P.items.filter((i) => !(i.data && i.data.synthesized && i.status === 'proposed'));
     for (const i of P.items) if (i.data && i.data.superseded && i.status === 'ignored') { i.status = 'proposed'; delete i.data.superseded; }
     const hasSchedFile = docs.some((d) => d.role === 'schedule');
-    const syn = hasSchedFile ? null : await AI.synthesizeSchedule({ docs, items: view(), anchor, project: proj() }).catch(() => null);
+    // The schedule and the risk analysis are independent, so both AI calls run at the same time.
+    const synP = hasSchedFile ? Promise.resolve(null) : AI.synthesizeSchedule({ docs, items: view(), anchor, project: proj() }).catch((e) => ({ failed: true, reason: (e && e.message) || 'unknown', plan: [], notes: [], summary: '' }));
+    let riskP = Promise.resolve(null);
+    if (AI.hasKey() && docs.length) {
+      P.analysis.stages.find((x) => x.key === 'generate').detail = 'Building the schedule and analyzing risks';
+      const preChecks = AI.runChecks({ items: view(), project: proj(), docs: (P.analysis && P.analysis.docs) || [] });
+      const rdocs = docs.map((d) => ({ id: d.id, filename: d.filename, role: d.role, summary: d.summary }));
+      riskP = Pipe.analyzeRisks({ project: proj(), docs: rdocs, items: view(), text: P.texts, checks: preChecks }).catch((e) => { console.error('risk analysis', e); return []; });
+    }
+    const syn = await synP;
+    if (syn && syn.failed) out.notes.push('The schedule could not be built: ' + syn.reason + '. Use Analyze again.');
+    if (syn && syn.failed && P.analysis && !P.analysis.warning) P.analysis.warning = { code: 'schedule', message: 'The documents were read and the items were filled in, but the schedule could not be built (' + syn.reason + '). Use Analyze again to rebuild it.' };
     if (syn && syn.plan.length >= 3) {
       for (const i of P.items) if (i.kind === 'schedule' && i.status === 'proposed') { i.status = 'ignored'; i.data.superseded = true; }
       const cal = S.calendar(rawProject(P));
@@ -610,16 +621,14 @@
         it.doc_id = (P.items.find((x) => x.id === r.refs[0]) || {}).doc_id ?? null;
         out.phases += r.level === 'phase' ? 1 : 0;
       }
-      out.summary = syn.summary; out.notes = syn.notes; out.engine = 'claude';
+      out.summary = syn.summary; out.notes = out.notes.concat(syn.notes); out.engine = 'claude';
     }
     P.analysis.stages.find((x) => x.key === 'generate').detail = 'Running consistency checks';
     const checks = AI.runChecks({ items: view(), project: proj(), docs: (P.analysis && P.analysis.docs) || [] });
     // Project risks are analysed from the whole document set
     P.items = P.items.filter((i) => !(i.kind === 'risk' && i.data && i.data.analysis && i.status === 'proposed'));
     if (AI.hasKey() && docs.length) {
-      P.analysis.stages.find((x) => x.key === 'generate').detail = 'Analyzing project risks';
-      const rdocs = docs.map((d) => ({ id: d.id, filename: d.filename, role: d.role, summary: d.summary }));
-      const risks = await Pipe.analyzeRisks({ project: proj(), docs: rdocs, items: view(), text: P.texts, checks }).catch((e) => { console.error('risk analysis', e); return []; });
+      const risks = (await riskP) || [];
       const ex = P.items.filter((i) => i.kind === 'risk' && i.status !== 'ignored');
       for (const r of risks) {
         if (ex.some((x) => similarity(x.title, r.title) >= 0.7)) continue;

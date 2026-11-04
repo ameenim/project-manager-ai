@@ -198,23 +198,43 @@ async function handleExtract(req, res, url) {
 // ---------- Claude proxy ----------
 async function callClaude(payload) {
   const key = process.env.ANTHROPIC_API_KEY;
-  const body = JSON.stringify({ model: MODEL, max_tokens: payload.max_tokens, system: payload.system, messages: [{ role: 'user', content: payload.content || payload.user }] });
+  // The reply is streamed so a long answer (a full schedule) is not lost to one long request timeout.
+  // The call only fails when no data arrives for two minutes or the whole answer takes over ten minutes.
+  const body = JSON.stringify({ model: MODEL, max_tokens: payload.max_tokens, stream: true, system: payload.system, messages: [{ role: 'user', content: payload.content || payload.user }] });
   let last;
   for (let attempt = 0; attempt < 2; attempt++) {
-    const r = await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-      body,
-      signal: AbortSignal.timeout(280000),
-    });
-    if (r.ok) {
-      const j = await r.json();
-      const text = (j.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n');
-      return { text, stop_reason: j.stop_reason || null, usage: j.usage || null };
-    }
-    const t = await r.text();
-    last = { status: r.status, message: t.slice(0, 300) };
-    if (r.status !== 429 && r.status < 500) break;
+    const ctl = new AbortController();
+    let idle = setTimeout(() => ctl.abort(), 120000);
+    const total = setTimeout(() => ctl.abort(), 600000);
+    try {
+      const r = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+        body,
+        signal: ctl.signal,
+      });
+      if (r.ok) {
+        let text = ''; let stop = null; let usage = null; let buf = '';
+        const dec = new TextDecoder();
+        for await (const chunk of r.body) {
+          clearTimeout(idle); idle = setTimeout(() => ctl.abort(), 120000);
+          buf += dec.decode(chunk, { stream: true });
+          let nl;
+          while ((nl = buf.indexOf('\n')) >= 0) {
+            const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
+            if (!line.startsWith('data:')) continue;
+            let ev; try { ev = JSON.parse(line.slice(5)); } catch (e) { continue; }
+            if (ev.type === 'content_block_delta' && ev.delta && ev.delta.type === 'text_delta') text += ev.delta.text;
+            else if (ev.type === 'message_delta') { if (ev.delta && ev.delta.stop_reason) stop = ev.delta.stop_reason; if (ev.usage) usage = ev.usage; }
+            else if (ev.type === 'error') throw Object.assign(new Error('Claude stream error: ' + ((ev.error && ev.error.message) || '')), { status: 502 });
+          }
+        }
+        return { text, stop_reason: stop, usage };
+      }
+      const t = await r.text();
+      last = { status: r.status, message: t.slice(0, 300) };
+      if (r.status !== 429 && r.status < 500) break;
+    } finally { clearTimeout(idle); clearTimeout(total); }
     await new Promise((ok) => setTimeout(ok, 1500));
   }
   throw Object.assign(new Error(`Claude API ${last.status}: ${last.message}`), { status: last.status });
@@ -227,7 +247,7 @@ async function handleAi(req, res) {
   let payload;
   try { payload = JSON.parse((await readBody(req, MAX_AI_BODY)).toString('utf8')); } catch (e) { return send(res, e.status || 400, { error: e.status === 413 ? 'Request is too large' : 'Invalid request' }); }
   if (typeof payload.system !== 'string' || typeof payload.user !== 'string') return send(res, 400, { error: 'Invalid request' });
-  payload.max_tokens = Math.min(Math.max(parseInt(payload.max_tokens, 10) || 4000, 200), 16000);
+  payload.max_tokens = Math.min(Math.max(parseInt(payload.max_tokens, 10) || 4000, 200), 32000);
   try {
     return send(res, 200, await callClaude(payload));
   } catch (e) {

@@ -1177,7 +1177,7 @@ async function claudeRaw(system, user, maxTokens = 4000) {
   if (!aiState.configured) return null;
   let res;
   try {
-    res = await fetch('/srv/ai', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ system, user, max_tokens: maxTokens }), signal: AbortSignal.timeout(300000) });
+    res = await fetch('/srv/ai', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ system, user, max_tokens: maxTokens }), signal: AbortSignal.timeout(660000) });
   } catch (err) {
     if (err && (err.name === 'TimeoutError' || err.name === 'AbortError')) throw Object.assign(new Error('The AI took too long to answer'), { code: 'timeout' });
     throw Object.assign(new Error('Could not reach the server'), { code: 'network' });
@@ -1198,7 +1198,7 @@ async function claudeJSON(system, user, maxTokens = 6000) {
   const r = await claudeRaw(system + '\nReply with one JSON object only. No prose, no code fences.', user, maxTokens);
   if (r == null) return null;
   const txt = r.text || '';
-  if (r.stop === 'max_tokens') throw Object.assign(new Error('Model reply was cut off'), { code: 'cutoff' });
+  if (r.stop === 'max_tokens') throw Object.assign(new Error('Model reply was cut off'), { code: 'cutoff', text: txt });
   const a = txt.indexOf('{');
   const b = txt.lastIndexOf('}');
   if (a < 0 || b < a) throw Object.assign(new Error('Model did not return JSON'), { code: 'badjson' });
@@ -1716,7 +1716,7 @@ Return JSON: {"summary":"3 to 5 sentences: what is being delivered, for whom, th
 
 Timing rules. Never invent calendar dates. Use explicit start and end dates only when an item states them. A phase with week numbers gets start_week and end_week, where week 1 starts on the anchor date. For every other row use start_day, the working day number counted from the anchor date where day 1 is the anchor day, and duration_days. Week n starts on working day (n minus 1) times 5 plus 1. A milestone has start_day and no duration. A dependent row never starts before its predecessors end.
 
-Evidence rules. Stated rows cite the items they come from in refs. Implied rows cite the item of the phase, deliverable or gate they support, so every row has at least one valid ref. Merge duplicates that describe the same work from different documents. Order the plan so that phases come before their tasks. Documents rank: award letter, then financial offer, then technical proposal. When documents disagree on a date, value or scope, schedule the higher ranked one and list the disagreement in notes. Also list in notes every date that falls before the award date, every go live dated before its staging, and any gap between the week plan and the dated windows. State your assumptions in notes, including review durations and holidays. Aim for 60 to 140 rows. Write all text as plain sentences without dashes or semicolons.`;
+Evidence rules. Stated rows cite the items they come from in refs. Implied rows cite the item of the phase, deliverable or gate they support, so every row has at least one valid ref. Merge duplicates that describe the same work from different documents. Order the plan so that phases come before their tasks. Documents rank: award letter, then financial offer, then technical proposal. When documents disagree on a date, value or scope, schedule the higher ranked one and list the disagreement in notes. Also list in notes every date that falls before the award date, every go live dated before its staging, and any gap between the week plan and the dated windows. State your assumptions in notes, including review durations and holidays. Aim for 50 to 90 rows. Keep each name under 60 characters and keep assumption text to one short sentence. Write all text as plain sentences without dashes or semicolons.`;
 
 async function synthesizeSchedule({ docs, items, anchor, project }) {
   await aiReady;
@@ -1727,11 +1727,22 @@ async function synthesizeSchedule({ docs, items, anchor, project }) {
   const userMsg = `Anchor date for Week 1: ${anchor || 'unknown'}\nProject: ${JSON.stringify({ value: project.value, currency: project.currency, award_date: project.award_date || null, start_date: project.start_date || null, end_date: project.end_date || null })}\nDocuments: ${JSON.stringify(docs.map((d) => ({ file: d.filename, kind: d.kind, summary: d.summary })))}\nItems: ${JSON.stringify(list)}`;
   try {
     let j;
-    try { j = await claudeJSON(SYNTH_SYSTEM, userMsg, 16000); }
+    // Part of the reply budget goes to the model's own reasoning, so a long plan can be cut off. Keep every complete row that arrived.
+    const salvage = (txt) => {
+      const a = txt.indexOf('"plan"');
+      if (a < 0) return null;
+      const open = txt.indexOf('[', a);
+      for (let i = txt.length; i > open; i--) {
+        if (txt[i - 1] !== '}') continue;
+        try { const arr = JSON.parse(txt.slice(open, i) + ']'); if (Array.isArray(arr) && arr.length >= 3) return { summary: '', plan: arr, notes: ['The schedule was long and was cut off, so the last rows may be missing. Use Analyze again to rebuild it.'] }; } catch (e) { /* keep scanning back */ }
+      }
+      return null;
+    };
+    try { j = await claudeJSON(SYNTH_SYSTEM, userMsg, 30000); }
     catch (e) {
-      // A very long plan can be cut off. Ask once for a tighter plan.
       if (e.code !== 'cutoff') throw e;
-      j = await claudeJSON(SYNTH_SYSTEM + '\nThe plan must fit in the reply: use 60 to 80 rows, keep names short, and leave out assumption text for rows whose duration is a standard one.', userMsg, 16000);
+      j = salvage(e.text || '');
+      if (!j) j = await claudeJSON(SYNTH_SYSTEM + '\nThe plan must fit in the reply: use 40 to 60 rows, keep names short, and leave out assumption text for rows whose duration is a standard one.', userMsg, 30000);
     }
     if (!j || !Array.isArray(j.plan)) return null;
     const plan = [];
@@ -1761,7 +1772,7 @@ async function synthesizeSchedule({ docs, items, anchor, project }) {
     return { summary: String(j.summary || ''), plan, notes: (Array.isArray(j.notes) ? j.notes : []).map(String).filter(Boolean).slice(0, 16) };
   } catch (e) {
     console.error('Synthesis failed:', e.message);
-    return null;
+    return { failed: true, reason: e.message, code: e.code || null, plan: [], notes: [], summary: '' };
   }
 }
 
