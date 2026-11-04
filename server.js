@@ -229,6 +229,7 @@ async function callClaude(payload) {
             else if (ev.type === 'error') throw Object.assign(new Error('Claude stream error: ' + ((ev.error && ev.error.message) || '')), { status: 502 });
           }
         }
+        console.log('claude ok', JSON.stringify({ stop, chars: text.length, out: usage && usage.output_tokens, head: text.slice(0, 120) }));
         return { text, stop_reason: stop, usage };
       }
       const t = await r.text();
