@@ -1,5 +1,5 @@
 entrypoint = "server.js"
-modules = ["nodejs-20", "python-base-3.13"]
+modules = ["nodejs-20", "python-base-3.13", "postgresql-16"]
 run = "npm start"
 
 [nix]
