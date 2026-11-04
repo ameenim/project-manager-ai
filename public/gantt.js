@@ -43,6 +43,7 @@
       this.cal = { days: new Set([1, 2, 3, 4, 5]), holidays: new Set() };
       this.today = F(new Date());
       this.ui = { zoom: 'week', critical: true, baseline: true, compact: false, z: 1, selected: null, multi: new Set(), anchor: null, collapsed: new Set(), legend: true, filter: 'all', q: '', tab: 'task', ribbon: true };
+      try { this.ui.colW = JSON.parse(localStorage.getItem('pm_gt_cols') || '{}') || {}; } catch (e) { this.ui.colW = {}; }
       try { const sv = localStorage.getItem('pm_rb_tab'); if (sv) this.ui.tab = sv; if (localStorage.getItem('pm_rb_open') === '0') this.ui.ribbon = false; const lw = Number(localStorage.getItem('pm_gt_leftw')); if (lw >= 160) this.ui.leftW = lw; } catch (e) { /* storage blocked */ }
       this.items = [];
       this.impactOn = true;
@@ -82,7 +83,10 @@
     // ---------- layout ----------
     baseCols() {
       const c = this.ui.compact;
-      return c ? [['num', 'wbs', 58], ['md', 'mode', 34], ['nm', 'task', 250]] : [['num', 'wbs', 64], ['md', 'mode', 36], ['nm', 'task', 260], ['pd', 'pred', 104], ['dt', 'start', 102], ['du', 'dur', 48], ['dt', 'finish', 102], ['pc', 'pct', 48], ['ow', 'owner', 100]];
+      const b = c ? [['num', 'wbs', 58], ['md', 'mode', 34], ['nm', 'task', 250]] : [['num', 'wbs', 64], ['md', 'mode', 36], ['nm', 'task', 260], ['pd', 'pred', 112], ['dt', 'start', 106], ['du', 'dur', 56], ['dt', 'finish', 106], ['pc', 'pct', 62], ['ow', 'owner', 140]];
+      const cw = this.ui.colW || {};
+      for (const x of b) if (cw[x[1]]) x[2] = cw[x[1]];
+      return b;
     }
     // The width of the table can be dragged. Extra width goes to the task column, and a narrower table clips the right hand columns.
     cols() {
@@ -222,7 +226,7 @@
             </div>
             <div class="rb-panel" data-panel="view" hidden>
               ${grp(t('g_grp_zoom'), `<div class="rb-stack"><div class="rb-seg"><button type="button" class="rb chip" data-g="zoom-day">${t('g_day')}</button><button type="button" class="rb chip" data-g="zoom-week">${t('g_week')}</button><button type="button" class="rb chip" data-g="zoom-month">${t('g_month')}</button></div><div class="rb-row"><button type="button" class="rb sm icon" data-g="zout" data-tip="${esc(t('g_zoom_out'))}" aria-label="${esc(t('g_zoom_out'))}">${ic('minus')}</button><span class="gt-zl" data-zl data-g="zreset" data-tip="${esc(t('g_zoom_reset'))}" role="button" tabindex="0">100%</span><button type="button" class="rb sm icon" data-g="zin" data-tip="${esc(t('g_zoom_in'))}" aria-label="${esc(t('g_zoom_in'))}">${ic('plus')}</button></div></div>` + L('today', 'today', t('g_today')) + L('goto', 'target', t('g_go_selected')) + L('fit', 'full', t('g_fit')))}
-              ${grp(t('g_grp_show'), col(Sm('critical', 'zap', t('g_critical')) + Sm('baseline', 'layers', t('g_baseline_show')) + Sm('legend', 'flag', t('g_legend_short'), t('g_legend'))) + col(Sm('cols', 'cols', t('g_columns_short'), t('g_columns')) + `<select class="gt-level" data-g="level" title="${esc(t('g_show_level'))}" aria-label="${esc(t('g_show_level'))}"></select>`))}
+              ${grp(t('g_grp_show'), col(Sm('critical', 'zap', t('g_critical')) + Sm('baseline', 'layers', t('g_baseline_show')) + Sm('legend', 'flag', t('g_legend_short'), t('g_legend'))) + col(Sm('cols', 'cols', t('g_columns_short'), t('g_columns')) + `<select class="gt-level" data-g="level" title="${esc(t('g_show_level'))}" aria-label="${esc(t('g_show_level'))}"></select>`)) + col(Sm('fitcols', 'full', t('g_fit_cols'), t('g_fit_cols_tip')) + Sm('resetcols', 'undo', t('g_reset_cols'), t('g_reset_cols_tip')))}
               ${grp(t('g_grp_filter'), `<div class="rb-stack wide"><select class="rb-sel" data-g="filter" aria-label="${esc(t('g_filter'))}">${FILTERS.map(([k, label]) => `<option value="${k}">${esc(t(label))}</option>`).join('')}</select><label class="rb-search">${ic('search')}<input type="search" data-g="q" placeholder="${esc(t('g_find'))}" aria-label="${esc(t('g_find'))}"></label></div>`)}
             </div>
             <div class="rb-panel" data-panel="project" hidden>
@@ -251,7 +255,7 @@
       // Ctrl or Cmd with the mouse wheel zooms the timeline around the pointer
       this.root.querySelector('.gt-scroll').addEventListener('wheel', (e) => { if (!(e.ctrlKey || e.metaKey)) return; e.preventDefault(); this.setZoom(this.ui.z * (e.deltaY < 0 ? 1.1 : 0.9)); }, { passive: false });
       this.scroll.addEventListener('keydown', (e) => { if (this.onSplitKey(e)) return; this.onKey(e); });
-      this.root.addEventListener('pointerdown', (e) => { if (e.target.closest && e.target.closest('.gt-split')) this.onSplitDown(e); });
+      this.root.addEventListener('pointerdown', (e) => { if (!e.target.closest) return; if (e.target.closest('.gt-split')) this.onSplitDown(e); else if (e.target.closest('.hc-rs')) this.onColDown(e); });
       this.root.addEventListener('change', (e) => { const s = e.target.closest('select[data-g="level"]'); if (s) this.showLevel(Number(s.value)); const f = e.target.closest('select[data-g="filter"]'); if (f) this.setFilter(f.value); });
       this.root.addEventListener('input', (e) => { const q = e.target.closest('input[data-g="q"]'); if (q) { clearTimeout(this._qt); this._qt = setTimeout(() => this.setFilter(undefined, q.value), 180); } });
       this.root.addEventListener('dblclick', (e) => { const tb = e.target.closest('[data-tab]'); if (tb) { this.ui.ribbon = !this.ui.ribbon; try { localStorage.setItem('pm_rb_open', this.ui.ribbon ? '1' : '0'); } catch (er) { /* ignore */ } this.updateToolbar(); } });
@@ -383,7 +387,7 @@
 
       // header
       const { h1, h2 } = this.headers(R);
-      const headLeft = this.cols().map((c) => `<div class="hc" style="width:${c[2]}px">${esc(this.colTitle(c[1]))}</div>`).join('');
+      const headLeft = this.cols().map((c) => `<div class="hc" style="width:${c[2]}px" data-tip="${esc(this.colTitle(c[1]))}">${esc(this.colTitle(c[1]))}<i class="hc-rs" data-col="${c[1]}" data-tip="${esc(this.t('g_col_drag'))}"></i></div>`).join('');
       // grid rows
       const dl = `<datalist id="gt-res">${this.resources.map((r) => `<option value="${esc(r)}">`).join('')}</datalist>`;
       const cells = rows.map((t) => this.rowHtml(t)).join('');
@@ -522,7 +526,7 @@
           case 'start': return `<div class="c dt ${leaf ? 'ed' : ''}" ${w} data-f="start">${t.start || ''}</div>`;
           case 'dur': return `<div class="c dt ${leaf ? 'ed' : ''}" ${w} data-f="duration">${t.is_milestone ? '0d' : t.duration + 'd'}</div>`;
           case 'finish': return `<div class="c dt" ${w}>${t.finish || ''}</div>`;
-          case 'pct': return `<div class="c pc ${leaf ? 'ed' : ''}" ${w} data-f="progress">${t.progress || 0}%</div>`;
+          case 'pct': return `<div class="c pc ${leaf ? 'ed' : ''}" ${w} data-f="progress" title="${t.progress || 0}%">${t.progress || 0}%</div>`;
           case 'owner': return `<div class="c dt ed" ${w} data-f="assignee" title="${esc(t.assignee || '')}">${esc(t.assignee || '')}</div>`;
         }
         return '';
@@ -622,6 +626,43 @@
       this.legendEl.innerHTML = `${L('--g-todo', 'g_l_todo')}${L('--g-prog', 'g_l_prog')}${L('--g-done', 'g_l_done')}${L('--g-late', 'g_l_late')}${L('--g-ms', 'g_l_ms')}${L('--g-sum', 'g_l_sum')}<span><i style="background:transparent;outline:2px solid var(--g-crit)"></i>${this.t('g_l_crit')}</span><span><i style="background:var(--faint);height:4px;vertical-align:2px"></i>${this.t('g_l_base')}</span><span><i class="gt-lg-manual"></i>${this.t('g_mode_manual')}</span><span><i style="background:var(--g-today);width:3px"></i>${this.t('g_today')}</span>`;
     }
 
+    // ---------- column widths: drag the edge of a header, double click fits the text, buttons fit or reset all ----------
+    saveCols() { try { if (Object.keys(this.ui.colW || {}).length) localStorage.setItem('pm_gt_cols', JSON.stringify(this.ui.colW)); else localStorage.removeItem('pm_gt_cols'); } catch (e) { /* storage blocked */ } }
+    fitWidth(key) {
+      const idx = this.cols().findIndex((c) => c[1] === key); if (idx < 0) return null;
+      let mx = 0;
+      const probe = (el) => { if (!el) return; const kids = [...el.children]; let w; if (kids.length) { w = 0; const cs = getComputedStyle(el); const gap = parseFloat(cs.columnGap) || 0; for (const k of kids) { w += k.getBoundingClientRect().width + gap; } w += parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight); } else { w = el.scrollWidth; } mx = Math.max(mx, w); };
+      this.inner.querySelectorAll('.gt-cells[data-row]').forEach((r) => { const c = r.children[idx]; if (c) { const clone = c.cloneNode(true); clone.style.cssText = 'position:absolute;visibility:hidden;width:auto;overflow:visible;white-space:nowrap;flex:none'; r.appendChild(clone); mx = Math.max(mx, clone.getBoundingClientRect().width); clone.remove(); } });
+      const hc = this.inner.querySelectorAll('.gt-head-left .hc')[idx]; if (hc) { const clone = hc.cloneNode(true); clone.style.cssText = 'position:absolute;visibility:hidden;width:auto;overflow:visible'; hc.parentNode.appendChild(clone); mx = Math.max(mx, clone.getBoundingClientRect().width); clone.remove(); }
+      return Math.max(36, Math.min(700, Math.ceil(mx) + 4));
+    }
+    setColW(key, w, save) {
+      this.ui.colW = this.ui.colW || {};
+      if (w == null) delete this.ui.colW[key]; else this.ui.colW[key] = Math.round(w);
+      this.ui.leftW = null; try { localStorage.removeItem('pm_gt_leftw'); } catch (e) { /* ignore */ }
+      if (save) this.saveCols();
+      this.render();
+    }
+    fitAll() { const keys = this.cols().map((c) => c[1]).filter((k) => k !== 'mode'); const out = {}; for (const k of keys) { const w = this.fitWidth(k); if (w) out[k] = w; } this.ui.colW = { ...(this.ui.colW || {}), ...out }; this.ui.leftW = null; this.saveCols(); this.render(); }
+    resetCols() { this.ui.colW = {}; this.ui.leftW = null; try { localStorage.removeItem('pm_gt_leftw'); } catch (e) { /* ignore */ } this.saveCols(); this.render(); }
+    onColDown(e) {
+      const h = e.target.closest('.hc-rs'); if (!h || e.button > 0) return;
+      e.preventDefault(); e.stopPropagation();
+      const key = h.dataset.col; const now = Date.now();
+      if (this._colAt && this._colKey === key && now - this._colAt < 400) { this._colAt = 0; const w = this.fitWidth(key); if (w) this.setColW(key, w, true); return; }
+      this._colAt = now; this._colKey = key;
+      const x0 = e.clientX; const w0 = this.cols().find((c) => c[1] === key)[2]; let raf = 0, next = w0, moved = false;
+      const min = key === 'mode' ? 30 : 40;
+      this.root.classList.add('gt-resizing'); document.body.style.cursor = 'col-resize';
+      const move = (ev) => { moved = true; next = Math.max(min, Math.min(700, w0 + ev.clientX - x0)); if (!raf) raf = requestAnimationFrame(() => { raf = 0; this.ui.colW = this.ui.colW || {}; this.ui.colW[key] = next; this.ui.leftW = null; this.render(); }); };
+      const up = () => {
+        window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+        this.root.classList.remove('gt-resizing'); document.body.style.cursor = ''; if (raf) cancelAnimationFrame(raf);
+        if (moved) this.setColW(key, next, true);
+      };
+      window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+    }
+
     // ---------- draggable divider between the table and the timeline ----------
     splitHtml() { return `<div class="gt-split" role="separator" aria-orientation="vertical" tabindex="0" title="${esc(this.t('g_split'))}" aria-label="${esc(this.t('g_split'))}"></div>`; }
     setLeftW(w, save) {
@@ -679,6 +720,8 @@
       if (id === 'critical') { this.ui.critical = !this.ui.critical; return this.render(); }
       if (id === 'baseline') { this.ui.baseline = !this.ui.baseline; return this.render(); }
       if (id === 'cols') { this.ui.compact = !this.ui.compact; return this.render(); }
+      if (id === 'fitcols') return this.fitAll();
+      if (id === 'resetcols') return this.resetCols();
       if (id === 'expandall') return this.showLevel(0);
       if (id === 'collapseall') return this.showLevel(1);
       if (id === 'level' || id === 'filter' || id === 'q') return;

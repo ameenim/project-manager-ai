@@ -1109,3 +1109,9 @@ body.gt-dnd, body.gt-dnd * { cursor: grabbing !important; user-select: none; }
 .asst-row:first-of-type { border-top: 0; }
 .asst-acts { display: flex; gap: 6px; flex: none; }
 @media (max-width: 600px) { .asst-row, .asst { flex-wrap: wrap; } .asst-acts { width: 100%; } }
+
+/* resizable columns */
+.gt-head-left .hc { position: relative; }
+.hc-rs { position: absolute; inset-block: 0; inset-inline-end: 0; width: 8px; cursor: col-resize; z-index: 3; touch-action: none; }
+.hc-rs::after { content: ''; position: absolute; inset-block: 6px; inset-inline-start: 6px; width: 1px; background: var(--border-strong); transition: background .15s var(--ease), width .15s var(--ease); }
+.hc-rs:hover::after, .gt-resizing .hc-rs::after { background: var(--primary); width: 2px; }
