@@ -94,9 +94,9 @@
   (function () {
     var items = $$('[data-p]');
     if (!items.length) return;
-    var on = !reduce && window.innerWidth >= 700, info = [];
+    var on = !reduce && window.innerWidth >= 961, info = [];
     function measure() {
-      on = !reduce && window.innerWidth >= 700;
+      on = !reduce && window.innerWidth >= 961;
       var sy = window.scrollY || 0;
       info = items.map(function (el) {
         var cur = parseFloat(el.style.getPropertyValue('--py')) || 0;
