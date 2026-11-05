@@ -204,7 +204,7 @@
   }
   function shell(active, content, projHead) {
     $('#app').innerHTML = `${PM.billing ? PM.billing.ribbon() : ''}<div class="shell"><aside class="sidebar"><div class="brand"><div class="logo">${PM.logo.mark()}</div><span class="grow">${t('app_name')}</span><button class="btn ghost icon sm" id="navHide" type="button" aria-label="${t('nav_hide')}" title="${t('nav_hide')}">${icon('chev_l')}</button></div>
-      <nav class="nav"><a href="#/" class="${active === 'dash' ? 'active' : ''}">${icon('home')}${t('nav_dashboard')}</a><div class="nav-fly" id="navFly"><a href="#/projects" class="${active === 'projects' ? 'active' : ''}" aria-haspopup="true" aria-expanded="false">${icon('folder')}<span class="grow">${t('nav_projects')}</span><span class="nav-caret">${icon('chev_r')}</span></a></div><a href="#/calendar" class="${active === 'calendar' ? 'active' : ''}">${icon('cal')}${t('nav_calendar')}</a><a href="#/trends" class="${active === 'trends' ? 'active' : ''}">${icon('trend')}${t('nav_trends')}</a><a href="#/billing" class="${active === 'billing' ? 'active' : ''}">${icon('coin')}${t('nav_billing')}</a></nav>
+      <nav class="nav"><a href="#/" class="${active === 'dash' ? 'active' : ''}">${icon('home')}${t('nav_dashboard')}</a><div class="nav-fly" id="navFly"><a href="#/projects" class="${active === 'projects' ? 'active' : ''}" aria-haspopup="true" aria-expanded="false">${icon('folder')}<span class="grow">${t('nav_projects')}</span><span class="nav-caret">${icon('chev_r')}</span></a></div><a href="#/calendar" class="${active === 'calendar' ? 'active' : ''}">${icon('cal')}${t('nav_calendar')}</a><a href="#/billing" class="${active === 'billing' ? 'active' : ''}">${icon('coin')}${t('nav_billing')}</a></nav>
       <div class="spacer"></div>
       <div class="side-prefs">
         <div class="pref"><span class="pref-ic">${icon(S.theme === 'dark' ? 'moon' : 'sun')}</span><span class="grow">${t('dark_mode')}</span><button type="button" class="tgl ${S.theme === 'dark' ? 'on' : ''}" id="themeBtn" role="switch" aria-checked="${S.theme === 'dark'}" aria-label="${t('dark_mode')}" data-tip="${t('dark_mode')}"><i>${icon(S.theme === 'dark' ? 'moon' : 'sun')}</i></button></div>
@@ -362,7 +362,7 @@
   };
 
   // ---------- project shell ----------
-  const TABS = [['overview', 'chart'], ['review', 'check'], ['schedule', 'cal'], ['trends', 'trend'], ['logs', 'list'], ['inbox', 'inbox'], ['documents', 'file'], ['reports', 'spark'], ['settings', 'gear']];
+  const TABS = [['overview', 'chart'], ['review', 'check'], ['schedule', 'cal'], ['logs', 'list'], ['inbox', 'inbox'], ['documents', 'file'], ['reports', 'spark'], ['settings', 'gear']];
   // Project shortcuts in the header: icon only buttons, each with a tooltip and an accessible name.
   const projLinks = (p) => {
     const items = [['sharepoint_url', 'folder', 'pl_open_sp'], ['jira_url', 'jira', 'pl_open_jira']].filter(([k]) => p[k]);
@@ -412,10 +412,10 @@
     if (parts[0] === 'billing') { S.project = null; return PM.views.billing(); }
     if (parts[0] === 'brand') { S.project = null; return PM.views.brand(); }
     if (parts[0] === 'projects') { S.project = null; return PM.views.projects(); }
-    if (parts[0] === 'trends') { S.project = null; return PM.views.trends(); }
+    if (parts[0] === 'trends') { location.hash = '#/'; return; }
     if (parts[0] === 'calendar') { S.project = null; return PM.views.calendar(); }
     if (parts[0] === 'account') return PM.views.account();
-    if (parts[0] === 'p' && parts[1]) return PM.projectView(Number(parts[1]), parts[2] || 'overview', new URLSearchParams(qs || ''));
+    if (parts[0] === 'p' && parts[1]) return PM.projectView(Number(parts[1]), parts[2] && parts[2] !== 'trends' ? parts[2] : 'overview', new URLSearchParams(qs || ''));
     location.hash = '#/';
   }
   PM.route = route;
