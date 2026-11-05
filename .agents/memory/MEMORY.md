@@ -1,0 +1,1 @@
+- [Verification safety](verification-safety.md) — run regression checks without inherited database or paid-AI credentials; verify production separately.

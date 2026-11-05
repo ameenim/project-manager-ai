@@ -108,9 +108,20 @@ async function openLite(opts) {
   };
 }
 
-async function open(opts = {}) {
-  const url = opts.url !== undefined ? opts.url : process.env.DATABASE_URL;
-  const db = url ? await openPg(url) : await openLite(opts);
+async function prepareSchema(db, { managedProduction = false } = {}) {
+  if (managedProduction) {
+    // Replit Publish owns production DDL. Its schema copy need not include the
+    // development migration-history rows, so do not replay migrations here.
+    const required = ['users', 'sessions', 'projects', 'project_members', 'project_files', 'app_secrets', 'oauth_states', 'schema_migrations', 'id_blocks'];
+    const result = await db.query(
+      "SELECT name FROM unnest($1::text[]) AS required(name) WHERE to_regclass('public.' || name) IS NULL",
+      [required],
+    );
+    if (result.rows.length) {
+      throw new Error('Production database schema is missing: ' + result.rows.map((r) => r.name).join(', ') + '. Replit Publish must apply the development schema before this version starts.');
+    }
+    return;
+  }
   await db.query('CREATE TABLE IF NOT EXISTS schema_migrations (version INT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())');
   const done = new Set((await db.query('SELECT version FROM schema_migrations')).rows.map((r) => Number(r.version)));
   for (let i = 0; i < MIGRATIONS.length; i++) {
@@ -121,7 +132,22 @@ async function open(opts = {}) {
       await t.query('INSERT INTO schema_migrations(version) VALUES ($1)', [v]);
     });
   }
+}
+
+async function open(opts = {}) {
+  const url = opts.url !== undefined ? opts.url : process.env.DATABASE_URL;
+  const managedProduction = process.env.REPLIT_DEPLOYMENT === '1' && !opts.memory;
+  if (managedProduction && !url) {
+    throw new Error('DATABASE_URL is required in a published app. Replit must provision the production database; embedded storage is not a production fallback.');
+  }
+  const db = url ? await openPg(url) : await openLite(opts);
+  try {
+    await prepareSchema(db, { managedProduction });
+  } catch (error) {
+    await db.close().catch(() => {});
+    throw error;
+  }
   return db;
 }
 
-module.exports = { open };
+module.exports = { open, prepareSchema };

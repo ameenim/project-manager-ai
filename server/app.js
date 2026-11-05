@@ -78,8 +78,14 @@ function readMultipart(req, limit) {
 }
 
 async function createApp(opts = {}) {
+  const stage = opts.onStartupStage || (() => {});
+  stage('database open');
   const db = opts.db || (await dbm.open(opts.dbOptions || {}));
-  const store = new Store(db); await store.init();
+  stage('database ready; store init');
+  const store = new Store(db);
+  try { await store.init(); }
+  catch (error) { await db.close().catch(() => {}); throw error; }
+  stage('store ready');
   const auth = authm.make(db);
   const connectors = new Connectors(db, opts.connectorOptions || {});
   const api = createApi(store, auth, connectors);

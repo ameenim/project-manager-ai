@@ -13,7 +13,7 @@ Open http://localhost:5000 and create an account. Without a `DATABASE_URL` the s
 
 ## Settings (environment variables)
 
-1. `DATABASE_URL` is the Postgres connection string. On Replit, create a Postgres database and this value is provided for you. Tables are created automatically on start.
+1. `DATABASE_URL` is the Postgres connection string. Replit provides it for the Development Database. Local/development startup applies the app's non-destructive migrations. In a published Replit app (`REPLIT_DEPLOYMENT=1`), Replit Publish owns schema changes: startup only verifies the required database objects and never replays schema migrations. A published app requires `DATABASE_URL`; it will not silently fall back to embedded storage.
 2. `ANTHROPIC_API_KEY` turns on AI reading of documents. Optional `ANTHROPIC_MODEL` changes the model. Without a key a rule based reading is used.
 3. `APP_TZ` sets the time zone used for "today" (default Asia/Dubai).
 4. `SITE_URL` sets the public address used in the sitemap.

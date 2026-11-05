@@ -8,9 +8,21 @@ const { extractText } = require('./server/extract');
 const PORT = process.env.PORT || 5000;
 
 async function main() {
-  const app = await createApp();
-  await new Promise((ok) => app.server.listen(PORT, '0.0.0.0', ok));
+  const started = Date.now();
+  const app = await createApp({
+    onStartupStage: (stage) => console.log(`Startup: ${stage} (${Date.now() - started}ms)`),
+  });
+  try {
+    await new Promise((ok, reject) => {
+      app.server.once('error', reject);
+      app.server.listen(PORT, '0.0.0.0', () => {
+        app.server.removeListener('error', reject);
+        ok();
+      });
+    });
+  } catch (error) { await app.close(); throw error; }
   console.log(`Project Manager AI running on port ${PORT} (${app.db.kind === 'pg' ? 'Postgres' : 'embedded Postgres in ./data'})`);
+  console.log(`Startup: listening after ${Date.now() - started}ms`);
 
   let closing = false;
   const stop = async (sig) => {
