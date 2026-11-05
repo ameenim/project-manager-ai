@@ -12,7 +12,7 @@ const scrypt = (pw, salt) => new Promise((ok, no) => crypto.scrypt(pw, salt, 64,
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const csvCell = (v) => { const s = String(v == null ? '' : v); return /[",\n\r]/.test(s) || /^[=+\-@]/.test(s) ? '"' + (/^[=+\-@]/.test(s) ? "'" : '') + s.replace(/"/g, '""') + '"' : s; };
 
-module.exports = function createAdmin({ db, store, auth, ops }) {
+module.exports = function createAdmin({ db, store, auth, ops, usage }) {
   const q = (t, p) => db.query(t, p);
   const routes = [];
   const on = (method, re, fn) => routes.push([method, new RegExp('^/api/admin' + re + '$'), fn]);
@@ -354,6 +354,9 @@ module.exports = function createAdmin({ db, store, auth, ops }) {
     if (sys.rss_mb > 1500) issues.push('Memory use is high.');
     return { status: !dbOk ? 'down' : issues.some((x) => !/Anthropic/.test(x)) ? 'degraded' : 'healthy', issues, database: { ok: dbOk, kind: db.kind, latency_ms: dbMs }, system: sys, uptime: { d1: await ops.uptime(1), d7: await ops.uptime(7), d30: await ops.uptime(30) }, server_errors: { last_hour: num(err1.h1), last_24h: num(err1.h24) }, counts: { users: num(sizes.users), projects: num(sizes.projects), sessions: num(sizes.sessions) }, beats: beats.map((b) => ({ at: iso(b.beat), db_ms: b.db_ms, mem_mb: b.mem_mb })) };
   });
+
+  // ---------- project manager usability ----------
+  on('GET', '/usability', async ({ query }) => usage.report(query.days));
 
   // ---------- error log ----------
   on('GET', '/errors', async ({ query }) => {

@@ -38,10 +38,11 @@
     let st = emptyState(), saved = null;
     try {
       if (id) { const w = (await api('GET', `/api/widgets/${id}`)).widget; if (!w.mine) throw new Error(t('wb_not_yours')); st = fromSpec(w); saved = w; }
-    } catch (e) { if (PM.stale(token)) return; $('#content .page').innerHTML = `<div class="empty"><p>${esc(e.message)}</p><a class="btn" href="#/widgets?tab=mine">${esc(t('wb_back'))}</a></div>`; return; }
+    } catch (e) { if (PM.stale(token)) return; $('#content').innerHTML = '<div class="page wb"></div>'; $('#content .page').innerHTML = `<div class="empty"><p>${esc(e.message)}</p><a class="btn" href="#/widgets?tab=mine">${esc(t('wb_back'))}</a></div>`; return; }
     let data = null;
     try { await PM.loadProjects(); const r = await api('GET', '/api/widgets/datasets'); data = { datasets: r.datasets, today: r.today, truncated: r.truncated || {} }; } catch (e) { /* the preview shows a note */ }
     if (PM.stale(token)) return;
+    $('#content').innerHTML = '<div class="page wb"></div>';
     const dirty = { v: false };
     const label = W().labels;
 

@@ -57,9 +57,11 @@
     if (body instanceof FormData) init.body = body;
     else if (body !== undefined) { init.headers['content-type'] = 'application/json'; init.body = JSON.stringify(body); }
     let r;
-    try { r = await fetch(path, init); } catch { throw new Error(t('err_network')); }
+    const t0 = performance.now();
+    try { r = await fetch(path, init); } catch { if (PM.track) PM.track.call(path, performance.now() - t0, false); throw new Error(t('err_network')); }
     let data = null;
     try { data = await r.json(); } catch { /* not json */ }
+    if (PM.track) PM.track.call(path, performance.now() - t0, r.ok || r.status === 401 || (r.status >= 400 && r.status < 500 && r.status !== 429));
     if (r.status === 401 && !path.startsWith('/api/auth/')) { signOut(true); throw new Error(t('err_session')); }
     if (!r.ok) throw new Error((data && data.error) || r.statusText);
     return data;

@@ -262,6 +262,23 @@ const MIGRATIONS = [
   );
   CREATE INDEX IF NOT EXISTS admin_audit_time_idx ON admin_audit(created_at);
   `,
+  // 7: how project managers use the product. One row per observed step (a screen opened, an action used, a repeated
+  // click, a slow or failed call). It holds screen and action names only, never project content, and is purged after 90 days.
+  `
+  CREATE TABLE IF NOT EXISTS usage_events (
+    id BIGINT PRIMARY KEY,
+    user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+    sid TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    screen TEXT NOT NULL DEFAULT '',
+    target TEXT NOT NULL DEFAULT '',
+    ms INT NOT NULL DEFAULT 0,
+    device TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS usage_events_time_idx ON usage_events(created_at);
+  CREATE INDEX IF NOT EXISTS usage_events_user_idx ON usage_events(user_id, created_at);
+  `,
 ];
 
 async function openPg(url) {

@@ -352,6 +352,7 @@
     PM.shell('widgets', `${PM.loader.html({ size: 'page' })}`);
     await PM.loadProjects();
     if (PM.stale(token)) return;
+    $('#content').innerHTML = '<div class="page wm"></div>';
     const SOURCES = ['all', 'builtin', 'community', 'added', 'mine'], SORTS = ['rating', 'installs', 'newest', 'name'];
     const page = () => $('#content .page');
 

@@ -14,7 +14,7 @@
   const ICONS = {
     home: '<path d="m3 11 9-8 9 8v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z"/>', users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6.5 6.5 0 0 1 3.5 5.5"/>',
     card: '<rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 10h19M6 15h4"/>', coin: '<circle cx="12" cy="12" r="9"/><path d="M14.5 9a2.5 2.5 0 0 0-2.5-1.5c-1.4 0-2.5.8-2.5 2s1 1.7 2.5 2 2.5.8 2.5 2-1.1 2-2.5 2A2.5 2.5 0 0 1 9.5 15M12 6v1.5M12 16.5V18"/>',
-    spark: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8Z"/>', folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
+    route: '<circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5"/>', spark: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8Z"/>', folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
     grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
     gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>', pulse: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
     alert: '<path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/>', list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
@@ -144,7 +144,7 @@
 
   // ---------- shell ----------
   const NAV = [
-    ['overview', 'Overview', 'home'], ['users', 'Users', 'users'], ['subscriptions', 'Subscriptions', 'card'], ['finance', 'Finance and income', 'coin'], ['ai', 'AI consumption', 'spark'],
+    ['overview', 'Overview', 'home'], ['users', 'Users', 'users'], ['usability', 'Usability', 'route'], ['subscriptions', 'Subscriptions', 'card'], ['finance', 'Finance and income', 'coin'], ['ai', 'AI consumption', 'spark'],
     ['projects', 'Projects', 'folder'], ['widgets', 'Widgets', 'grid'], ['config', 'Configuration', 'gear'], ['health', 'System health', 'pulse'], ['errors', 'Error log', 'alert'], ['audit', 'Audit log', 'list'],
   ];
   function shell() {
@@ -201,7 +201,7 @@
   };
 
   // ---------- users ----------
-  const F = { users: { q: '', status: '', role: '', page: 1 }, subs: { q: '', state: '', page: 1 }, projects: { q: '', page: 1 }, widgets: { page: 1 }, errors: { kind: '', resolved: '0', q: '', page: 1 }, audit: { q: '', page: 1 }, fin: { from: '', to: '', page: 1 }, aiDays: 30 };
+  const F = { users: { q: '', status: '', role: '', page: 1 }, subs: { q: '', state: '', page: 1 }, projects: { q: '', page: 1 }, widgets: { page: 1 }, errors: { kind: '', resolved: '0', q: '', page: 1 }, audit: { q: '', page: 1 }, fin: { from: '', to: '', page: 1 }, aiDays: 30, useDays: 30 };
   VIEWS.users = async (rest) => {
     if (rest[0]) return userDetail(Number(rest[0]));
     const f = F.users;
@@ -325,6 +325,57 @@
       <section class="card"><div class="card-head"><h3>By model</h3></div>${r.by_model.length ? `<div class="table-wrap"><table class="t sa-tbl"><thead><tr><th>Model</th><th class="num">Calls</th><th class="num">Tokens</th></tr></thead><tbody>${r.by_model.map((s) => `<tr><td>${esc(s.model)}</td><td class="num">${nf(s.calls)}</td><td class="num">${tok(s.input + s.output)}</td></tr>`).join('')}</tbody></table></div>` : empty('No model data yet.')}</section></div>
       <section class="card mt"><div class="card-head"><h3>Top users</h3></div>${r.top_users.length ? `<div class="table-wrap"><table class="t sa-tbl"><thead><tr><th>Person</th><th class="num">Calls</th><th class="num">Input</th><th class="num">Output</th><th class="num">Cost</th></tr></thead><tbody>${r.top_users.map((u) => `<tr><td><a href="#/users/${u.id}"><b>${esc(u.name)}</b></a><div class="small muted">${esc(u.email)}</div></td><td class="num">${nf(u.calls)}</td><td class="num">${tok(u.input)}</td><td class="num">${tok(u.output)}</td><td class="num">${usd(u.cost, 4)}</td></tr>`).join('')}</tbody></table></div>` : empty('No one has used AI in this range.')}</section></div>`);
     $$('[data-d]').forEach((b) => (b.onclick = () => { F.aiDays = Number(b.dataset.d); refresh(); }));
+  };
+
+  // ---------- project manager usability ----------
+  VIEWS.usability = async () => {
+    const days = F.useDays; const r = await api('GET', `/api/admin/usability?days=${days}`); const k = r.kpis;
+    const tbl = (cols, rows, emptyText) => rows.length ? `<div class="table-wrap"><table class="t sa-tbl"><thead><tr>${cols.map((c, i) => `<th class="${c[1] || ''}">${esc(c[0])}</th>`).join('')}</tr></thead><tbody>${rows.map((x) => `<tr>${x.map((v, i) => `<td class="${cols[i][1] || ''}">${v}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : empty(emptyText);
+    const when = (iso) => (iso ? new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'Never');
+    const tone = { high: 'bad', medium: 'warn', low: 'info' };
+    const sug = r.suggestions.length ? `<div class="sa-sug">${r.suggestions.map((x) => `<article class="sa-sug-i ${tone[x.priority]}"><div class="sa-sug-h"><span class="sa-tag sa-prio ${tone[x.priority]}">${esc(x.priority)} priority</span><span class="sa-tag">${esc(x.area)}</span>${x.users ? `<span class="small muted">${nf(x.users)} project manager${x.users === 1 ? '' : 's'}</span>` : ''}</div><h4>${esc(x.title)}</h4><p class="small muted"><b>Evidence.</b> ${esc(x.evidence)}</p><p class="small"><b>Suggested change.</b> ${esc(x.action)}</p></article>`).join('')}</div>`
+      : empty(r.empty ? 'Suggestions appear once project managers have used the system.' : 'No clear friction found in this period. Keep watching as more project managers join.');
+    const maxShare = Math.max(1, ...r.screens.map((x) => x.views));
+    const share = (v, m) => `<span class="sa-meter" aria-hidden="true"><i style="width:${Math.round((v / m) * 100)}%"></i></span>`;
+    setView(`<div class="page">${head('Project manager usability', `<div class="seg" role="group" aria-label="Range">${[7, 14, 30, 60, 90].map((d) => `<button data-d="${d}" class="${d === days ? 'on' : ''}">${d} days</button>`).join('')}</div>`, `How project managers move through the product in the last ${days} days, and what to change to make their journey smoother.`)}
+      ${r.note ? note(r.note, 'bad') : ''}
+      ${r.empty && !r.note ? note('No usage has been recorded in this period yet. Steps are recorded automatically as project managers work. Only screen names and button names are kept, never project content or typed text, and they are deleted after 90 days.') : ''}
+      <div class="sa-kpis">
+        ${kpi(nf(k.users), 'Active project managers', `${nf(k.sessions)} sessions`, 'info')}
+        ${kpi(k.avg_session_min >= 1 ? nf(k.avg_session_min, 1) + ' min' : Math.round(k.avg_session_min * 60) + ' sec', 'Average session', `${nf(k.avg_screens, 1)} screens and ${nf(k.avg_actions, 1)} actions per session`, 'info')}
+        ${kpi(k.returning_pct + '%', 'Came back on another day', 'Active on two or more days', k.users < 3 ? '' : k.returning_pct >= 60 ? 'good' : k.returning_pct >= 40 ? 'warn' : 'bad')}
+        ${kpi(nf(k.friction_events), 'Friction moments', `${nf(k.rage)} repeated clicks, ${nf(k.slow)} slow calls, ${nf(k.fail)} failed calls`, k.friction_events ? 'warn' : 'good')}
+      </div>
+      <section class="card mt"><div class="card-head"><h3>Suggestions to enhance the journey</h3><span class="small muted">${nf(r.suggestions.length)} based on tracked behavior</span></div>${sug}</section>
+      <div class="sa-grid2 mt">
+        <section class="card"><div class="card-head"><h3>Active project managers per day</h3></div>${bars(r.daily.map((x) => ({ d: x.d, v: x.users })), { label: 'Active project managers per day' })}</section>
+        <section class="card"><div class="card-head"><h3>Sessions per day</h3></div>${bars(r.daily.map((x) => ({ d: x.d, v: x.sessions })), { cls: 'orange', label: 'Sessions per day' })}</section>
+      </div>
+      <section class="card mt"><div class="card-head"><h3>Where time goes</h3><span class="small muted">Every screen project managers opened</span></div>
+        ${tbl([['Screen'], ['Visits', 'num'], ['Share of visits'], ['Project managers', 'num'], ['Average time', 'num'], ['Left within 5 seconds', 'num']], r.screens.map((x) => [esc(x.label), nf(x.views), share(x.views, maxShare), nf(x.users), x.dwell_s >= 60 ? nf(x.dwell_s / 60, 1) + ' min' : x.dwell_s + ' s', x.quick_pct + '%']), 'No screens recorded yet.')}
+        ${r.unused.length && k.users ? `<p class="small muted" style="margin-top:10px"><b>Never opened:</b> ${r.unused.map((x) => esc(x.label)).join(', ')}.</p>` : ''}</section>
+      <div class="sa-grid2 mt">
+        <section class="card"><div class="card-head"><h3>Most common paths</h3><span class="small muted">From one screen to the next</span></div>${tbl([['From'], ['To'], ['Times', 'num'], ['Project managers', 'num']], r.transitions.map((x) => [esc(x.from), esc(x.to), nf(x.count), nf(x.users)]), 'No paths yet.')}</section>
+        <section class="card"><div class="card-head"><h3>Back and forth loops</h3><span class="small muted">A to B and straight back to A</span></div>${tbl([['Between'], ['Times', 'num'], ['Project managers', 'num']], r.loops.map((x) => [esc(x.a) + ' and ' + esc(x.b), nf(x.count), nf(x.users)]), 'No loops found.')}</section>
+        <section class="card"><div class="card-head"><h3>Where sessions start</h3></div>${tbl([['Screen'], ['Sessions', 'num']], r.first_screens.map((x) => [esc(x.label), nf(x.count)]), 'No data yet.')}</section>
+        <section class="card"><div class="card-head"><h3>Where sessions end</h3></div>${tbl([['Screen'], ['Sessions', 'num']], r.exit_screens.map((x) => [esc(x.label), nf(x.count)]), 'No data yet.')}</section>
+      </div>
+      <section class="card mt"><div class="card-head"><h3>Friction</h3><span class="small muted">Repeated clicks, slow calls and failed calls</span></div>
+        <div class="sa-grid3">
+          <div><h4 class="sa-sub">Repeated clicks</h4>${tbl([['Where'], ['Bursts', 'num'], ['People', 'num']], r.friction.rage.map((x) => [esc(x.screen + ': ' + (x.name || 'unnamed')), nf(x.count), nf(x.users)]), 'None found.')}</div>
+          <div><h4 class="sa-sub">Slow calls</h4>${tbl([['Call'], ['Times', 'num'], ['Average', 'num']], r.friction.slow.map((x) => [esc(x.target || 'unknown'), nf(x.count), x.avg_s + ' s']), 'None found.')}</div>
+          <div><h4 class="sa-sub">Failed calls</h4>${tbl([['Call'], ['Times', 'num'], ['People', 'num']], r.friction.fail.map((x) => [esc(x.target || 'unknown'), nf(x.count), nf(x.users)]), 'None found.')}</div>
+        </div></section>
+      <section class="card mt"><div class="card-head"><h3>Features used</h3><span class="small muted">Buttons and controls, by how many project managers use them</span></div>
+        ${tbl([['Control'], ['Where'], ['Uses', 'num'], ['Project managers', 'num'], ['Adoption', 'num']], r.actions.map((x) => [esc(x.name || x.target), esc(x.screen), nf(x.count), nf(x.users), x.adoption_pct + '%']), 'No actions recorded yet.')}</section>
+      <div class="sa-grid2 mt">
+        <section class="card"><div class="card-head"><h3>Devices</h3></div>${tbl([['Device'], ['Project managers', 'num'], ['Sessions', 'num'], ['Friction', 'num']], r.devices.map((x) => [esc(x.device), nf(x.users), nf(x.sessions), x.friction_pct + '%']), 'No data yet.')}</section>
+        <section class="card"><div class="card-head"><h3>New project managers</h3></div>${r.onboarding.new_users ? `<p>${nf(r.onboarding.new_users)} accounts joined in the last 14 days and were active. ${nf(r.onboarding.stalled)} of them never opened a project.</p>` : empty('No new project managers were active in this period.')}</section>
+      </div>
+      <section class="card mt"><div class="card-head"><h3>Each project manager</h3><span class="small muted">Up to 100 most active</span></div>
+        ${tbl([['Person'], ['Sessions', 'num'], ['Active days', 'num'], ['Screens', 'num'], ['Actions', 'num'], ['Friction', 'num'], ['Main device'], ['Last active']], r.people.map((x) => [`<b>${esc(x.name)}</b>${x.is_new ? ' <span class="sa-tag">New</span>' : ''}<div class="small muted">${esc(x.email)}</div>`, nf(x.sessions), nf(x.active_days), nf(x.screens), nf(x.actions), nf(x.friction), esc(x.device || ''), when(x.last_at)]), 'No project managers yet.')}</section>
+    </div>`);
+    $$('[data-d]').forEach((b) => (b.onclick = () => { F.useDays = Number(b.dataset.d); refresh(); }));
   };
 
   // ---------- projects ----------
