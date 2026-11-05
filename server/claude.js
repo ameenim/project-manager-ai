@@ -54,12 +54,12 @@ async function callClaude(payload) {
 // { type: 'done', stop_reason, usage }. The key never leaves the server. There is no tool here that reaches the web
 // or runs code: the caller decides which tools exist.
 const CHAT_MODEL = process.env.CHAT_MODEL || MODEL;
-async function* streamClaude({ system, messages, tools, max_tokens = 1500, temperature, signal, model }) {
+async function* streamClaude({ system, messages, tools, max_tokens = 1500, signal, model }) {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) throw Object.assign(new Error('ANTHROPIC_API_KEY is not set on the server'), { status: 503, code: 'no_key' });
   const payload = { model: model || CHAT_MODEL, max_tokens, stream: true, system, messages };
   if (tools && tools.length) payload.tools = tools;
-  if (temperature != null) payload.temperature = temperature;
+  // no temperature: newer models reject the setting
   const ctl = new AbortController();
   const onAbort = () => ctl.abort();
   if (signal) { if (signal.aborted) ctl.abort(); else signal.addEventListener('abort', onAbort, { once: true }); }

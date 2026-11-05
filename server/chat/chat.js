@@ -128,7 +128,7 @@ function createChat({ db, store, api, auth, model }) {
 
     for (let round = 0; round < MAX_ROUNDS; round++) {
       const calls = []; let assistantText = '';
-      for await (const ev of modelFn({ system, messages, tools: catalog, max_tokens: 1500, temperature: 0.2, signal })) {
+      for await (const ev of modelFn({ system, messages, tools: catalog, max_tokens: 1500, signal })) {
         if (ev.type === 'text') { assistantText += ev.text; send(og.push(ev.text)); if (og.blocked) break; }
         else if (ev.type === 'tool_use') calls.push(ev);
         else if (ev.type === 'done' && ev.usage) { usage.input += ev.usage.input_tokens || 0; usage.output += ev.usage.output_tokens || 0; }
@@ -242,7 +242,7 @@ function createChat({ db, store, api, auth, model }) {
     if (gt.decision === 'pass' && !PROJECTISH.test(text) && text.length > 20) {
       try {
         let out = '';
-        for await (const ev of modelFn({ system: gate.CLASSIFY_SYSTEM, messages: [{ role: 'user', content: text }], max_tokens: 120, temperature: 0, signal })) if (ev.type === 'text') out += ev.text;
+        for await (const ev of modelFn({ system: gate.CLASSIFY_SYSTEM, messages: [{ role: 'user', content: text }], max_tokens: 120, signal })) if (ev.type === 'text') out += ev.text;
         const c = gate.parseClassification(out);
         if (c && c.label === 'out_of_scope') {
           const reply = prompt.refusal(c.reason === 'none' || c.reason === 'bypass' ? 'general' : c.reason, lang);
