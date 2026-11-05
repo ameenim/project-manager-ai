@@ -144,3 +144,13 @@ test('heartbeat feeds uptime', async () => {
 test('the admin page is served', async () => {
   const r = await fetch(s.base + '/admin'); assert.equal(r.status, 200); assert.match(await r.text(), /Super admin/);
 });
+
+// Ad blockers hide anything whose class or id starts with "ad-". The console once used that prefix and showed empty screens.
+test('admin page files avoid class names that ad blockers hide', () => {
+  const fs = require('fs'), path = require('path');
+  for (const f of ['admin.html', 'admin.css', 'admin.js']) {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'public', f), 'utf8');
+    assert.ok(!/(^|[^a-z0-9])ad-[a-z]/i.test(src), `${f} must not use names that start with ad-`);
+    assert.ok(!/[.#"' ](ads?|advert|sponsor|banner)[-_ "'{]/i.test(src.replace(/\/\*[\s\S]*?\*\//g, '')), `${f} must not use ad like class names`);
+  }
+});
