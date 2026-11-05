@@ -428,7 +428,9 @@ html[dir="rtl"] .drawer { transform: translateX(-40px); }
 @container (max-width: 1040px) { .rd-body { grid-template-columns: 310px minmax(0, 1fr); } .rd-side { grid-column: 1 / -1; } }
 @container (max-width: 700px) { .rd-body { grid-template-columns: minmax(0, 1fr); } .rd-side { grid-column: auto; } .rd-spider { align-items: center; } }
 @container (max-width: 420px) { .rd-grid { grid-template-columns: auto repeat(3, minmax(0, 1fr)); } .rd-cell { height: 56px; font-size: var(--fs-title); } .rd-head { flex-wrap: wrap; } }
-.viz { max-width: 100%; } .spider { min-width: 220px; }
+.viz { max-width: 100%; }
+/* radar: render at 1:1 with its 300 unit viewBox so label text stays the same size as the rest of the UI when the widget is resized */
+.viz.spider { width: 300px; max-width: 100%; min-width: 0; }
 .kpis { container-type: normal; }
 @container (max-width: 760px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @container (max-width: 420px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .kv { font-size: var(--fs-title); } }
