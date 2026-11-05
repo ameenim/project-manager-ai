@@ -362,7 +362,11 @@
 
   // ---------- project shell ----------
   const TABS = [['overview', 'chart'], ['review', 'check'], ['schedule', 'cal'], ['logs', 'list'], ['inbox', 'inbox'], ['documents', 'file'], ['reports', 'spark'], ['settings', 'gear']];
-  const projLinks = (p) => [['sharepoint_url', 'folder', 'pl_open_sp'], ['jira_url', 'link', 'pl_open_jira']].filter(([k]) => p[k]).map(([k, ic, tip]) => `<a class="btn sm ghost" href="${esc(p[k])}" target="_blank" rel="noopener noreferrer" data-tip="${t(tip)}">${icon(ic)}${t(tip)}</a>`).join('');
+  // Project shortcuts in the header: icon only buttons, each with a tooltip and an accessible name.
+  const projLinks = (p) => {
+    const items = [['sharepoint_url', 'folder', 'pl_open_sp'], ['jira_url', 'jira', 'pl_open_jira']].filter(([k]) => p[k]);
+    return items.length ? `<div class="proj-links" role="group" aria-label="${esc(t('pl_title'))}">${items.map(([k, ic, name]) => `<a class="btn ghost icon" href="${esc(p[k])}" target="_blank" rel="noopener noreferrer" aria-label="${esc(t(name))}" data-tip="${esc(t(name))}">${icon(ic)}</a>`).join('')}</div>` : '';
+  };
   PM.projectView = async function (id, tab, query) {
     if (!S.project || S.project.id !== id) shell('', `<div class="page"><div class="empty"><span class="spinner"></span></div></div>`);
     let p;

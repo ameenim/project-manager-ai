@@ -41,7 +41,7 @@
     tour_end_t: 'You are ready to go', tour_end_b: 'Create your first project, or explore the demo project first.', tour_create: 'Create a project', tour_explore: 'Explore the demo',
     rb_label: 'Plan and token usage', rb_trial: 'Free trial ends in {days}', rb_sub: 'Subscription ends in {days}', rb_trial_over: 'Your free trial has ended', rb_sub_over: 'Your subscription has ended',
     rb_tokens: 'Tokens', rb_tokens_of: '{used} of {limit}', rb_tokens_tip: 'Tokens are used when the AI reads documents, writes reports and answers messages. Your {limit} tokens reset each month.',
-    rb_subscribe: 'Subscribe for $25 per month', rb_subscribe_short: 'Subscribe', rb_manage: 'Manage plan', rb_out: 'Token limit reached', rb_warn80: 'You have used 80% of your tokens.',
+    rb_subscribe: 'Subscribe for $25 per month', rb_subscribe_short: 'Subscribe', rb_manage: 'Manage plan', rb_close: 'Close', rb_hidden: 'Plan bar hidden. You can find your plan under Billing and plan.', rb_undo: 'Undo', rb_out: 'Token limit reached', rb_warn80: 'You have used 80% of your tokens.',
     rb_err_expired: 'Your plan has ended. Subscribe to continue.', rb_err_tokens: 'You have used all of your tokens. They reset on {date}.',
     sub_title: 'Subscribe to Project Manager AI', sub_plan: 'Monthly plan', sub_per: 'per month', sub_f1: '10 million tokens every month', sub_f2: 'All project, schedule and report features', sub_f3: 'Jira and email connections',
     sub_today: 'Due today', sub_renews: 'Renews on', sub_continue: 'Continue to payment', sub_not_now: 'Not now', sub_pay_h: 'Secure payment',
@@ -83,7 +83,7 @@
     tour_end_t: 'أنت جاهز', tour_end_b: 'أنشئ أول مشروع، أو استكشف المشروع التجريبي أولا.', tour_create: 'إنشاء مشروع', tour_explore: 'استكشاف المشروع التجريبي',
     rb_label: 'الباقة واستهلاك الرموز', rb_trial: 'تنتهي التجربة المجانية بعد {days}', rb_sub: 'ينتهي الاشتراك بعد {days}', rb_trial_over: 'انتهت تجربتك المجانية', rb_sub_over: 'انتهى اشتراكك',
     rb_tokens: 'الرموز', rb_tokens_of: '{used} من {limit}', rb_tokens_tip: 'تُستهلك الرموز عندما يقرأ الذكاء الاصطناعي المستندات ويكتب التقارير ويجيب عن الرسائل. تتجدد رموزك البالغة {limit} كل شهر.',
-    rb_subscribe: 'اشترك مقابل 25 دولارا شهريا', rb_subscribe_short: 'اشترك', rb_manage: 'إدارة الباقة', rb_out: 'بلغت حد الرموز', rb_warn80: 'استهلكت 80% من رموزك.',
+    rb_subscribe: 'اشترك مقابل 25 دولارا شهريا', rb_subscribe_short: 'اشترك', rb_manage: 'إدارة الباقة', rb_close: 'إغلاق', rb_hidden: 'تم إخفاء شريط الباقة. تجد باقتك ضمن الفوترة والباقة.', rb_undo: 'تراجع', rb_out: 'بلغت حد الرموز', rb_warn80: 'استهلكت 80% من رموزك.',
     rb_err_expired: 'انتهت باقتك. اشترك للمتابعة.', rb_err_tokens: 'استهلكت كل رموزك. تتجدد في {date}.',
     sub_title: 'الاشتراك في مدير المشاريع الذكي', sub_plan: 'الباقة الشهرية', sub_per: 'شهريا', sub_f1: '10 ملايين رمز كل شهر', sub_f2: 'كل ميزات المشاريع والجداول والتقارير', sub_f3: 'ربط Jira والبريد الإلكتروني',
     sub_today: 'المستحق اليوم', sub_renews: 'يتجدد في', sub_continue: 'المتابعة إلى الدفع', sub_not_now: 'ليس الآن', sub_pay_h: 'دفع آمن',
@@ -104,7 +104,7 @@
   const mem = {};
   const load = (k) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : mem[k] || null; } catch (e) { return mem[k] || null; } };
   const save = (k, v) => { mem[k] = v; try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage blocked, memory copy is used */ } };
-  const freshBilling = () => ({ trialStart: Date.now(), paidAt: null, tokens: 0, shift: 0, usage: {}, invoices: [], auto: true, warned: 0 });
+  const freshBilling = () => ({ trialStart: Date.now(), paidAt: null, tokens: 0, shift: 0, usage: {}, invoices: [], auto: true, warned: 0, rbHide: null });
   let B = load('pm_billing') || freshBilling();
   let O = load('pm_onboard') || { done: false, tour: false, phone: '', hide: false };
   const saveB = () => save('pm_billing', B);
@@ -142,8 +142,14 @@
   }
 
   // ---------- plan ribbon ----------
+  // The ribbon can be closed. It stays closed until the plan state gets worse (warning, then limit reached or ended).
+  const SEV = { ok: 0, paid: 0, warn: 1, bad: 2 };
   function ribbon() {
     const i = info();
+    if (B.rbHide != null) {
+      if (SEV[i.tone] < SEV[B.rbHide]) { B.rbHide = i.tone; saveB(); }
+      if (SEV[i.tone] <= SEV[B.rbHide]) return '';
+    }
     const label = i.expired ? t(i.paid ? 'rb_sub_over' : 'rb_trial_over') : t(i.paid ? 'rb_sub' : 'rb_trial', { days: dayText(i.days) });
     const ic = i.tone === 'bad' || i.tone === 'warn' ? 'alert' : i.paid ? 'check' : 'spark';
     const cta = i.paid && !i.expired ? `<a class="btn sm" href="#/billing">${t('rb_manage')}</a>` : `<button type="button" class="btn sm primary" data-subscribe><span class="rb-long">${t('rb_subscribe')}</span><span class="rb-short">${t('rb_subscribe_short')}</span></button>`;
@@ -153,18 +159,29 @@
     return `<div class="ribbon ${i.tone}" id="ribbon" role="region" aria-label="${esc(t('rb_label'))}">
       <div class="rb-status">${icon(ic)}<span>${esc(label)}</span></div>
       <div class="rb-tokens ${tone}" tabindex="0" data-tip="${esc(tip)}" aria-label="${esc(t('rb_tokens') + ': ' + used)}"><span>${t('rb_tokens')}</span><b>${esc(used)}</b><span class="progress rb-meter" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${i.pct}"><i style="width:${i.pct}%"></i></span></div>
-      <div class="rb-cta">${cta}</div></div>`;
+      <div class="rb-cta">${cta}</div>
+      <button type="button" class="btn ghost icon sm rb-close" data-rb-close aria-label="${esc(t('rb_close'))}" data-tip="${esc(t('rb_close'))}">${icon('x')}</button></div>`;
   }
   function sync() { const el = $('#ribbon'); document.documentElement.style.setProperty('--ribbon-h', (el ? el.offsetHeight : 0) + 'px'); }
+  function hideRibbon() {
+    const prev = B.rbHide == null ? null : B.rbHide;
+    B.rbHide = info().tone; saveB(); refresh();
+    PM.toast(t('rb_hidden'), '', { label: t('rb_undo'), fn: () => { B.rbHide = prev; saveB(); refresh(); } });
+  }
   function bindRibbon() {
-    const el = $('#ribbon'); if (!el) return;
-    $$('[data-subscribe]', el).forEach((b) => (b.onclick = () => subscribe()));
+    const el = $('#ribbon');
+    if (el) {
+      $$('[data-subscribe]', el).forEach((b) => (b.onclick = () => subscribe()));
+      const x = $('[data-rb-close]', el); if (x) x.onclick = hideRibbon;
+    }
     sync();
   }
   let redraw = null;
   function refresh() {
-    const el = $('#ribbon');
-    if (el) { el.outerHTML = ribbon(); bindRibbon(); }
+    const html = ribbon(), el = $('#ribbon');
+    if (el) { if (html) el.outerHTML = html; else el.remove(); }
+    else if (html && $('#app > .shell')) $('#app').insertAdjacentHTML('afterbegin', html);
+    bindRibbon();
     if (redraw && $('#billingPage')) redraw(); else redraw = null;
   }
   window.addEventListener('resize', sync);
@@ -224,7 +241,7 @@
       m.$('#subPay').onclick = async () => {
         const r = await PM.busy(m.$('#subPay'), async () => { await delay(900); return true; });
         if (!r) return;
-        B.paidAt = now(); B.tokens = 0; B.warned = 0; B.auto = true; B.invoices.unshift(invoice(now())); saveB(); refresh();
+        B.paidAt = now(); B.tokens = 0; B.warned = 0; B.rbHide = null; B.auto = true; B.invoices.unshift(invoice(now())); saveB(); refresh();
         step3();
       };
       m.$('#subPay').focus();

@@ -21,13 +21,17 @@
 .rb-tokens.bad .progress > i { background: var(--danger); }
 .rb-tokens.bad b { color: var(--danger); }
 .rb-cta { display: flex; align-items: center; }
+.rb-close { flex: none; width: 32px; height: 32px; padding: 0; justify-content: center; color: var(--muted); margin-inline-start: -6px; }
+.rb-close:hover { color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
+.rb-close:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .rb-short { display: none; }
 @media (max-width: 700px) {
   .ribbon { padding: 6px 12px; gap: 4px 12px; }
   .rb-long { display: none; }
   .rb-short { display: inline; }
-  .rb-status { flex-basis: 60%; }
+  .rb-status { flex: 1 1 0; }
   .rb-cta { margin-inline-start: auto; }
+  .rb-close { width: 44px; height: 44px; margin-inline-start: -8px; }
   .rb-tokens { order: 3; flex: 1 1 100%; }
   .rb-meter { flex: 1; width: auto; }
 }

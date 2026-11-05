@@ -65,6 +65,11 @@ svg.i { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-widt
 .proj-head { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 28px 0; position: sticky; top: 0; z-index: 20; }
 .proj-title { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .proj-title img.logo { height: 34px; max-width: 110px; object-fit: contain; border-radius: 6px; }
+.proj-links { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.proj-links .btn.icon { width: 36px; height: 36px; padding: 0; justify-content: center; color: var(--muted); }
+.proj-links .btn.icon:hover { color: var(--primary); background: var(--primary-soft); }
+.proj-links .btn.icon:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+@media (max-width: 600px) { .proj-links .btn.icon { width: 44px; height: 44px; } }
 .tabs { display: flex; gap: 2px; margin-top: 10px; overflow-x: auto; }
 .tab { padding: 10px 14px; color: var(--muted); border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 7px; text-decoration: none; background: none; border-top: 0; border-inline: 0; }
 .tab:hover { color: var(--text); text-decoration: none; }
@@ -1014,7 +1019,9 @@ input.te-name { font-size: var(--fs-heading); font-weight: 650; padding: 10px 12
 .fmt-pick .seg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
 .fmt-pick .seg button { justify-content: center; min-height: 40px; }
 .fmt-pick .seg button.on { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
-.fv { display: grid; grid-template-columns: 224px minmax(0, 1fr); gap: 18px; container-type: inline-size; }
+/* The card is the size container, so the container query below can restyle .fv itself (an element cannot query its own container). */
+#rpDocs { container-type: inline-size; min-width: 0; }
+.fv { display: grid; grid-template-columns: 224px minmax(0, 1fr); gap: 18px; }
 .fv-rail { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .fv-rail .sub { font-size: var(--fs-small); color: var(--muted); font-weight: 600; padding: 2px 10px 6px; }
 .fv-folder { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 6px 10px; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--text); font: inherit; font-size: var(--fs-body); text-align: start; cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
@@ -1048,12 +1055,12 @@ input.te-name { font-size: var(--fs-heading); font-weight: 650; padding: 10px 12
 .fv-empty { border: 1px dashed var(--border-strong); border-radius: 10px; padding: 28px 16px; text-align: center; color: var(--muted); font-size: var(--fs-body); }
 .fv-empty.over { border-color: var(--primary); background: var(--primary-soft); color: var(--primary); }
 .mv-list { display: flex; flex-direction: column; gap: 4px; }
-@container (max-width: 640px) {
-  .fv { grid-template-columns: minmax(0, 1fr); gap: 12px; }
-  .fv-rail { flex-direction: row; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; align-items: center; }
+@container (max-width: 700px) {
+  .fv { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .fv-rail { flex-direction: row; flex-wrap: wrap; gap: 8px; align-items: center; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
   .fv-rail .sub { display: none; }
-  .fv-folder { width: auto; flex: none; white-space: nowrap; border-color: var(--border); }
-  .fv-newf { flex: none; }
+  .fv-folder { width: auto; max-width: 100%; flex: none; white-space: nowrap; border-color: var(--border); }
+  .fv-newf { flex: 1 1 220px; }
 }
 @media (prefers-reduced-motion: reduce) { .fv-folder, .fv-doc { transition: none; } }
 
