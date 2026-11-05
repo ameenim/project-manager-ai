@@ -266,6 +266,7 @@
     if (!['all', 'none'].includes(sel) && !folders.some((f) => String(f.id) === sel)) sel = 'all';
     const setSel = (v) => { sel = String(v); try { sessionStorage.setItem(selKey, sel); } catch (e) { /* storage blocked */ } };
     const titleOf = (id) => (types.find((x) => x.id === id) || {}).title || id;
+    const isOne = () => !!(types.find((x) => x.id === type) || {}).oneSlide;
     const form = { name: '', touched: false, tpl: '', folder: null, asOf: PM.today(), period: null };
     const defName = () => `${titleOf(type)} ${p.name}`;
     const ui = { creating: false, folderErr: '', renamingFolder: false, renamingDoc: null, dragging: null };
@@ -283,14 +284,15 @@
     function createDialog() {
       const body = () => {
         const isProg = type.startsWith('progress');
+        const one = isOne(), cur = one ? 'pptx' : out;
         const tpls = templates.filter((x) => x.doc_type === type);
         const opt = (ts) => ts.map((x) => `<option value="${x.id}">${esc(x.title)}</option>`).join('');
         return `<div class="form-grid">
           <div class="fmt-pick full"><span class="lbl" id="rpKindL">${t('cd_mode_label')}</span>
             <div class="seg two" role="radiogroup" aria-labelledby="rpKindL"><button type="button" role="radio" aria-checked="true" class="on" data-kind="std">${icon('file')}${t('cd_mode_std')}</button><button type="button" role="radio" aria-checked="false" data-kind="custom">${icon('spark')}${t('cd_mode_custom')}</button></div></div>
           <div class="fmt-pick full"><span class="lbl" id="rpOutL">${t('doc_output')}</span>
-            <div class="seg" role="radiogroup" aria-labelledby="rpOutL">${Object.keys(FMT).map((k) => `<button type="button" role="radio" aria-checked="${out === k}" class="${out === k ? 'on' : ''}" data-fmt="${k}" data-tip="${esc(t(FMT[k].name))}">${icon(FMT[k].icon)}${FMT[k].label}</button>`).join('')}</div>
-            <div class="small muted">${t(FMT[out].hint)}</div></div>
+            <div class="seg" role="radiogroup" aria-labelledby="rpOutL">${Object.keys(FMT).map((k) => `<button type="button" role="radio" aria-checked="${cur === k}" class="${cur === k ? 'on' : ''}" data-fmt="${k}" ${one && k !== 'pptx' ? 'disabled' : ''} data-tip="${esc(t(FMT[k].name))}">${icon(FMT[k].icon)}${FMT[k].label}</button>`).join('')}</div>
+            <div class="small muted">${t(one ? 'out_hint_onepager' : FMT[cur].hint)}</div></div>
           <label class="f full">${t('doc_type')}<select id="rpType"><optgroup label="${t('grp_progress')}">${opt(types.filter((x) => x.progress))}</optgroup><optgroup label="${t('grp_project')}">${opt(types.filter((x) => !x.progress))}</optgroup></select></label>
           <label class="f full">${t('template')}<select id="rpTpl"><option value="">${t('tpl_default')}</option>${tpls.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select></label>
           <label class="f">${t('doc_name')}<input type="text" id="rpName" maxlength="120" value="${esc(form.touched ? form.name : defName())}"><span class="small muted">${t('doc_name_hint')}</span></label>
@@ -317,7 +319,7 @@
       draw();
       $('#rpGo', m.el).onclick = () => {
         const el = $('#rpBody', m.el), isProg = type.startsWith('progress');
-        const body = { type, format: out, template_id: form.tpl || null, title: $('#rpName', el).value.trim() || defName(), folder_id: $('#rpFolder', el).value ? Number($('#rpFolder', el).value) : null };
+        const body = { type, format: isOne() ? 'pptx' : out, template_id: form.tpl || null, title: $('#rpName', el).value.trim() || defName(), folder_id: $('#rpFolder', el).value ? Number($('#rpFolder', el).value) : null };
         if (isProg) { body.as_of = $('#rpAsOf', el).value; body.period_days = Number($('#rpPeriod', el).value); }
         m.close();
         runCreate(body);

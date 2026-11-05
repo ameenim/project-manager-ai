@@ -8,7 +8,7 @@
   const TOP = 1.9, BOTTOM = 6.85;                            // content area
   const F = X.FONT_NAME;
 
-  X.builders.pptx = async function ({ plan, logo, mark, client }) {
+  async function buildDeck({ plan, logo, mark, client }) {
     const meta = plan.meta;
     const pptx = new window.PptxGenJS();
     pptx.layout = 'LAYOUT_WIDE';
@@ -262,5 +262,169 @@
       }
     }
     return pptx.write({ outputType: 'blob' });
-  };
+  }
+
+  // ---------- one slide status report ----------
+  // One 16:9 slide in the platform design. Left side: key facts, stages, the activity table and the top risks.
+  // Right side: brief, completion and status, reasons for delay, achievements, next steps and decisions.
+  // Everything is a native shape, text box or table, so the slide stays editable in PowerPoint.
+  async function buildOnePager({ plan, logo, client }) {
+    const o = plan.onepager, meta = plan.meta, info = o.info;
+    const pptx = new window.PptxGenJS();
+    pptx.layout = 'LAYOUT_WIDE';
+    pptx.author = 'Project Manager AI'; pptx.company = 'Project Manager AI'; pptx.title = plan.title; pptx.subject = `${plan.typeTitle} for ${meta.project || ''}`.trim();
+    const SH_ = pptx.ShapeType;
+    const png = (im) => 'image/png;base64,' + X.b64(im.data);
+    pptx.defineSlideMaster({ title: 'ONE', background: { color: T.surface }, objects: [] });
+    const s = pptx.addSlide({ masterName: 'ONE' });
+
+    const M = 0.4, LW = 7.5, GAP = 0.2, RX = M + LW + GAP, RW = SW - M - RX, TOPY = 1.12, BOT = 6.98;
+    const FS = 9, LINE = 0.165;
+    const toneHex = (k) => (k === 'done' ? T.primary : X.tone(k));
+    const toneSoft = (k) => (k === 'done' ? T.primarySoft : X.SOFT[k] || T.surface2);
+    const clip = (t, n) => {
+      const v = String(t == null ? '' : t);
+      if (v.length <= n) return v;
+      const cut = v.slice(0, n - 1), sp = cut.lastIndexOf(' ');
+      return (sp > n * 0.6 ? cut.slice(0, sp) : cut).trimEnd().replace(/[,;:.]$/, '') + '\u2026';
+    };
+    const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const parts = (iso) => { const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? { y: +m[1], m: +m[2] - 1, d: +m[3] } : null; };
+    const sd = (iso) => { const p = parts(iso); return p ? `${MON[p.m]} ${p.d}, ${p.y}` : ''; };
+    const period = (() => {
+      const a = o.period && parts(o.period.start), b = o.period && parts(o.period.end);
+      if (!a || !b) return '';
+      return `${MON[a.m]} ${a.d}${a.y !== b.y ? ', ' + a.y : ''} to ${MON[b.m]} ${b.d}, ${b.y}`;
+    })();
+    const money = (n) => `${info.currency ? info.currency + ' ' : ''}${Math.round(n || 0).toLocaleString('en-US')}`;
+    const DOT = { done: T.c1, ok: T.c3, warn: T.c4, bad: T.gToday, idle: T.faint };
+    const HEALTH = { done: 'Completed', ok: 'On track', warn: 'Timeline at risk', bad: 'Off track', idle: 'Not started' };
+
+    // ----- header -----
+    s.addText(meta.project || plan.title, { x: M, y: 0.22, w: 8.2, h: 0.5, fontFace: F, fontSize: 24, bold: true, color: T.primary, valign: 'middle', margin: 0, fit: 'shrink' });
+    s.addText('Weekly project status', { x: M, y: 0.72, w: 8.2, h: 0.26, fontFace: F, fontSize: 12, color: T.muted, valign: 'middle', margin: 0 });
+    const lw = 2.0; let rx = SW - M - lw;
+    s.addImage({ data: png(logo), x: rx, y: 0.3, w: lw, h: (lw * logo.h) / logo.w, altText: 'Project Manager AI logo' });
+    if (client) {
+      const r = Math.min(1.3 / client.w, 0.5 / client.h), cw = client.w * r, ch = client.h * r;
+      s.addImage({ data: png(client), x: rx - 0.25 - cw, y: 0.22 + (0.56 - ch) / 2, w: cw, h: ch, altText: `${meta.client || 'Client'} logo` });
+    }
+    s.addShape(SH_.rect, { x: M, y: 1.02, w: SW - 2 * M, h: 0.012, fill: { color: T.border }, line: { color: T.border, width: 0 } });
+
+    // ----- key facts: three groups of four -----
+    const daysTxt = info.daysLeft == null ? '' : info.daysLeft < 0 ? `${-info.daysLeft} past the end` : String(info.daysLeft);
+    const groups = [
+      { color: T.primary, rows: [['Reporting period', period], ['Client', info.client], ['Business owner', info.owner], ['Project manager', info.pm]] },
+      { color: T.primary600, rows: [['Start date', sd(info.start)], ['Planned end', sd(info.plannedEnd)], ['Forecast end', sd(info.forecastEnd)], ['Days to end', daysTxt]] },
+      { color: T.gSum, rows: [['Contract value', info.value ? money(info.value) : ''], ['Paid to date', info.value ? money(info.paid) : ''], ['Invoiced', info.value ? money(info.invoiced) : ''], ['Pending', info.value ? money(info.pending) : '']] },
+    ];
+    const GW = [2.75, 2.2, 2.3], GP = 0.125, LBL = 1.1, RH = 0.31;
+    groups.forEach((g, gi) => g.rows.forEach(([k, v], ri) => {
+      const gw = GW[gi], x = M + GW.slice(0, gi).reduce((a, v) => a + v + GP, 0), y = TOPY + ri * RH;
+      s.addText(k, { x, y, w: LBL, h: RH, fontFace: F, fontSize: 8.5, bold: true, color: T.onPrimary, fill: { color: g.color }, line: { color: T.surface, width: 0.75 }, valign: 'middle', margin: [5, 5, 0, 0] });
+      s.addText(v ? clip(v, 24) : 'Not set', { x: x + LBL, y, w: gw - LBL, h: RH, fontFace: F, fontSize: 8.5, bold: !!v, color: v ? T.text : T.faint, fill: { color: T.surface2 }, line: { color: T.surface, width: 0.75 }, valign: 'middle', margin: [5, 5, 0, 0] });
+    }));
+    let y = TOPY + 4 * RH + 0.1;
+
+    // ----- stages -----
+    const stages = o.stages.slice(0, 8);
+    if (stages.length) {
+      const n = stages.length, ar = 0.18, w = (LW - ar * (n - 1)) / n, sfs = n > 6 ? 7.5 : 8;
+      const ST = { done: { fill: T.success, color: T.onPrimary }, active: { fill: T.primary, color: T.onPrimary }, todo: { fill: T.surface2, color: T.muted } };
+      stages.forEach((st, i) => {
+        const c = ST[st.state] || ST.todo, x = M + i * (w + ar);
+        s.addText((st.state === 'done' ? '\u2713 ' : '') + clip(st.name, 16), { x, y, w, h: 0.4, fontFace: F, fontSize: sfs, bold: st.state !== 'todo', color: c.color, fill: { color: c.fill }, line: { color: st.state === 'todo' ? T.borderStrong : c.fill, width: 0.75 }, align: 'center', valign: 'middle', margin: [1, 1, 0, 0] });
+        if (i < n - 1) s.addShape(SH_.chevron, { x: x + w + 0.03, y: y + 0.1, w: ar - 0.06, h: 0.2, fill: { color: T.faint }, line: { color: T.faint, width: 0 } });
+      });
+      y += 0.46;
+      [['Done', T.success], ['In progress', T.primary], ['Not started', T.borderStrong]].forEach(([k, c], i) => {
+        const x = M + i * 1.15;
+        s.addShape(SH_.rect, { x, y: y + 0.045, w: 0.1, h: 0.1, fill: { color: c }, line: { color: c, width: 0 } });
+        s.addText(k, { x: x + 0.15, y, w: 0.95, h: 0.19, fontFace: F, fontSize: 8, color: T.muted, valign: 'middle', margin: 0 });
+      });
+      y += 0.26;
+    }
+
+    // ----- activity table -----
+    const hc = (t, al) => ({ text: t, options: { bold: true, color: T.onPrimary, fill: { color: T.primary }, fontFace: F, fontSize: 8.5, align: al || 'left', valign: 'middle' } });
+    const rowsT = o.rows.slice(0, 7).map((r, i) => {
+      const z = i % 2 ? T.surface2 : T.surface;
+      const c = (t, al, x) => ({ text: String(t), options: { fontFace: F, fontSize: FS, color: T.text, fill: { color: z }, align: al || 'left', valign: 'middle', ...(x || {}) } });
+      return [c(clip(r.name, 40)), c(`${r.pct}%`, 'center', { bold: true }), c(r.pay ? 'Yes' : 'No', 'center'), c(sd(r.start)), c(sd(r.end)), c(r.label, 'center', { bold: true, color: toneHex(r.tone), fill: { color: toneSoft(r.tone) } })];
+    });
+    if (!rowsT.length) rowsT.push([{ text: 'No phases yet. Add tasks to the schedule to see them here.', options: { colspan: 6, fontFace: F, fontSize: FS, color: T.muted, fill: { color: T.surface }, valign: 'middle' } }]);
+    s.addTable([[hc('Activity or milestone'), hc('%', 'center'), hc('Payment due', 'center'), hc('Start'), hc('End'), hc('Status', 'center')], ...rowsT],
+      { x: M, y, w: LW, colW: [2.85, 0.6, 0.85, 1.0, 1.0, 1.2], rowH: [0.3, ...rowsT.map(() => 0.27)], border: { type: 'solid', pt: 0.5, color: T.border }, margin: [0.02, 0.08, 0.02, 0.08], autoPage: false });
+    y += 0.3 + rowsT.length * 0.27 + 0.14;
+
+    // ----- top risks -----
+    const bar = (x, yy, w, text) => s.addText(text, { x, y: yy, w, h: 0.26, fontFace: F, fontSize: 9.5, bold: true, color: T.onPrimary, fill: { color: T.primary }, valign: 'middle', margin: [7, 7, 0, 0] });
+    bar(M, y, LW, 'Top risks and issues'); y += 0.26;
+    const rr = o.risks.length ? o.risks : null;
+    const rh = Math.max(0.24, Math.min(0.42, (BOT - y - 0.26) / Math.max(1, rr ? rr.length : 1)));
+    const RT = { High: 'bad', Medium: 'warn', Low: 'ok' };
+    const rrows = rr ? rr.map((r, i) => {
+      const z = i % 2 ? T.surface2 : T.surface, c = (t, al, x) => ({ text: String(t), options: { fontFace: F, fontSize: FS, color: T.text, fill: { color: z }, align: al || 'left', valign: 'middle', ...(x || {}) } });
+      return [c(String(i + 1), 'center'), c(clip(r.title, 58)), c(clip(r.mitigation, 95)), c(r.level, 'center', { bold: true, color: toneHex(RT[r.level]), fill: { color: toneSoft(RT[r.level]) } })];
+    }) : [[{ text: 'No open risks or issues.', options: { colspan: 4, fontFace: F, fontSize: FS, color: T.muted, fill: { color: T.surface }, valign: 'middle' } }]];
+    s.addTable([[hc('#', 'center'), hc('Risk or issue'), hc('Mitigation'), hc('Rating', 'center')], ...rrows],
+      { x: M, y, w: LW, colW: [0.35, 2.5, 3.45, 1.2], rowH: [0.26, ...rrows.map(() => rh)], border: { type: 'solid', pt: 0.5, color: T.border }, margin: [0.02, 0.08, 0.02, 0.08], autoPage: false });
+
+    // ----- right column -----
+    const cpl = (w) => Math.floor((w - 0.22) / 0.065);                      // characters per line at 9 pt
+    const fitList = (items, w, h) => {
+      const out = []; let used = 0;
+      for (const t of items) { const n = Math.ceil(String(t).length / cpl(w)); if (out.length && used + n * LINE > h - 0.1) break; out.push(t); used += n * LINE; }
+      return out;
+    };
+    const box = (title, h, fn) => {
+      bar(RX, ry, RW, title);
+      s.addShape(SH_.rect, { x: RX, y: ry + 0.26, w: RW, h: h - 0.26, fill: { color: T.surface2 }, line: { color: T.border, width: 0.75 } });
+      const more = fn(ry + 0.26, h - 0.26);
+      if (more > 0) s.addText(`+${more} more in the notes`, { x: RX + RW - 1.8, y: ry, w: 1.7, h: 0.26, fontFace: F, fontSize: 8, color: T.onPrimary, align: 'right', valign: 'middle', margin: 0 });
+      ry += h + 0.08;
+    };
+    const list = (items, empty, yy, hh) => {
+      const has = items && items.length, shown = has ? fitList(items, RW, hh) : [empty];
+      s.addText(shown.map((t) => ({ text: t, options: has ? { bullet: { indent: 10 }, breakLine: true } : { breakLine: true } })), { x: RX, y: yy, w: RW, h: hh, fontFace: F, fontSize: FS, color: has ? T.text : T.muted, italic: !has, valign: 'top', margin: [7, 7, 2, 4], paraSpaceAfter: 2 });
+      return has ? items.length - shown.length : 0;
+    };
+    let ry = TOPY;
+    const H = { brief: 0.96, pct: 0.98, delay: 0.72, done: 0.98, next: 0.98, ask: BOT - TOPY - (0.96 + 0.98 + 0.72 + 0.98 + 0.98) - 5 * 0.08 };
+
+    box('Project brief', H.brief, (yy, hh) => {
+      s.addText(clip(o.brief, 270), { x: RX, y: yy, w: RW, h: hh, fontFace: F, fontSize: FS, color: T.text, valign: 'top', margin: [7, 7, 2, 4] });
+      return 0;
+    });
+
+    box('Completion', H.pct, (yy, hh) => {
+      const tw = 1.45, cell = (x, label, value, hint, big) => s.addText([
+        { text: label, options: { fontSize: 8.5, color: T.muted, breakLine: true } },
+        { text: value, options: { fontSize: big ? 20 : 12, bold: true, color: big ? T.text : T.faint, breakLine: true } },
+        { text: hint, options: { fontSize: 8, color: T.muted } },
+      ], { x, y: yy, w: tw, h: hh, fontFace: F, valign: 'middle', margin: [7, 7, 0, 0] });
+      cell(RX, 'Last week', o.pct.last == null ? 'No record' : `${o.pct.last}%`, o.pct.last == null ? 'No snapshot found' : 'Overall progress', o.pct.last != null);
+      cell(RX + tw, 'This week', `${o.pct.current}%`, o.pct.planned == null ? 'No baseline set' : `Planned ${o.pct.planned}%`, true);
+      const sx = RX + 2 * tw, sw = RW - 2 * tw, label = toneHex(o.health);
+      s.addShape(SH_.rect, { x: sx, y: yy + 0.1, w: 0.012, h: hh - 0.2, fill: { color: T.border }, line: { color: T.border, width: 0 } });
+      s.addText('Status', { x: sx, y: yy + 0.03, w: sw, h: 0.14, fontFace: F, fontSize: 8, color: T.muted, align: 'center', valign: 'middle', margin: 0 });
+      s.addShape(SH_.ellipse, { x: sx + (sw - 0.3) / 2, y: yy + 0.18, w: 0.3, h: 0.3, fill: { color: DOT[o.health] }, line: { color: DOT[o.health], width: 0 }, altText: `Status: ${HEALTH[o.health]}` });
+      s.addText(HEALTH[o.health], { x: sx, y: yy + 0.5, w: sw, h: 0.2, fontFace: F, fontSize: 9.5, bold: true, color: label, align: 'center', valign: 'middle', margin: 0 });
+      return 0;
+    });
+
+    box('Reasons for delay', H.delay, (yy, hh) => list(o.delays, 'No delays against the baseline.', yy, hh));
+    box('Achievements this period', H.done, (yy, hh) => list(o.done, 'Nothing recorded in this period.', yy, hh));
+    box('Next steps', H.next, (yy, hh) => list(o.next, 'No tasks are planned for the next period.', yy, hh));
+    box('Decisions and support required', H.ask, (yy, hh) => list(o.ask, 'No decisions are required this period.', yy, hh));
+
+    // ----- footer -----
+    s.addText(`${meta.client ? meta.client + '  ·  ' : ''}Weekly project status`, { x: M, y: 7.1, w: 8, h: 0.24, fontFace: F, fontSize: 8.5, color: T.muted, valign: 'middle', margin: 0 });
+    s.addText(`${plan.date}${meta.pm ? '  ·  Prepared by ' + meta.pm : ''}`, { x: SW - M - 5, y: 7.1, w: 5, h: 0.24, fontFace: F, fontSize: 8.5, color: T.muted, align: 'right', valign: 'middle', margin: 0 });
+
+    // the full lists, for the person presenting
+    s.addNotes([`${plan.title} (${plan.date})`, '', 'Reasons for delay:', ...(o.delays.length ? o.delays : ['None.']).map((x) => '- ' + x), '', 'Achievements:', ...(o.done.length ? o.done : ['None recorded.']).map((x) => '- ' + x), '', 'Next steps:', ...(o.next.length ? o.next : ['None planned.']).map((x) => '- ' + x), '', 'Decisions and support:', ...(o.ask.length ? o.ask : ['None required.']).map((x) => '- ' + x)].join('\n'));
+    return pptx.write({ outputType: 'blob' });
+  }
+  X.builders.pptx = (args) => (args.plan.oneSlide && args.plan.onepager ? buildOnePager(args) : buildDeck(args));
 })();

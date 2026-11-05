@@ -2030,9 +2030,17 @@ const DEFAULTS = {
       ['Payment Milestones', 'p_payments'], ['Risks and Issues', 'p_risks'], ['Decisions and Support Needed', 'p_actions'],
     ],
   },
+  // One slide in PowerPoint. The slide is drawn from the data in visuals.js. These sections are the text behind it.
+  progress_onepager: {
+    title: 'One Slide Status Report', period: 7, oneSlide: true,
+    sections: [
+      ['Executive Summary', 'p_summary'], ['Progress Against Baseline', 'p_metrics'], ['Achievements This Period', 'p_activity'],
+      ['Planned Next Period', 'p_next'], ['Reasons for Delay', 'p_variance'], ['Risks and Issues', 'p_risks'], ['Decisions and Support Needed', 'p_actions'],
+    ],
+  },
 };
 
-const DOC_TYPES = Object.entries(DEFAULTS).map(([id, d]) => ({ id, title: d.title, progress: id.startsWith('progress'), sections: d.sections.map((s) => s[0]) }));
+const DOC_TYPES = Object.entries(DEFAULTS).map(([id, d]) => ({ id, title: d.title, progress: id.startsWith('progress'), oneSlide: !!d.oneSlide, sections: d.sections.map((s) => s[0]) }));
 
 const SYN = [
   ['p_summary', /executive summary|summary|overview of progress/], ['p_metrics', /progress|baseline|performance|status/],
@@ -2047,7 +2055,7 @@ const SYN = [
 ];
 
 // ---------- context ----------
-function buildContext({ project, user, tasks, items, resources, docs, audit, inbox, today, periodDays }) {
+function buildContext({ project, user, tasks, items, resources, docs, audit, inbox, today, periodDays, lastWeek }) {
   const live = items.filter((i) => i.status !== 'ignored').map((i) => ({ ...i, d: safe(i.data) }));
   const by = (k) => live.filter((i) => i.kind === k);
   const sched = S.schedule(tasks, project);
@@ -2056,7 +2064,7 @@ function buildContext({ project, user, tasks, items, resources, docs, audit, inb
   const start = S.addDays(today, -(periodDays || 7) + 1);
   const next = S.addDays(today, periodDays || 7);
   return {
-    project, user, today, tasks: sched, metrics, hasBaseline, resources, docs, inbox,
+    project, user, today, tasks: sched, metrics, hasBaseline, resources, docs, inbox, lastWeek: lastWeek || null,
     deliverables: by('deliverable'), requirements: by('requirement'), risks: by('risk'), milestones: by('milestone'),
     audit: audit.filter((a) => a.ts.slice(0, 10) >= start && a.ts.slice(0, 10) <= today),
     unconfirmed: live.filter((i) => i.status === 'proposed').length,
@@ -2066,6 +2074,23 @@ function buildContext({ project, user, tasks, items, resources, docs, audit, inb
 const safe = (s) => { try { return JSON.parse(s || '{}'); } catch { return {}; } };
 
 // ---------- generators ----------
+// Lines shared by the progress reports and the one slide status report.
+function activityLines(c, n) {
+  return c.audit.filter((a) => /task|deliverable|milestone/.test(a.action)).slice(0, n).map((a) => ({ date: a.ts.slice(0, 10), text: summarizeAudit(a) }));
+}
+function nextRows(c, n) {
+  return c.tasks.filter((t) => !t.summary && (t.progress || 0) < 100 && t.start <= c.period.next && t.finish >= c.today).slice(0, n);
+}
+function decisionLines(c) {
+  const items = [];
+  const late = c.metrics.rows.filter((r) => r.overdue).slice(0, 5);
+  for (const r of late) items.push(`Recovery plan needed for overdue task: ${r.name}.`);
+  const pend = (c.inbox || []).filter((i) => i.status === 'pending').length;
+  if (pend) items.push(`${pend} project update suggestion${pend === 1 ? '' : 's'} waiting for confirmation.`);
+  if (c.unconfirmed) items.push(`${c.unconfirmed} extracted item${c.unconfirmed === 1 ? '' : 's'} not yet confirmed.`);
+  return items;
+}
+
 const G = {
   purpose: (c) => {
     // Only genuine summaries go into client facing text, never the internal rule engine notes.
@@ -2146,27 +2171,21 @@ const G = {
     return md.table(['Measure', 'Value'], [['Actual progress', `${m.actualPct}%`], ['Planned progress (baseline)', m.plannedPct != null ? `${m.plannedPct}%` : 'No baseline'], ['Schedule performance index', m.spi != null ? String(m.spi) : 'Not available'], ['Tasks overdue', String(m.overdue)], ['Total tasks', String(m.taskCount)]]);
   },
   p_activity: (c) => {
-    const ups = c.audit.filter((a) => /task|deliverable|milestone/.test(a.action));
-    return md.bullets(ups.slice(0, 25).map((a) => `${a.ts.slice(0, 10)}: ${summarizeAudit(a)}`));
+    return md.bullets(activityLines(c, 25).map((a) => `${a.date}: ${a.text}`));
   },
   p_variance: (c) => {
     const rows = c.metrics.rows.filter((r) => (r.slipDays && r.slipDays !== 0) || r.overdue).sort((a, b) => (b.slipDays || 0) - (a.slipDays || 0)).slice(0, 15);
     return md.table(['Task', 'Baseline Finish', 'Forecast Finish', 'Variance (working days)', 'Progress'], rows.map((r) => [r.name, r.b_end || 'No baseline', r.finish, r.slipDays != null ? (r.slipDays > 0 ? `+${r.slipDays}` : String(r.slipDays)) : '', `${r.progress || 0}%`]));
   },
   p_next: (c) => {
-    const rows = c.tasks.filter((t) => !t.summary && (t.progress || 0) < 100 && t.start <= c.period.next && t.finish >= c.today).slice(0, 20);
+    const rows = nextRows(c, 20);
     return md.table(['Task', 'Start', 'Finish', 'Owner', 'Progress'], rows.map((t) => [t.name, t.start, t.finish, t.assignee || '', `${t.progress || 0}%`]));
   },
   p_deliverables: (c) => md.table(['Deliverable', 'Due', 'Status', 'Evidence'], c.deliverables.map((d) => [d.title, d.d.due_date || 'TBC', d.state === 'closed' ? 'Closed' : (d.d.due_date && d.d.due_date < c.today ? 'Overdue' : 'Open'), d.evidence_doc_id ? `Document ${d.evidence_doc_id}` : ''])),
   p_payments: (c) => md.table(['Milestone', 'Amount', 'Due', 'Status'], c.milestones.map((m) => [m.title, m.d.amount != null ? money(m.d.amount, c.project.currency) : (m.d.percent != null && c.project.value ? money(c.project.value * m.d.percent / 100, c.project.currency) : 'TBC'), m.d.due_date || 'TBC', m.state === 'paid' ? 'Paid' : m.state === 'invoiced' ? 'Invoiced' : 'Pending'])),
   p_risks: (c) => md.table(['Risk or Issue', 'Probability', 'Impact', 'Status'], c.risks.filter((r) => r.state !== 'closed').map((r) => [r.title, r.d.probability || 'Medium', r.d.impact || 'Medium', r.state || 'open'])),
   p_actions: (c) => {
-    const items = [];
-    const late = c.metrics.rows.filter((r) => r.overdue).slice(0, 5);
-    for (const r of late) items.push(`Recovery plan needed for overdue task: ${r.name}.`);
-    const pend = (c.inbox || []).filter((i) => i.status === 'pending').length;
-    if (pend) items.push(`${pend} project update suggestion${pend === 1 ? '' : 's'} waiting for confirmation.`);
-    if (c.unconfirmed) items.push(`${c.unconfirmed} extracted item${c.unconfirmed === 1 ? '' : 's'} not yet confirmed.`);
+    const items = decisionLines(c);
     return md.bullets(items.length ? items : ['No decisions are required this period.']);
   },
 };
@@ -2437,5 +2456,5 @@ async function toDocx({ title, markdown, project, user, today, logoPath }) {
   return Packer.toBuffer(doc);
 }
 
-module.exports = { DEFAULTS, DOC_TYPES, LIBRARY, GENERATOR_KEYS: Object.keys(G), buildContext, generate, suggestPlan, toDocx, parseTemplate, replaceVars };
+module.exports = { DEFAULTS, DOC_TYPES, LIBRARY, GENERATOR_KEYS: Object.keys(G), activityLines, nextRows, decisionLines, buildContext, generate, suggestPlan, toDocx, parseTemplate, replaceVars };
 ;return module.exports})();

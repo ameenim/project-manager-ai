@@ -49,6 +49,12 @@ The Widgets screen lets each project manager add or remove widgets on the portfo
 
 The widget builder creates a custom widget from a form. A widget is plain data (a spec with a dataset, filters and one of number, bars, columns, donut or table), never code, so a published widget can only read the projects of the person who runs it. The same file `public/widgetspec.js` validates a spec on the server and draws it in the browser. Publishing copies the draft to what everyone runs, so people who already added a widget change only when its author publishes again. Other project managers rate a widget from 1 to 5 stars with an optional comment after adding it. The marketplace keeps four tables (`widgets`, `widget_ratings`, `widget_installs`, `dash_layouts`, migration 5). On Replit the Publish step applies them to the production database.
 
+## One slide status report
+
+Reports, Create a document, One Slide Status Report makes a single PowerPoint slide with the whole weekly status of a project. It shows the key facts, the stages, an activity table, the top risks, the project brief, completion with last week and this week, the status, reasons for delay, achievements, next steps and the decisions needed. It is always one slide in the platform colors with the platform logo. The full lists are in the speaker notes.
+
+Last week comes from the daily snapshots, taken 7 to 14 days before the report date. When there is no snapshot the slide says so and shows no estimate. The slide is drawn from `onepager` data built in `public/visuals.js` and by `buildOnePager` in `public/export_pptx.js`.
+
 ## Saved work
 
 Every change is saved to Postgres before the server answers, so a refresh, a new device or a server restart never loses work. Nothing is removed automatically. A project is deleted only when its project manager deletes it. If the server restarts while a document is being analyzed, the project stays and the Review tab offers Reanalyze.

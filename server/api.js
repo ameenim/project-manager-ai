@@ -775,11 +775,11 @@ module.exports = function createApi(store, auth, connectors) {
   }
 
   // ---------- reports ----------
-  function reportInputs(P, today, periodDays) {
+  function reportInputs(P, today, periodDays, lastWeek) {
     return {
       project: rawProject(P), user: DB.user, tasks: P.tasks, items: P.items.map((i) => ({ ...i, data: JSON.stringify(i.data) })), resources: P.resources,
       docs: P.documents.map((d) => ({ id: d.id, filename: d.filename, kind: d.kind, summary: d.summary, text: P.texts[d.id] || '' })),
-      audit: P.audit.map((a) => ({ ...a, detail: JSON.stringify(a.detail) })), inbox: P.inbox.map((r) => ({ status: r.status })), today, periodDays,
+      audit: P.audit.map((a) => ({ ...a, detail: JSON.stringify(a.detail) })), inbox: P.inbox.map((r) => ({ status: r.status })), today, periodDays, lastWeek: lastWeek || null,
     };
   }
 
@@ -1544,7 +1544,8 @@ Rules:
     return { report, errors };
   });
 
-  on('GET', '/api/doc-types', async () => ({ types: RAW.docTypes }));
+  // Read from the live report engine, so a new document type shows up without regenerating the demo seed.
+  on('GET', '/api/doc-types', async () => ({ types: R.DOC_TYPES }));
   on('GET', '/api/templates', async () => ({ templates: DB.templates.map((t) => ({ id: t.id, doc_type: t.doc_type, name: t.name, created_at: t.created_at })) }));
   on('GET', '/api/templates/skeleton/([a-z_]+)', async (m) => { if (!RAW.skeletons[m[1]]) throw err(404, 'Unknown document type'); return { body: RAW.skeletons[m[1]] }; });
   on('POST', '/api/templates', async (m, q, fd) => {
@@ -1568,8 +1569,8 @@ Rules:
   const cleanName = (v, max) => String(v == null ? '' : v).replace(/[\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
   // The facts printed on every page of an exported file, and the chart data behind its visuals
   const docMeta = (P, today, pm) => ({ client: P.p.client || '', project: P.p.name, code: P.p.code || '', date: today, pm: pm || DB.user.name, currency: P.p.currency || '', client_logo: P.p.client_logo || null });
-  function snapshot(P, type, today, periodDays) {
-    const ctx = R.buildContext(reportInputs(P, today, periodDays));
+  function snapshot(P, type, today, periodDays, lastWeek) {
+    const ctx = R.buildContext(reportInputs(P, today, periodDays, lastWeek));
     const progress = R.DEFAULTS[type] ? type.startsWith('progress') : false;
     return { ctx, visuals: win.__Visuals ? win.__Visuals.fromContext(ctx, progress) : null };
   }
@@ -1598,7 +1599,7 @@ Rules:
   // Claude reads the brief and picks the sections. Any failure falls back to the rule based suggestion.
   async function aiPlan(P, inp) {
     if (!process.env.ANTHROPIC_API_KEY) return null;
-    const types = Object.entries(R.DEFAULTS).map(([id, d]) => `${id}: ${d.title}`).join('\n');
+    const types = Object.entries(R.DEFAULTS).filter(([, d]) => !d.oneSlide).map(([id, d]) => `${id}: ${d.title}`).join('\n');
     const lib = R.LIBRARY.map(([k, h, about]) => `${k}: ${h}. ${about}`).join('\n');
     const system = 'You plan professional project management documents. Reply with one JSON object only, with no prose and no code fences. Write in US English. Do not use dashes as punctuation and do not use semicolons.';
     const user = `Project: ${P.p.name}${P.p.client ? ` for ${P.p.client}` : ''}\nDocument name: ${inp.name}\nAudience: ${inp.audience}\nDescription: ${inp.description}\n\nStandard templates:\n${types}\n\nSections the system can fill from project data (key: heading. what it holds):\n${lib}\n\nReturn {"base_type":"<one template id>","summary":"<one or two plain sentences on what the document is for and why these sections fit this audience>","sections":[{"heading":"...","key":"<library key or null>","guidance":"<one sentence on what the section will say>"}]}. Use 5 to 12 sections in reading order. Use a library key whenever a section matches one. Use null for a section that has to be written from the brief.`;
@@ -1623,6 +1624,15 @@ Rules:
     return { plan };
   });
 
+  // Overall progress recorded by the daily snapshots 7 to 14 days before the report date. No row means no figure.
+  async function lastWeekOf(P, today) {
+    try {
+      const rows = await snapshots.range([P.id], dstr(dnum(today) - 14), dstr(dnum(today) - 7));
+      const row = rows[rows.length - 1];
+      return row && row.figures && row.figures.progress != null ? { date: row.date, progress: row.figures.progress } : null;
+    } catch (e) { return null; }
+  }
+
   on('POST', '/api/projects/(\\d+)/generate', async (m, q, b) => {
     const P = P_(m[1]);
     let cu = null;
@@ -1632,13 +1642,14 @@ Rules:
       if (!cu.sections.length) throw err(400, 'Choose at least one section');
     }
     const def = R.DEFAULTS[b.type]; if (!def) throw err(400, 'Choose a document type');
-    const format = FORMATS.includes(b.format) ? b.format : 'docx';
+    // The one slide status report is a single PowerPoint slide, so it has no other format.
+    const format = def.oneSlide && !cu ? 'pptx' : FORMATS.includes(b.format) ? b.format : 'docx';
     const tpl = !cu && b.template_id ? DB.templates.find((t) => t.id === Number(b.template_id)) : null;
     if (!cu && b.template_id && !tpl) throw err(404, 'Template not found');
     if (!folderOk(P, b.folder_id)) throw err(404, 'Folder not found');
     const today = b.as_of && /^\d{4}-\d{2}-\d{2}$/.test(b.as_of) ? b.as_of : TODAY();
     const periodDays = Number(b.period_days) || def.period || 7;
-    const snap = snapshot(P, b.type, today, periodDays);
+    const snap = snapshot(P, b.type, today, periodDays, def.oneSlide && !cu ? await lastWeekOf(P, today) : null);
     const out = await R.generate(cu
       ? { type: b.type, templateName: 'Custom document', ctx: snap.ctx, useAI: true, sections: cu.sections, title: cu.name, brief: `Audience: ${cu.audience}. ${cu.description}` }
       : { type: b.type, templateBody: tpl ? tpl.body : null, templateName: tpl ? tpl.name : null, ctx: snap.ctx, useAI: false });
