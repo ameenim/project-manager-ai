@@ -57,6 +57,8 @@
     g += DIMS.map((_, k) => { const [x, y] = pt(k, 1); return `<line class="sp-axis" x1="${CX}" y1="${CY}" x2="${x}" y2="${y}"/>`; }).join('');
     g += `<polygon class="sp-area" points="${DIMS.map((d, k) => pt(k, val[d] / max).join(',')).join(' ')}"/>`;
     g += DIMS.map((d, k) => { const [x, y] = pt(k, val[d] / max); return `<circle class="sp-dot ${val[d] ? '' : 'zero'}" cx="${x}" cy="${y}" r="4.5"/>`; }).join('');
+    const cl = PMCL.get('radar'), sum = DIMS.reduce((a, d) => a + val[d], 0);
+    if (cl.on) g += DIMS.map((d, k) => { if (!val[d]) return ''; const [x, y] = pt(k, val[d] / max); return PMCL.text(x, y, PMCL.str(cl, { text: String(val[d]), pct: PMCL.pctOf(val[d], sum) }), cl.pos, { gap: 8 }); }).join('');
     g += DIMS.map((d, k) => {
       const [x, y] = pt(k, 1.2);
       const anchor = Math.abs(x - CX) < 6 ? 'middle' : x < CX ? 'end' : 'start';
@@ -68,6 +70,7 @@
 
   function mount(host, initial, opts) {
     opts = opts || {};
+    const ck = PMCL.current();
     let data = initial;
     const F = { cell: null, type: 'all', sev: 'all', project: 'all', dim: 'all' };
 
@@ -153,7 +156,7 @@
           <div class="rd-sev">${SEVS.map((s) => `<button class="rd-pill ${s} ${F.sev === s ? 'on' : ''}" data-sev="${s}" aria-pressed="${F.sev === s}"><b>${data.counts[s]}</b> ${t('radar_sev_' + s)}</button>`).join('')}</div></div>
         ${all.length ? `<div class="rd-body">
           <div class="rd-map"><div class="rd-cap">${t('radar_matrix')}</div><div class="rd-ylabel">${t('impact')}</div><div class="rd-grid">${['High', 'Medium', 'Low'].map((i) => `<div class="rd-rowlab">${t('lv_' + i)}</div>${LV.map((p) => heat(p, i)).join('')}`).join('')}<div></div>${LV.map((p) => `<div class="rd-collab">${t('lv_' + p)}</div>`).join('')}</div><div class="rd-xlabel">${t('probability')}</div></div>
-          <div class="rd-spider"><div class="rd-cap">${t('radar_dims')}</div>${spider(spiderBase, F.dim)}</div>
+          <div class="rd-spider"><div class="rd-cap">${t('radar_dims')}</div>${(PMCL.scope(ck), spider(spiderBase, F.dim))}</div>
           <div class="rd-side">
             <div class="rd-filters"><button class="rd-chip ${F.type === 'all' ? 'on' : ''}" data-type="all">${t('radar_all')} ${all.length}</button>${TYPES.filter(typeCount).map((ty) => `<button class="rd-chip ${F.type === ty ? 'on' : ''}" data-type="${ty}">${t('rt_' + ty)} ${typeCount(ty)}</button>`).join('')}
               ${projects.length > 1 ? `<select id="rdProj" aria-label="${t('project')}"><option value="all">${t('radar_all_projects')}</option>${projects.map(([id, n]) => `<option value="${id}" ${String(id) === F.project ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>` : ''}

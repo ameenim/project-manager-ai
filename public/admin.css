@@ -21,8 +21,17 @@
 @media (max-width: 1180px) { .sa-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .sa-grid3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 860px) { .sa-grid2, .sa-grid3 { grid-template-columns: 1fr; } }
 @media (max-width: 600px) { .sa-kpis { grid-template-columns: 1fr; } }
-.sa-bars { display: flex; align-items: flex-end; gap: 2px; height: 120px; padding-top: 8px; border-bottom: 1px solid var(--border); }
-.sa-bars i { flex: 1; min-width: 2px; max-width: 56px; background: var(--c1); border-radius: 4px 4px 0 0; min-height: 2px; opacity: .9; transition: opacity .15s; }
+.sa-grid2 > .card, .sa-grid3 > .card { position: relative; min-width: 0; overflow: hidden; }
+.sa-chart-tools { position: absolute; inset-block-start: 10px; inset-inline-end: 12px; z-index: 2; }
+.sa-bars { display: flex; align-items: flex-end; gap: 2px; height: 150px; padding-top: 30px; border-bottom: 1px solid var(--border); overflow: hidden; }
+.sa-bars:not(.dense) { overflow: visible; } .sa-bars.lab-below { margin-bottom: 20px; }
+.sa-bars i.edge-end .cl-t { left: auto; right: 0; transform: none; } .sa-bars.lab-center i.edge-end .cl-t { transform: translateY(-50%); } .sa-bars i.edge-start .cl-t { left: 0; transform: none; } .sa-bars.lab-center i.edge-start .cl-t { transform: translateY(-50%); }
+.sa-bars i { position: relative; }
+.sa-bars i .cl-t { position: absolute; left: 50%; transform: translateX(-50%); }
+.sa-bars.lab-above i .cl-t { bottom: 100%; margin-bottom: 3px; } .sa-bars.lab-below i .cl-t { top: 100%; margin-top: 3px; } .sa-bars.lab-center i .cl-t { top: 50%; transform: translate(-50%, -50%); text-shadow: 0 0 3px var(--surface), 0 0 3px var(--surface); }
+.sa-bars.dense i .cl-t { writing-mode: vertical-rl; transform: translateX(-50%) rotate(180deg); } .sa-bars.dense.lab-center i .cl-t { transform: translate(-50%, -50%) rotate(180deg); }
+.sa-bars.dense.lab-above { padding-top: 56px; }
+.sa-bars i { flex: 1 1 0; min-width: 1px; max-width: 56px; background: var(--c1); border-radius: 4px 4px 0 0; min-height: 2px; opacity: .9; transition: opacity .15s; }
 .sa-bars i:hover, .sa-bars i:focus { opacity: 1; outline: 2px solid var(--primary); outline-offset: 1px; }
 .sa-bars.green i { background: var(--c3); } .sa-bars.orange i { background: var(--c2); } .sa-bars i.zero { background: var(--track); }
 .sa-axis { display: flex; justify-content: space-between; font-size: var(--fs-micro); color: var(--faint); margin-top: 4px; }

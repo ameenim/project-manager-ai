@@ -92,11 +92,13 @@
     }
     if (spec.viz === 'column') {
       const max = Math.max(1, ...groups.map((g) => g.value));
-      body.innerHTML = `<div class="wk-cols" role="img" aria-label="${esc(aria)}">${groups.map((g) => `<div class="wk-col" data-tip="${esc(`${groupName(g, res)}: ${val(g)} (${t('wk_rows_n', { n: fmtNum(g.count) })})`)}"><span class="wk-cv">${esc(val(g))}</span><span class="wk-bar-wrap"><i class="wk-bar ${g.tone || 'c1'}" style="height:${Math.max(0, (g.value / max) * 100).toFixed(1)}%"></i></span><span class="wk-cl">${esc(groupName(g, res))}</span></div>`).join('')}</div>${note}`;
+      const cl = PMCL.get('htmlcol'), tot = groups.reduce((a, g) => a + Math.max(g.value, 0), 0);
+      const lab = (g) => esc(PMCL.str(cl, { text: val(g), pct: PMCL.pctOf(g.value, tot) }));
+      body.innerHTML = `<div class="wk-cols" role="img" aria-label="${esc(aria)}">${groups.map((g) => `<div class="wk-col" data-tip="${esc(`${groupName(g, res)}: ${val(g)} (${t('wk_rows_n', { n: fmtNum(g.count) })})`)}"><span class="wk-cv cl-t">${cl.on && cl.pos === 'above' ? lab(g) : ''}</span><span class="wk-bar-wrap"><i class="wk-bar ${g.tone || 'c1'}" style="height:${Math.max(0, (g.value / max) * 100).toFixed(1)}%">${cl.on && cl.pos === 'center' ? `<span class="cl-t cl-mid">${lab(g)}</span>` : ''}</i></span><span class="wk-cl">${cl.on && cl.pos === 'below' ? `<b class="cl-t">${lab(g)}</b><br>` : ''}${esc(groupName(g, res))}</span></div>`).join('')}</div>${note}`;
       return { csv };
     }
     // donut
-    const parts = groups.filter((g) => g.value > 0).map((g, i) => ({ v: g.value, cls: g.tone || PALETTE[i % PALETTE.length], label: groupName(g, res), raw: g }));
+    const parts = groups.filter((g) => g.value > 0).map((g, i) => ({ v: g.value, cls: g.tone || PALETTE[i % PALETTE.length], label: groupName(g, res), lab: val(g), raw: g }));
     const total = parts.reduce((s, p) => s + p.v, 0);
     body.innerHTML = `<div class="donut-wrap">${h.donut(parts, esc(fmtValue(total, mfd, cur)), aggLabel(spec))}${h.legend(parts.map((p) => [p.cls, p.label, esc(val(p.raw))]))}</div>${note}`;
     return { csv, chart: true };

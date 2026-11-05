@@ -259,6 +259,12 @@
         g += `<path class="sc-act" d="M${x(c.min)} ${y(0)} L${tx} ${y(c.actual)}"/>`;
         g += `<line class="tl-today" x1="${tx}" x2="${tx}" y1="${T}" y2="${T + ph}"/>`;
         g += `<circle class="sc-dot plan" cx="${tx}" cy="${y(c.plannedToday)}" r="5"/><circle class="sc-dot act" cx="${tx}" cy="${y(c.actual)}" r="6"/>`;
+        const cl = PMCL.get('line', { percent: false });
+        if (cl.on) {
+          const pts = c.points, stepN = Math.max(1, Math.ceil(pts.length / Math.max(2, Math.floor(pw / 64))));
+          pts.forEach((p, i) => { if (i % stepN === 0 || i === pts.length - 1) g += PMCL.text(x(p.d), y(p.planned), p.planned + '%', cl.pos === 'center' ? 'above' : cl.pos); });
+          g += PMCL.text(tx, y(c.actual), c.actual + '%', cl.pos === 'above' ? 'left' : cl.pos === 'below' ? 'right' : cl.pos === 'left' ? 'above' : 'below', { cls: 'cl-act', gap: 10 });
+        }
         g += c.points.map((p) => `<circle class="hit-dot" cx="${x(p.d)}" cy="${y(p.planned)}" r="9" ${PM.dash.h.tipAttr(`<b>${p.d}</b><br>${t('planned')} ${p.planned}%`)}/>`).join('');
         body.innerHTML = `<svg class="viz scurve" viewBox="0 0 ${Wd} ${Ht}" role="img" aria-label="${esc(t('pw_scurve'))}">${g}</svg>${h.legend([['c1 line', t('planned')], ['ok', t('progress') + ' ' + c.actual + '%'], ['mark', t('g_today')]])}<div class="small muted mt">${gap >= 0 ? t('pw_ahead', { n: gap }) : t('pw_behind', { n: -gap })}</div>`;
         return { csv: () => [[t('date'), t('planned')], ...c.points.map((p) => [p.d, p.planned])] };
@@ -294,7 +300,10 @@
         const h = H(), P = d.payments, cur = d.project.currency, s = d.paymentSums;
         if (!P.length) { body.innerHTML = h.empty(); return { csv: () => [] }; }
         const bar = [['ok', 'paid', t('state_paid')], ['c1', 'invoiced', t('state_invoiced')], ['idle', 'pending', t('state_pending')], ['bad', 'late', t('late')]];
-        body.innerHTML = `<div class="stackbar" role="img" aria-label="${esc(t('payment_milestones'))}">${bar.map(([c, k]) => (s[k] ? `<i class="${c}" style="flex:${s[k]}" ${h.tipAttr(`${t(k === 'late' ? 'late' : 'state_' + k)}: ${money(s[k], cur)}`)}></i>` : '')).join('')}</div>${h.legend(bar.map(([c, k, l]) => [c, l, money(s[k], cur)]))}` + P.map((x) => `<div class="list-item"><div class="grow"><div style="font-weight:600">${esc(x.title)}</div><div class="small muted">${x.due || ''}${x.percent != null ? ` · ${x.percent}%` : ''}${x.late ? ` <span class="bad-txt">(${t('late')})</span>` : ''}</div>${x.state !== 'paid' ? `<div class="row qa">${x.state === 'pending' ? `<button class="btn sm" data-py="invoiced" data-i="${x.id}" data-prev="${x.state}">${t('state_invoiced')}</button>` : ''}<button class="btn sm good" data-py="paid" data-i="${x.id}" data-prev="${x.state}">${t('ra_paid')}</button></div>` : ''}</div><div class="right"><div>${x.amount ? money(x.amount, cur) : ''}</div><span class="chip ${stateTone(x.state)}">${t('state_' + x.state)}</span></div></div>`).join('');
+        const cl = PMCL.get('stackbar'), liveBar = bar.filter(([, k]) => s[k]), sumBar = liveBar.reduce((a, [, k]) => a + s[k], 0);
+        const labOf = (k) => PMCL.str(cl, { text: money(s[k], cur), pct: PMCL.pctOf(s[k], sumBar) });
+        const labsRow = cl.on && cl.pos !== 'center' ? `<div class="sb-labs" dir="ltr">${liveBar.map(([, k]) => `<span class="cl-t" style="flex:${s[k]}">${esc(labOf(k))}</span>`).join('')}</div>` : '';
+        body.innerHTML = `${cl.on && cl.pos === 'above' ? labsRow : ''}<div class="stackbar ${cl.on && cl.pos === 'center' ? 'tall' : ''}" role="img" aria-label="${esc(t('payment_milestones'))}">${bar.map(([c, k]) => (s[k] ? `<i class="${c}" style="flex:${s[k]}" ${h.tipAttr(`${t(k === 'late' ? 'late' : 'state_' + k)}: ${money(s[k], cur)}`)}>${cl.on && cl.pos === 'center' ? `<span class="cl-t">${esc(labOf(k))}</span>` : ''}</i>` : '')).join('')}</div>${cl.on && cl.pos === 'below' ? labsRow : ''}${h.legend(bar.map(([c, k, l]) => [c, l, money(s[k], cur)]))}` + P.map((x) => `<div class="list-item"><div class="grow"><div style="font-weight:600">${esc(x.title)}</div><div class="small muted">${x.due || ''}${x.percent != null ? ` · ${x.percent}%` : ''}${x.late ? ` <span class="bad-txt">(${t('late')})</span>` : ''}</div>${x.state !== 'paid' ? `<div class="row qa">${x.state === 'pending' ? `<button class="btn sm" data-py="invoiced" data-i="${x.id}" data-prev="${x.state}">${t('state_invoiced')}</button>` : ''}<button class="btn sm good" data-py="paid" data-i="${x.id}" data-prev="${x.state}">${t('ra_paid')}</button></div>` : ''}</div><div class="right"><div>${x.amount ? money(x.amount, cur) : ''}</div><span class="chip ${stateTone(x.state)}">${t('state_' + x.state)}</span></div></div>`).join('');
         $$('[data-py]', body).forEach((b) => (b.onclick = () => setState(Number(b.dataset.i), b.dataset.py, b.dataset.prev, () => ctx.reload())));
         return { csv: () => [[t('milestone'), t('due_date'), t('amount'), t('col_state')], ...P.map((x) => [x.title, x.due || '', x.amount, x.state])] };
       },
@@ -311,14 +320,20 @@
         const slot = pw / C.months.length, bw = Math.min(46, slot * 0.62);
         let g = [0, 0.5, 1].map((f) => `<line class="tl-grid" x1="${L}" x2="${L + pw}" y1="${y(top * f)}" y2="${y(top * f)}"/><text x="${L - 6}" y="${y(top * f) + 4}" text-anchor="end">${short(top * f)}</text>`).join('');
         const every = Math.ceil(C.months.length / Math.max(2, Math.floor(pw / 56)));
+        const cl = PMCL.get('stackcol');
         C.months.forEach((r, i) => {
           const cx = L + slot * i + slot / 2;
           let acc = 0;
           const segs = [['ok', r.paid], ['c1', r.invoiced], ['idle', r.pending], ['bad', r.late]].filter((s) => s[1] > 0);
           const tipTxt = `<b>${monthLabel(r.m)}</b><br>${t('state_paid')}: ${money(r.paid, cur)}<br>${t('state_invoiced')}: ${money(r.invoiced, cur)}<br>${t('state_pending')}: ${money(r.pending, cur)}<br>${t('late')}: ${money(r.late, cur)}`;
           g += `<g class="cb" ${h.tipAttr(tipTxt)}><rect class="hit" x="${cx - slot / 2}" y="${T}" width="${slot}" height="${ph}"/>`;
-          segs.forEach(([c, v], k) => { const y1 = y(acc + v), y0 = y(acc); acc += v; g += `<rect class="hb-seg ${c}" x="${cx - bw / 2}" y="${y1}" width="${bw}" height="${Math.max(y0 - y1 - (k < segs.length - 1 ? 2 : 0), 1)}" rx="${k === segs.length - 1 ? 4 : 1}"/>`; });
-          g += `</g>`;
+          const colTotal = tot(r); let labs = '';
+          segs.forEach(([c, v], k) => {
+            const y1 = y(acc + v), y0 = y(acc); acc += v; g += `<rect class="hb-seg ${c}" x="${cx - bw / 2}" y="${y1}" width="${bw}" height="${Math.max(y0 - y1 - (k < segs.length - 1 ? 2 : 0), 1)}" rx="${k === segs.length - 1 ? 4 : 1}"/>`;
+            if (cl.on && cl.pos === 'center') { const lb = PMCL.str(cl, { text: short(v), pct: PMCL.pctOf(v, colTotal) }); if (y0 - y1 >= 13 && bw >= PMCL.estW(lb)) labs += PMCL.text(cx, (y0 + y1) / 2, lb, 'center'); }
+          });
+          if (cl.on && cl.pos === 'above' && colTotal > 0) labs += PMCL.text(cx, y(colTotal), PMCL.str(cl, { text: short(colTotal), pct: '100%' }), 'above', { gap: 4 });
+          g += labs + `</g>`;
           if (i % every === 0) g += `<text x="${cx}" y="${Ht - 8}" text-anchor="middle" ${r.m === C.thisMonth ? 'class="cur-m"' : ''}>${monthLabel(r.m)}</text>`;
         });
         const ti = C.months.findIndex((r) => r.m === C.thisMonth);
@@ -341,6 +356,11 @@
         C.months.forEach((r, i) => { if (i % every === 0) g += `<text x="${x(i)}" y="${Ht - 8}" text-anchor="middle">${monthLabel(r.m)}</text>`; });
         g += `<path class="sc-area" d="${path('cumPlanned')} L${x(n - 1)} ${y(0)} L${x(0)} ${y(0)} Z"/><path class="sc-line" d="${path('cumPlanned')}"/><path class="sc-act ok" d="${path('cumReceived')}"/>`;
         g += C.months.map((r, i) => `<circle class="hit-dot" cx="${x(i)}" cy="${y(r.cumPlanned)}" r="9" ${h.tipAttr(`<b>${monthLabel(r.m)}</b><br>${t('planned')}: ${money(r.cumPlanned, cur)}<br>${t('state_paid')}: ${money(r.cumReceived, cur)}`)}/>`).join('');
+        const cl = PMCL.get('line', { percent: false });
+        if (cl.on) {
+          const other = { above: 'below', below: 'above', left: 'right', right: 'left', center: 'below' }[cl.pos];
+          C.months.forEach((r, i) => { if (i % every === 0 || i === n - 1) { g += PMCL.text(x(i), y(r.cumPlanned), short(r.cumPlanned), cl.pos); if (r.cumReceived > 0 || i === n - 1) g += PMCL.text(x(i), y(r.cumReceived), short(r.cumReceived), other); } });
+        }
         const last = C.months[n - 1];
         body.innerHTML = `<svg class="viz scurve" viewBox="0 0 ${Wd} ${Ht}" role="img" aria-label="${esc(t('pw_cumulative'))}">${g}</svg>${h.legend([['c1', t('planned'), money(last.cumPlanned, cur)], ['ok', t('state_paid'), money(last.cumReceived, cur)]])}`;
         return { csv: () => [[t('month'), t('planned'), t('state_paid')], ...C.months.map((r) => [r.m, r.cumPlanned, r.cumReceived])] };

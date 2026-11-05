@@ -94,6 +94,7 @@
     if (n === 1) g += `<text x="${L + pw / 2}" y="${Ht - 8}" text-anchor="middle">${esc(dayShort(rows[0].date))}</text>`;
     if (spec.ref && spec.ref.v >= lo && spec.ref.v <= hi) g += `<line class="tr-ref" x1="${L}" x2="${L + pw}" y1="${y(spec.ref.v).toFixed(1)}" y2="${y(spec.ref.v).toFixed(1)}"/><text class="tr-ref-lab" direction="ltr" x="${L + 4}" y="${(y(spec.ref.v) - 4).toFixed(1)}" text-anchor="start">${esc(spec.ref.label)}</text>`;
     let gaps = false;
+    const cl = PMCL.get('line', { percent: false });
     for (const s of defs) {
       const pts = rows.filter((r) => num(s.get(r))).map((r) => ({ r, px: x(r.date), py: y(s.get(r)) }));
       let solid = '', dashed = '', run = false;
@@ -107,6 +108,11 @@
       if (dashed) g += `<path class="tr-line gap ${s.cls}" d="${dashed}"/>`;
       const showAll = pts.length <= 31;
       pts.forEach((p, i) => { if (showAll || i === pts.length - 1) g += `<circle class="tr-dot ${s.cls}" cx="${p.px.toFixed(1)}" cy="${p.py.toFixed(1)}" r="${showAll ? 4 : 5}"/>`; });
+      if (cl.on) {
+        const pos = defs.indexOf(s) === 0 ? cl.pos : { above: 'below', below: 'above', left: 'right', right: 'left', center: 'below' }[cl.pos];
+        let lastX = -1e9;
+        pts.forEach((p, i) => { const lb = (s.fmt || nf)(s.get(p.r)); const lw = PMCL.estW(lb) + 8; if (i === pts.length - 1 ? p.px - lastX >= lw * 0.7 || i === 0 : p.px - lastX >= lw) { g += PMCL.text(p.px, p.py, lb, pos); lastX = p.px; } });
+      }
     }
     const hw = Math.max(14, Math.min(40, pw / Math.max(1, span + 1)));
     for (const r of rows) {
@@ -138,12 +144,17 @@
     const ticks = Math.min(4, Math.max(1, Math.floor(pw / 90)));
     for (let i = 0; i <= ticks && span > 0; i++) { const day = Math.round(d0 + (span * i) / ticks); g += `<text x="${(L + slot / 2 + (slot * span * i) / ticks).toFixed(1)}" y="${Ht - 8}" text-anchor="${i === 0 ? 'start' : i === ticks ? 'end' : 'middle'}">${esc(dayShort(h.ymd(day)))}</text>`; }
     if (span === 0) g += `<text x="${cx(rows[0].date).toFixed(1)}" y="${Ht - 8}" text-anchor="middle">${esc(dayShort(rows[0].date))}</text>`;
+    const cl = PMCL.get('stackcol');
+    let lastTop = -1e9;
     for (const r of rows) {
       let acc = 0;
       const segs = [['ok', r.green], ['warn', r.amber], ['bad', r.red]].filter((s) => s[1] > 0);
       const tip = `<b>${esc(dayLong(r.date))}</b><br>${esc(t('tr_health_counts', { g: r.green, a: r.amber, r: r.red }))}<br><span class="muted">${esc(t('tr_projects_n', { n: r.n }))}</span>`;
       g += `<g class="cb" ${h.tipAttr(tip)}><rect class="hit" x="${(cx(r.date) - Math.max(bw, 12) / 2).toFixed(1)}" y="${T}" width="${Math.max(bw, 12)}" height="${ph}"/>`;
-      segs.forEach(([c, v], k) => { const y1 = y(acc + v), y0 = y(acc); acc += v; g += `<rect class="hb-seg ${c}" x="${(cx(r.date) - bw / 2).toFixed(1)}" y="${y1.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(y0 - y1 - (k < segs.length - 1 ? 2 : 0), 1).toFixed(1)}" rx="${k === segs.length - 1 ? 3 : 1}"/>`; });
+      segs.forEach(([c, v], k) => { const y1 = y(acc + v), y0 = y(acc); acc += v; g += `<rect class="hb-seg ${c}" x="${(cx(r.date) - bw / 2).toFixed(1)}" y="${y1.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(y0 - y1 - (k < segs.length - 1 ? 2 : 0), 1).toFixed(1)}" rx="${k === segs.length - 1 ? 3 : 1}"/>`;
+        if (cl.on && cl.pos === 'center') { const lb = PMCL.str(cl, { text: String(v), pct: PMCL.pctOf(v, r.n) }); if (y0 - y1 >= 13 && bw >= PMCL.estW(lb)) g += PMCL.text(cx(r.date), (y0 + y1) / 2, lb, 'center'); }
+      });
+      if (cl.on && cl.pos === 'above') { const lb = String(r.n); const px = cx(r.date); if (px - lastTop >= PMCL.estW(lb) + 6) { g += PMCL.text(px, y(r.n), lb, 'above', { gap: 4 }); lastTop = px; } }
       g += '</g>';
     }
     const last = rows[n - 1];

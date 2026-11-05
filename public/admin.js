@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const KEY = 'pm_admin_token';
-  const BUILD = '1.2.3';
+  const BUILD = '1.2.4';
   const S = { token: null, me: null, timer: null, errs: [] };
   try { S.token = localStorage.getItem(KEY); } catch (e) { /* storage blocked */ }
   try { const th = localStorage.getItem('pm_theme'); if (th) document.documentElement.dataset.theme = th; } catch (e) { /* storage blocked */ }
@@ -89,9 +89,24 @@
   const empty = (t) => `<div class="empty">${esc(t)}</div>`;
   const kpi = (v, l, h, tone) => `<div class="sa-kpi ${tone || ''}"><div class="v">${v}</div><div class="l">${esc(l)}</div>${h ? `<div class="h">${esc(h)}</div>` : ''}</div>`;
   const note = (t, cls) => `<div class="sa-note ${cls || ''}" role="note">${esc(t)}</div>`;
-  function bars(list, { fmt = nf, cls = '', label = 'Chart' } = {}) {
-    const max = Math.max(1, ...list.map((x) => x.v));
-    return `<div class="sa-bars ${cls}" role="img" aria-label="${esc(label)}">${list.map((x) => `<i class="${x.v ? '' : 'zero'}" style="height:${x.v ? Math.max(3, Math.round((x.v / max) * 100)) : 2}%" tabindex="0" title="${esc(x.t || x.d)}: ${esc(fmt(x.v))}"></i>`).join('')}</div><div class="sa-axis"><span>${esc(list[0] ? (list[0].t || list[0].d) : '')}</span><span>${esc(list.length ? (list[list.length - 1].t || list[list.length - 1].d) : '')}</span></div>`;
+  // Column chart with data labels. A long series is grouped so it always fits its card.
+  function bars(list, { fmt = nf, cls = '', label = 'Chart', group = 'sum', percent = true } = {}) {
+    const MAXB = 48;
+    if (list.length > MAXB) {
+      const size = Math.ceil(list.length / MAXB), out = [];
+      for (let i = 0; i < list.length; i += size) {
+        const part = list.slice(i, i + size), vals = part.map((x) => x.v);
+        out.push({ d: part[0].t || part[0].d, t: part.length > 1 ? `${part[0].t || part[0].d} to ${part[part.length - 1].t || part[part.length - 1].d}` : (part[0].t || part[0].d), v: group === 'max' ? Math.max(...vals) : group === 'avg' ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : vals.reduce((a, b) => a + b, 0) });
+      }
+      list = out;
+    }
+    PMCL.scope('admin:' + label);
+    const cl = PMCL.get('htmlcol', { percent });
+    const max = Math.max(1, ...list.map((x) => x.v)), total = list.reduce((a, x) => a + x.v, 0), many = list.length > 14, dense = many && list.filter((x) => x.v > 0).length > 3;
+    const lab = (x) => esc(PMCL.str(cl, { text: fmt(x.v), pct: PMCL.pctOf(x.v, total) }));
+    const showLab = (x) => cl.on && (x.v > 0 || !many);
+    const info = PMCL.collect()[0];
+    return `<div class="sa-chart"><div class="sa-chart-tools">${info ? PMCL.button(info) : ''}</div><div class="sa-bars ${cls} ${cl.on ? 'lab-' + cl.pos : ''} ${dense ? 'dense' : ''}" role="img" aria-label="${esc(label)}">${list.map((x, ix) => `<i class="${x.v ? '' : 'zero'} ${!dense && ix === list.length - 1 ? 'edge-end' : ''} ${!dense && ix === 0 ? 'edge-start' : ''}" style="height:${x.v ? Math.max(3, Math.round((x.v / max) * 100)) : 2}%" tabindex="0" title="${esc(x.t || x.d)}: ${esc(fmt(x.v))}">${showLab(x) ? `<span class="cl-t">${lab(x)}</span>` : ''}</i>`).join('')}</div><div class="sa-axis"><span>${esc(list[0] ? (list[0].t || list[0].d) : '')}</span><span>${esc(list.length ? (list[list.length - 1].t || list[list.length - 1].d) : '')}</span></div></div>`;
   }
   function pager(r, onPage) {
     const pages = Math.max(1, Math.ceil(r.total / r.size));
@@ -100,7 +115,7 @@
   }
   const field = (label, input, help) => `<label class="f">${esc(label)}${input}${help ? `<span class="small muted">${esc(help)}</span>` : ''}</label>`;
   const view = () => $('#view');
-  const setView = (h) => { const v = view(); if (v) v.innerHTML = h; };
+  const setView = (h) => { const v = view(); if (v) { v.innerHTML = h; if (window.PMCL) PMCL.bind(v, () => route()); } };
   const fail = (e) => setView(`<div class="page"><div class="card"><div class="sa-note bad" role="alert">${esc(e.message)}</div><button class="btn" onclick="location.reload()">Try again</button></div></div>`);
 
   // ---------- sign in ----------
@@ -363,7 +378,7 @@
       $('#hv').innerHTML = `<div class="sa-note ${h.status === 'healthy' ? 'ok' : h.status === 'down' ? 'bad' : ''}" role="status"><span class="sa-status"><span class="sa-dot ${dot}"></span>${h.status === 'healthy' ? 'All systems healthy' : h.status === 'degraded' ? 'Degraded' : 'Down'}</span></div>${h.issues.length ? `<div class="card mb"><div class="card-head"><h3>Needs attention</h3></div><ul style="margin:0;padding-inline-start:18px">${h.issues.map((i) => `<li>${esc(i)}</li>`).join('')}</ul></div>` : ''}
         <div class="sa-kpis">${kpi(up(h.uptime.d1), 'Uptime, 24 hours', `${nf(h.uptime.d1.beats)} of ${nf(h.uptime.d1.expected)} minutes`, h.uptime.d1.pct >= 99 ? 'good' : 'warn')}${kpi(up(h.uptime.d7), 'Uptime, 7 days', '', h.uptime.d7.pct >= 99 ? 'good' : 'warn')}${kpi(up(h.uptime.d30), 'Uptime, 30 days', '', h.uptime.d30.pct >= 99 ? 'good' : 'warn')}${kpi(dur(sy.uptime_seconds), 'Running since last restart', `Started ${dt(sy.started_at)}`, 'info')}
         ${kpi(`${h.database.latency_ms} ms`, 'Database response', h.database.kind === 'pg' ? 'Postgres' : 'Embedded Postgres', h.database.ok ? (h.database.latency_ms > 500 ? 'warn' : 'good') : 'bad')}${kpi(`${sy.rss_mb} MB`, 'Memory in use', `Heap ${sy.heap_mb} MB`, '')}${kpi(nf(h.server_errors.last_hour), 'Server errors, last hour', `${nf(h.server_errors.last_24h)} in 24 hours`, h.server_errors.last_hour ? 'bad' : 'good')}${kpi(nf(sy.requests_since_start), 'Requests since restart', `${nf(sy.errors_since_start)} errors`, '')}</div>
-        <div class="sa-grid2 mt"><section class="card"><div class="card-head"><h3>Database response, last 3 hours</h3></div>${h.beats.length ? bars(h.beats.map((b) => ({ d: new Date(b.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }), v: b.db_ms })), { fmt: (x) => x + ' ms', label: 'Database response per minute' }) : empty('No heartbeats yet. The first one is recorded within a minute.')}</section>
+        <div class="sa-grid2 mt"><section class="card"><div class="card-head"><h3>Database response, last 3 hours</h3></div>${h.beats.length ? bars(h.beats.map((b) => ({ d: new Date(b.at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }), v: b.db_ms })), { fmt: (x) => x + ' ms', label: 'Database response per minute', group: 'max', percent: false }) : empty('No heartbeats yet. The first one is recorded within a minute.')}</section>
         <section class="card"><div class="card-head"><h3>System</h3></div><dl class="sa-dl"><dt>Node</dt><dd>${esc(sy.node)}</dd><dt>Platform</dt><dd>${esc(sy.platform)} with ${sy.cpus} CPUs</dd><dt>Load average</dt><dd>${sy.load.join(', ')}</dd><dt>Users</dt><dd>${nf(h.counts.users)}</dd><dt>Projects</dt><dd>${nf(h.counts.projects)}</dd><dt>Live sessions</dt><dd>${nf(h.counts.sessions)}</dd></dl><p class="small muted" style="margin-bottom:0">Uptime counts the minutes the server was running. A restart or an outage shows as lost minutes.</p></section></div>`;
     }
     setView(`<div class="page">${head('System health', '<button class="btn" id="rf">Refresh</button>', 'Updates every 30 seconds.')}<div id="hv">${loading()}</div></div>`);

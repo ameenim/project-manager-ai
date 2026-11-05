@@ -6,6 +6,7 @@
   const dnum = (s) => { const [y, m, d] = s.split('-').map(Number); return Date.UTC(y, m - 1, d) / DAY; };
   const ymd = (n) => new Date(n * DAY).toISOString().slice(0, 10);
   const num = (n) => Number(n || 0).toLocaleString(S.lang === 'ar' ? 'ar-AE' : 'en-US', { maximumFractionDigits: 0 });
+  const cnum = (n) => { const a = Math.abs(n); return a >= 1e6 ? (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M' : a >= 1e4 ? Math.round(n / 1e3) + 'K' : num(n); };
   const trunc = (s, n) => (String(s).length > n ? String(s).slice(0, Math.max(n - 1, 1)) + '…' : String(s));
   const reduced = () => window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
   const tip = (html) => `data-tip="${esc(html)}"`;
@@ -23,41 +24,78 @@
     const total = parts.reduce((s, p) => s + p.v, 0);
     let acc = 0;
     const R = 54, C = 70;
-    const segs = parts.filter((p) => p.v > 0).map((p) => {
+    const cl = PMCL.get('donut');
+    const live = parts.filter((p) => p.v > 0);
+    let labs = '';
+    const placed = [];
+    const segs = live.map((p) => {
       const len = (p.v / total) * 100;
-      const gap = parts.filter((x) => x.v > 0).length > 1 ? 1.2 : 0;
+      const gap = live.length > 1 ? 1.2 : 0;
       const el = `<circle class="dn ${p.cls}" cx="${C}" cy="${C}" r="${R}" pathLength="100" stroke-dasharray="${Math.max(len - gap, 0.1)} ${100 - Math.max(len - gap, 0.1)}" stroke-dashoffset="${-acc}" transform="rotate(-90 ${C} ${C})" ${tip(`${p.label}: ${p.v}`)}/>`;
+      if (cl.on) {
+        const mid = ((acc + len / 2) / 100) * 2 * Math.PI - Math.PI / 2;
+        const lab = PMCL.str(cl, { text: p.lab != null ? p.lab : num(p.v), pct: PMCL.pctOf(p.v, total) });
+        const tw = PMCL.estW(lab), clash = (px, py) => placed.some(([ox, oy, ow]) => Math.abs(ox - px) < (ow + tw) / 2 + 2 && Math.abs(oy - py) < 12);
+        if (cl.pos === 'center') {
+          const px = C + Math.cos(mid) * R, py = C + Math.sin(mid) * R;
+          if ((len >= 7 || live.length === 1) && !clash(px, py)) { labs += PMCL.text(px, py, lab, 'center'); placed.push([px, py, tw]); }
+        } else {
+          const rx = C + Math.cos(mid) * (R + 15), ry = C + Math.sin(mid) * (R + 15);
+          const a = Math.abs(Math.cos(mid)) < 0.2 ? 'middle' : Math.cos(mid) > 0 ? 'start' : 'end';
+          const cx0 = a === 'start' ? rx + tw / 2 : a === 'end' ? rx - tw / 2 : rx;
+          if (!clash(cx0, ry)) { labs += PMCL.text(rx, ry, lab, 'outside', { anchor: a }); placed.push([cx0, ry, tw]); }
+        }
+      }
       acc += len;
       return el;
     }).join('');
-    return `<div class="donut-box"><svg class="viz donut" viewBox="0 0 140 140" role="img" aria-label="${esc(centerBot)}: ${parts.map((p) => `${p.label} ${p.v}`).join(', ')}"><circle class="dn-track" cx="${C}" cy="${C}" r="${R}"/>${segs}</svg><div class="dn-center"><b>${centerTop}</b><span>${esc(centerBot)}</span></div></div>`;
+    const out = cl.on && cl.pos === 'outside';
+    return `<div class="donut-box"><svg class="viz donut" viewBox="${out ? '-40 -8 220 156' : '0 0 140 140'}" role="img" aria-label="${esc(centerBot)}: ${parts.map((p) => `${p.label} ${p.v}`).join(', ')}"><circle class="dn-track" cx="${C}" cy="${C}" r="${R}"/>${segs}${labs}</svg><div class="dn-center"><b>${centerTop}</b><span>${esc(centerBot)}</span></div></div>`;
   }
 
   let CW = 560; // usable chart width of the widget being drawn, set by frame()
   function hbars(rows, opts) {
-    // rows: [{label, sub, segs:[{v, cls, label}], mark, tipHtml, href}]
-    const W = Math.max(240, Math.min(1600, Math.round(CW))), LW = opts.labelW || 130, PR = 44, RH = opts.rowH || 34, BH = 10;
+    // rows: [{label, sub, segs:[{v, cls, label, lab, pct}], mark, tipHtml, href, valueLabel, pctLabel}]
+    const cl = PMCL.get('hbar');
+    const W = Math.max(240, Math.min(1600, Math.round(CW))), LW = opts.labelW || 130, PR = 44, RH = opts.rowH || 34, BH = cl.on ? 14 : 10;
     const max = opts.max || Math.max(1, ...rows.map((r) => r.segs.reduce((s, x) => s + x.v, 0)));
     const pw = W - LW - PR;
     const H = rows.length * RH + 6;
+    const grand = rows.reduce((s, r) => s + r.segs.reduce((a, x) => a + x.v, 0), 0);
     let g = '';
     rows.forEach((r, i) => {
       const y = i * RH + 4;
       let x = LW;
       const total = r.segs.reduce((s, p) => s + p.v, 0);
+      const live = r.segs.filter((p) => p.v > 0);
+      const single = r.segs.length === 1;
+      const by = y + 7, ym = by + BH / 2;
       g += `<g class="hb-row" ${r.href ? `data-go="${r.href}" style="cursor:pointer"` : ''} ${tip(r.tipHtml || '')}><rect class="hit" x="0" y="${y - 2}" width="${W}" height="${RH}"/>`;
       g += `<text class="lab" x="0" y="${y + 12}">${esc(trunc(r.label, 20))}</text>`;
       if (r.sub) g += `<text class="lab-sub" x="0" y="${y + 24}">${esc(r.sub)}</text>`;
-      g += `<rect class="hb-track" x="${LW}" y="${y + 7}" width="${pw}" height="${BH}" rx="${BH / 2}"/>`;
-      const live = r.segs.filter((p) => p.v > 0);
+      g += `<rect class="hb-track" x="${LW}" y="${by}" width="${pw}" height="${BH}" rx="${BH / 2}"/>`;
+      let marks = '', lastEnd = -1e9;
       live.forEach((p, k) => {
         const w = (p.v / max) * pw;
         const last = k === live.length - 1;
-        g += `<rect class="hb-seg ${p.cls}" x="${x}" y="${y + 7}" width="${Math.max(w - (last ? 0 : 2), 1)}" height="${BH}" rx="${last ? 4 : 1}" style="--i:${k}"/>`;
+        g += `<rect class="hb-seg ${p.cls}" x="${x}" y="${by}" width="${Math.max(w - (last ? 0 : 2), 1)}" height="${BH}" rx="${last ? Math.min(4, BH / 2) : 1}" style="--i:${k}"/>`;
+        if (cl.on) {
+          const own = single && r.valueLabel != null;
+          const txt = PMCL.str(cl, { text: own ? r.valueLabel : (p.lab != null ? p.lab : String(Math.round(p.v * 10) / 10)), pct: p.pct != null ? p.pct : own ? (r.pctLabel != null ? r.pctLabel : /%$/.test(String(r.valueLabel)) ? r.valueLabel : PMCL.pctOf(p.v, grand)) : PMCL.pctOf(p.v, total) });
+          const x0 = x, x1 = x + w, xc = x + w / 2, tw = PMCL.estW(txt);
+          let m = '';
+          if (cl.pos === 'center') { if (w >= tw + 4) m = PMCL.text(xc, ym, txt, 'center'); }
+          else if (cl.pos === 'left') { if (single || w >= tw + 8) m = PMCL.text(x0, ym, txt, 'right', { gap: 5 }); }
+          else if (cl.pos === 'right') { if (single && x1 + tw + 6 <= W) m = PMCL.text(x1, ym, txt, 'right', { gap: 5 }); else if (w >= tw + 8) m = PMCL.text(x1, ym, txt, 'left', { gap: 5 }); }
+          else if (xc - tw / 2 > lastEnd + 3) { m = PMCL.text(xc, cl.pos === 'above' ? by : by + BH, txt, cl.pos, { gap: 3 }); lastEnd = xc + tw / 2; }
+          marks += m;
+        }
         x += w;
       });
+      g += marks;
       if (r.mark != null) { const mx = LW + (r.mark / max) * pw; g += `<line class="hb-mark" x1="${mx}" x2="${mx}" y1="${y + 2}" y2="${y + 24}"/>`; }
-      g += `<text class="val" x="${W}" y="${y + 17}" text-anchor="end">${esc(r.valueLabel != null ? r.valueLabel : String(total))}</text></g>`;
+      if (!single) g += `<text class="val" x="${W}" y="${y + 17}" text-anchor="end">${esc(r.valueLabel != null ? r.valueLabel : String(total))}</text>`;
+      g += '</g>';
     });
     return `<svg class="viz hbars" style="max-width:${W}px" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(opts.aria || '')}">${g}</svg>`;
   }
@@ -170,7 +208,7 @@
         const conv = PM.fx.mode !== 'native', mode = PM.fx.mode;
         if (conv && M.length) { const sum = (k) => M.reduce((a, x) => a + PM.fx.convert(x[k], x.currency, mode), 0); M = [{ currency: mode, paid: sum('paid'), invoiced: sum('invoiced'), pending: sum('pending'), late: sum('late'), total: sum('total') }]; }
         if (!M.length) { body.innerHTML = empty(); return { csv: () => [] }; }
-        const rows = M.map((x) => ({ label: x.currency || '-', sub: money(Math.round(x.total), x.currency), segs: [{ v: x.paid / x.total, cls: 'ok' }, { v: x.invoiced / x.total, cls: 'c1' }, { v: x.pending / x.total, cls: 'idle' }, { v: x.late / x.total, cls: 'bad' }], valueLabel: Math.round((x.paid / x.total) * 100) + '%', tipHtml: `${t('state_paid')} ${money(x.paid, x.currency)}<br>${t('state_invoiced')} ${money(x.invoiced, x.currency)}<br>${t('state_pending')} ${money(x.pending, x.currency)}<br>${t('late')} ${money(x.late, x.currency)}` }));
+        const rows = M.map((x) => ({ label: x.currency || '-', sub: money(Math.round(x.total), x.currency), segs: [{ v: x.paid / x.total, cls: 'ok', lab: cnum(x.paid) }, { v: x.invoiced / x.total, cls: 'c1', lab: cnum(x.invoiced) }, { v: x.pending / x.total, cls: 'idle', lab: cnum(x.pending) }, { v: x.late / x.total, cls: 'bad', lab: cnum(x.late) }], valueLabel: Math.round((x.paid / x.total) * 100) + '%', tipHtml: `${t('state_paid')} ${money(x.paid, x.currency)}<br>${t('state_invoiced')} ${money(x.invoiced, x.currency)}<br>${t('state_pending')} ${money(x.pending, x.currency)}<br>${t('late')} ${money(x.late, x.currency)}` }));
         body.innerHTML = hbars(rows, { max: 1, aria: t('w_payments'), labelW: 96 }) + legend([['ok', t('state_paid')], ['c1', t('state_invoiced')], ['idle', t('state_pending')], ['bad', t('late')]]) +
           `<div class="small muted" style="margin-top:8px">${conv ? esc(t('fx_converted', { cur: mode })) + '<br>' : ''}${M.map((x) => `${esc(x.currency)}: ${t('state_paid')} ${num(x.paid)} · ${t('late')} ${num(x.late)}`).join('<br>')}</div>`;
         return { csv: () => [[t('currency'), t('state_paid'), t('state_invoiced'), t('state_pending'), t('late'), t('total')], ...M.map((x) => [x.currency, x.paid, x.invoiced, x.pending, x.late, x.total])], chart: true };
@@ -297,7 +335,7 @@
     const text = '﻿' + csvOf(info.csv());
     fileOut(`${slug(wlabel(cfg.widgets[id]))}.csv`, new Blob([text], { type: 'text/csv;charset=utf-8' }), text);
   }
-  const STYLE_PROPS = ['fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-linecap', 'opacity', 'fill-opacity', 'font-size', 'font-family', 'font-weight', 'text-anchor', 'letter-spacing'];
+  const STYLE_PROPS = ['fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-linecap', 'opacity', 'fill-opacity', 'font-size', 'font-family', 'font-weight', 'text-anchor', 'letter-spacing', 'paint-order', 'stroke-linejoin', 'direction'];
   function exportPng(id, body, cfg) {
     const svg = $('svg.viz', body);
     if (!svg) return;
@@ -440,7 +478,10 @@
       const sp = cols === 1 ? 12 : cols === 2 ? 6 : span;
       CW = (gw - 11 * 16) / 12 * sp + (sp - 1) * 16 - 38;
       PM.fx.mode = modeNow();
+      PMCL.scope(id);
       infos[id] = w.render(body, d, ctx) || { csv: () => [] };
+      const cl = PMCL.collect()[0];
+      if (cl) { const more = $('.dw-more', el); if (more) more.insertAdjacentHTML('beforebegin', PMCL.button(cl)); PMCL.bind(el, () => rerender(id)); }
       if (id !== 'radar') limitRows(el, body, id);
       if (animate) body.classList.add('anim-in');
       return el;
