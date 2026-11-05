@@ -114,6 +114,10 @@
     const hist = [], redo = [];
     let histTimer = null;
     const meta = g.meta || {};
+    // A document made from a client template is drawn with the client's colors, fonts and logo.
+    const brand = g.brand || null;
+    const logoSrc = brand ? (brand.logo ? brand.logo.dataUrl : null) : 'brand/full-light.png';
+    const logoImg = () => (logoSrc ? `<img src="${logoSrc}" alt="" class="lg">` : '');
 
     const ov = document.createElement('div');
     ov.className = 'ded-ov';
@@ -146,6 +150,11 @@
     document.body.classList.add('ded-open');
     const q = (s) => $(s, ov);
     const page = q('#dPage');
+    if (brand) {
+      const k = X.brandTokens(brand);
+      page.style.cssText = `--primary:#${k.primary};--primary-soft:#${k.primarySoft};--g-sum:#${k.gSum};--on-primary:#${k.onPrimary};--text:#${k.text};--muted:#${k.muted};--border:#${k.border};--ded-head:'${brand.fonts.heading}',Calibri,Arial,sans-serif;font-family:'${brand.fonts.body}',Calibri,Arial,sans-serif;color:#${k.text};`;
+      page.classList.add('branded');
+    }
 
     // ----- model <-> DOM -----
     const byId = (id) => blocks.find((b) => b.id === id);
@@ -195,7 +204,7 @@
     }
     function draw() {
       const cover = `<section class="ded-cover" aria-label="${esc(t('ed_cover'))}"><div class="cap">${t('ed_cover')}</div>
-        <div class="row" style="justify-content:${{ left: 'flex-start', center: 'center', right: 'flex-end', hidden: 'flex-start' }[layout.logo.cover]}">${layout.logo.cover === 'hidden' ? `<span class="small muted">${t('ed_logo_hidden')}</span>` : `<img src="brand/full-light.png" alt="" class="lg">`}</div>
+        <div class="row" style="justify-content:${{ left: 'flex-start', center: 'center', right: 'flex-end', hidden: 'flex-start' }[layout.logo.cover]}">${layout.logo.cover === 'hidden' ? `<span class="small muted">${t('ed_logo_hidden')}</span>` : `${logoImg()}`}</div>
         <div class="ct">${esc(title)}</div><div class="small muted">${esc(meta.project || '')}${meta.client ? ' · ' + esc(meta.client) : ''}</div></section>`;
       page.innerHTML = `${cover}<div class="ded-hf" id="dHead"></div><div id="dBlocks">${blocks.map(blockHtml).join('')}</div><button class="btn sm ded-addend" id="dAddEnd">${icon('plus')}${t('ed_add_block')}</button><div class="ded-hf foot" id="dFoot"></div>`;
       wire(); outline(); drawPreviewStrips();
@@ -372,7 +381,7 @@
       if (!head || !foot) return;
       const pages = blocks.filter((b) => b.type === 'h1').length + 1;
       const fill = (txt) => esc(X.fillPlain(txt, { title, date: X.fmtDate(meta.date), meta }, 2, pages)).replace(/\n/g, '<br>');
-      const cell = (grp, k) => `<div class="c ${k}">${grp === 'header' && layout.logo.header === k ? '<img src="brand/full-light.png" alt="" class="lg">' : ''}${fill(layout[grp][k])}</div>`;
+      const cell = (grp, k) => `<div class="c ${k}">${grp === 'header' && layout.logo.header === k ? logoImg() : ''}${fill(layout[grp][k])}</div>`;
       head.innerHTML = layout.logo.header === 'hidden' && !['left', 'center', 'right'].some((k) => layout.header[k].trim()) ? '' : ['left', 'center', 'right'].map((k) => cell('header', k)).join('');
       foot.innerHTML = ['left', 'center', 'right'].some((k) => layout.footer[k].trim()) ? ['left', 'center', 'right'].map((k) => cell('footer', k)).join('') : '';
       head.classList.toggle('empty', !head.innerHTML); foot.classList.toggle('empty', !foot.innerHTML);
@@ -442,7 +451,7 @@
         flush();
         const lay = clone(layout); for (const grp of ['header', 'footer']) for (const k of ['left', 'center', 'right']) lay[grp][k] = secTok(lay[grp][k]);
         const fd = new FormData();
-        fd.append('name', name); fd.append('doc_type', (m.$('input[name=tplScope]:checked') || {}).value === 'all' ? '*' : g.doc_type); fd.append('body', out.trim() + '\n'); fd.append('layout', JSON.stringify(lay));
+        fd.append('name', name); fd.append('doc_type', (m.$('input[name=tplScope]:checked') || {}).value === 'all' ? '*' : g.doc_type); fd.append('body', out.trim() + '\n'); fd.append('layout', JSON.stringify(lay)); if (brand) fd.append('brand', JSON.stringify(brand));
         const r = await busy(m.$('#tplOk'), () => api('POST', '/api/templates', fd));
         if (r) { m.close(); toast(t('ed_tpl_saved'), 'ok'); opts.onTemplate && opts.onTemplate(r.template); }
       };

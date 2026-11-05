@@ -160,3 +160,13 @@ The prompts live in server/extract2.js (document roles, extraction, risks) and p
 ## Sync history and automatic sync
 
 The Updates tab shows when the project was last synced, when the next automatic sync is due, and a Sync history view with the last 50 runs (time, manual or scheduled, what each source found, and any errors). Auto sync is set per project (off, hourly, every 4 hours, daily or weekdays at a chosen time). The schedule is stored on the project, and the server checks for due syncs every minute and runs them as the person who set the schedule, so it keeps working when nobody has the page open. Endpoints: `GET /api/projects/:id/sync-history` and `PUT /api/projects/:id/sync-schedule`.
+
+## Client templates
+
+On the Reports page, the Custom templates card has an Upload client template button. Upload the client's Word (.docx, .dotx) or PowerPoint (.pptx, .potx) file and the system reads its colors, fonts, logo, headings, header text and footer text. With an Anthropic key, Claude chooses the color roles and cleans the heading list. Without one, built in rules do the same job.
+
+The result is a template that carries a brand. Documents created from it use the client's colors, fonts, logo and headings in the preview, editor, Word, PowerPoint and Excel files, and the platform logo and colors are not used. Status colors for good, warning and danger stay the same so they keep their meaning.
+
+Open a client template from the card to see its colors, fonts, logo and sections. Change any of them and save. Documents that already exist keep the style they were made with. Fonts are named in the files but not embedded, so the reader needs them installed.
+
+Code: `server/brand.js` (extraction), `public/app_clienttpl.js` (upload and viewer), `public/export.js` (`applyBrand`), tests in `test/clienttpl.test.js`.

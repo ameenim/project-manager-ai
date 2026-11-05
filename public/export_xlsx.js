@@ -68,7 +68,7 @@
       ws.getRow(1).height = 36; ws.getRow(2).height = 18; ws.getRow(3).height = 6;
       const zones = { left: [1, 4], center: [5, 8], right: [9, 12] };
       const logoCol = { left: 0, center: 4, right: 10 };
-      if (lay.logo.header !== 'hidden') addPic(ws, logo, logoCol[lay.logo.header], 0, 170, Math.round((170 * logo.h) / logo.w), 'Project Manager AI logo');
+      if (logo && lay.logo.header !== 'hidden') { const w = Math.min(170, Math.round((34 * logo.w) / logo.h)); addPic(ws, logo, logoCol[lay.logo.header], 0, w, Math.round((w * logo.h) / logo.w), `${plan.brandName || 'Project Manager AI'} logo`); }
       for (const k of ['left', 'center', 'right']) {
         const ln = X.fillTokens(lay.header[k], plan).replace(/\{\{\s*pages?\s*\}\}/g, '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 2);
         if (!ln.length) continue;

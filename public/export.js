@@ -6,7 +6,7 @@
 (function () {
   'use strict';
   const PM = window.PM;
-  const VERSION = '4';
+  const VERSION = '5';
 
   // ---------- design tokens (light theme of styles.css, hex without the hash) ----------
   const T = {
@@ -17,8 +17,9 @@
   };
   const TONE = { ok: T.success, warn: T.warning, bad: T.danger, info: T.primary, idle: T.faint };
   const SOFT = { ok: T.successSoft, warn: T.warningSoft, bad: T.dangerSoft, info: T.primarySoft, idle: T.surface2 };
-  const FONT_NAME = 'IBM Plex Sans';
-  const FONT = '"IBM Plex Sans","IBM Plex Sans Arabic",Inter,system-ui,-apple-system,"Segoe UI",sans-serif';
+  let FONT_NAME = 'IBM Plex Sans';
+  const BASE_FONT = '"IBM Plex Sans","IBM Plex Sans Arabic",Inter,system-ui,-apple-system,"Segoe UI",sans-serif';
+  let FONT = '"IBM Plex Sans","IBM Plex Sans Arabic",Inter,system-ui,-apple-system,"Segoe UI",sans-serif';
   const hex = (h) => '#' + h;
   const tone = (k) => TONE[k] || TONE.idle;
 
@@ -160,6 +161,55 @@
     return [];
   }
 
+
+  // ---------- client brand: a template's colors, fonts and logo replace the platform design ----------
+  // The brand is applied for the length of one build and then put back, so the next document starts clean.
+  const lum = (h) => { const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+  const contrast = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+  const mixHex = (a, b, t) => [0, 2, 4].map((i) => { const x = parseInt(a.slice(i, i + 2), 16), y = parseInt(b.slice(i, i + 2), 16); return Math.round(x + (y - x) * t).toString(16).padStart(2, '0'); }).join('').toUpperCase();
+  const farFrom = (c, others, d) => others.every((o) => { const x = [0, 2, 4].map((i) => parseInt(c.slice(i, i + 2), 16)), y = [0, 2, 4].map((i) => parseInt(o.slice(i, i + 2), 16)); return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]) > (d || 70); });
+  const legible = (h, min) => { let c = String(h).toUpperCase(); for (let i = 0; i < 30 && contrast(c, 'FFFFFF') < min; i++) c = mixHex(c, '000000', 0.12); return c; };
+  // The color tokens a document draws with, from a brand. Light brand colors are darkened until text and fills stay readable.
+  function brandTokens(b) {
+    const c = (b && b.colors) || {};
+    const ok = (v, d) => (/^[0-9A-Fa-f]{6}$/.test(v || '') ? v.toUpperCase() : d);
+    const primary = legible(ok(c.primary, T0.primary), 3);
+    const secondary = ok(c.secondary, T0.gSum), accent = ok(c.accent, T0.c3);
+    const text = legible(ok(c.text, T0.text), 7), muted = legible(ok(c.muted, T0.muted), 4.5);
+    const onPrimary = contrast(primary, 'FFFFFF') >= contrast(primary, text) ? 'FFFFFF' : text;
+    const c1 = primary, c2 = farFrom(secondary, [c1]) ? secondary : T0.c2, c3 = farFrom(accent, [c1, c2]) ? accent : T0.c3;
+    return {
+      primary, primary600: mixHex(primary, '000000', 0.2), primarySoft: mixHex(primary, 'FFFFFF', 0.9), onPrimary, text, muted, faint: muted,
+      border: mixHex(text, 'FFFFFF', 0.88), borderStrong: mixHex(text, 'FFFFFF', 0.78), surface2: mixHex(primary, 'FFFFFF', 0.96), track: mixHex(text, 'FFFFFF', 0.9),
+      gSum: legible(secondary, 4.5), c1, c2, c3,
+    };
+  }
+  const T0 = { ...T };
+  function applyBrand(brand) {
+    const saved = { T: { ...T }, tone: { ...TONE }, soft: { ...SOFT }, name: FONT_NAME, head: ex.HEAD_FONT, font: FONT };
+    const tk = brandTokens(brand);
+    Object.assign(T, tk);
+    TONE.info = T.primary; TONE.idle = T.faint; SOFT.info = T.primarySoft; SOFT.idle = T.surface2;
+    const f = brand.fonts || {};
+    FONT_NAME = f.body || FONT_NAME;
+    ex.FONT_NAME = FONT_NAME; ex.HEAD_FONT = f.heading || FONT_NAME;
+    FONT = `"${FONT_NAME}",${BASE_FONT}`;
+    return () => { Object.assign(T, saved.T); Object.assign(TONE, saved.tone); Object.assign(SOFT, saved.soft); FONT_NAME = saved.name; ex.FONT_NAME = saved.name; ex.HEAD_FONT = saved.head; FONT = saved.font; };
+  }
+  // Any image the browser can draw becomes a PNG the Word, PowerPoint and Excel libraries accept.
+  async function brandLogo(logo) {
+    if (!logo || !logo.dataUrl) return null;
+    const img = new Image();
+    img.src = logo.dataUrl;
+    try { await img.decode(); } catch (e) { return null; }
+    const nw = img.naturalWidth || logo.w || 300, nh = img.naturalHeight || logo.h || 100;
+    const k = Math.min(1, 900 / Math.max(nw, nh)), w = Math.max(1, Math.round(nw * k)), h = Math.max(1, Math.round(nh * k));
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    cv.getContext('2d').drawImage(img, 0, 0, w, h);
+    const blob = await new Promise((ok) => cv.toBlob(ok, 'image/png'));
+    return blob ? { data: new Uint8Array(await blob.arrayBuffer()), w, h } : null;
+  }
+
   // ---------- page layout: logo position, header and footer text ----------
   // A document with no saved layout looks as it always did. {{page}} and {{pages}} are filled by the file itself.
   const DEFAULT_LAYOUT = {
@@ -195,6 +245,11 @@
     }
     return out;
   }
+  function planLayout(g) {
+    const l = layoutOf(g);
+    if (g.brand && !g.brand.logo) { l.logo.cover = 'hidden'; l.logo.header = 'hidden'; }
+    return l;
+  }
   function plan(g) {
     const meta = g.meta || {};
     const V = g.visuals || null;
@@ -209,7 +264,7 @@
     const glanceIds = ['phases', 'status'].filter((id) => has(id, V));
     const all = glanceIds.length ? [{ heading: 'Project at a glance', blocks: [], ids: glanceIds, glance: true }, ...sections] : sections;
     for (const s of all) s.specs = s.ids.flatMap((id) => specsFor(id, V, meta));
-    return { layout: layoutOf(g), title: g.title || (def && def.title) || 'Document', typeTitle: g.custom ? 'Custom document' : (def && def.title) || '', meta, date: fmtDate(meta.date), kpis: (V && V.kpis) || [], sections: all, onepager: def && def.oneSlide && !g.custom && V ? V.onepager || null : null, oneSlide: !!(def && def.oneSlide && !g.custom) };
+    return { brand: g.brand || null, brandName: g.brand ? (g.template || 'Client template') : 'Project Manager AI', layout: planLayout(g), title: g.title || (def && def.title) || 'Document', typeTitle: g.custom ? 'Custom document' : (def && def.title) || '', meta, date: fmtDate(meta.date), kpis: (V && V.kpis) || [], sections: all, onepager: def && def.oneSlide && !g.custom && V ? V.onepager || null : null, oneSlide: !!(def && def.oneSlide && !g.custom) };
   }
 
   // ---------- canvas chart rendering ----------
@@ -483,15 +538,23 @@
     return loading[src];
   }
   const LIBS = { docx: ['vendor/docx.min.js', 'export_docx.js'], pptx: ['vendor/pptxgen.bundle.js', 'export_pptx.js'], xlsx: ['vendor/exceljs.min.js', 'export_xlsx.js'] };
-  const ex = { DEFAULT_LAYOUT, LAYOUT_TOKENS, layoutOf, fillTokens, fillPlain, T, TONE, SOFT, FONT_NAME, FORMATS, STATUS, tone, statusTone, fmtDate, safeName, money, inlineRuns, plain, parseMarkdown, plan, specsFor, specTable, heatTone, renderSpec, asset, b64, builders: {} };
+  const ex = { HEAD_FONT: FONT_NAME, brandTokens, brandLogo, contrast, legible, applyBrand, DEFAULT_LAYOUT, LAYOUT_TOKENS, layoutOf, fillTokens, fillPlain, T, TONE, SOFT, FONT_NAME, FORMATS, STATUS, tone, statusTone, fmtDate, safeName, money, inlineRuns, plain, parseMarkdown, plan, specsFor, specTable, heatTone, renderSpec, asset, b64, builders: {} };
 
   async function build(g) {
     const fmt = FORMATS[g.format] ? g.format : 'docx';
     for (const src of LIBS[fmt]) await loadScript(src);
-    const P = plan(g);
-    const [logo, mark, client] = await Promise.all([asset('brand/full-light.png'), asset('brand/mark-512.png'), clientLogo(g.meta)]);
-    const blob = await ex.builders[fmt]({ plan: P, logo, mark, client });
-    return { blob, filename: `${safeName(g.title)}.${FORMATS[fmt].ext}`, format: fmt };
+    const brand = g.brand || null;
+    const restore = brand ? applyBrand(brand) : null;
+    try {
+      const P = plan(g);
+      let logo, mark, client;
+      if (brand) {
+        const bl = await brandLogo(brand.logo);
+        logo = bl; mark = bl; client = bl ? null : await clientLogo(g.meta);
+      } else [logo, mark, client] = await Promise.all([asset('brand/full-light.png'), asset('brand/mark-512.png'), clientLogo(g.meta)]);
+      const blob = await ex.builders[fmt]({ plan: P, logo, mark, client });
+      return { blob, filename: `${safeName(g.title)}.${FORMATS[fmt].ext}`, format: fmt };
+    } finally { if (restore) restore(); }
   }
   function save(blob, filename) {
     const a = document.createElement('a');

@@ -6,9 +6,10 @@
   const X = window.PM.exporter, T = X.T;
   const SW = 13.333, SH = 7.5, MX = 0.55, CWI = SW - 2 * MX; // slide width and height, side margin, content width
   const TOP = 1.9, BOTTOM = 6.85;                            // content area
-  const F = X.FONT_NAME;
+  let F = X.FONT_NAME, FH = X.FONT_NAME;
 
   async function buildDeck({ plan, logo, mark, client }) {
+    F = X.FONT_NAME; FH = X.HEAD_FONT || F;
     const meta = plan.meta;
     const pptx = new window.PptxGenJS();
     pptx.layout = 'LAYOUT_WIDE';
@@ -21,9 +22,9 @@
     const lay = plan.layout || X.DEFAULT_LAYOUT;
     const POSX = { left: MX, center: SW / 2, right: SW - MX };
     const hdr = [], ftr = [];
-    const LW_ = 1.8;
+    const LW_ = logo ? Math.min(1.8, (0.5 * logo.w) / logo.h) : 1.8; // wide logos use the full width, square ones stay within the header height
     const lx = lay.logo.header === 'left' ? MX : lay.logo.header === 'center' ? SW / 2 - LW_ / 2 : SW - MX - LW_;
-    if (lay.logo.header !== 'hidden') hdr.push({ image: { x: lx, y: 0.28, w: LW_, h: lh(LW_, logo), data: png(logo) } });
+    if (logo && lay.logo.header !== 'hidden') hdr.push({ image: { x: lx, y: 0.28, w: LW_, h: lh(LW_, logo), data: png(logo) } });
     for (const k of ['left', 'center', 'right']) {
       const txt = X.fillTokens(lay.header[k], plan).replace(/\{\{\s*pages?\s*\}\}/g, '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 2);
       if (!txt.length) continue;
@@ -64,17 +65,21 @@
       s.addShape(SH_.rect, { x: px, y: 0, w: SW - px, h: SH, fill: { color: T.primary }, line: { color: T.primary, width: 0 } });
       s.addShape(SH_.ellipse, { x: px + 2.6, y: -1.2, w: 3.6, h: 3.6, fill: { color: T.primary600, transparency: 55 }, line: { color: T.primary600, width: 0, transparency: 100 } });
       s.addShape(SH_.ellipse, { x: px - 1.3, y: 5.2, w: 3.2, h: 3.2, fill: { color: T.primary600, transparency: 55 }, line: { color: T.primary600, width: 0, transparency: 100 } });
-      s.addShape(SH_.roundRect, { x: px + 1.35, y: 1.65, w: 2.4, h: 2.4, fill: { color: T.surface }, line: { color: T.surface, width: 0 }, rectRadius: 0.35 });
-      s.addImage({ data: png(mark), x: px + 1.55, y: 1.85, w: 2.0, h: 2.0, altText: 'Project Manager AI mark' });
+      if (mark) {
+        s.addShape(SH_.roundRect, { x: px + 1.35, y: 1.65, w: 2.4, h: 2.4, fill: { color: T.surface }, line: { color: T.surface, width: 0 }, rectRadius: 0.35 });
+        // a client logo keeps its own proportions inside the white square
+        const k = Math.min(2.0 / mark.w, 2.0 / mark.h);
+        s.addImage({ data: png(mark), x: px + 2.55 - (mark.w * k) / 2, y: 2.85 - (mark.h * k) / 2, w: mark.w * k, h: mark.h * k, altText: `${plan.brandName || 'Project Manager AI'} mark` });
+      }
       if (client) {
         const bw = 3.4, bh = 1.0, bx = px + (SW - px - bw) / 2, by = 5.35;
         s.addShape(SH_.roundRect, { x: bx, y: by, w: bw, h: bh, fill: { color: T.surface }, line: { color: T.surface, width: 0 }, rectRadius: 0.15 });
         const r = Math.min((bw - 0.4) / client.w, (bh - 0.3) / client.h);
         s.addImage({ data: png(client), x: bx + (bw - client.w * r) / 2, y: by + (bh - client.h * r) / 2, w: client.w * r, h: client.h * r, altText: `${meta.client || 'Client'} logo` });
       }
-      if (lay.logo.cover !== 'hidden') s.addImage({ data: png(logo), x: lay.logo.cover === 'left' ? 0.7 : lay.logo.cover === 'center' ? 2.9 : 5.3, y: 0.65, w: 2.7, h: lh(2.7, logo), altText: 'Project Manager AI logo' });
+      if (logo && lay.logo.cover !== 'hidden') s.addImage({ data: png(logo), x: lay.logo.cover === 'left' ? 0.7 : lay.logo.cover === 'center' ? 4.35 - Math.min(2.7, (0.95 * logo.w) / logo.h) / 2 : 8.0 - Math.min(2.7, (0.95 * logo.w) / logo.h), y: 0.65, w: Math.min(2.7, (0.95 * logo.w) / logo.h), h: lh(Math.min(2.7, (0.95 * logo.w) / logo.h), logo), altText: 'Project Manager AI logo' });
       s.addText(plan.typeTitle, { x: 0.7, y: 2.1, w: 7.3, h: 0.4, fontFace: F, fontSize: 16, bold: true, color: T.primary, margin: 0 });
-      s.addText(plan.title, { x: 0.7, y: 2.55, w: 7.3, h: 1.7, fontFace: F, fontSize: 38, bold: true, color: T.text, valign: 'top', margin: 0, fit: 'shrink' });
+      s.addText(plan.title, { x: 0.7, y: 2.55, w: 7.3, h: 1.7, fontFace: FH, fontSize: 38, bold: true, color: T.text, valign: 'top', margin: 0, fit: 'shrink' });
       s.addShape(SH_.rect, { x: 0.7, y: 4.4, w: 1.2, h: 0.07, fill: { color: T.primary }, line: { color: T.primary, width: 0 } });
       const facts = [['Client', meta.client], ['Project', meta.project], ['Project code', meta.code], ['Document date', plan.date], ['Prepared for', meta.audience], ['Prepared by', meta.pm]].filter((r) => r[1]);
       facts.forEach(([k, v], i) => {
@@ -86,7 +91,7 @@
 
     // ----- shared pieces -----
     const slideTitle = (s, text) => {
-      s.addText(text, { x: MX, y: 0.98, w: CWI, h: 0.6, fontFace: F, fontSize: 26, bold: true, color: T.text, valign: 'middle', margin: 0, fit: 'shrink' });
+      s.addText(text, { x: MX, y: 0.98, w: CWI, h: 0.6, fontFace: FH, fontSize: 26, bold: true, color: T.text, valign: 'middle', margin: 0, fit: 'shrink' });
       s.addShape(SH_.rect, { x: MX, y: 1.62, w: 0.9, h: 0.06, fill: { color: T.primary }, line: { color: T.primary, width: 0 } });
     };
     const card = (s, x, y, w, h) => s.addShape(SH_.roundRect, { x, y, w, h, fill: { color: T.surface }, line: { color: T.border, width: 1 }, rectRadius: 0.1 });
@@ -294,6 +299,7 @@
   // Right side: brief, completion and status, reasons for delay, achievements, next steps and decisions.
   // Everything is a native shape, text box or table, so the slide stays editable in PowerPoint.
   async function buildOnePager({ plan, logo, client }) {
+    F = X.FONT_NAME; FH = X.HEAD_FONT || F;
     const o = plan.onepager, meta = plan.meta, info = o.info;
     const pptx = new window.PptxGenJS();
     pptx.layout = 'LAYOUT_WIDE';
@@ -326,10 +332,10 @@
     const HEALTH = { done: 'Completed', ok: 'On track', warn: 'Timeline at risk', bad: 'Off track', idle: 'Not started' };
 
     // ----- header -----
-    s.addText(meta.project || plan.title, { x: M, y: 0.22, w: 8.2, h: 0.5, fontFace: F, fontSize: 24, bold: true, color: T.primary, valign: 'middle', margin: 0, fit: 'shrink' });
+    s.addText(meta.project || plan.title, { x: M, y: 0.22, w: 8.2, h: 0.5, fontFace: FH, fontSize: 24, bold: true, color: T.primary, valign: 'middle', margin: 0, fit: 'shrink' });
     s.addText('Weekly project status', { x: M, y: 0.72, w: 8.2, h: 0.26, fontFace: F, fontSize: 12, color: T.muted, valign: 'middle', margin: 0 });
-    const lw = 2.0; let rx = SW - M - lw;
-    s.addImage({ data: png(logo), x: rx, y: 0.3, w: lw, h: (lw * logo.h) / logo.w, altText: 'Project Manager AI logo' });
+    const lw = logo ? Math.min(2.0, (0.55 * logo.w) / logo.h) : 0; let rx = SW - M - lw;
+    if (logo) s.addImage({ data: png(logo), x: rx, y: 0.3, w: lw, h: (lw * logo.h) / logo.w, altText: `${plan.brandName || 'Project Manager AI'} logo` });
     if (client) {
       const r = Math.min(1.3 / client.w, 0.5 / client.h), cw = client.w * r, ch = client.h * r;
       s.addImage({ data: png(client), x: rx - 0.25 - cw, y: 0.22 + (0.56 - ch) / 2, w: cw, h: ch, altText: `${meta.client || 'Client'} logo` });
