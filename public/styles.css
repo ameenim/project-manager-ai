@@ -1155,3 +1155,17 @@ body.gt-dnd, body.gt-dnd * { cursor: grabbing !important; user-select: none; }
 .lg-t td:nth-child(7) .chip { display: block; width: fit-content; margin-top: 2px; } .lg-item { max-width: 340px; min-width: 220px; } .lg-acts { min-width: 0; width: 1%; }
 .lg-t th:last-child, .lg-t td.lg-acts { position: sticky; inset-inline-end: 0; background: var(--surface); box-shadow: -1px 0 0 var(--border); } .lg-t th:last-child { background: var(--surface-2); } .lg-t tr:hover td.lg-acts { background: var(--surface-2); }
 .lg-acts .row { flex-wrap: nowrap; }
+
+/* Trends dashboards */
+.tr-chart { max-height: 240px; }
+.tr-line { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; stroke: var(--c1); }
+.tr-line.ok { stroke: var(--success); } .tr-line.bad { stroke: var(--danger); } .tr-line.c1 { stroke: var(--c1); } .tr-line.c2 { stroke: var(--c2); }
+.tr-line.gap { stroke-dasharray: 4 4; opacity: .7; }
+.tr-dot { stroke: var(--surface); stroke-width: 1.5; fill: var(--c1); } .tr-dot.ok { fill: var(--success); } .tr-dot.bad { fill: var(--danger); } .tr-dot.c2 { fill: var(--c2); }
+.tr-ref { stroke: var(--faint); stroke-width: 1; stroke-dasharray: 3 3; } .viz .tr-ref-lab { font-size: var(--fs-micro); }
+.tr-hit { fill: transparent; } .tr-hit:hover { fill: var(--primary-soft); opacity: .5; }
+.cb .hit { fill: transparent; } .cb:hover .hit { fill: var(--primary-soft); opacity: .5; }
+.kd { font-size: var(--fs-small); font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; } .kd.good { color: var(--success); } .kd.bad { color: var(--danger); } .kd .muted { font-weight: 400; }
+.tr-note .banner { margin-bottom: 14px; }
+.page-head .seg { margin-inline-start: auto; }
+@media (max-width: 600px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

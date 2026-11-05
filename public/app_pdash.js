@@ -66,7 +66,7 @@
   }
 
   // side panel: look at or work on any project without leaving the page
-  const PEEK_TABS = [['overview', 'chart'], ['schedule', 'cal'], ['review', 'check'], ['inbox', 'inbox'], ['reports', 'spark']];
+  const PEEK_TABS = [['overview', 'chart'], ['schedule', 'cal'], ['trends', 'trend'], ['review', 'check'], ['inbox', 'inbox'], ['reports', 'spark']];
   let drawer = null;
   async function peek(pid, tab) {
     if (tab === 'attention') tab = 'review';

@@ -70,6 +70,17 @@ const MIGRATIONS = [
     expires_at TIMESTAMPTZ NOT NULL
   );
   `,
+  // 3: daily snapshots of each project's key figures, the history behind the trends dashboards
+  `
+  CREATE TABLE IF NOT EXISTS project_snapshots (
+    project_id BIGINT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    snap_date DATE NOT NULL,
+    figures JSONB NOT NULL,
+    taken_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (project_id, snap_date)
+  );
+  CREATE INDEX IF NOT EXISTS snapshots_date_idx ON project_snapshots(snap_date);
+  `,
 ];
 
 async function openPg(url) {
@@ -112,7 +123,7 @@ async function prepareSchema(db, { managedProduction = false } = {}) {
   if (managedProduction) {
     // Replit Publish owns production DDL. Its schema copy need not include the
     // development migration-history rows, so do not replay migrations here.
-    const required = ['users', 'sessions', 'projects', 'project_members', 'project_files', 'app_secrets', 'oauth_states', 'schema_migrations', 'id_blocks'];
+    const required = ['users', 'sessions', 'projects', 'project_members', 'project_files', 'app_secrets', 'oauth_states', 'project_snapshots', 'schema_migrations', 'id_blocks'];
     const result = await db.query(
       "SELECT name FROM unnest($1::text[]) AS required(name) WHERE to_regclass('public.' || name) IS NULL",
       [required],
