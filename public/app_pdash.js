@@ -381,6 +381,7 @@
   const PORDER = ['pkpi', 'pradar', 'pstatus', 'pdecide', 'pactivity', 'pscurve', 'pcritical', 'pphases', 'pcash', 'ppay', 'pcum', 'pdeliv', 'powners'];
 
   // ================= the project overview tab =================
+  PM.pdash = { widgets: PW, order: PORDER };
   PM.views.tab_overview = async function (root, p, q, token, opts) {
     opts = opts || {};
     const nav = opts.nav || ((tab) => { location.hash = `#/p/${p.id}/${tab}`; });

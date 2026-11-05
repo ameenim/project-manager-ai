@@ -43,6 +43,12 @@ Sign up and sign in use the server. Passwords are hashed with scrypt, sessions a
 
 A person only ever sees projects they belong to. The manager adds people by email from the project Settings screen (the person must already have an account). The last manager of a project cannot be removed.
 
+## Widget marketplace
+
+The Widgets screen lets each project manager add or remove widgets on the portfolio overview and on every project overview. Widgets are grouped (overview, schedule, financials, risk, delivery, team, trends, other), can be searched and filtered by group, source and rating, and can be previewed with the person's own project data before they are added. The Layouts button on an overview saves the shown widgets, their order and size under a name.
+
+The widget builder creates a custom widget from a form. A widget is plain data (a spec with a dataset, filters and one of number, bars, columns, donut or table), never code, so a published widget can only read the projects of the person who runs it. The same file `public/widgetspec.js` validates a spec on the server and draws it in the browser. Publishing copies the draft to what everyone runs, so people who already added a widget change only when its author publishes again. Other project managers rate a widget from 1 to 5 stars with an optional comment after adding it. The marketplace keeps four tables (`widgets`, `widget_ratings`, `widget_installs`, `dash_layouts`, migration 5). On Replit the Publish step applies them to the production database.
+
 ## Saved work
 
 Every change is saved to Postgres before the server answers, so a refresh, a new device or a server restart never loses work. Nothing is removed automatically. A project is deleted only when its project manager deletes it. If the server restarts while a document is being analyzed, the project stays and the Review tab offers Reanalyze.

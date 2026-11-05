@@ -242,6 +242,9 @@
   const planned = (p) => (p.planned != null ? `· ${t('planned')} ${p.planned}%` : '');
   const DEFAULT_ORDER = ['kpi', 'radar', 'schedule', 'health', 'deliverables', 'payments', 'progress', 'workload', 'portfolio', 'payments_list', 'overdue', 'activity'];
   const SIZES = ['s', 'm', 'l'];
+  // A built in widget names its title with a translation key. A custom widget carries its own text (label), so a title
+  // someone typed can never be mistaken for a key.
+  const wlabel = (w) => (w.label != null ? w.label : t(w.title));
 
   // ---------------- layout storage ----------------
   function fullLayout() {
@@ -268,6 +271,19 @@
     saveTimer = setTimeout(() => api('PUT', '/api/me', { dash_layout: txt }).catch(() => {}), 350);
   }
 
+  // Read and write one overview's layout from outside the grid (the marketplace adds and removes widgets, saved layouts apply).
+  const layoutApi = {
+    read(key) { const F = fullLayout(), L = key ? F[key] || {} : F; return { order: (L.order || []).slice(), hidden: (L.hidden || []).slice(), size: { ...(L.size || {}) } }; },
+    async write(key, part) {
+      const F = fullLayout(), p = { order: part.order, hidden: part.hidden, size: part.size };
+      if (key) F[key] = p; else Object.assign(F, p);
+      const txt = JSON.stringify(F);
+      if (S.user) S.user.dash_layout = txt;
+      clearTimeout(saveTimer);
+      await api('PUT', '/api/me', { dash_layout: txt });
+    },
+  };
+
   // ---------------- export ----------------
   function fileOut(name, blob, text) {
     const a = document.createElement('a');
@@ -279,7 +295,7 @@
   const slug = (s) => String(s).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '');
   function exportCsv(id, info, cfg) {
     const text = '﻿' + csvOf(info.csv());
-    fileOut(`${slug(t(cfg.widgets[id].title))}.csv`, new Blob([text], { type: 'text/csv;charset=utf-8' }), text);
+    fileOut(`${slug(wlabel(cfg.widgets[id]))}.csv`, new Blob([text], { type: 'text/csv;charset=utf-8' }), text);
   }
   const STYLE_PROPS = ['fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-linecap', 'opacity', 'fill-opacity', 'font-size', 'font-family', 'font-weight', 'text-anchor', 'letter-spacing'];
   function exportPng(id, body, cfg) {
@@ -300,9 +316,9 @@
       const cv = document.createElement('canvas'); cv.width = (w + pad * 2) * scale; cv.height = (h + pad * 2 + head) * scale;
       const c = cv.getContext('2d'); c.scale(scale, scale);
       c.fillStyle = surface; c.fillRect(0, 0, cv.width, cv.height);
-      c.fillStyle = ink; c.font = '600 20px sans-serif'; c.fillText(t(cfg.widgets[id].title), pad, pad + 16);
+      c.fillStyle = ink; c.font = '600 20px sans-serif'; c.fillText(wlabel(cfg.widgets[id]), pad, pad + 16);
       c.drawImage(img, pad, pad + head, w, h);
-      cv.toBlob((b) => fileOut(`${slug(t(cfg.widgets[id].title))}.png`, b), 'image/png');
+      cv.toBlob((b) => fileOut(`${slug(wlabel(cfg.widgets[id]))}.png`, b), 'image/png');
     };
     img.onerror = () => toast(t('err_download'), 'err');
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(clone));
@@ -344,6 +360,8 @@
   const MAIN = { widgets: WIDGETS, order: DEFAULT_ORDER, key: null, currencyToggle: true, fetch: () => api('GET', '/api/dashboard') };
   function mount(host, d, cfg) {
     cfg = cfg || MAIN;
+    const scope = cfg.key ? 'project' : 'portfolio';
+    if (PM.widgets) cfg = PM.widgets.extend(cfg, d, scope); // widgets the person added from the marketplace
     const animate = (cfg.always || firstPaint) && !reduced();
     if (!cfg.always) firstPaint = false;
     let L = loadLayout(cfg);
@@ -351,7 +369,7 @@
     const modeNow = () => (cfg.currencyToggle ? L.cur : 'native');
     const infos = {};
 
-    host.innerHTML = `<div class="dw-bar"><div class="dw-bar-l"><span class="muted small" id="dwCount"></span></div><div class="row" style="gap:8px">${cfg.currencyToggle ? `<div class="seg" id="dwCur" role="group" aria-label="${esc(t('fx_display'))}" title="${esc(t('fx_note', { r: PM.fx.rateNote('AED') + ', ' + PM.fx.rateNote('SAR') }))}">${PM.fx.choices.map((c) => `<button data-cur="${c}" aria-pressed="${c === L.cur}" class="${c === L.cur ? 'on' : ''}">${c}</button>`).join('')}</div>` : ''}<button class="btn sm ghost" id="dwReset" hidden>${t('dash_reset')}</button><button class="btn sm" id="dwCustom" aria-expanded="false">${icon('cols')}${t('dash_customize')}</button></div></div>
+    host.innerHTML = `<div class="dw-bar"><div class="dw-bar-l"><span class="muted small" id="dwCount"></span></div><div class="row" style="gap:8px">${cfg.currencyToggle ? `<div class="seg" id="dwCur" role="group" aria-label="${esc(t('fx_display'))}" title="${esc(t('fx_note', { r: PM.fx.rateNote('AED') + ', ' + PM.fx.rateNote('SAR') }))}">${PM.fx.choices.map((c) => `<button data-cur="${c}" aria-pressed="${c === L.cur}" class="${c === L.cur ? 'on' : ''}">${c}</button>`).join('')}</div>` : ''}<button class="btn sm ghost" id="dwReset" hidden>${t('dash_reset')}</button>${PM.widgets ? `<a class="btn sm" id="dwAdd" href="#/widgets?scope=${scope}">${icon('plus')}${t('wm_add_widgets')}</a><button class="btn sm" id="dwLayouts" type="button">${icon('list')}${t('wl_layouts')}</button>` : ''}<button class="btn sm" id="dwCustom" aria-expanded="false">${icon('cols')}${t('dash_customize')}</button></div></div>
       <div class="dw-panel" id="dwPanel" aria-hidden="true"><div><div class="dw-panel-in" id="dwChips"></div></div></div>
       <div class="dw-grid ${animate ? 'anim' : ''}" id="dwGrid"></div>`;
     const grid = $('#dwGrid', host);
@@ -416,7 +434,7 @@
       const w = cfg.widgets[id];
       const el = document.createElement('section');
       el.className = `dw sz-${sizeOf(id)}`; el.dataset.w = id; el.style.setProperty('--i', i);
-      el.innerHTML = `<header class="dw-h"><button class="dw-grip" aria-label="${esc(t('dash_move'))}" title="${esc(t('dash_drag_hint'))}">${icon('grip')}</button><h3>${esc(t(w.title))}</h3><span class="grow"></span><button class="dw-more btn ghost icon" aria-haspopup="menu" aria-label="${esc(t('dash_widget_menu'))}">${icon('more')}</button></header><div class="dw-body"></div>`;
+      el.innerHTML = `<header class="dw-h"><button class="dw-grip" aria-label="${esc(t('dash_move'))}" title="${esc(t('dash_drag_hint'))}">${icon('grip')}</button><h3>${esc(wlabel(w))}</h3><span class="grow"></span><button class="dw-more btn ghost icon" aria-haspopup="menu" aria-label="${esc(t('dash_widget_menu'))}">${icon('more')}</button></header><div class="dw-body"></div>`;
       const body = $('.dw-body', el);
       const span = { l: 12, m: 6, s: 4 }[sizeOf(id)] || 12, gw = grid.clientWidth || 1100, vw = innerWidth, cols = vw <= 860 ? 1 : vw <= 1180 && span === 4 ? 2 : 0;
       const sp = cols === 1 ? 12 : cols === 2 ? 6 : span;
@@ -438,7 +456,7 @@
       $$('[data-newproj]', grid).forEach((b) => (b.onclick = PM.newProjectDialog));
     }
     function chips() {
-      $('#dwChips', host).innerHTML = L.order.map((id) => { const on = !L.hidden.includes(id); return `<button class="dw-chip ${on ? 'on' : ''}" data-toggle="${id}" aria-pressed="${on}">${icon(on ? 'eye' : 'eyeoff')}${esc(t(cfg.widgets[id].title))}</button>`; }).join('');
+      $('#dwChips', host).innerHTML = L.order.map((id) => { const on = !L.hidden.includes(id); return `<button class="dw-chip ${on ? 'on' : ''}" data-toggle="${id}" aria-pressed="${on}">${icon(on ? 'eye' : 'eyeoff')}${esc(wlabel(cfg.widgets[id]))}</button>`; }).join('');
     }
     const persist = () => saveLayout(L, cfg);
 
@@ -468,6 +486,8 @@
     const curBox = $('#dwCur', host);
     if (curBox) curBox.onclick = (e) => { const b = e.target.closest('[data-cur]'); if (!b || b.dataset.cur === L.cur) return; L.cur = b.dataset.cur; $$('#dwCur button', host).forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); }); persist(); draw(); };
     $('#dwReset', host).onclick = () => { L = { order: cfg.order.slice(), hidden: [], size: {}, cur: L.cur }; persist(); draw(); };
+    const layoutsBtn = $('#dwLayouts', host);
+    if (layoutsBtn) layoutsBtn.onclick = () => PM.widgets.layoutsDialog({ scope, key: cfg.key, current: () => ({ order: L.order.slice(), hidden: L.hidden.slice(), size: { ...L.size } }) });
 
     // ----- widget menu -----
     let menu = null;
@@ -480,9 +500,10 @@
       const idx = visible().indexOf(id), vis = visible();
       const item = (act, label, ic, dis) => `<button role="menuitem" data-act="${act}" ${dis ? 'disabled' : ''}>${icon(ic)}${esc(label)}</button>`;
       menu = document.createElement('div'); menu.className = 'dw-menu'; menu.setAttribute('role', 'menu');
-      menu.innerHTML = item('csv', t('dash_export_csv'), 'dl') + (info.chart ? item('png', t('dash_export_png'), 'img') : '') + '<hr>' +
+      const cw = cfg.widgets[id].community;
+      menu.innerHTML = (cw ? `<div class="dw-menu-note small muted">${esc(t('wm_by', { name: cw.author }))}${cw.version > 1 ? ` · ${esc(t('wm_version', { n: cw.version }))}` : ''}</div>` : '') + item('csv', t('dash_export_csv'), 'dl') + (info.chart ? item('png', t('dash_export_png'), 'img') : '') + '<hr>' +
         item('up', t('dash_move_earlier'), 'up', idx <= 0) + item('down', t('dash_move_later'), 'down', idx >= vis.length - 1) + '<hr>' +
-        `<div class="dw-sizes" role="group" aria-label="${esc(t('dash_size'))}">${SIZES.map((s) => `<button data-size="${s}" class="${sizeOf(id) === s ? 'on' : ''}" aria-pressed="${sizeOf(id) === s}">${t('dash_size_' + s)}</button>`).join('')}</div><hr>` + item('hide', t('dash_hide'), 'eyeoff');
+        `<div class="dw-sizes" role="group" aria-label="${esc(t('dash_size'))}">${SIZES.map((s) => `<button data-size="${s}" class="${sizeOf(id) === s ? 'on' : ''}" aria-pressed="${sizeOf(id) === s}">${t('dash_size_' + s)}</button>`).join('')}</div><hr>` + item('hide', t('dash_hide'), 'eyeoff') + (cw ? item('remove', t('wm_remove_widget'), 'trash') : '');
       document.body.appendChild(menu);
       const r = btn.getBoundingClientRect(), mw = menu.offsetWidth;
       const left = Math.min(Math.max(8, S.lang === 'ar' ? r.left : r.right - mw), innerWidth - mw - 8);
@@ -494,7 +515,13 @@
         closeMenu();
         if (a.dataset.act === 'csv') exportCsv(id, info, cfg);
         else if (a.dataset.act === 'png') exportPng(id, $('.dw-body', el), cfg);
-        else if (a.dataset.act === 'hide') { L.hidden.push(id); persist(); flip(() => { el.remove(); }); chips(); $('#dwCount', host).textContent = t('dash_hidden_n', { n: L.hidden.length }); $('#dwReset', host).hidden = false; }
+        else if (a.dataset.act === 'remove') {
+          PM.widgets.removeFromOverview({ scope, key: cfg.key, id, cw, L, undo: () => PM.vt(PM.route) }).then((ok) => {
+            if (!ok) return;
+            delete cfg.widgets[id]; L.order = L.order.filter((x) => x !== id); L.hidden = L.hidden.filter((x) => x !== id); delete L.size[id];
+            persist(); draw();
+          });
+        } else if (a.dataset.act === 'hide') { L.hidden.push(id); persist(); flip(() => { el.remove(); }); chips(); $('#dwCount', host).textContent = t('dash_hidden_n', { n: L.hidden.length }); $('#dwReset', host).hidden = false; }
         else { // move earlier or later among visible widgets
           const v = visible(), i = v.indexOf(id), j = a.dataset.act === 'up' ? i - 1 : i + 1;
           if (j < 0 || j >= v.length) return;
@@ -642,5 +669,5 @@
     if (animate) setTimeout(() => grid.classList.remove('anim'), 2200);
   }
 
-  PM.dash = { mount, main: MAIN, h: { listRow, projLink, stamp, width: () => CW, tipAttr: tip, hbars, donut, legend, empty, tip, num, dnum, ymd, trunc, countUp, csvOf, reduced, WIDGETS } };
+  PM.dash = { mount, main: MAIN, layout: layoutApi, h: { setWidth: (n) => { CW = n; }, bindTips, listRow, projLink, stamp, width: () => CW, tipAttr: tip, hbars, donut, legend, empty, tip, num, dnum, ymd, trunc, countUp, csvOf, reduced, WIDGETS } };
 })();

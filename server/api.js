@@ -49,7 +49,7 @@ function loadBundles() {
     return res(404, { error: 'Not found' });
   };
   vm.createContext(win);
-  for (const [dir, f] of [[PUB, 'engine.js'], [PUB, 'visuals.js'], [__dirname, 'seed.js'], [__dirname, 'extract2.js']]) vm.runInContext(fs.readFileSync(path.join(dir, f), 'utf8'), win, { filename: f });
+  for (const [dir, f] of [[PUB, 'engine.js'], [PUB, 'visuals.js'], [PUB, 'widgetspec.js'], [__dirname, 'seed.js'], [__dirname, 'extract2.js']]) vm.runInContext(fs.readFileSync(path.join(dir, f), 'utf8'), win, { filename: f });
   return win;
 }
 const win = loadBundles();
@@ -944,7 +944,9 @@ module.exports = function createApi(store, auth, connectors) {
   });
   // the overview carries a 30 day trend so its trend widgets draw from the same response
   const activeList = () => DB.order.map((id) => DB.projects[id]).filter((P) => P.p.status !== 'archived');
-  on('GET', '/api/dashboard', async () => ({ ...dashboard(), trends: await trendsFor(activeList(), 30) }));
+  // the widget marketplace. The overviews also carry the custom widgets the person added and the data those read.
+  const WIDGETS = require('./widgets')({ on, ctx, err, store, WS: win.__WidgetSpec, S, rawProject, stats, TODAY, P_, activeList });
+  on('GET', '/api/dashboard', async () => ({ ...dashboard(), trends: await trendsFor(activeList(), 30), ...(await WIDGETS.extras('portfolio', activeList())) }));
   // one project's dashboard: radar, schedule and critical path, deliverables, payments and cash flow
   on('GET', '/api/projects/(\\d+)/dashboard', async (mm) => {
     const P = P_(mm[1]), raw = rawProject(P), st = stats(P);
@@ -953,7 +955,7 @@ module.exports = function createApi(store, auth, connectors) {
     const entry = { p: { ...clone(P.p), id: P.id }, stats: st, items: items.filter((i) => i.status !== 'ignored' && ['risk', 'milestone', 'deliverable'].includes(i.kind)), rows: S.progressMetrics(P.tasks, raw, TODAY()).rows, sched };
     const audit = P.audit.slice(0, 12).map((a) => ({ ...a, detail: a.detail || {} }));
     return { project: { ...projectView(P) }, radar: win.__Radar.buildRadar([entry], TODAY()), analytics: win.__Analytics.buildAnalytics([entry], TODAY()),
-      ...win.__ProjDash.buildProjectDash({ project: raw, tasks: sched, items, inbox: P.inbox, audit, today: TODAY() }), trends: await trendsFor([P], 30) };
+      ...win.__ProjDash.buildProjectDash({ project: raw, tasks: sched, items, inbox: P.inbox, audit, today: TODAY() }), trends: await trendsFor([P], 30), ...(await WIDGETS.extras('project', [P])) };
   });
   // trends over time, drawn only from the daily snapshots. days is one of 7, 14, 30, 90, 180, 365.
   on('GET', '/api/trends', async (m, q) => trendsFor(DB.order.map((id) => DB.projects[id]).filter((P) => P.p.status !== 'archived'), periodOf(q.days)));

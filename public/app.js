@@ -11,6 +11,7 @@
     return s;
   };
   const ICONS = {
+    star: '<polygon points="12 2.5 14.9 8.7 21.7 9.5 16.6 14.1 18 20.8 12 17.4 6 20.8 7.4 14.1 2.3 9.5 9.1 8.7 12 2.5"/>',
     globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
     grip: '<circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/>', more: '<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>', eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>', eyeoff: '<path d="M3 3l18 18M10.6 5.1A9.6 9.6 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4M6.5 6.6A17 17 0 0 0 2 12s3.5 7 10 7a9.7 9.7 0 0 0 4-.9"/>', img: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m21 16-5-5-9 9"/>',
     target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/>',
@@ -98,7 +99,7 @@
       close(v) { if (ov.isConnected) { ov.remove(); document.removeEventListener('keydown', onKey); onClose && onClose(v); } },
       setBody(h) { $('.modal-body', ov).innerHTML = h; }, setFooter(h) { let f = $('.modal-foot', ov); if (!f) { f = document.createElement('div'); f.className = 'modal-foot'; $('.modal', ov).appendChild(f); } f.innerHTML = h; },
     };
-    const onKey = (e) => { if (e.key === 'Escape' && ov.parentNode && ov.parentNode.lastElementChild === ov) api2.close(); };
+    const onKey = (e) => { if (e.key === 'Escape' && ov.isConnected && [...document.querySelectorAll('.overlay')].pop() === ov) api2.close(); };
     document.addEventListener('keydown', onKey);
     ov.addEventListener('mousedown', (e) => { if (e.target === ov && !noBackdropClose) api2.close(); });
     ov.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) api2.close(); });
@@ -204,7 +205,7 @@
   }
   function shell(active, content, projHead) {
     $('#app').innerHTML = `${PM.billing ? PM.billing.ribbon() : ''}<div class="shell"><aside class="sidebar"><div class="brand"><div class="logo">${PM.logo.mark()}</div><span class="grow">${t('app_name')}</span><button class="btn ghost icon sm" id="navHide" type="button" aria-label="${t('nav_hide')}" title="${t('nav_hide')}">${icon('chev_l')}</button></div>
-      <nav class="nav"><a href="#/" class="${active === 'dash' ? 'active' : ''}">${icon('home')}${t('nav_dashboard')}</a><div class="nav-fly" id="navFly"><a href="#/projects" class="${active === 'projects' ? 'active' : ''}" aria-haspopup="true" aria-expanded="false">${icon('folder')}<span class="grow">${t('nav_projects')}</span><span class="nav-caret">${icon('chev_r')}</span></a></div><a href="#/calendar" class="${active === 'calendar' ? 'active' : ''}">${icon('cal')}${t('nav_calendar')}</a><a href="#/billing" class="${active === 'billing' ? 'active' : ''}">${icon('coin')}${t('nav_billing')}</a></nav>
+      <nav class="nav"><a href="#/" class="${active === 'dash' ? 'active' : ''}">${icon('home')}${t('nav_dashboard')}</a><div class="nav-fly" id="navFly"><a href="#/projects" class="${active === 'projects' ? 'active' : ''}" aria-haspopup="true" aria-expanded="false">${icon('folder')}<span class="grow">${t('nav_projects')}</span><span class="nav-caret">${icon('chev_r')}</span></a></div><a href="#/calendar" class="${active === 'calendar' ? 'active' : ''}">${icon('cal')}${t('nav_calendar')}</a><a href="#/widgets" class="${active === 'widgets' ? 'active' : ''}">${icon('grid')}${t('nav_widgets')}</a><a href="#/billing" class="${active === 'billing' ? 'active' : ''}">${icon('coin')}${t('nav_billing')}</a></nav>
       <div class="spacer"></div>
       <div class="side-prefs">
         <div class="pref"><span class="pref-ic">${icon(S.theme === 'dark' ? 'moon' : 'sun')}</span><span class="grow">${t('dark_mode')}</span><button type="button" class="tgl ${S.theme === 'dark' ? 'on' : ''}" id="themeBtn" role="switch" aria-checked="${S.theme === 'dark'}" aria-label="${t('dark_mode')}" data-tip="${t('dark_mode')}"><i>${icon(S.theme === 'dark' ? 'moon' : 'sun')}</i></button></div>
@@ -414,6 +415,12 @@
     if (parts[0] === 'projects') { S.project = null; return PM.views.projects(); }
     if (parts[0] === 'trends') { location.hash = '#/'; return; }
     if (parts[0] === 'calendar') { S.project = null; return PM.views.calendar(); }
+    if (parts[0] === 'widgets') {
+      S.project = null;
+      if (parts[1] === 'new') return PM.views.widgetBuilder(null);
+      if (parts[1] && parts[2] === 'edit') return PM.views.widgetBuilder(Number(parts[1]));
+      return PM.views.widgets(new URLSearchParams(qs || ''));
+    }
     if (parts[0] === 'account') return PM.views.account();
     if (parts[0] === 'p' && parts[1]) return PM.projectView(Number(parts[1]), parts[2] && parts[2] !== 'trends' ? parts[2] : 'overview', new URLSearchParams(qs || ''));
     location.hash = '#/';

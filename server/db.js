@@ -123,6 +123,54 @@ const MIGRATIONS = [
   );
   CREATE INDEX IF NOT EXISTS snapshots_date_idx ON project_snapshots(snap_date);
   `,
+  // 5: the widget marketplace. A widget is plain data (a spec), never code. published_spec is what other people run, so
+  // editing a draft never changes a widget someone already added. Ratings are one per person. Installs record which
+  // overview (portfolio or project) a widget was added to. Saved layouts are named snapshots of an overview.
+  `
+  CREATE TABLE IF NOT EXISTS widgets (
+    id BIGINT PRIMARY KEY,
+    owner_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    grp TEXT NOT NULL,
+    spec JSONB NOT NULL,
+    published_spec JSONB,
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','published','unpublished')),
+    version INT NOT NULL DEFAULT 1,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    published_at TIMESTAMPTZ
+  );
+  CREATE INDEX IF NOT EXISTS widgets_status_idx ON widgets(status, published_at);
+  CREATE INDEX IF NOT EXISTS widgets_owner_idx ON widgets(owner_id);
+  CREATE TABLE IF NOT EXISTS widget_ratings (
+    widget_id BIGINT NOT NULL REFERENCES widgets(id) ON DELETE CASCADE,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    stars SMALLINT NOT NULL CHECK (stars BETWEEN 1 AND 5),
+    comment TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (widget_id, user_id)
+  );
+  CREATE TABLE IF NOT EXISTS widget_installs (
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    widget_id BIGINT NOT NULL REFERENCES widgets(id) ON DELETE CASCADE,
+    scope TEXT NOT NULL CHECK (scope IN ('portfolio','project')),
+    added_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, widget_id, scope)
+  );
+  CREATE INDEX IF NOT EXISTS widget_installs_widget_idx ON widget_installs(widget_id);
+  CREATE TABLE IF NOT EXISTS dash_layouts (
+    id BIGINT PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    scope TEXT NOT NULL CHECK (scope IN ('portfolio','project')),
+    name TEXT NOT NULL,
+    layout JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS dash_layouts_name_idx ON dash_layouts(user_id, scope, lower(name));
+  `,
 ];
 
 async function openPg(url) {
@@ -165,7 +213,7 @@ async function prepareSchema(db, { managedProduction = false } = {}) {
   if (managedProduction) {
     // Replit Publish owns production DDL. Its schema copy need not include the
     // development migration-history rows, so do not replay migrations here.
-    const required = ['users', 'sessions', 'projects', 'project_members', 'project_files', 'app_secrets', 'oauth_states', 'chat_threads', 'chat_messages', 'chat_log', 'project_snapshots', 'schema_migrations', 'id_blocks'];
+    const required = ['users', 'sessions', 'projects', 'project_members', 'project_files', 'app_secrets', 'oauth_states', 'chat_threads', 'chat_messages', 'chat_log', 'project_snapshots', 'widgets', 'widget_ratings', 'widget_installs', 'dash_layouts', 'schema_migrations', 'id_blocks'];
     const result = await db.query(
       "SELECT name FROM unnest($1::text[]) AS required(name) WHERE to_regclass('public.' || name) IS NULL",
       [required],
