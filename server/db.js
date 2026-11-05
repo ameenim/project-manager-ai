@@ -262,6 +262,7 @@ const MIGRATIONS = [
   );
   CREATE INDEX IF NOT EXISTS admin_audit_time_idx ON admin_audit(created_at);
   `,
+<<<<<<< HEAD
   // 7: how project managers use the product. One row per observed step (a screen opened, an action used, a repeated
   // click, a slow or failed call). It holds screen and action names only, never project content, and is purged after 90 days.
   `
@@ -278,6 +279,56 @@ const MIGRATIONS = [
   );
   CREATE INDEX IF NOT EXISTS usage_events_time_idx ON usage_events(created_at);
   CREATE INDEX IF NOT EXISTS usage_events_user_idx ON usage_events(user_id, created_at);
+=======
+  // 7: support tickets. A ticket is a problem report or an idea from a signed in person (or an automatic draft from a
+  // repeated server error). context is the sanitized debugging package, triage is the AI briefing for the super admin,
+  // fix is the state of the AI fix job. A report that matches an open ticket becomes a child of it (duplicate_of), so each
+  // person keeps their own words and sees the status of the main ticket. ticket_events is the timeline. visible says
+  // whether the reporter sees the entry.
+  `
+  CREATE SEQUENCE IF NOT EXISTS ticket_numbers;
+  CREATE TABLE IF NOT EXISTS tickets (
+    id BIGINT PRIMARY KEY,
+    number BIGINT NOT NULL UNIQUE DEFAULT nextval('ticket_numbers'),
+    reporter_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('bug','enhancement','question')),
+    source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('manual','auto_error')),
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'reported' CHECK (status IN ('reported','triaged','needs_info','fixing','needs_attention','fixed_dev','ready_publish','published','wont_fix','duplicate')),
+    severity TEXT NOT NULL DEFAULT 'medium' CHECK (severity IN ('low','medium','high','critical')),
+    fingerprint TEXT NOT NULL DEFAULT '',
+    duplicate_of BIGINT REFERENCES tickets(id) ON DELETE SET NULL,
+    occurrences INT NOT NULL DEFAULT 1,
+    context JSONB NOT NULL DEFAULT '{}'::jsonb,
+    triage JSONB NOT NULL DEFAULT '{}'::jsonb,
+    fix JSONB NOT NULL DEFAULT '{}'::jsonb,
+    fix_attempts INT NOT NULL DEFAULT 0,
+    reopened INT NOT NULL DEFAULT 0,
+    reporter_unread BOOLEAN NOT NULL DEFAULT false,
+    admin_unread BOOLEAN NOT NULL DEFAULT true,
+    confirmed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    closed_at TIMESTAMPTZ
+  );
+  CREATE INDEX IF NOT EXISTS tickets_reporter_idx ON tickets(reporter_id, updated_at);
+  CREATE INDEX IF NOT EXISTS tickets_status_idx ON tickets(status, updated_at);
+  CREATE INDEX IF NOT EXISTS tickets_fp_idx ON tickets(fingerprint);
+  CREATE INDEX IF NOT EXISTS tickets_dup_idx ON tickets(duplicate_of);
+  CREATE TABLE IF NOT EXISTS ticket_events (
+    id BIGINT PRIMARY KEY,
+    ticket_id BIGINT NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+    actor_kind TEXT NOT NULL CHECK (actor_kind IN ('reporter','admin','ai','system')),
+    actor_id BIGINT,
+    type TEXT NOT NULL,
+    message TEXT NOT NULL DEFAULT '',
+    detail JSONB NOT NULL DEFAULT '{}'::jsonb,
+    visible BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS ticket_events_ticket_idx ON ticket_events(ticket_id, id);
+>>>>>>> e92b19d (Add support tickets with AI triage and Fix it)
   `,
 ];
 
@@ -321,7 +372,7 @@ async function prepareSchema(db, { managedProduction = false } = {}) {
   if (managedProduction) {
     // Replit Publish owns production DDL. Its schema copy need not include the
     // development migration-history rows, so do not replay migrations here.
-    const required = ['users', 'sessions', 'projects', 'project_members', 'project_files', 'app_secrets', 'oauth_states', 'chat_threads', 'chat_messages', 'chat_log', 'project_snapshots', 'widgets', 'widget_ratings', 'widget_installs', 'dash_layouts', 'user_flags', 'app_config', 'subscriptions', 'payments', 'ai_usage', 'error_log', 'health_beats', 'admin_audit', 'schema_migrations', 'id_blocks'];
+    const required = ['users', 'sessions', 'projects', 'project_members', 'project_files', 'app_secrets', 'oauth_states', 'chat_threads', 'chat_messages', 'chat_log', 'project_snapshots', 'widgets', 'widget_ratings', 'widget_installs', 'dash_layouts', 'user_flags', 'app_config', 'subscriptions', 'payments', 'ai_usage', 'error_log', 'health_beats', 'admin_audit', 'tickets', 'ticket_events', 'schema_migrations', 'id_blocks'];
     const result = await db.query(
       "SELECT name FROM unnest($1::text[]) AS required(name) WHERE to_regclass('public.' || name) IS NULL",
       [required],

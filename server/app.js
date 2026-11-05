@@ -15,7 +15,11 @@ const { MODEL } = require('./claude');
 const { createChat } = require('./chat/chat');
 const { Ops } = require('./ops');
 const createAdmin = require('./admin');
+<<<<<<< HEAD
 const { createUsage } = require('./usage');
+=======
+const { Tickets } = require('./tickets');
+>>>>>>> e92b19d (Add support tickets with AI triage and Fix it)
 
 const ROOT = path.join(__dirname, '..', 'public');
 const PKG = require('../package.json');
@@ -100,8 +104,14 @@ async function createApp(opts = {}) {
   await ops.backfillSubscriptions();
   await ops.bootstrapSuperAdmins();
   if (opts.opsJobs !== false) ops.start();
+<<<<<<< HEAD
   const usage = createUsage({ db, store });
   const admin = createAdmin({ db, store, auth, ops, usage });
+=======
+  // Support tickets. opts.ticketAi and opts.ticketDispatcher let tests replace the Claude call and the GitHub dispatch.
+  const tickets = new Tickets({ db, store, ops, ai: opts.ticketAi, dispatcher: opts.ticketDispatcher, version: PKG.version });
+  const admin = createAdmin({ db, store, auth, ops, tickets });
+>>>>>>> e92b19d (Add support tickets with AI triage and Fix it)
   const connectors = new Connectors(db, opts.connectorOptions || {});
   const api = createApi(store, auth, connectors, ops);
   // The Project Chat. opts.chatModel lets tests replace the model with a scripted one.
@@ -167,11 +177,15 @@ async function createApp(opts = {}) {
       return json(res, 200, { ok: true });
     }
 
+    // the fix job calls these with a signature instead of a sign in
+    if (p.startsWith('/api/hooks/tickets/')) { await tickets.hook(req, res, url, { json, readBody, SECURITY }); return; }
+
     const token = bearer(req);
     const user = await auth.userForToken(token);
     if (!user) return json(res, 401, { error: 'Your session has expired. Sign in again.' });
     if (user.status === 'suspended') return json(res, 403, { error: 'This account is suspended. Contact support.' });
     ops.touchSeen(user.id);
+<<<<<<< HEAD
     // usage steps from the browser (screen names and action names only). Never fails the page that sends them.
     if (method === 'POST' && p === '/api/usage') {
       if (usageLimit(clientIp(req))) return json(res, 429, { error: 'Too many reports' });
@@ -179,8 +193,12 @@ async function createApp(opts = {}) {
       return json(res, 200, await usage.ingest(user, b));
     }
     if (await admin.route(req, res, url, user, { json, readBody, SECURITY })) return;
+=======
+    if (await admin.route(req, res, url, user, { json, readBody, SECURITY, origin })) return;
+>>>>>>> e92b19d (Add support tickets with AI triage and Fix it)
     if (!user.is_super && (await ops.config()).maintenance_mode && !/^\/api\/(me|billing)/.test(p)) return json(res, 503, { error: (await ops.config()).maintenance_message });
 
+    if (p.startsWith('/api/tickets') && (await tickets.route(req, res, url, user, { json, readBody, SECURITY }))) return;
     if (p.startsWith('/api/chat') && (await chat.route(req, res, url, user, { json, readBody, SECURITY }))) return;
 
     let body = null;
@@ -261,7 +279,7 @@ async function createApp(opts = {}) {
       return serveStatic(req, res, url);
     } catch (e) {
       const status = e.status && e.status >= 400 && e.status < 600 ? e.status : 500;
-      if (status >= 500 && !e.expose) { const id = crypto.randomBytes(4).toString('hex'); console.error(`[${id}] ${req.method} ${url.pathname}`, e); ops.logError({ kind: 'server', status, method: req.method, path: url.pathname, message: e.message, stack: e.stack, ref: id }); if (!res.headersSent) return json(res, 500, { error: `Something went wrong on the server (reference ${id}). Try again.` }); return res.end(); }
+      if (status >= 500 && !e.expose) { const id = crypto.randomBytes(4).toString('hex'); console.error(`[${id}] ${req.method} ${url.pathname}`, e); const rec = { kind: 'server', status, method: req.method, path: url.pathname, message: e.message, stack: e.stack, ref: id }; ops.logError(rec).then(() => tickets.noteServerError(rec)); if (!res.headersSent) return json(res, 500, { error: `Something went wrong on the server (reference ${id}). Try again.`, ref: id }); return res.end(); }
       if (!res.headersSent) return json(res, status, { error: e.message });
       res.end();
     }
@@ -275,10 +293,11 @@ async function createApp(opts = {}) {
     ops.stop();
     await new Promise((ok) => server.close(ok));
     await snapRun;
+    await tickets.idle();
     await store.flush();
     await db.close();
   }
-  return { server, store, db, auth, api, chat, ops, admin, close };
+  return { server, store, db, auth, api, chat, ops, admin, tickets, close };
 }
 
 module.exports = { createApp };

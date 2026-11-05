@@ -11,6 +11,7 @@
     return s;
   };
   const ICONS = {
+    life: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/><path d="M5.6 5.6l3.9 3.9M14.5 14.5l3.9 3.9M18.4 5.6l-3.9 3.9M9.5 14.5l-3.9 3.9"/>',
     expand: '<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>', shrink: '<path d="M14 10h6V4M10 14H4v6M20 4l-7 7M4 20l7-7"/>',
     star: '<polygon points="12 2.5 14.9 8.7 21.7 9.5 16.6 14.1 18 20.8 12 17.4 6 20.8 7.4 14.1 2.3 9.5 9.1 8.7 12 2.5"/>',
     globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
@@ -58,11 +59,12 @@
     else if (body !== undefined) { init.headers['content-type'] = 'application/json'; init.body = JSON.stringify(body); }
     let r;
     const t0 = performance.now();
-    try { r = await fetch(path, init); } catch { if (PM.track) PM.track.call(path, performance.now() - t0, false); throw new Error(t('err_network')); }
+    try { r = await fetch(path, init); } catch { if (PM.tickets) PM.tickets.note(method, path, 0, '', t('err_network')); if (PM.track) PM.track.call(path, performance.now() - t0, false); throw new Error(t('err_network')); }
     let data = null;
     try { data = await r.json(); } catch { /* not json */ }
     if (PM.track) PM.track.call(path, performance.now() - t0, r.ok || r.status === 401 || (r.status >= 400 && r.status < 500 && r.status !== 429));
     if (r.status === 401 && !path.startsWith('/api/auth/')) { signOut(true); throw new Error(t('err_session')); }
+    if (PM.tickets && (!r.ok || path.startsWith('/api/'))) PM.tickets.note(method, path, r.status, data && data.ref, data && data.error);
     if (!r.ok) throw new Error((data && data.error) || r.statusText);
     return data;
   }
@@ -86,6 +88,7 @@
     if (box.parentNode !== host) host.appendChild(box);
     const el = document.createElement('div');
     el.className = `toast ${type}`;
+    if (!action && type === 'err' && PM.tickets && PM.tickets.recentFailure()) action = { label: t('sp_report_it'), fn: () => PM.tickets.open() };
     el.innerHTML = `<span>${esc(msg)}</span>${action ? `<button>${esc(action.label)}</button>` : ''}`;
     if (action) el.querySelector('button').onclick = () => { action.fn(); el.remove(); };
     box.appendChild(el);
@@ -216,7 +219,7 @@
   }
   function shell(active, content, projHead) {
     $('#app').innerHTML = `${PM.billing ? PM.billing.ribbon() : ''}<div class="shell"><aside class="sidebar"><div class="brand"><div class="logo">${PM.logo.mark()}</div><span class="grow">${t('app_name')}</span><button class="btn ghost icon sm" id="navHide" type="button" aria-label="${t('nav_hide')}" title="${t('nav_hide')}">${icon('chev_l')}</button></div>
-      <nav class="nav"><a href="#/" class="${active === 'dash' ? 'active' : ''}">${icon('home')}${t('nav_dashboard')}</a><div class="nav-fly" id="navFly"><a href="#/projects" class="${active === 'projects' ? 'active' : ''}" aria-haspopup="true" aria-expanded="false">${icon('folder')}<span class="grow">${t('nav_projects')}</span><span class="nav-caret">${icon('chev_r')}</span></a></div><a href="#/calendar" class="${active === 'calendar' ? 'active' : ''}">${icon('cal')}${t('nav_calendar')}</a><a href="#/widgets" class="${active === 'widgets' ? 'active' : ''}">${icon('grid')}${t('nav_widgets')}</a><a href="#/billing" class="${active === 'billing' ? 'active' : ''}">${icon('coin')}${t('nav_billing')}</a>${S.user && S.user.is_super ? `<a href="/admin">${icon('gear')}${t('nav_admin')}</a>` : ''}</nav>
+      <nav class="nav"><a href="#/" class="${active === 'dash' ? 'active' : ''}">${icon('home')}${t('nav_dashboard')}</a><div class="nav-fly" id="navFly"><a href="#/projects" class="${active === 'projects' ? 'active' : ''}" aria-haspopup="true" aria-expanded="false">${icon('folder')}<span class="grow">${t('nav_projects')}</span><span class="nav-caret">${icon('chev_r')}</span></a></div><a href="#/calendar" class="${active === 'calendar' ? 'active' : ''}">${icon('cal')}${t('nav_calendar')}</a><a href="#/widgets" class="${active === 'widgets' ? 'active' : ''}">${icon('grid')}${t('nav_widgets')}</a><a href="#/billing" class="${active === 'billing' ? 'active' : ''}">${icon('coin')}${t('nav_billing')}</a><a href="#/support" id="navSupport" class="${active === 'support' ? 'active' : ''}">${icon('life')}${t('nav_support')}</a>${S.user && S.user.is_super ? `<a href="/admin">${icon('gear')}${t('nav_admin')}</a>` : ''}</nav>
       <div class="spacer"></div>
       <div class="side-prefs">
         <div class="pref"><span class="pref-ic">${icon(S.theme === 'dark' ? 'moon' : 'sun')}</span><span class="grow">${t('dark_mode')}</span><button type="button" class="tgl ${S.theme === 'dark' ? 'on' : ''}" id="themeBtn" role="switch" aria-checked="${S.theme === 'dark'}" aria-label="${t('dark_mode')}" data-tip="${t('dark_mode')}"><i>${icon(S.theme === 'dark' ? 'moon' : 'sun')}</i></button></div>
@@ -408,7 +411,7 @@
     const token = ++S.nav;
     // a tab that is still fetching its data shows the loading screen instead of an empty page
     const endLoad = PM.loader.show(t('ld_loading'));
-    try { await view($('#content'), p, query, token); } catch (e) { console.error(e); $('#content').innerHTML = `<div class="page"><div class="card empty">${esc(e.message)}</div></div>`; } finally { endLoad(); }
+    try { await view($('#content'), p, query, token); } catch (e) { console.error(e); $('#content').innerHTML = `<div class="page"><div class="card empty">${esc(e.message)}${PM.tickets ? `<div style="margin-top:12px"><button class="btn" id="spRep">${t('sp_report_problem')}</button></div>` : ''}</div></div>`; const rb = $('#spRep'); if (rb) rb.onclick = () => PM.tickets.open(); } finally { endLoad(); }
   };
   PM.stale = (token) => token !== S.nav;
 
@@ -428,6 +431,7 @@
     S.nav++;
     if (!parts.length) return PM.views.dashboard();
     if (parts[0] === 'billing') { S.project = null; return PM.views.billing(); }
+    if (parts[0] === 'support') { S.project = null; return PM.views.support(parts[1] ? Number(parts[1]) : null); }
     if (parts[0] === 'brand') { S.project = null; return PM.views.brand(); }
     if (parts[0] === 'projects') { S.project = null; return PM.views.projects(); }
     if (parts[0] === 'trends') { location.hash = '#/'; return; }
@@ -454,7 +458,9 @@
       const key = String(message).slice(0, 120); if (sent >= 5 || seen.has(key)) return; seen.add(key); sent++;
       try { fetch('/api/client-error', { method: 'POST', keepalive: true, headers: Object.assign({ 'content-type': 'application/json' }, S.token ? { Authorization: `Bearer ${S.token}` } : {}), body: JSON.stringify({ message: String(message).slice(0, 500), stack: String(stack || '').slice(0, 3000), url: location.pathname + location.hash }) }).catch(() => {}); } catch (e) { /* best effort */ }
     };
-    window.addEventListener('error', (e) => { if (e.message && !/ResizeObserver loop/.test(e.message)) send(e.message, e.error && e.error.stack); });
+    let offered = 0;
+    const offer = () => { if (offered++ || !PM.tickets) return; setTimeout(() => toast(t('sp_unexpected'), 'err', { label: t('sp_report_it'), fn: () => PM.tickets.open() }), 400); };
+    window.addEventListener('error', (e) => { if (e.message && !/ResizeObserver loop/.test(e.message)) { send(e.message, e.error && e.error.stack); offer(); } });
     window.addEventListener('unhandledrejection', (e) => { const r = e.reason; send('Unhandled promise rejection: ' + ((r && r.message) || r), r && r.stack); });
   })();
   PM.start = () => { window.addEventListener('hashchange', () => PM.vt(route)); route(); };

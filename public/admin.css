@@ -85,3 +85,12 @@
 .sa-sub { margin: 0 0 8px; font-size: var(--fs-small); color: var(--muted); font-weight: 600; }
 .sa-meter { display: inline-block; width: 90px; height: 8px; border-radius: 4px; background: var(--track, var(--border)); overflow: hidden; vertical-align: middle; }
 .sa-meter i { display: block; height: 100%; background: var(--primary); border-radius: 4px; }
+.sa-warn { background: var(--warning-soft); color: var(--warning); }
+.sa-pre { max-height: 260px; overflow: auto; font-size: 12px; white-space: pre-wrap; background: var(--surface-2); padding: 10px; border-radius: 8px; }
+.sa-ul { margin: 0; padding-inline-start: 18px; }
+.sa-tl { list-style: none; padding: 0; display: grid; gap: 8px; margin: 0; }
+.sa-tl li { padding: 8px 12px; border-radius: 8px; background: var(--surface-2); }
+.sa-tl li.internal { opacity: .75; border-inline-start: 3px solid var(--border); }
+.sa-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 900px) { .sa-grid2 { grid-template-columns: 1fr; } }
+tr.clk { cursor: pointer; } tr.clk:hover { background: var(--surface-2); }

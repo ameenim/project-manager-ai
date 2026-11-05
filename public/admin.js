@@ -18,6 +18,7 @@
     grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
     gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>', pulse: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
     alert: '<path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/>', list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+    life: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/><path d="M5.6 5.6l3.9 3.9M14.5 14.5l3.9 3.9M18.4 5.6l-3.9 3.9M9.5 14.5l-3.9 3.9"/>',
     logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>', plus: '<path d="M12 5v14M5 12h14"/>', back: '<path d="m15 18-6-6 6-6"/>', menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
     moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/>', sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>', dl: '<path d="M12 3v12m0 0-4-4m4 4 4-4M4 21h16"/>',
   };
@@ -145,7 +146,7 @@
   // ---------- shell ----------
   const NAV = [
     ['overview', 'Overview', 'home'], ['users', 'Users', 'users'], ['usability', 'Usability', 'route'], ['subscriptions', 'Subscriptions', 'card'], ['finance', 'Finance and income', 'coin'], ['ai', 'AI consumption', 'spark'],
-    ['projects', 'Projects', 'folder'], ['widgets', 'Widgets', 'grid'], ['config', 'Configuration', 'gear'], ['health', 'System health', 'pulse'], ['errors', 'Error log', 'alert'], ['audit', 'Audit log', 'list'],
+    ['projects', 'Projects', 'folder'], ['widgets', 'Widgets', 'grid'], ['config', 'Configuration', 'gear'], ['health', 'System health', 'pulse'], ['tickets', 'Tickets', 'life'], ['errors', 'Error log', 'alert'], ['audit', 'Audit log', 'list'],
   ];
   function shell() {
     const dark = document.documentElement.dataset.theme === 'dark';
@@ -190,6 +191,7 @@
         ${kpi(tok(o.ai30.total), 'AI tokens, 30 days', `${nf(o.ai30.calls)} calls`, 'info')}
         ${kpi(usd(o.ai30.cost), 'AI cost, 30 days', 'Estimated at your rates', 'warn')}
         ${kpi(nf(o.errors24.open), 'Open errors, 24 hours', `${nf(o.errors24.total)} logged in total`, o.errors24.open ? 'bad' : 'good')}
+        ${kpi(nf(o.tickets ? o.tickets.open : 0), 'Open tickets', `${nf(o.tickets ? o.tickets.needs_action : 0)} need your action`, o.tickets && o.tickets.needs_action ? 'warn' : 'good')}
         ${kpi(up == null ? 'No data' : up + '%', 'Uptime, 7 days', `${o.uptime.d1.pct == null ? 'No data' : o.uptime.d1.pct + '%'} in 24 hours`, up == null ? '' : up >= 99 ? 'good' : up >= 95 ? 'warn' : 'bad')}
       </div>
       <div class="sa-grid3 mt">
@@ -457,6 +459,83 @@
     $('#cr').onclick = async () => { if (await confirmDlg({ title: 'Clear resolved errors', message: 'This permanently deletes every error marked as resolved.', ok: 'Clear', danger: true })) busy($('#cr'), async () => { const r = await api('DELETE', '/api/admin/errors?resolved=1'); toast(`${r.count} errors cleared`); draw(); }); };
     await draw(); S.timer = setInterval(() => draw().catch(() => {}), 30000);
   };
+
+  // ---------- tickets ----------
+  const TS = { reported: ['blue', 'Reported'], triaged: ['blue', 'Triaged'], needs_info: ['amber', 'Needs info'], fixing: ['amber', 'Claude is fixing'], needs_attention: ['red', 'Needs attention'], fixed_dev: ['green', 'Fixed on dev'], ready_publish: ['green', 'Ready to publish'], published: ['gray', 'Published'], wont_fix: ['gray', "Won't fix"], duplicate: ['gray', 'Duplicate'] };
+  const tChip = (s) => chip(...(TS[s] || ['gray', s]));
+  const SEV = { critical: 'red', high: 'red', medium: 'amber', low: 'gray' };
+  const BADGE = { green: ['green', 'Safe to try'], amber: ['amber', 'Review first'], red: ['red', 'High risk'] };
+  const KIND = { bug: 'Problem', enhancement: 'Idea', question: 'Question' };
+  F.tickets = { q: '', status: 'open', kind: '', page: 1 };
+  VIEWS.tickets = async (rest) => {
+    if (rest && rest[0]) return ticketDetail(rest[0]);
+    const f = F.tickets;
+    async function draw() {
+      const r = await api('GET', '/api/admin/tickets?' + qs(f)); const v = $('#tv'); if (!v) return; const pg = pager(r, (p) => { f.page = p; draw(); });
+      const c = r.counts || {};
+      v.innerHTML = `${r.pipeline && !r.pipeline.configured ? '<div class="card mb sa-warn">Fix it is not connected yet. Set GITHUB_DISPATCH_TOKEN and TICKET_WEBHOOK_SECRET in Replit Secrets, and add the matching secrets in GitHub.</div>' : ''}
+      <div class="card">${r.tickets.length ? `<div class="table-wrap"><table class="t sa-tbl"><thead><tr><th>Ticket</th><th>Type</th><th>Status</th><th>Severity</th><th>Briefing</th><th>Reports</th><th>Updated</th></tr></thead><tbody>${r.tickets.map((x) => `<tr class="clk" data-go="${x.id}"><td><b>${x.unread ? '&bull; ' : ''}${esc(x.title)}</b><div class="small muted">${esc(x.ref)}${x.reporter ? ' by ' + esc(x.reporter.name || x.reporter.email) : ' automatic'}</div></td><td>${KIND[x.kind] || x.kind}</td><td>${tChip(x.status)}${x.reopened ? ' ' + chip('amber', 'Reopened') : ''}</td><td>${chip(SEV[x.severity] || 'gray', x.severity)}</td><td>${x.badge ? chip(...BADGE[x.badge]) : ''}</td><td>${nf(x.occurrences)}</td><td>${ago(x.updated_at)}</td></tr>`).join('')}</tbody></table></div>${pg.html}` : '<p class="muted" style="padding:16px">No tickets match.</p>'}</div>`;
+      pg.bind(v); $$('[data-go]', v).forEach((tr) => (tr.onclick = () => (location.hash = '#/tickets/' + tr.dataset.go)));
+      const ready = c.ready_publish || 0; const pb = $('#pubAll'); if (pb) { pb.disabled = !ready; pb.textContent = `Mark ${ready} as published`; }
+    }
+    setView(`<div class="page">${head('Tickets', '<button class="btn" id="pubAll">Mark ready as published</button>', 'Problems and ideas from your users. Press Fix it and Claude prepares a fix on the dev branch.')}
+      <div class="sa-toolbar"><input type="search" id="tq" placeholder="Search title, text, reference or person" value="${esc(f.q)}" aria-label="Search tickets"><select id="ts" aria-label="Status"><option value="open">All open</option><option value="">Everything</option>${Object.entries(TS).map(([k, [, l]]) => `<option value="${k}">${l}</option>`).join('')}</select><select id="tk" aria-label="Type"><option value="">All types</option><option value="bug">Problems</option><option value="enhancement">Ideas</option><option value="question">Questions</option></select></div><div id="tv"></div></div>`);
+    $('#ts').value = f.status; $('#tk').value = f.kind; let tm; $('#tq').oninput = (e) => { clearTimeout(tm); tm = setTimeout(() => { f.q = e.target.value; f.page = 1; draw(); }, 250); };
+    $('#ts').onchange = (e) => { f.status = e.target.value; f.page = 1; draw(); }; $('#tk').onchange = (e) => { f.kind = e.target.value; f.page = 1; draw(); };
+    $('#pubAll').onclick = async () => { if (await confirmDlg({ title: 'Mark as published', message: 'Every ticket that is ready to publish will be marked published and the reporters will be told. Do this after you publish the app.', ok: 'Mark published' })) busy($('#pubAll'), async () => { const r = await api('POST', '/api/admin/tickets/publish-ready', {}); toast(`${r.count} tickets marked published`); draw(); }); };
+    await draw(); S.timer = setInterval(() => draw().catch(() => {}), 20000);
+  };
+  async function ticketDetail(id) {
+    let cur = '';
+    async function draw(first) {
+      const d = await api('GET', '/api/admin/tickets/' + id); cur = d.ticket.status; const x = d.ticket, tr = x.triage || {}, fs = x.fix_state || {}, c = x.context || {}; if (!$('#view')) return;
+      const canFix = x.kind !== 'question' && ['reported', 'triaged', 'needs_attention', 'fixed_dev', 'needs_info'].includes(x.status);
+      const list = (a) => (a && a.length ? `<ul class="sa-ul">${a.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>` : '<span class="muted">None</span>');
+      const crumbs = (c.breadcrumbs || []).map((b) => `${esc(b.a)} ${esc(b.l)}`).join('\n');
+      setView(`<div class="page"><a href="#/tickets" class="small">${ic('back')} All tickets</a>
+        ${head(x.title, `${tChip(x.status)} ${x.badge ? chip(...BADGE[x.badge]) : ''}`, `${x.ref} · ${KIND[x.kind]} · ${x.reporter ? esc(x.reporter.name) + ' (' + esc(x.reporter.email) + ')' : 'Opened automatically'} · ${dt(x.created_at)}`)}
+        <div class="sa-actions card mb"><div class="row">
+          ${canFix ? '<button class="btn primary" id="tFix">Fix it</button>' : ''}<button class="btn" id="tRe">Re-run briefing</button>
+          ${['triaged', 'reported'].includes(x.status) ? '<button class="btn" id="tInfo">Ask for info</button>' : ''}
+          ${x.status === 'fixed_dev' ? '<button class="btn" id="tReady">Mark ready to publish</button>' : ''}${x.status === 'ready_publish' ? '<button class="btn" id="tPub">Mark published</button>' : ''}
+          ${['reported', 'triaged', 'needs_info', 'needs_attention'].includes(x.status) ? '<button class="btn" id="tNo">Won\'t fix</button>' : ''}
+          <select id="tSev" aria-label="Severity">${['low', 'medium', 'high', 'critical'].map((s) => `<option ${s === x.severity ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
+          ${x.status === 'fixing' ? `<p class="small muted" style="margin:10px 0 0">Claude is working${fs.run_url ? ` · <a href="${esc(fs.run_url)}" target="_blank" rel="noopener">see the run</a>` : ''}. This page refreshes by itself.</p>` : ''}</div>
+        <div class="sa-grid2"><section class="card"><div class="card-head"><h3>What was reported</h3></div><p style="white-space:pre-wrap">${esc(x.description) || '<span class="muted">No description.</span>'}</p>
+          <dl class="sa-dl"><dt>Page</dt><dd>${esc(c.route || '')}</dd><dt>Reports</dt><dd>${nf(x.occurrences)}</dd><dt>Role</dt><dd>${esc(c.project_role || 'Unknown')}</dd><dt>Version</dt><dd>${esc(c.app_version || '')}</dd></dl>
+          ${d.reports.length ? `<h4>Same problem, other people</h4>${d.reports.map((k) => `<div class="small"><b>${esc(k.ref)}</b> ${esc(k.title)} <span class="muted">${esc(k.email || '')}</span> <button class="btn sm" data-unlink="${k.id}">Unlink</button></div>`).join('')}` : ''}</section>
+        <section class="card"><div class="card-head"><h3>AI briefing ${tr.by === 'rules' ? chip('gray', 'Rules only') : ''}</h3></div>
+          <p><b>${esc(tr.summary || 'Not ready yet.')}</b></p><p>${esc(tr.likely_cause || '')}</p>
+          <dl class="sa-dl"><dt>Risk</dt><dd>${esc(tr.risk || '')}${tr.touches_protected ? ' (touches protected files)' : ''}</dd><dt>Size</dt><dd>${esc(tr.size || '')}</dd><dt>Confidence</dt><dd>${tr.confidence == null ? '' : Math.round(tr.confidence * 100) + '%'}</dd><dt>Suspected files</dt><dd>${list(tr.suspected_files)}</dd><dt>Screens</dt><dd>${list(tr.affected_screens)}</dd></dl>
+          ${tr.questions && tr.questions.length ? `<h4>Questions to ask</h4>${list(tr.questions)}` : ''}</section></div>
+        ${d.server_error ? `<section class="card mt"><div class="card-head"><h3>Server error</h3></div><pre class="sa-pre">${esc(d.server_error.method + ' ' + d.server_error.path + ' ' + d.server_error.status + '\n' + d.server_error.message + '\n' + (d.server_error.stack || ''))}</pre></section>` : ''}
+        ${crumbs || (c.console || []).length ? `<details class="card mt"><summary>Technical context</summary><pre class="sa-pre">${esc(crumbs)}\n${esc((c.console || []).map((l) => l.k + ' ' + l.m).join('\n'))}</pre></details>` : ''}
+        ${fs.phase && fs.phase !== 'running' ? `<section class="card mt"><div class="card-head"><h3>Last fix run</h3></div><dl class="sa-dl"><dt>Result</dt><dd>${esc(fs.phase)} · checks ${esc(fs.ci || 'none')} · ${fs.merged ? 'merged to dev' : 'not merged'}</dd>${fs.pr_url ? `<dt>Pull request</dt><dd><a href="${esc(fs.pr_url)}" target="_blank" rel="noopener">${esc(fs.pr_url)}</a></dd>` : ''}${fs.run_url ? `<dt>Run</dt><dd><a href="${esc(fs.run_url)}" target="_blank" rel="noopener">Open in GitHub</a></dd>` : ''}<dt>Files</dt><dd>${list(fs.files_changed)}</dd><dt>Summary</dt><dd>${esc(fs.summary || fs.root_cause || fs.error || '')}</dd></dl></section>` : ''}
+        <section class="card mt"><div class="card-head"><h3>Timeline</h3></div><ul class="sa-tl">${d.timeline.map((e) => `<li class="${e.visible ? '' : 'internal'}"><div class="small muted">${dt(e.at)} · ${esc(e.by)}${e.visible ? '' : ' · internal'}</div>${esc(e.message)}</li>`).join('')}</ul>
+          <div class="row" style="margin-top:12px"><textarea id="tMsg" rows="2" style="flex:1" placeholder="Write to the reporter" aria-label="Message to the reporter"></textarea><button class="btn" id="tSend">Send</button></div></section></div>`);
+      const run = (sel, fn) => { const b = $(sel); if (b) b.onclick = () => busy(b, async () => { try { await fn(); await draw(); } catch (e) { toast(e.message, 'err'); } }); };
+      run('#tRe', async () => { await api('POST', `/api/admin/tickets/${id}/triage`, {}); toast('Briefing refreshed'); });
+      run('#tReady', () => api('POST', `/api/admin/tickets/${id}/status`, { status: 'ready_publish' }));
+      run('#tPub', () => api('POST', `/api/admin/tickets/${id}/status`, { status: 'published' }));
+      run('#tSend', async () => { const v = $('#tMsg').value.trim(); if (!v) return; await api('POST', `/api/admin/tickets/${id}/reply`, { message: v }); });
+      $$('[data-unlink]').forEach((b) => (b.onclick = () => busy(b, async () => { await api('POST', `/api/admin/tickets/${b.dataset.unlink}/unlink`, {}); toast('Unlinked'); draw(); })));
+      if ($('#tSev')) $('#tSev').onchange = (e) => busy(e.target, async () => { await api('PUT', `/api/admin/tickets/${id}`, { severity: e.target.value }); toast('Severity changed'); });
+      const ask = (title, label, ok, status) => { const m = modal({ title, body: field(label, '<textarea id="mT" rows="4"></textarea>'), footer: `<button class="btn" data-close>Cancel</button><button class="btn primary" id="mGo">${ok}</button>` }); m.$('#mGo').onclick = () => busy(m.$('#mGo'), async () => { try { await api('POST', `/api/admin/tickets/${id}/status`, { status, message: m.$('#mT').value }); m.close(); draw(); } catch (e) { toast(e.message, 'err'); } }); };
+      if ($('#tInfo')) $('#tInfo').onclick = () => ask('Ask the reporter', 'Your question', 'Send question', 'needs_info');
+      if ($('#tNo')) $('#tNo').onclick = () => ask("Won't fix", 'Tell the reporter why', "Close ticket", 'wont_fix');
+      if ($('#tFix')) $('#tFix').onclick = () => {
+        const enh = x.kind === 'enhancement'; const sp = tr.spec || {};
+        const risky = tr.risk === 'high' || tr.touches_protected;
+        const m = modal({ title: 'Send to Claude', size: 'lg', body: `${risky ? '<div class="sa-warn card mb">The briefing says this is high risk or touches protected files. Claude will prepare a pull request, but it will not merge by itself.</div>' : ''}
+          <p class="small muted">Claude works on a branch, runs the tests, and merges into the dev branch only when the checks pass and no protected file is touched. Production stays manual.</p>
+          ${enh ? field('Goal', `<input id="fG" value="${esc(sp.goal || x.title)}">`) + field('Acceptance criteria, one per line', `<textarea id="fC" rows="5">${esc((sp.acceptance_criteria || []).join('\n'))}</textarea>`) : ''}
+          ${field('Notes for Claude (optional)', '<textarea id="fN" rows="3" placeholder="Where to look, what to avoid"></textarea>')}`, footer: '<button class="btn" data-close>Cancel</button><button class="btn primary" id="fGo">Fix it</button>' });
+        m.$('#fGo').onclick = () => busy(m.$('#fGo'), async () => { try { const body = { notes: m.$('#fN').value }; if (enh) body.spec = { goal: m.$('#fG').value, acceptance_criteria: m.$('#fC').value.split('\n').map((s) => s.trim()).filter(Boolean) }; await api('POST', `/api/admin/tickets/${id}/fix`, body); m.close(); toast('Sent to Claude'); draw(); } catch (e) { toast(e.message, 'err'); } });
+      };
+      if (first) S.timer = setInterval(() => { if (cur === 'fixing') draw().catch(() => {}); }, 15000);
+    }
+    await draw(true);
+  }
 
   // ---------- audit ----------
   VIEWS.audit = async () => {

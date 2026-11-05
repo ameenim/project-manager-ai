@@ -12,7 +12,11 @@ const scrypt = (pw, salt) => new Promise((ok, no) => crypto.scrypt(pw, salt, 64,
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const csvCell = (v) => { const s = String(v == null ? '' : v); return /[",\n\r]/.test(s) || /^[=+\-@]/.test(s) ? '"' + (/^[=+\-@]/.test(s) ? "'" : '') + s.replace(/"/g, '""') + '"' : s; };
 
+<<<<<<< HEAD
 module.exports = function createAdmin({ db, store, auth, ops, usage }) {
+=======
+module.exports = function createAdmin({ db, store, auth, ops, tickets }) {
+>>>>>>> e92b19d (Add support tickets with AI triage and Fix it)
   const q = (t, p) => db.query(t, p);
   const routes = [];
   const on = (method, re, fn) => routes.push([method, new RegExp('^/api/admin' + re + '$'), fn]);
@@ -66,7 +70,7 @@ module.exports = function createAdmin({ db, store, auth, ops, usage }) {
       currency: cfg.currency,
       users: { total: num(users.total), new7: num(users.new7), suspended: num(users.suspended), active30: num(users.active30) },
       subscriptions: by, mrr_cents: mrr, income: { month_cents: num(inc.month), total_cents: num(inc.total) }, projects,
-      ai30: await aiTotals(30), errors24: { total: num(errs.d1), open: num(errs.open1) },
+      ai30: await aiTotals(30), errors24: { total: num(errs.d1), open: num(errs.open1) }, tickets: tickets ? await tickets.stats() : { open: 0, needs_action: 0, counts: {}, ai_fix: { tried: 0, succeeded: 0 } },
       uptime: { d1: await ops.uptime(1), d7: await ops.uptime(7), d30: await ops.uptime(30) },
       series: {
         signups: await series('users', 'count(*)', 30),
@@ -386,6 +390,9 @@ module.exports = function createAdmin({ db, store, auth, ops, usage }) {
     return { total, page: p, size, entries: rows.map((r) => ({ id: r.id, admin: r.admin_email, action: r.action, target: r.target, detail: r.detail, at: iso(r.created_at) })) };
   });
 
+  // ---------- support tickets (see tickets.js) ----------
+  if (tickets) tickets.registerAdmin({ on, audit, idOf, page, like });
+
   // ---------- routing ----------
   // Returns true when it handled the request. "ctx" brings the JSON helpers from app.js.
   async function route(req, res, url, user, c) {
@@ -407,7 +414,7 @@ module.exports = function createAdmin({ db, store, auth, ops, usage }) {
       const m = url.pathname.match(re); if (!m) continue;
       let body = {};
       if (method !== 'GET') { const raw = await c.readBody(req, 256 * 1024); if (raw.length) { try { body = JSON.parse(raw.toString('utf8')); } catch (e) { throw err(400, 'The request body is not valid JSON'); } } }
-      c.json(res, 200, await fn({ m, admin: fresh, body, query: Object.fromEntries(url.searchParams) }));
+      c.json(res, 200, await fn({ m, admin: fresh, body, query: Object.fromEntries(url.searchParams), origin: c.origin ? c.origin(req) : '' }));
       return true;
     }
     throw err(404, 'Not found');

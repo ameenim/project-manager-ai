@@ -1,0 +1,22 @@
+{
+  "_note": "One policy for AI ticket fixes. The fix job and the server both read this file. A fix that touches a protected path is never merged automatically: the pull request stays open and a person reviews it.",
+  "protected_paths": [
+    "server/auth.js",
+    "server/db.js",
+    "server/store.js",
+    "server/admin.js",
+    "server/ops.js",
+    "server/connectors.js",
+    "server/tickets.js",
+    "server/ticketfix.js",
+    "server/chat/guard.js",
+    "server.js",
+    "package.json",
+    "package-lock.json",
+    ".replit",
+    ".github/",
+    "scripts/ticket-fix/"
+  ],
+  "max_files": 12,
+  "max_changed_lines": 400
+}

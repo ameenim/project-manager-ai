@@ -21,6 +21,10 @@ const CONFIG = {
   enforce_limits: { def: false, type: 'bool', label: 'Block AI use when a plan has ended or tokens are used up' },
   maintenance_mode: { def: false, type: 'bool', label: 'Maintenance mode (only super admins can use the app)' },
   maintenance_message: { def: 'The service is being updated. Please try again in a few minutes.', type: 'text', max: 300, label: 'Maintenance message' },
+  ticket_ai_triage: { def: true, type: 'bool', label: 'Let AI triage new support tickets' },
+  auto_error_tickets: { def: true, type: 'bool', label: 'Open a ticket automatically when the same server error repeats' },
+  fix_max_attempts: { def: 3, type: 'int', min: 1, max: 10, label: 'AI fix attempts allowed per ticket' },
+  fix_daily_cap: { def: 10, type: 'int', min: 0, max: 200, label: 'AI fixes allowed per day (0 turns Fix it off)' },
 };
 
 function cleanValue(key, v) {

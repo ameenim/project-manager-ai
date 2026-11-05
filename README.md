@@ -176,3 +176,24 @@ Code: `server/brand.js` (extraction), `public/app_clienttpl.js` (upload and view
 In the document editor you can color selected text with the A button in the toolbar (headings keep the document style). The Logo panel on the right changes or removes the logo for that document, and the logo travels with the page layout when you save the document as a template. A bulleted or numbered list has a Convert to table button, and a table has Convert to bullets and Create chart. In the chart dialog, tick the columns and rows to chart, edit values if needed, and pick column, bar, line or pie. Charts are stored in the Markdown as a `:::chart {json}` line, and text color as `{#RRGGBB:text}`, so every export (Word, PowerPoint, Excel) reads them. Excel keeps chart pictures and data tables but not text color.
 
 Tests: `test/editor2.test.js`.
+
+## Support tickets and Fix it
+
+Users report problems, suggest ideas or ask questions from the Support page. When something fails, the app offers to open a ticket and fills in the page, the last clicks and the error. The ticket goes to the super admin console under Tickets. An AI briefing explains the likely cause, the suspected files, the risk and the size. Pressing Fix it sends the ticket to Claude Code, which runs in GitHub Actions, not inside the app. The reporter sees the status in plain words: received, reviewed, being fixed, fixed on dev, ready to go live, live.
+
+### How Fix it works
+
+1. The app sends a repository_dispatch event with ids only. Ticket text never travels through GitHub.
+2. The job in `.github/workflows/ticket-fix.yml` runs `scripts/ticket-fix/run.js`. It fetches the redacted ticket package from the app over a signed request.
+3. Claude Code changes the code on a branch named `ticket/t-N-attempt`, with limited tools and no secrets. The job runs `npm test` itself.
+4. `scripts/ticket-fix/policy.json` decides whether the fix may merge by itself. Protected files, too many files or too many changed lines force a human review.
+5. A safe fix is merged into the `dev` branch and the ticket becomes fixed on dev. Anything else stays a pull request and the ticket shows needs attention.
+6. The super admin marks tickets ready to publish and then published after the production deploy. Production deploys stay manual.
+
+### Setup
+
+In Replit Secrets: `GITHUB_DISPATCH_TOKEN` (a fine grained token with contents write on the repo), `TICKET_WEBHOOK_SECRET` (a long random string), optionally `FIX_REPO` (default ameenim/project-manager-ai), `FIX_TARGET_BRANCH` (default dev) and `SITE_URL` (the public address the job can reach).
+
+In GitHub repository secrets: `ANTHROPIC_API_KEY` and the same `TICKET_WEBHOOK_SECRET`. Allow GitHub Actions to create pull requests in the repository settings.
+
+Migration 7 adds the `tickets` and `ticket_events` tables. Replit Publish applies it. Limits (attempts per ticket, fixes per day, automatic error tickets, AI triage) are in Configuration.
