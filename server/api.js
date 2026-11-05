@@ -1465,11 +1465,55 @@ Rules:
     const toks = name.split(/[^a-z0-9؀-ۿ]+/).filter((w) => w.length > 3);
     return toks.length >= 2 && toks.length <= 3 && toks.every((w) => hay.includes(w));
   };
+  // ---------- sync history and the automatic schedule ----------
+  const SCHEDULES = ['off', 'hourly', 'every4h', 'daily', 'weekdays'];
+  const HHMM = /^([01]\d|2[0-3]):([0-5]\d)$/;
+  // when the next automatic sync is due: hourly styles count from the last run, daily styles use the person's clock time
+  function nextSync(cfg) {
+    if (!cfg || !SCHEDULES.includes(cfg.mode) || cfg.mode === 'off') return null;
+    const base = Math.max(cfg.last_run || 0, cfg.set_at || 0) || Date.now();
+    if (cfg.mode === 'hourly') return base + 3600e3;
+    if (cfg.mode === 'every4h') return base + 4 * 3600e3;
+    const [H, M] = String(cfg.time || '08:00').split(':').map(Number), tzo = Number(cfg.tzo) || 0;
+    const local = new Date(base - tzo * 60000);
+    for (let i = 0; i < 9; i++) {
+      const cand = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate() + i, H, M) + tzo * 60000;
+      const wd = new Date(cand - tzo * 60000).getUTCDay();
+      if (cfg.mode === 'weekdays' && (wd === 0 || wd === 6)) continue;
+      if (cand > base) return cand;
+    }
+    return null;
+  }
+  const syncInfo = (P) => {
+    const cfg = P.sync_cfg || {}, next = nextSync(cfg), log = P.sync_log || [];
+    return { last: log.length ? log[0].at : null, last_ok: log.length ? log[0].ok : null, schedule: { mode: SCHEDULES.includes(cfg.mode) ? cfg.mode : 'off', time: cfg.time || '08:00' }, next: next ? new Date(next).toISOString() : null, history: log };
+  };
+  on('GET', '/api/projects/(\\d+)/sync-history', async (m) => syncInfo(P_(m[1])));
+  on('PUT', '/api/projects/(\\d+)/sync-schedule', async (m, q, b) => {
+    const P = P_(m[1], 'editor'), c = ctx();
+    const mode = String((b && b.mode) || 'off'), time = String((b && b.time) || '08:00');
+    if (!SCHEDULES.includes(mode)) throw err(400, 'Choose off, hourly, every 4 hours, daily or weekdays');
+    if (!HHMM.test(time)) throw err(400, 'Use a time like 08:00');
+    const tzo = Math.max(-840, Math.min(840, Math.round(Number(b && b.tzo) || 0)));
+    P.sync_cfg = { mode, time, tzo, user_id: c.user.id, set_at: Date.now(), last_run: (P.sync_cfg && P.sync_cfg.last_run) || 0 };
+    touch(P); audit(P, ACTOR(), 'sync_schedule', { summary: mode === 'off' ? 'Turned off automatic sync' : `Set automatic sync to ${mode}` });
+    return syncInfo(P);
+  });
+  const MAXLOG = 50;
+  function logSync(P, entry) {
+    P.sync_log = P.sync_log || [];
+    P.sync_log.unshift({ id: nid(), at: new Date().toISOString(), ...entry });
+    if (P.sync_log.length > MAXLOG) P.sync_log.length = MAXLOG;
+  }
   on('POST', '/api/projects/(\\d+)/sync', async (m) => {
-    const P = P_(m[1]), c = ctx(), report = {}, errors = {};
+    const P = P_(m[1]), c = ctx(), report = {}, errors = {}, trigger = c.scheduled ? 'scheduled' : 'manual', t0 = Date.now();
     const prefs = c.user.prefs || {}, secrets = prefs.conn_secrets || {};
     const kinds = ['outlook', 'jira'].filter((k) => secrets[k]);
-    if (!kinds.length) return { report, errors: { connect: 'Connect Outlook or Jira first. Then Sync now brings in new mail and Jira updates.' }, needs_connection: true };
+    if (!kinds.length) {
+      const errors = { connect: 'Connect Outlook or Jira first. Then Sync now brings in new mail and Jira updates.' };
+      if (trigger === 'scheduled') { logSync(P, { trigger, actor: ACTOR(), ok: false, found: 0, report: {}, errors, ms: Date.now() - t0 }); touch(P); }
+      return { report, errors, needs_connection: true };
+    }
     P.sync = P.sync || {};
     const known = new Set(P.inbox.map((r) => r.ext_id).filter(Boolean));
     let changedPrefs = prefs;
@@ -1493,6 +1537,7 @@ Rules:
       } catch (e) { errors[kind] = e.expose || e.status < 500 ? e.message : 'The sync could not finish. Try again in a moment.'; if (!e.status || e.status >= 500) console.error('sync', kind, e); }
     }
     if (changedPrefs !== prefs) { c.user.prefs = changedPrefs; await saveUser(); }
+    logSync(P, { trigger, actor: ACTOR(), ok: !Object.keys(errors).length, found: Object.values(report).reduce((a, v) => a + v, 0), report, errors, ms: Date.now() - t0 });
     touch(P);
     return { report, errors };
   });
@@ -1774,13 +1819,13 @@ Rules:
     await store.db.query('UPDATE users SET name = $2, avatar = $3, prefs = $4::jsonb WHERE id = $1', [u.id, u.name, u.avatar, JSON.stringify(prefs)]);
   }
 
-  async function makeCtx(user, origin, level) {
+  async function makeCtx(user, origin, level, scheduled) {
     const { projects, roles, order } = await store.forUser(user.id);
     for (const id of order) settleInterrupted(projects[id]);
     const prefs = user.prefs || {};
     const view = userView(user);
     if (!view.ingest_key) view.ingest_key = require('crypto').randomBytes(16).toString('hex');
-    return { origin: origin || 'http://localhost', user, store, auth, roles, touched: new Set(), level, DB: { user: view, templates: Array.isArray(prefs.templates) ? prefs.templates : [], connections: prefs.connections || {}, projects, order: order.slice() } };
+    return { scheduled: !!scheduled, origin: origin || 'http://localhost', user, store, auth, roles, touched: new Set(), level, DB: { user: view, templates: Array.isArray(prefs.templates) ? prefs.templates : [], connections: prefs.connections || {}, projects, order: order.slice() } };
   }
   async function dispatch(c, method, p, query, body) {
     for (const [mth, re, fn] of routes) {
@@ -1793,8 +1838,8 @@ Rules:
     throw err(404, 'Not found');
   }
 
-  async function handle({ user, method, path: p, query, body, origin }) {
-    const c = await makeCtx(user, origin, method === 'GET' ? 'viewer' : 'editor');
+  async function handle({ user, method, path: p, query, body, origin, scheduled }) {
+    const c = await makeCtx(user, origin, method === 'GET' ? 'viewer' : 'editor', scheduled);
     return als.run(c, async () => {
       const out = await dispatch(c, method, p, query, body);
       // a change is saved before the answer is sent, so "saved" on screen always means saved in the database
@@ -1828,6 +1873,30 @@ Rules:
     });
   }
 
-  return { handle, runAs, FileResult, userView, saveUserFor: null, running, TODAY, captureAll, snapshots };
+  // Runs every automatic sync that is due, as the person who set it up. Safe to call often.
+  const syncing = new Set();
+  async function runDueSyncs(now = Date.now()) {
+    const rows = (await store.db.query("SELECT id, data->'sync_cfg' AS cfg FROM projects WHERE data->'sync_cfg'->>'mode' IS NOT NULL AND data->'sync_cfg'->>'mode' <> 'off'")).rows;
+    let ran = 0;
+    for (const r of rows) {
+      const cfg = r.cfg || {}, due = nextSync(cfg);
+      if (!due || due > now || syncing.has(r.id)) continue;
+      syncing.add(r.id);
+      try {
+        const u = (await store.db.query('SELECT id, name, email, prefs, avatar FROM users WHERE id = $1', [cfg.user_id])).rows[0];
+        if (!u) continue;
+        const { projects } = await store.forUser(u.id), P = projects[r.id];
+        if (!P) continue;
+        P.sync_cfg = { ...(P.sync_cfg || cfg), last_run: now };
+        await store.save(P);
+        await handle({ user: u, method: 'POST', path: `/api/projects/${r.id}/sync`, query: {}, body: {}, scheduled: true });
+        ran++;
+      } catch (e) { console.error('scheduled sync', r.id, e.message); }
+      finally { syncing.delete(r.id); }
+    }
+    return ran;
+  }
+
+  return { handle, runAs, runDueSyncs, FileResult, userView, saveUserFor: null, running, TODAY, captureAll, snapshots };
 };
 module.exports.FileResult = FileResult;

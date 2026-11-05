@@ -105,6 +105,7 @@ async function createApp(opts = {}) {
       await api.handle({ user: u, method: 'POST', path: '/api/workspace/sample', query: {}, body: {} });
     }
   }
+  if (!opts.noScheduler) { const tick = setInterval(() => api.runDueSyncs().catch((e) => console.error('sync tick', e.message)), 60e3); tick.unref(); }
   setInterval(() => auth.purgeExpired().catch(() => {}), 3600e3).unref();
 
   // Daily snapshots of every project's key figures. The first capture runs shortly after start, then every hour.

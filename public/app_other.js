@@ -41,12 +41,16 @@
   // Messages and documents become suggested changes. The PM reviews each one and applies, edits or dismisses it.
   PM.views.tab_inbox = async function (root, p, q, token) {
     let rows = (await api('GET', `/api/projects/${p.id}/inbox`)).inbox;
-    let filter = 'pending', src = 'all';
-    const SRC = { teams: 'chat', email: 'mail', jira: 'jira', upload: 'file', manual: 'edit' };
+    let filter = 'pending', src = 'all', view = 'updates', sh = { last: null, history: [], schedule: { mode: 'off', time: '08:00' }, next: null };
+    const loadSync = async () => { try { sh = await api('GET', `/api/projects/${p.id}/sync-history`); } catch (e) { /* keep the last view */ } };
+    await loadSync();
+    const fdt = (iso) => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString(S.lang === 'ar' ? 'ar-AE' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' }); };
+    const schedLabel = (s) => (s.mode === 'off' ? t('sh_f_off') : t('sh_s_' + s.mode, { time: s.time }));
+    const SRC ={ teams: 'chat', email: 'mail', jira: 'jira', upload: 'file', manual: 'edit' };
     const FIL = { pending: ['pending'], applied: ['applied', 'auto_applied'], other: ['dismissed', 'undone', 'no_action'] };
     const ACT = { update_task: 'cal', close_deliverable: 'check', milestone_invoiced: 'coin', milestone_paid: 'coin', flag_issue: 'alert' };
     let guide = true; try { guide = localStorage.getItem('pm_upd_guide') !== 'off'; } catch (e) { /* storage blocked */ }
-    const reload = async () => { rows = (await api('GET', `/api/projects/${p.id}/inbox`)).inbox; S.project = (await api('GET', `/api/projects/${p.id}`)).project; draw(); };
+    const reload = async () => { rows = (await api('GET', `/api/projects/${p.id}/inbox`)).inbox; await loadSync(); S.project = (await api('GET', `/api/projects/${p.id}`)).project; draw(); };
     const level = (c) => (c == null ? null : c >= 0.8 ? 'hi' : c >= 0.65 ? 'mid' : 'lo');
     const conf = (c) => (c == null ? '' : `<span class="conf ${level(c)}" data-tip="${esc(t('upd_conf_tip', { n: Math.round(c * 100) }))}">${t('upd_conf_' + level(c))} ${Math.round(c * 100)}%</span>`);
     const completes = (r) => !!(r.action && r.action.type === 'update_task' && r.action.progress >= 100);
@@ -76,19 +80,33 @@
       const srcs = [...new Set(rows.map((r) => r.source))];
       const safeN = rows.filter(safe).length;
       const stat = (k, label, hint, ic2) => `<button type="button" class="upd-stat ${filter === k ? 'on' : ''} ${k}" data-f="${k}"><span class="upd-stat-ic">${icon(ic2)}</span><span class="grow"><b>${inStatus(k).length}</b><span>${t(label)}</span></span></button>`;
-      const conn = (name, ic2, on, kind) => `<span class="upd-conn ${on ? 'on' : ''}">${icon(ic2)}<b>${name}</b>${on ? `<i>${t('connected')}</i>` : `<button type="button" class="btn sm" data-conn="${kind}">${t('upd_connect')}</button>`}</span>`;
+      const conn = (name, ic2, on, kind) => `<div class="upd-conn ${on ? 'on' : ''}"><span class="upd-conn-ic">${icon(ic2)}</span><div class="upd-conn-t"><b>${name}</b><span class="chip ${on ? 'green' : 'gray'}">${on ? t('connected') : t('sh_not_conn')}</span></div>${on ? '' : `<button type="button" class="btn sm" data-conn="${kind}">${t('upd_connect')}</button>`}</div>`;
+      const lastE = sh.history[0], NAMES = { outlook: 'Outlook', jira: 'Jira' };
+      const syncBar = `<section class="upd-sync" aria-label="${esc(t('sh_last'))}"><div class="upd-sync-top"><span class="upd-sync-ic">${icon('clock')}</span><div class="upd-sync-txt"><div class="upd-sync-last"><span class="muted">${t('sh_last')}</span> ${lastE ? `<b>${esc(fdt(lastE.at))}</b><span class="chip ${lastE.ok ? 'green' : 'amber'}">${t(lastE.ok ? 'sh_ok' : 'sh_failed')}</span>` : `<b>${t('sh_never')}</b>`}</div><div class="small muted">${sh.next ? `${t('sh_next')} <b>${esc(fdt(sh.next))}</b>` : t('sh_auto_off')}</div></div><button type="button" class="btn upd-sched-btn" data-sched data-tip="${esc(t('sh_sched_tip'))}">${icon('cal')}<span>${t('sh_auto')}: <b>${esc(schedLabel(sh.schedule))}</b></span></button></div><div class="upd-conns">${conn('Teams', 'chat', st.graph, 'outlook')}${conn('Outlook', 'mail', st.graph, 'outlook')}${conn('Jira', 'jira', st.jira, 'jira')}</div></section>`;
+      const histRow = (h) => {
+        const got = Object.entries(h.report || {}).filter(([, v]) => v > 0).map(([k, v]) => `${NAMES[k] || k} ${v}`).join(', ');
+        const errs = Object.entries(h.errors || {});
+        return `<article class="sh-row ${h.ok ? 'ok' : 'bad'}"><span class="sh-ic">${icon(h.ok ? 'check' : 'alert')}</span><div class="sh-body"><div class="sh-t"><b>${esc(fdt(h.at))}</b><span class="chip gray">${t('sh_trig_' + h.trigger)}</span></div><div class="small muted">${esc(got || t('sh_found_none'))}</div>${errs.map(([k, v]) => `<div class="small sh-err">${k === 'connect' ? '' : `<b>${esc(NAMES[k] || k)}</b>: `}${esc(v)}</div>`).join('')}</div><div class="sh-n"><b>${h.found || 0}</b><span class="small muted">${t('sh_new')}</span></div></article>`;
+      };
+      const hist = !sh.history.length
+        ? `<div class="upd-empty small"><div class="upd-empty-ic">${icon('clock')}</div><h3>${t('sh_empty_t')}</h3><p class="muted">${t('sh_empty_b')}</p><button class="btn primary" data-sync>${icon('refresh')}${t('sync_now')}</button></div>`
+        : `<p class="muted sh-lead">${t('sh_hist_lead')}</p><div class="sh-list">${sh.history.map(histRow).join('')}</div>`;
+      const tabs = `<div class="seg upd-tabs" role="group" aria-label="${esc(t('tab_inbox'))}"><button type="button" class="${view === 'updates' ? 'on' : ''}" data-view="updates" aria-pressed="${view === 'updates'}">${icon('inbox')}${t('sh_tab_updates')}</button><button type="button" class="${view === 'history' ? 'on' : ''}" data-view="history" aria-pressed="${view === 'history'}">${icon('clock')}${t('sh_tab_history')}<span class="seg-n">${sh.history.length}</span></button></div>`;
       const empty = filter === 'pending' && !rows.length
         ? `<div class="upd-empty"><div class="upd-empty-ic">${icon('inbox')}</div><h3>${t('upd_empty_title')}</h3><p class="muted">${t('upd_empty_body')}</p><div class="row wrap" style="justify-content:center;gap:8px"><button class="btn primary" data-add>${icon('plus')}${t('upd_add')}</button><button class="btn" data-sync>${icon('refresh')}${t('sync_now')}</button></div></div>`
         : filter === 'pending' ? `<div class="upd-empty small"><div class="upd-empty-ic ok">${icon('check')}</div><h3>${t('upd_caught_up')}</h3><p class="muted">${t('upd_caught_body')}</p></div>` : `<div class="empty">${t('nothing_here')}</div>`;
       root.innerHTML = `<div class="page upd-page">
         <div class="upd-head"><div class="grow"><h2>${t('tab_inbox')}</h2><div class="muted">${t('upd_lead')}</div></div>
           <button class="btn" data-sync id="syncBtn">${icon('refresh')}${t('sync_now')}</button><button class="btn primary" data-add>${icon('plus')}${t('upd_add')}</button></div>
-        ${guide ? `<div class="upd-guide" role="note"><ol><li><span>1</span><div><b>${t('upd_g1_t')}</b><div class="small muted">${t('upd_g1_b')}</div></div></li><li><span>2</span><div><b>${t('upd_g2_t')}</b><div class="small muted">${t('upd_g2_b')}</div></div></li><li><span>3</span><div><b>${t('upd_g3_t')}</b><div class="small muted">${t('upd_g3_b')}</div></div></li></ol><button type="button" class="btn ghost icon sm" data-hide-guide aria-label="${t('close')}" data-tip="${t('upd_hide_guide')}">${icon('x')}</button></div>` : ''}
+        ${tabs}
+        ${syncBar}
+        ${view === 'history' ? hist : `        ${guide ? `<div class="upd-guide" role="note"><ol><li><span>1</span><div><b>${t('upd_g1_t')}</b><div class="small muted">${t('upd_g1_b')}</div></div></li><li><span>2</span><div><b>${t('upd_g2_t')}</b><div class="small muted">${t('upd_g2_b')}</div></div></li><li><span>3</span><div><b>${t('upd_g3_t')}</b><div class="small muted">${t('upd_g3_b')}</div></div></li></ol><button type="button" class="btn ghost icon sm" data-hide-guide aria-label="${t('close')}" data-tip="${t('upd_hide_guide')}">${icon('x')}</button></div>` : ''}
         ${p.auto_apply ? `<div class="banner ok mb small">${icon('spark')}<div>${t('auto_on', { n: Math.round(p.auto_threshold * 100) })} <a href="#/p/${p.id}/settings">${t('change')}</a></div></div>` : ''}
-        <div class="upd-stats">${stat('pending', 'upd_s_waiting', '', 'inbox')}${stat('applied', 'upd_s_applied', '', 'check')}${stat('other', 'upd_s_other', '', 'x')}<div class="upd-conns">${conn('Teams', 'chat', st.graph, 'outlook')}${conn('Outlook', 'mail', st.graph, 'outlook')}${conn('Jira', 'jira', st.jira, 'jira')}</div></div>
-        <div class="upd-bar2"><div class="row wrap grow" style="gap:6px"><span class="small muted">${t('upd_source')}</span>${['all', ...srcs].map((k) => `<button type="button" class="filter-chip ${src === k ? 'on' : ''}" data-src="${k}">${k === 'all' ? t('all') : esc(srcLabel(k))}${k !== 'all' ? ` <b>${bySrc.filter((r) => r.source === k).length}</b>` : ''}</button>`).join('')}</div>
+        <div class="upd-stats">${stat('pending', 'upd_s_waiting', '', 'inbox')}${stat('applied', 'upd_s_applied', '', 'check')}${stat('other', 'upd_s_other', '', 'x')}</div>
+        <div class="upd-bar2"><div class="upd-filter"><span class="small muted">${t('upd_source')}</span><div class="seg wrap" role="group" aria-label="${esc(t('upd_source'))}">${['all', ...srcs].map((k) => `<button type="button" class="${src === k ? 'on' : ''}" data-src="${k}" aria-pressed="${src === k}">${k === 'all' ? t('all') : esc(srcLabel(k))}<span class="seg-n">${k === 'all' ? bySrc.length : bySrc.filter((r) => r.source === k).length}</span></button>`).join('')}</div></div>
           ${filter === 'pending' && safeN ? `<button class="btn good" data-all>${icon('check')}${t('upd_apply_safe', { n: safeN })}</button>` : ''}</div>
-        <div class="upd-list">${list.length ? list.map(card).join('') : empty}</div></div>`;
+        <div class="upd-list">${list.length ? list.map(card).join('') : empty}</div>`}
+      </div>`;
 
       $$('[data-f]', root).forEach((c) => (c.onclick = () => { filter = c.dataset.f; src = 'all'; draw(); }));
       $$('[data-src]', root).forEach((c) => (c.onclick = () => { src = c.dataset.src; draw(); }));
@@ -96,6 +114,8 @@
       $$('[data-more]', root).forEach((c) => (c.onclick = () => { const bq = c.previousElementSibling; const open = bq.classList.toggle('clamp') === false; c.textContent = t(open ? 'upd_less' : 'upd_more'); }));
       $$('[data-conn]', root).forEach((c) => (c.onclick = () => PM.connect.wizard(c.dataset.conn, async () => { try { S.status = (await api('GET', '/api/me')).status; } catch (e) { /* ignore */ } draw(); })));
       $$('[data-add]', root).forEach((c) => (c.onclick = addDialog));
+      $$('[data-view]', root).forEach((c) => (c.onclick = () => { view = c.dataset.view; draw(); }));
+      $$('[data-sched]', root).forEach((c) => (c.onclick = schedDialog));
       $$('[data-sync]', root).forEach((c) => (c.onclick = () => sync(c)));
       $$('[data-apply]', root).forEach((b) => (b.onclick = async () => {
         const r = rows.find((x) => x.id === Number(b.dataset.apply));
@@ -144,6 +164,26 @@
         if (!body) { m.$('#msgBody').focus(); return; }
         const r = await busy(m.$('#msgGo'), () => api('POST', `/api/projects/${p.id}/messages`, { source: m.$('#msgSrc').value, sender: m.$('#msgFrom').value, body }));
         if (r) { m.close(); toast(t('msg_analyzed', { n: r.rows }), 'ok'); filter = 'pending'; src = 'all'; reload(); }
+      };
+    }
+
+    // the automatic sync schedule, saved on the server so it keeps running when nobody has the page open
+    function schedDialog() {
+      const cur = sh.schedule || { mode: 'off', time: '08:00' }, st = S.status || {};
+      const modes = ['off', 'hourly', 'every4h', 'daily', 'weekdays'];
+      const m = modal({ title: t('sh_sched_title'), body: `<p class="muted" style="margin-top:0">${t('sh_sched_lead')}</p>
+        ${!st.graph && !st.jira ? `<div class="banner mb small">${icon('alert')}<div>${t('sh_need_conn')}</div></div>` : ''}
+        <div class="sh-modes" role="radiogroup" aria-label="${esc(t('sh_freq'))}">${modes.map((k) => `<label class="sh-mode ${cur.mode === k ? 'on' : ''}"><input type="radio" name="shMode" value="${k}" ${cur.mode === k ? 'checked' : ''}><span>${t('sh_f_' + k)}</span></label>`).join('')}</div>
+        <label class="f sh-time" id="shTimeRow">${t('sh_time')}<input type="time" id="shTime" value="${esc(cur.time || '08:00')}"></label>`,
+        footer: `<button class="btn" data-close>${t('cancel')}</button><button class="btn primary" id="shSave">${icon('check')}${t('sh_save')}</button>` });
+      const mode = () => (m.$('input[name=shMode]:checked') || {}).value || 'off';
+      const fit = () => { m.$('#shTimeRow').hidden = !['daily', 'weekdays'].includes(mode()); [...m.el.querySelectorAll('.sh-mode')].forEach((l) => l.classList.toggle('on', l.querySelector('input').checked)); };
+      m.el.querySelectorAll('input[name=shMode]').forEach((i) => (i.onchange = fit)); fit();
+      m.$('#shSave').onclick = async () => {
+        const time = m.$('#shTime').value || '08:00';
+        const r = await busy(m.$('#shSave'), () => api('PUT', `/api/projects/${p.id}/sync-schedule`, { mode: mode(), time, tzo: new Date().getTimezoneOffset() }));
+        if (!r) return;
+        sh = r; m.close(); toast(r.next ? t('sh_saved_on', { d: fdt(r.next) }) : t('sh_saved_off'), 'ok'); draw();
       };
     }
 

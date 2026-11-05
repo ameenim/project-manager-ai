@@ -108,3 +108,7 @@ Reports are written by the server and kept with the project. Word, Excel and Pow
 
 
 The prompts live in server/extract2.js (document roles, extraction, risks) and public/engine.js (schedule synthesis). They are written for a principal project manager persona and ask for references, prices, acceptance events, payment terms, durations and owners.
+
+## Sync history and automatic sync
+
+The Updates tab shows when the project was last synced, when the next automatic sync is due, and a Sync history view with the last 50 runs (time, manual or scheduled, what each source found, and any errors). Auto sync is set per project (off, hourly, every 4 hours, daily or weekdays at a chosen time). The schedule is stored on the project, and the server checks for due syncs every minute and runs them as the person who set the schedule, so it keeps working when nobody has the page open. Endpoints: `GET /api/projects/:id/sync-history` and `PUT /api/projects/:id/sync-schedule`.
