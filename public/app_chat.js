@@ -8,6 +8,8 @@
   const { esc, t, icon } = PM;
 
   Object.assign(PM.I18N.en, {
+    cht_history: 'Chat history', cht_hist_back: 'Back to the chat', cht_hist_empty: 'No chats yet. Your chats will be kept here.', cht_hist_msgs: '{n} messages', cht_hist_now: 'Open now', cht_hist_del: 'Delete this chat', cht_hist_sure: 'Delete', cht_hist_deleted: 'Chat deleted', cht_untitled: 'Untitled chat', cht_hist_fail: 'The history could not load. Try again.',
+    cht_wide: 'Make the chat wider', cht_narrow: 'Make the chat narrower', cht_resize: 'Drag to resize. Double click to reset.', cht_grow: 'Drag to make the message box taller. Double click to reset.',
     cht_title: 'Project chat', cht_all: 'All projects', cht_open: 'Open the project chat', cht_close: 'Close', cht_new: 'Start a new chat',
     cht_ph: 'Ask about your projects', cht_send: 'Send', cht_stop: 'Stop', cht_thinking: 'Thinking', cht_tool: 'Checking your data',
     cht_sources: 'Sources', cht_apply: 'Apply', cht_cancel: 'Cancel', cht_edit: 'Edit', cht_undo: 'Undo', cht_back: 'Back', cht_yes: 'Yes, apply',
@@ -28,6 +30,8 @@
     cht_v_open: 'Open', cht_v_progress: 'In progress', cht_v_closed: 'Closed', cht_v_mitigated: 'Mitigated', cht_v_transferred: 'Transferred', cht_v_pending: 'Pending', cht_v_invoiced: 'Invoiced', cht_v_paid: 'Paid', cht_v_low: 'Low', cht_v_medium: 'Medium', cht_v_high: 'High',
   });
   Object.assign(PM.I18N.ar, {
+    cht_history: 'سجل المحادثات', cht_hist_back: 'العودة إلى المحادثة', cht_hist_empty: 'لا توجد محادثات بعد. ستُحفظ محادثاتك هنا.', cht_hist_msgs: '{n} رسائل', cht_hist_now: 'مفتوحة الآن', cht_hist_del: 'حذف هذه المحادثة', cht_hist_sure: 'حذف', cht_hist_deleted: 'تم حذف المحادثة', cht_untitled: 'محادثة بلا عنوان', cht_hist_fail: 'تعذر تحميل السجل. حاول مرة أخرى.',
+    cht_wide: 'وسّع المحادثة', cht_narrow: 'قلّل عرض المحادثة', cht_resize: 'اسحب لتغيير الحجم. انقر مرتين للإعادة.', cht_grow: 'اسحب لتكبير مربع الرسالة. انقر مرتين للإعادة.',
     cht_title: 'محادثة المشروع', cht_all: 'كل المشاريع', cht_open: 'افتح محادثة المشروع', cht_close: 'إغلاق', cht_new: 'ابدأ محادثة جديدة',
     cht_ph: 'اسأل عن مشاريعك', cht_send: 'إرسال', cht_stop: 'إيقاف', cht_thinking: 'جار التفكير', cht_tool: 'جار فحص بياناتك',
     cht_sources: 'المصادر', cht_apply: 'تطبيق', cht_cancel: 'إلغاء', cht_edit: 'تعديل', cht_undo: 'تراجع', cht_back: 'رجوع', cht_yes: 'نعم، طبّق',
@@ -48,7 +52,9 @@
     cht_v_open: 'مفتوح', cht_v_progress: 'قيد التنفيذ', cht_v_closed: 'مغلق', cht_v_mitigated: 'تمت المعالجة', cht_v_transferred: 'تم النقل', cht_v_pending: 'قيد الانتظار', cht_v_invoiced: 'تمت الفوترة', cht_v_paid: 'مدفوعة', cht_v_low: 'منخفض', cht_v_medium: 'متوسط', cht_v_high: 'مرتفع',
   });
 
-  const S = { open: false, busy: false, ctl: null, ctx: { projectId: null, screen: 'portfolio' }, data: null, msgs: [], confirming: null, raf: 0 };
+  const pref = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* storage blocked */ } return null; };
+  const DEF_W = 420, MIN_W = 340, WIDE_W = 760, MIN_IN = 38;
+  const S = { open: false, busy: false, ctl: null, ctx: { projectId: null, screen: 'portfolio' }, data: null, msgs: [], confirming: null, raf: 0, mode: 'chat', hist: null, w: Number(pref('pm_chat_w')) || DEF_W, inH: Number(pref('pm_chat_inh')) || 0, dragging: false };
   let root = null;
   const $q = (sel) => (root ? root.querySelector(sel) : null);
   const ctxFromHash = () => {
@@ -89,13 +95,17 @@
     root.innerHTML = `
       <button class="cht-fab" id="chtFab" type="button" aria-haspopup="dialog" aria-expanded="false" aria-label="${esc(t('cht_open'))}" data-tip="${esc(t('cht_open'))}">${icon('chat')}</button>
       <section class="cht-panel" id="chtPanel" role="dialog" aria-modal="false" aria-labelledby="chtHead" hidden>
+        <div class="cht-resize" id="chtResize" role="separator" aria-orientation="vertical" aria-label="${esc(t('cht_resize'))}" data-tip="${esc(t('cht_resize'))}"></div>
         <header class="cht-head">
           <div class="grow"><h2 id="chtHead">${esc(t('cht_title'))}</h2><div class="small muted cht-ctx" id="chtCtx"></div></div>
+          <button class="btn ghost icon" type="button" data-act="hist" id="chtHistBtn" aria-label="${esc(t('cht_history'))}" data-tip="${esc(t('cht_history'))}">${icon('clock')}</button>
+          <button class="btn ghost icon cht-wide-btn" type="button" data-act="wide" id="chtWideBtn" aria-label="${esc(t('cht_wide'))}" data-tip="${esc(t('cht_wide'))}">${icon('expand')}</button>
           <button class="btn ghost icon" type="button" data-act="new" aria-label="${esc(t('cht_new'))}" data-tip="${esc(t('cht_new'))}">${icon('plus')}</button>
           <button class="btn ghost icon" type="button" data-act="close" aria-label="${esc(t('cht_close'))}" data-tip="${esc(t('cht_close'))}">${icon('x')}</button>
         </header>
         <div class="cht-body" id="chtBody" role="log" aria-live="polite" tabindex="0"></div>
         <footer class="cht-foot">
+          <div class="cht-grip" id="chtGrip" role="separator" aria-orientation="horizontal" aria-label="${esc(t('cht_grow'))}" data-tip="${esc(t('cht_grow'))}"></div>
           <div class="small muted cht-note" id="chtNote"></div>
           <div class="cht-composer">
             <textarea id="chtIn" rows="1" maxlength="4000" placeholder="${esc(t('cht_ph'))}" aria-label="${esc(t('cht_ph'))}"></textarea>
@@ -109,9 +119,39 @@
     const inp = $q('#chtIn');
     inp.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); submit(); } });
     inp.addEventListener('input', grow);
-    root.addEventListener('keydown', (e) => { if (e.key === 'Escape' && S.open) { e.stopPropagation(); close(); } });
+    applyWidth(); applyInputHeight(); bindResize();
+    root.addEventListener('keydown', (e) => { if (e.key === 'Escape' && S.open) { e.stopPropagation(); close(); } else if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('cht-h-item')) { e.preventDefault(); openChat(e.target.dataset.id); } });
   }
-  function grow() { const i = $q('#chtIn'); i.style.height = 'auto'; i.style.height = Math.min(i.scrollHeight, 120) + 'px'; }
+  // the message box grows with the text up to a cap. A person can raise the base height by dragging its top line.
+  function grow() { const i = $q('#chtIn'); if (!i) return; const base = S.inH || 0; i.style.height = 'auto'; i.style.height = Math.max(base, Math.min(i.scrollHeight, Math.max(base, 120))) + 'px'; }
+  function applyInputHeight() { const i = $q('#chtIn'); if (!i) return; i.style.minHeight = S.inH ? S.inH + 'px' : ''; i.style.maxHeight = S.inH ? Math.max(S.inH, 120) + 'px' : ''; grow(); }
+  const maxWidth = () => Math.max(MIN_W, Math.min(1000, window.innerWidth - 280));
+  function applyWidth() {
+    S.w = Math.round(Math.max(MIN_W, Math.min(maxWidth(), S.w || DEF_W)));
+    document.documentElement.style.setProperty('--chat-w', S.w + 'px');
+    const b = $q('#chtWideBtn'); if (!b) return;
+    const wide = S.w > DEF_W + 40, lab = t(wide ? 'cht_narrow' : 'cht_wide');
+    b.innerHTML = icon(wide ? 'shrink' : 'expand'); b.setAttribute('aria-label', lab); b.dataset.tip = lab;
+  }
+  // a drag on a handle: the callback gets every pointer move, the end callback runs once
+  function dragHandle(el, move, end) {
+    el.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault(); el.setPointerCapture(e.pointerId); S.dragging = true; document.body.classList.add('cht-dragging');
+      const mv = (ev) => move(ev, e);
+      const up = () => { el.removeEventListener('pointermove', mv); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); S.dragging = false; document.body.classList.remove('cht-dragging'); if (end) end(); };
+      el.addEventListener('pointermove', mv); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+    });
+  }
+  function bindResize() {
+    const rtl = document.documentElement.dir === 'rtl';
+    dragHandle($q('#chtResize'), (ev) => { S.w = rtl ? ev.clientX : window.innerWidth - ev.clientX; applyWidth(); }, () => pref('pm_chat_w', String(S.w)));
+    $q('#chtResize').addEventListener('dblclick', () => { S.w = DEF_W; applyWidth(); pref('pm_chat_w', null); });
+    const grip = $q('#chtGrip'); let startH = 0;
+    grip.addEventListener('pointerdown', () => { startH = $q('#chtIn').offsetHeight; });
+    dragHandle(grip, (ev, first) => { S.inH = Math.round(Math.max(MIN_IN, Math.min(window.innerHeight * 0.5, startH + (first.clientY - ev.clientY)))); applyInputHeight(); }, () => { if (S.inH <= MIN_IN + 2) S.inH = 0; applyInputHeight(); pref('pm_chat_inh', S.inH ? String(S.inH) : null); });
+    grip.addEventListener('dblclick', () => { S.inH = 0; applyInputHeight(); pref('pm_chat_inh', null); });
+  }
 
   // ---------- open, close, load ----------
   async function open() {
@@ -123,14 +163,14 @@
     await load();
     const i = $q('#chtIn'); if (i) i.focus();
   }
-  function close() {
+  function close(quiet) {
     if (!root) return;
     S.open = false; keep('pm_chat_open', '0');
     const p = $q('#chtPanel'); p.classList.remove('on');
     document.body.classList.remove('chat-open');
     $q('#chtFab').setAttribute('aria-expanded', 'false');
     setTimeout(() => { if (!S.open) p.hidden = true; }, 260);
-    $q('#chtFab').focus();
+    if (quiet !== true) $q('#chtFab').focus();
   }
   async function load() {
     S.ctx = ctxFromHash();
@@ -181,10 +221,30 @@
     const brief = d.brief ? `<div class="cht-brief"><div class="small muted">${esc(t('cht_brief_h'))}</div>${b.length ? b.map((x) => `<button class="cht-tile" type="button" data-act="sug" data-q="${esc(t('cht_q_' + x.key))}"><b>${esc(String(x.n))}</b><span>${esc(t('cht_b_' + x.key, { n: '' }).trim())}</span></button>`).join('') : `<div class="small muted">${esc(t('cht_brief_clear'))}</div>`}</div>` : '';
     return `<div class="cht-empty"><div class="cht-empty-ic">${icon('spark')}</div><h3>${esc(t('cht_empty_title'))}</h3><p class="muted">${esc(d.capabilities || '')}</p>${S.loadError ? `<p class="cht-err small" role="alert">${esc(S.loadError)}</p>` : ''}${brief}<div class="cht-sugs">${sug}</div></div>`;
   }
+  const when = (x) => { try { return new Date(x).toLocaleString(PM.state.lang === 'ar' ? 'ar' : 'en', { dateStyle: 'medium', timeStyle: 'short' }); } catch (e) { return ''; } };
+  function historyHtml() {
+    const H = S.hist || {};
+    if (H.items == null) return `<div class="cht-h-wait">${PM.loader.html({ size: 'md' })}</div>`;
+    if (H.error) return `<div class="cht-empty"><p class="cht-err small" role="alert">${esc(H.error)}</p></div>`;
+    if (!H.items.length) return `<div class="cht-empty"><div class="cht-empty-ic">${icon('clock')}</div><p class="muted">${esc(t('cht_hist_empty'))}</p></div>`;
+    return `<div class="cht-h-list">${H.items.map((x) => {
+      const sure = H.confirm === x.id;
+      const end = sure
+        ? `<button class="btn danger sm" type="button" data-act="hdel2" data-id="${x.id}">${esc(t('cht_hist_sure'))}</button><button class="btn ghost sm" type="button" data-act="hkeep">${esc(t('cht_back'))}</button>`
+        : `<button class="btn ghost icon sm" type="button" data-act="hdel" data-id="${x.id}" aria-label="${esc(t('cht_hist_del'))}" data-tip="${esc(t('cht_hist_del'))}">${icon('trash')}</button>`;
+      return `<div class="cht-h-item ${x.current ? 'cur' : ''}" role="button" tabindex="0" data-act="hopen" data-id="${x.id}"><div class="cht-h-body"><div class="cht-h-t" dir="auto">${esc(x.title || t('cht_untitled'))}</div><div class="small muted">${esc(when(x.updated_at))} · ${esc(t('cht_hist_msgs', { n: x.messages }))}${x.current ? ` <span class="chip blue">${esc(t('cht_hist_now'))}</span>` : ''}</div></div>${end}</div>`;
+    }).join('')}</div>`;
+  }
   function paint(toEnd) {
     if (!root) return;
     $q('#chtCtx').textContent = ctxName();
+    const hist = S.mode === 'history';
+    root.classList.toggle('hist', hist);
+    $q('#chtHead').textContent = t(hist ? 'cht_history' : 'cht_title');
+    const hb = $q('#chtHistBtn'); const hl = t(hist ? 'cht_hist_back' : 'cht_history');
+    hb.innerHTML = icon(hist ? 'back' : 'clock'); hb.setAttribute('aria-label', hl); hb.dataset.tip = hl; hb.classList.toggle('on', hist);
     const body = $q('#chtBody');
+    if (hist) { body.innerHTML = historyHtml(); return; }
     const near = body.scrollHeight - body.scrollTop - body.clientHeight < 80;
     body.innerHTML = S.msgs.length ? S.msgs.map(msgHtml).join('') : emptyHtml();
     if (toEnd || near) body.scrollTop = body.scrollHeight;
@@ -238,6 +298,33 @@
     else if (ev.type === 'error') { bot.error = ev.message; bot.text = bot.text || ''; soon(); }
   }
 
+  // ---------- history ----------
+  async function showHistory() {
+    if (S.busy) return;
+    S.mode = 'history'; S.hist = { items: null, confirm: null, error: '' }; paint();
+    try {
+      const q = new URLSearchParams(); if (S.ctx.projectId) q.set('project_id', S.ctx.projectId);
+      S.hist.items = (await PM.api('GET', '/api/chat/history?' + q)).items;
+    } catch (e) { S.hist.items = []; S.hist.error = t('cht_hist_fail'); }
+    paint();
+  }
+  function backToChat() { S.mode = 'chat'; S.hist = null; paint(true); const i = $q('#chtIn'); if (i) i.focus(); }
+  async function openChat(id) {
+    const it = (S.hist && S.hist.items || []).find((x) => String(x.id) === String(id)); if (!it || S.busy) return;
+    if (it.current) return backToChat();
+    try { await PM.api('POST', `/api/chat/threads/${id}/open`, {}); S.mode = 'chat'; S.hist = null; await load(); }
+    catch (e) { PM.toast(e.message, 'err'); }
+  }
+  async function deleteChat(id) {
+    try {
+      const it = S.hist.items.find((x) => String(x.id) === String(id));
+      await PM.api('DELETE', `/api/chat/threads/${id}`);
+      S.hist.items = S.hist.items.filter((x) => String(x.id) !== String(id)); S.hist.confirm = null;
+      if (it && it.current) { S.msgs = []; S.needReload = true; }
+      PM.toast(t('cht_hist_deleted'), 'ok'); paint();
+    } catch (e) { PM.toast(e.message, 'err'); }
+  }
+
   // ---------- actions ----------
   const find = (id) => S.msgs.find((m) => String(m.id) === String(id));
   async function cardCall(id, what, body) {
@@ -270,10 +357,16 @@
     const act = el.dataset.act; const id = el.dataset.id;
     if (act === 'nav') { if (window.matchMedia('(max-width: 600px)').matches) close(); return; }
     if (act === 'close') return close();
+    if (act === 'hist') return S.mode === 'history' ? (S.needReload ? (S.needReload = false, S.mode = 'chat', load()) : backToChat()) : showHistory();
+    if (act === 'wide') { S.w = S.w > DEF_W + 40 ? DEF_W : WIDE_W; applyWidth(); pref('pm_chat_w', String(S.w)); return; }
+    if (act === 'hopen') return openChat(id);
+    if (act === 'hdel') { S.hist.confirm = Number(id); return paint(); }
+    if (act === 'hkeep') { S.hist.confirm = null; return paint(); }
+    if (act === 'hdel2') return deleteChat(id);
     if (act === 'send') return submit();
     if (act === 'stop') { if (S.ctl) S.ctl.abort(); return; }
     if (act === 'sug') { return send(el.dataset.q); }
-    if (act === 'new') { if (S.busy) return; PM.api('POST', '/api/chat/clear', { project_id: S.ctx.projectId }).then(load).catch((x) => PM.toast(x.message, 'err')); return; }
+    if (act === 'new') { if (S.busy) return; S.mode = 'chat'; S.hist = null; S.needReload = false; PM.api('POST', '/api/chat/clear', { project_id: S.ctx.projectId }).then(load).catch((x) => PM.toast(x.message, 'err')); return; }
     if (act === 'copy') { const m = find(id); if (m && navigator.clipboard) navigator.clipboard.writeText(m.text).then(() => PM.toast(t('cht_copied'), 'ok')).catch(() => {}); return; }
     if (act === 'up' || act === 'down') {
       const m = find(id); if (!m) return; const want = act === 'up' ? 1 : -1; const v = m.feedback === want ? 0 : want;
@@ -291,13 +384,13 @@
   function onHash() {
     const c = ctxFromHash();
     if (!root) return;
-    if (c.projectId !== S.ctx.projectId) { if (S.busy && S.ctl) S.ctl.abort(); if (S.open) load(); else S.ctx = c; }
+    if (c.projectId !== S.ctx.projectId) { if (S.busy && S.ctl) S.ctl.abort(); S.mode = 'chat'; S.hist = null; S.needReload = false; if (S.open) load(); else S.ctx = c; }
     else S.ctx = c;
   }
   // a language change rebuilds the shell so every label follows
   function rebuild() {
     if (!root) return;
-    const was = S.open; root.remove(); root = null; document.body.classList.remove('chat-open');
+    const was = S.open; S.mode = 'chat'; S.hist = null; root.remove(); root = null; document.body.classList.remove('chat-open');
     build(); bindFab();
     if (was) { S.open = false; open(); } else paint();
   }
@@ -307,6 +400,13 @@
     build(); bindFab();
     new MutationObserver(() => rebuild()).observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
     window.addEventListener('hashchange', onHash);
+    window.addEventListener('resize', () => { if (root) applyWidth(); });
+    // a click anywhere outside the chat closes it. Dialogs, toasts, tooltips and the loading screen are not "outside".
+    document.addEventListener('pointerdown', (e) => {
+      if (!S.open || !root || S.dragging || root.contains(e.target)) return;
+      if (e.target.closest && e.target.closest('.pmld-screen, #toasts, .overlay, .modal, .gt-tip, .viz-tip, .g-tip, .dw-menu, [data-keep-chat]')) return;
+      close(true);
+    }, true);
     if (keep('pm_chat_open') === '1' && !window.matchMedia('(max-width: 820px)').matches) open();
   }
   PM.chat = { init, open, close };

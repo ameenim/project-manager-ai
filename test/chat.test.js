@@ -452,3 +452,34 @@ test('an unknown document type is rejected and a failed card leaves no generated
   assert.equal(ap.status, 409);
   assert.equal((await s.call('GET', `/api/projects/${p.id}/generated`, null, u.token)).data.generated.length, 0, 'the charter was removed with the failed card');
 });
+
+test('chat history lists earlier chats, opens one, deletes one and keeps other people out', async () => {
+  const { u, p } = await setup();
+  say(text('First answer.')); await talk(u.token, { project_id: p.id, text: 'What is late in this project?' });
+  await s.call('POST', '/api/chat/clear', { project_id: p.id }, u.token);
+  say(text('Second answer.')); await talk(u.token, { project_id: p.id, text: 'Which risks are open in this project?' });
+  const list = async () => (await s.call('GET', `/api/chat/history?project_id=${p.id}`, null, u.token)).data.items;
+  let h = await list();
+  assert.equal(h.length, 2);
+  assert.equal(h[0].title, 'Which risks are open in this project?'); assert.equal(h[0].current, true);
+  assert.equal(h[1].title, 'What is late in this project?'); assert.equal(h[1].current, false);
+  assert.ok(h[1].messages >= 2);
+  // open the older chat: it becomes the open one and its messages come back
+  const o = await s.call('POST', `/api/chat/threads/${h[1].id}/open`, {}, u.token);
+  assert.equal(o.status, 200);
+  const view = (await s.call('GET', `/api/chat?project_id=${p.id}&screen=overview`, null, u.token)).data;
+  assert.ok(view.messages.some((m) => m.text === 'First answer.'));
+  h = await list();
+  assert.equal(h.filter((x) => x.current).length, 1);
+  assert.equal(h.find((x) => x.current).title, 'What is late in this project?');
+  // another person cannot read, open or delete it
+  const other = await person();
+  if (other.id !== u.id) {
+    assert.equal((await s.call('POST', `/api/chat/threads/${h[0].id}/open`, {}, other.token)).status, 404);
+    assert.equal((await s.call('DELETE', `/api/chat/threads/${h[0].id}`, null, other.token)).status, 404);
+  }
+  // delete the one that is not open
+  const spare = h.find((x) => !x.current);
+  assert.equal((await s.call('DELETE', `/api/chat/threads/${spare.id}`, null, u.token)).status, 200);
+  assert.equal((await list()).length, 1);
+});

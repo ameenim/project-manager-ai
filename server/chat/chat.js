@@ -410,6 +410,31 @@ function createChat({ db, store, api, auth, ops, model }) {
     await q('UPDATE chat_threads SET archived = true WHERE user_id = $1 AND archived = false AND COALESCE(project_id, 0) = $2', [user.id, projectId || 0]);
     return { ok: true };
   }
+  // ---------- history ----------
+  // Every chat the person started stays in the list. One chat per context (a project, or all projects) is the open one.
+  async function historyList(user, projectId) {
+    await access(user, projectId);
+    const r = await q("SELECT t.id, t.archived, t.updated_at, t.created_at, (SELECT x.text FROM chat_messages x WHERE x.thread_id = t.id AND x.role = 'user' ORDER BY x.id LIMIT 1) AS title, (SELECT COUNT(*) FROM chat_messages x WHERE x.thread_id = t.id AND x.role IN ('user','assistant')) AS n FROM chat_threads t WHERE t.user_id = $1 AND COALESCE(t.project_id, 0) = $2 AND EXISTS (SELECT 1 FROM chat_messages x WHERE x.thread_id = t.id AND x.role = 'user') ORDER BY t.updated_at DESC LIMIT 50", [user.id, projectId || 0]);
+    return { items: r.rows.map((x) => ({ id: x.id, current: !x.archived, title: clip(String(x.title || '').replace(/\s+/g, ' ').trim(), 90), messages: Number(x.n), updated_at: x.updated_at })) };
+  }
+  async function ownThread(user, id) {
+    const t = (await q('SELECT * FROM chat_threads WHERE id = $1 AND user_id = $2', [Number(id), user.id])).rows[0];
+    if (!t) throw err(404, 'Not found');
+    if (t.project_id != null) await access(user, Number(t.project_id));
+    return t;
+  }
+  async function openThread(user, id) {
+    const t = await ownThread(user, id);
+    // the open chat of this context is put away first, so only one chat is open at a time
+    await q('UPDATE chat_threads SET archived = true WHERE user_id = $1 AND archived = false AND COALESCE(project_id, 0) = $2 AND id <> $3', [user.id, t.project_id || 0, t.id]);
+    await q('UPDATE chat_threads SET archived = false WHERE id = $1', [t.id]);
+    return { ok: true };
+  }
+  async function deleteThread(user, id) {
+    const t = await ownThread(user, id);
+    await q('DELETE FROM chat_threads WHERE id = $1', [t.id]);
+    return { ok: true };
+  }
   async function feedback(user, id, value) {
     const m = await loadMessage(user, id);
     const v = value === 1 ? 1 : value === -1 ? -1 : 0;
@@ -425,10 +450,13 @@ function createChat({ db, store, api, auth, ops, model }) {
     if (!p.startsWith('/api/chat')) return false;
     const read = async () => { const raw = await io.readBody(req, 64 * 1024); if (!raw.length) return {}; try { return JSON.parse(raw.toString('utf8')); } catch (e) { throw err(400, 'The request body is not valid JSON'); } };
     const pid = (v) => (v == null || v === '' || v === 'null' ? null : Number(v));
+    let m;
     if (method === 'GET' && p === '/api/chat') { io.json(res, 200, await view(user, pid(url.searchParams.get('project_id')), url.searchParams.get('screen'))); return true; }
     if (method === 'GET' && p === '/api/chat/feedback') { io.json(res, 200, await feedbackList(user)); return true; }
+    if (method === 'GET' && p === '/api/chat/history') { io.json(res, 200, await historyList(user, pid(url.searchParams.get('project_id')))); return true; }
+    if (method === 'POST' && (m = p.match(/^\/api\/chat\/threads\/(\d+)\/open$/))) { io.json(res, 200, await openThread(user, m[1])); return true; }
+    if (method === 'DELETE' && (m = p.match(/^\/api\/chat\/threads\/(\d+)$/))) { io.json(res, 200, await deleteThread(user, m[1])); return true; }
     if (method === 'POST' && p === '/api/chat/clear') { const b = await read(); io.json(res, 200, await clear(user, pid(b.project_id))); return true; }
-    let m;
     if (method === 'POST' && (m = p.match(/^\/api\/chat\/messages\/(\d+)\/(apply|cancel|undo|feedback)$/))) {
       const b = await read(); const lang = uiLang(user);
       const out = m[2] === 'apply' ? await applyCard(user, m[1], b, lang) : m[2] === 'cancel' ? await cancelCard(user, m[1]) : m[2] === 'undo' ? await undoCard(user, m[1], lang) : await feedback(user, m[1], b.value);
@@ -450,7 +478,7 @@ function createChat({ db, store, api, auth, ops, model }) {
     throw err(404, 'Not found');
   }
 
-  return { route, message, view, brief, feedbackList, clear, applyCard, cancelCard, undoCard, feedback, purge };
+  return { route, message, view, brief, feedbackList, historyList, openThread, deleteThread, clear, applyCard, cancelCard, undoCard, feedback, purge };
 }
 
 module.exports = { createChat };

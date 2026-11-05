@@ -1573,3 +1573,24 @@ body.ded-open { overflow: hidden; }
 .wk-cv.cl-t { min-height: 16px; font-size: var(--fs-small); } .wk-bar { position: relative; } .wk-bar .cl-mid { position: absolute; inset-inline: 0; top: 50%; transform: translateY(-50%); text-align: center; text-shadow: 0 0 3px var(--surface), 0 0 3px var(--surface); overflow: visible; }
 .wk-cl b.cl-t { font-size: var(--fs-small); }
 .dw .cl-btn { opacity: .3; transition: opacity .15s; } .dw:hover .cl-btn, .dw .cl-btn:focus-visible, .cl-btn[aria-expanded=true] { opacity: 1; } .dw .cl-btn { color: var(--muted); }
+
+/* chat: resize handles, history */
+.cht-resize { position: absolute; inset-block: 0; inset-inline-start: -5px; width: 10px; cursor: col-resize; z-index: 3; touch-action: none; }
+.cht-resize::after { content: ''; position: absolute; inset-block: 0; inset-inline-start: 4px; width: 2px; background: transparent; transition: background .15s var(--ease); }
+.cht-resize:hover::after { background: var(--primary); }
+.cht-foot { position: relative; }
+.cht-grip { position: absolute; inset-inline: 0; top: -5px; height: 10px; cursor: row-resize; z-index: 3; touch-action: none; }
+.cht-grip::after { content: ''; position: absolute; inset-inline: 0; top: 4px; height: 2px; background: transparent; transition: background .15s var(--ease); }
+.cht-grip:hover::after { background: var(--primary); }
+body.cht-dragging { user-select: none; }
+body.cht-dragging .cht-resize::after, body.cht-dragging .cht-grip::after { background: var(--primary); }
+.cht-head .btn.on { background: var(--primary-soft); color: var(--primary); }
+.cht-panel.hist .cht-foot { display: none; }
+.cht-h-list { display: flex; flex-direction: column; gap: 8px; }
+.cht-h-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); cursor: pointer; text-align: start; transition: background .12s var(--ease); }
+.cht-h-item:hover, .cht-h-item:focus-visible { background: var(--surface-2); }
+.cht-h-item.cur { border-color: var(--primary); background: var(--primary-soft); }
+.cht-h-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.cht-h-t { font-size: var(--fs-body); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cht-h-wait { display: grid; place-items: center; padding: 40px 0; }
+@media (max-width: 600px) { .cht-resize, .cht-wide-btn { display: none; } }
