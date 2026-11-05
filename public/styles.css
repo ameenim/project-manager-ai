@@ -1534,7 +1534,15 @@ body.ded-open { overflow: hidden; }
 /* the loading screen: centered on the whole window, everything behind it dimmed and blurred */
 .pmld-screen { position: fixed; inset: 0; z-index: 250; display: grid; place-items: center; padding: 20px; background: rgba(10, 16, 32, .55); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); opacity: 0; transition: opacity .2s var(--ease); }
 .pmld-screen.on { opacity: 1; }
-.pmld-screen .pmld { padding: 28px 44px 24px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-lg); }
+/* no box: the logo and circles sit straight on the dimmed page, so colors are the light ones that read on the dark scrim in both themes */
+.pmld-screen .pmld { --ring: rgba(255, 255, 255, .6); --dot1: #7aa2ff; --dot2: #a08cf5; --dot3: #ffffff; }
+.pmld-screen .pmld-ring { border-color: var(--ring); }
+.pmld-screen .pmld-ring.r2 { border-color: var(--dot2); }
+.pmld-screen .pmld-arm.a1 b { background: var(--dot1); }
+.pmld-screen .pmld-arm.a2 b { background: var(--dot2); }
+.pmld-screen .pmld-arm.a3 b { background: var(--dot3); }
+.pmld-screen .pmld-mark { filter: drop-shadow(0 8px 24px rgba(0, 0, 0, .35)); }
+.pmld-screen .pmld-label { color: rgba(255, 255, 255, .92); text-shadow: 0 1px 8px rgba(0, 0, 0, .5); }
 .cht-busy { align-items: center; gap: 10px; color: var(--muted); }
 @media (prefers-reduced-motion: reduce) {
   .pmld-ring, .pmld-arm { animation: none !important; }
