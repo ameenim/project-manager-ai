@@ -642,5 +642,5 @@
     if (animate) setTimeout(() => grid.classList.remove('anim'), 2200);
   }
 
-  PM.dash = { mount, h: { listRow, projLink, stamp, width: () => CW, tipAttr: tip, hbars, donut, legend, empty, tip, num, dnum, ymd, trunc, countUp, csvOf, reduced, WIDGETS } };
+  PM.dash = { mount, main: MAIN, h: { listRow, projLink, stamp, width: () => CW, tipAttr: tip, hbars, donut, legend, empty, tip, num, dnum, ymd, trunc, countUp, csvOf, reduced, WIDGETS } };
 })();

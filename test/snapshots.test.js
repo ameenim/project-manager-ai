@@ -168,3 +168,14 @@ test('pure helpers: period, aggregate and untrusted history', () => {
   assert.equal(clean[0].figures.health, 'green'); assert.equal(clean[0].figures.progress, null); assert.equal(clean[0].figures.overdue, 3);
   assert.equal(clean[0].figures.evil, undefined);
 });
+
+test('both overview payloads carry a 30 day trend for their trend widgets', async () => {
+  const u = await s.user(); const p = await s.project(u.token, 'Overview trend');
+  const main = (await s.call('GET', '/api/dashboard', null, u.token)).data;
+  assert.equal(main.trends.days, 30);
+  assert.equal(main.trends.latest.n, 1);
+  const one = (await s.call('GET', `/api/projects/${p.id}/dashboard`, null, u.token)).data;
+  assert.equal(one.trends.days, 30);
+  assert.equal(one.trends.latest.date, today());
+  assert.equal(one.trends.projects[0].id, p.id);
+});

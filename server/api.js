@@ -942,7 +942,9 @@ module.exports = function createApi(store, auth, connectors) {
     }
     return { today: TODAY(), projects: list.map((P) => ({ id: P.id, name: P.p.name, currency: P.p.currency })), tasks, payments };
   });
-  on('GET', '/api/dashboard', async () => dashboard());
+  // the overview carries a 30 day trend so its trend widgets draw from the same response
+  const activeList = () => DB.order.map((id) => DB.projects[id]).filter((P) => P.p.status !== 'archived');
+  on('GET', '/api/dashboard', async () => ({ ...dashboard(), trends: await trendsFor(activeList(), 30) }));
   // one project's dashboard: radar, schedule and critical path, deliverables, payments and cash flow
   on('GET', '/api/projects/(\\d+)/dashboard', async (mm) => {
     const P = P_(mm[1]), raw = rawProject(P), st = stats(P);
@@ -951,7 +953,7 @@ module.exports = function createApi(store, auth, connectors) {
     const entry = { p: { ...clone(P.p), id: P.id }, stats: st, items: items.filter((i) => i.status !== 'ignored' && ['risk', 'milestone', 'deliverable'].includes(i.kind)), rows: S.progressMetrics(P.tasks, raw, TODAY()).rows, sched };
     const audit = P.audit.slice(0, 12).map((a) => ({ ...a, detail: a.detail || {} }));
     return { project: { ...projectView(P) }, radar: win.__Radar.buildRadar([entry], TODAY()), analytics: win.__Analytics.buildAnalytics([entry], TODAY()),
-      ...win.__ProjDash.buildProjectDash({ project: raw, tasks: sched, items, inbox: P.inbox, audit, today: TODAY() }) };
+      ...win.__ProjDash.buildProjectDash({ project: raw, tasks: sched, items, inbox: P.inbox, audit, today: TODAY() }), trends: await trendsFor([P], 30) };
   });
   // trends over time, drawn only from the daily snapshots. days is one of 7, 14, 30, 90, 180, 365.
   on('GET', '/api/trends', async (m, q) => trendsFor(DB.order.map((id) => DB.projects[id]).filter((P) => P.p.status !== 'archived'), periodOf(q.days)));

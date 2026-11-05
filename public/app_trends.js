@@ -17,7 +17,7 @@
     tr_nt_spi: 'SPI needs planned dates. Add task dates to see it.', tr_nt_slip: 'This needs a contract end date and a schedule.', tr_nt_pay: 'No payment milestones are recorded yet.',
     tr_since: 'since {date}', tr_week: 'vs 7 days ago', tr_same: 'No change', tr_no_prev: 'No earlier day recorded yet.', tr_no_week: 'The comparison with a week ago appears after 7 days of history.',
     tr_up: 'Up {n}', tr_down: 'Down {n}', tr_to_review: 'To review', tr_at_risk: 'Projects at risk', tr_of_projects: 'of {n} projects', tr_slip: 'Days past contract end', tr_on_time: 'On time',
-    tw_kpi: 'Key figures', tw_progress: 'Progress and plan', tw_spi: 'Schedule performance (SPI)', tw_overdue: 'Overdue tasks', tw_risk: 'High risks and items to review',
+    tw_kpi: 'Key figures and change', tw_progress: 'Progress and plan', tw_spi: 'Schedule performance (SPI)', tw_overdue: 'Overdue tasks over time', tw_risk: 'High risks and items to review',
     tw_health: 'Health mix', tw_health_p: 'Health history', tw_slip: 'Forecast drift', tw_slip_p: 'Forecast end against contract end', tw_pay: 'Payments over time', tw_proj: 'What changed by project', tw_snap: 'Daily snapshot',
     tr_takeaway: '{label} went from {from} on {fromDate} to {to} on {toDate}.', tr_flat: '{label} stayed at {v} since {fromDate}.',
     tr_building: 'Only one day is recorded so far. The line appears from the second day.',
@@ -34,7 +34,7 @@
     tr_nt_spi: 'يحتاج مؤشر الأداء إلى تواريخ مخططة. أضف تواريخ المهام لعرضه.', tr_nt_slip: 'يحتاج هذا إلى تاريخ نهاية العقد وجدول زمني.', tr_nt_pay: 'لا توجد دفعات مسجلة بعد.',
     tr_since: 'منذ {date}', tr_week: 'مقارنة بـ 7 أيام', tr_same: 'لا تغيير', tr_no_prev: 'لا يوجد يوم سابق مسجل بعد.', tr_no_week: 'تظهر المقارنة مع الأسبوع الماضي بعد 7 أيام من السجل.',
     tr_up: 'ارتفاع {n}', tr_down: 'انخفاض {n}', tr_to_review: 'بانتظار المراجعة', tr_at_risk: 'مشاريع في خطر', tr_of_projects: 'من {n} مشروع', tr_slip: 'أيام التأخر عن نهاية العقد', tr_on_time: 'في الموعد',
-    tw_kpi: 'الأرقام الرئيسية', tw_progress: 'التقدم والخطة', tw_spi: 'أداء الجدول الزمني (SPI)', tw_overdue: 'المهام المتأخرة', tw_risk: 'المخاطر العالية وعناصر المراجعة',
+    tw_kpi: 'الأرقام الرئيسية والتغير', tw_progress: 'التقدم والخطة', tw_spi: 'أداء الجدول الزمني (SPI)', tw_overdue: 'المهام المتأخرة عبر الزمن', tw_risk: 'المخاطر العالية وعناصر المراجعة',
     tw_health: 'توزيع الصحة', tw_health_p: 'سجل الصحة', tw_slip: 'انحراف التوقعات', tw_slip_p: 'نهاية التوقعات مقابل نهاية العقد', tw_pay: 'الدفعات عبر الزمن', tw_proj: 'ما تغير في كل مشروع', tw_snap: 'اللقطة اليومية',
     tr_takeaway: '{label} انتقل من {from} في {fromDate} إلى {to} في {toDate}.', tr_flat: '{label} بقي عند {v} منذ {fromDate}.',
     tr_building: 'سجل يوم واحد فقط حتى الآن. يظهر الخط ابتداء من اليوم الثاني.',
@@ -272,6 +272,17 @@
     };
   };
   const ORDER = { portfolio: ['tkpi', 'tprog', 'tspi', 'toverdue', 'trisk', 'thealth', 'tslip', 'tpay', 'tproj', 'tsnap'], project: ['tkpi', 'tprog', 'tspi', 'toverdue', 'trisk', 'thealth', 'tslip', 'tpay', 'tsnap'] };
+
+  // The same widgets, offered on the two overview pages. Those pages already load a 30 day trend with their data
+  // (d.trends), so a widget only needs to hand its own slice to the render function above.
+  const wrapped = (scope) => {
+    const set = widgets(scope), out = {};
+    for (const id of ORDER[scope]) out['tr_' + id] = { size: set[id].size, title: set[id].title, render: (body, d, ctx) => (d.trends ? set[id].render(body, d.trends, ctx) : (body.innerHTML = H().empty(t('tr_none')), { csv: () => [] })) };
+    return out;
+  };
+  PM.trends = { wrapped, ids: (scope) => ORDER[scope].map((id) => 'tr_' + id) };
+  Object.assign(PM.dash.h.WIDGETS, wrapped('portfolio'));
+  PM.dash.main.order.push(...PM.trends.ids('portfolio'));
 
   // ---------------- screens ----------------
   const PERIODS = [7, 30, 90, 365];
