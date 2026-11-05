@@ -1380,7 +1380,7 @@ Rules:
   });
   on('POST', '/api/projects/(\\d+)/msproject/import', async (m, q, b) => {
     const P = P_(m[1]); const mode = b.mode === 'merge' ? 'merge' : 'replace';
-    let parsed; try { parsed = win.__MSP.parse(b.xml); } catch (e) { throw err(400, e.message); }
+    let parsed; try { parsed = win.__MSP.parse(win.__MSP.slim(b.xml)); } catch (e) { throw err(400, e.message); }
     const plan = win.__MSP.plan(P.tasks, parsed, mode);
     if (b.preview) return { summary: plan.summary, mode, missing: plan.missing.map((t) => t.name).slice(0, 20) };
     const idOf = new Map();

@@ -49,8 +49,11 @@ function limiter(max, windowMs) {
 function readBody(req, limit) {
   return new Promise((resolve, reject) => {
     const chunks = []; let size = 0;
-    req.on('data', (c) => { size += c.length; if (size > limit) { reject(Object.assign(new Error('The request is too large'), { status: 413 })); req.destroy(); return; } chunks.push(c); });
-    req.on('end', () => resolve(Buffer.concat(chunks)));
+    // Too large: keep reading and throw the data away, then answer 413. Destroying the socket here made the
+    // hosting proxy show a bare Bad Gateway instead of our message.
+    let over = false;
+    req.on('data', (c) => { size += c.length; if (size > limit) { over = true; chunks.length = 0; if (size > limit * 4) { reject(Object.assign(new Error('The request is too large'), { status: 413 })); req.destroy(); } return; } chunks.push(c); });
+    req.on('end', () => (over ? reject(Object.assign(new Error('The request is too large'), { status: 413 })) : resolve(Buffer.concat(chunks))));
     req.on('error', reject);
   });
 }
@@ -173,7 +176,7 @@ async function createApp(opts = {}) {
     let body = null;
     if (method !== 'GET' && method !== 'HEAD') {
       const ct = String(req.headers['content-type'] || '');
-      const big = /\/api\/(projects|workspace)\/import$/.test(p);
+      const big = /\/api\/(projects|workspace)\/import$/.test(p) || /\/api\/projects\/\d+\/msproject\/import$/.test(p);
       if (ct.startsWith('multipart/form-data')) body = await readMultipart(req, big ? MAX_IMPORT : MAX_UPLOAD * 4);
       else {
         const raw = await readBody(req, big ? MAX_IMPORT : MAX_JSON);

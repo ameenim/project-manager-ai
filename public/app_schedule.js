@@ -389,7 +389,9 @@
       m.$('#mspFile').onchange = async (e) => {
         const f = e.target.files[0];
         if (!f) return;
-        xml = await f.text();
+        try { xml = await f.text(); } catch (x) { toast(t('msp_read_fail'), 'err'); return; }
+        // Large Microsoft Project files are mostly detail the import ignores. Trim it here so the upload stays small.
+        try { if (window.__MSP && window.__MSP.slim) xml = window.__MSP.slim(xml); } catch (x) { /* send the file as it is */ }
         showPreview();
       };
       m.$$('input[name=mspMode]').forEach((r) => (r.onchange = showPreview));

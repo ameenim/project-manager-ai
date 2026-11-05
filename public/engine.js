@@ -1156,7 +1156,20 @@ function plan(existing, parsed, mode) {
   };
 }
 
-module.exports = { toXml, parse, plan, readXml };
+// Files saved from Microsoft Project can carry megabytes the import never reads (timephased data, per day
+// assignment detail, extended attributes, indentation). Keep only what parse() uses so the upload stays small.
+function slim(xml) {
+  let s = String(xml || '').replace(/^\uFEFF/, '');
+  s = s.replace(/<!--[\s\S]*?-->/g, '');
+  s = s.replace(/<TimephasedData>[\s\S]*?<\/TimephasedData>/g, '');
+  s = s.replace(/<ExtendedAttribute>[\s\S]*?<\/ExtendedAttribute>/g, '');
+  s = s.replace(/<Assignment>([\s\S]*?)<\/Assignment>/g, (m, inner) => {
+    const t = /<TaskUID>([^<]*)<\/TaskUID>/.exec(inner), r = /<ResourceUID>([^<]*)<\/ResourceUID>/.exec(inner);
+    return t && r ? `<Assignment><TaskUID>${t[1]}</TaskUID><ResourceUID>${r[1]}</ResourceUID></Assignment>` : '';
+  });
+  return s.replace(/>\s+</g, '><');
+}
+module.exports = { toXml, parse, plan, readXml, slim };
 ;return module.exports})();
 window.__AI=(function(){var module={exports:{}};var exports=module.exports;var process={env:{}};var require=function(){return {}};
 // AI layer: document reading, extraction, update interpretation and drafting.
