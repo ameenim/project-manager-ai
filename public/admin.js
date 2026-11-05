@@ -39,10 +39,13 @@
     const init = { method, headers: {} };
     if (S.token) init.headers.Authorization = `Bearer ${S.token}`;
     if (body !== undefined) { init.headers['content-type'] = 'application/json'; init.body = JSON.stringify(body); }
-    let r; try { r = await fetch(path, init); } catch (e) { throw new Error('The server could not be reached. Check your connection and try again.'); }
-    let data = null; try { data = await r.json(); } catch (e) { /* not JSON */ }
+    const ctl = typeof AbortController === 'function' ? new AbortController() : null; if (ctl) init.signal = ctl.signal;
+    const timer = setTimeout(() => ctl && ctl.abort(), 25000);
+    let r; try { r = await fetch(path, init); } catch (e) { clearTimeout(timer); throw new Error(e && e.name === 'AbortError' ? `The server took too long to answer ${method} ${path}. Try again.` : 'The server could not be reached. Check your connection and try again.'); }
+    let data = null, text = ''; try { text = await r.text(); clearTimeout(timer); data = JSON.parse(text); } catch (e) { clearTimeout(timer); /* not JSON */ }
     if (r.status === 401) { signOut(); throw new Error('Your session has ended. Sign in again.'); }
-    if (!r.ok) throw new Error((data && data.error) || r.statusText);
+    if (!r.ok) throw new Error((data && data.error) || `${method} ${path} answered ${r.status} ${r.statusText}`);
+    if (data === null) throw new Error(`${method} ${path} did not return data (status ${r.status}). The server may be running an older version. Restart it and reload this page.`);
     return data;
   }
   async function download(path, name) {
@@ -81,7 +84,7 @@
     try { return await fn(); } catch (e) { toast(e.message, 'err'); return undefined; } finally { if (btn && btn.isConnected) { btn.disabled = false; btn.innerHTML = btn.dataset.h; } }
   }
   const tip = (s) => `title="${esc(s)}" aria-label="${esc(s)}"`;
-  const loading = () => '<div style="display:grid;place-items:center;padding:60px"><span class="spinner"></span></div>';
+  const loading = () => '<div style="display:grid;place-items:center;gap:10px;padding:60px"><span class="spinner"></span><span class="muted small">Loading</span></div>';
   const empty = (t) => `<div class="empty">${esc(t)}</div>`;
   const kpi = (v, l, h, tone) => `<div class="ad-kpi ${tone || ''}"><div class="v">${v}</div><div class="l">${esc(l)}</div>${h ? `<div class="h">${esc(h)}</div>` : ''}</div>`;
   const note = (t, cls) => `<div class="ad-note ${cls || ''}" role="note">${esc(t)}</div>`;
@@ -151,7 +154,8 @@
     document.title = `${(NAV.find((n) => n[0] === key) || ['', 'Super admin'])[1]} | Super admin`;
     const fn = VIEWS[key] || VIEWS.overview;
     setView(loading());
-    try { await fn(parts.slice(1)); } catch (e) { fail(e); }
+    const slow = setTimeout(() => { const v = view(); if (v && v.querySelector('.spinner') && !v.querySelector('.page')) v.insertAdjacentHTML('beforeend', '<p class="muted small" style="text-align:center;margin:0">Still loading. This is taking longer than usual.</p>'); }, 6000);
+    try { await fn(parts.slice(1)); if (view() && !view().firstElementChild) fail(new Error('This screen returned no content. Reload the page.')); } catch (e) { console.error('admin view failed', key, e); fail(e); } finally { clearTimeout(slow); }
     window.scrollTo(0, 0); const m = $('#main'); if (m) m.scrollTop = 0;
   }
   const head = (title, actions, sub) => `<div class="page-head"><div><h1>${esc(title)}</h1>${sub ? `<p class="muted" style="margin:4px 0 0">${esc(sub)}</p>` : ''}</div><div class="row">${actions || ''}</div></div>`;
@@ -411,6 +415,7 @@
     }
     shell(); if (!S.bound) { S.bound = true; window.addEventListener('hashchange', route); } route();
   }
+  window.addEventListener('unhandledrejection', (e) => { const v = view(); if (v && !v.firstElementChild) fail(e.reason instanceof Error ? e.reason : new Error(String(e.reason))); });
   window.addEventListener('error', (e) => { try { navigator.sendBeacon && navigator.sendBeacon('/api/client-error', new Blob([JSON.stringify({ message: e.message, stack: e.error && e.error.stack, url: location.pathname + location.hash })], { type: 'application/json' })); } catch (x) { /* best effort */ } });
   boot();
 })();
