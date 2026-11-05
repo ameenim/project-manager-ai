@@ -1017,6 +1017,7 @@ input.te-name { font-size: var(--fs-heading); font-weight: 650; padding: 10px 12
 .fmt-pick { display: flex; flex-direction: column; gap: 6px; }
 .fmt-pick .lbl { font-size: var(--fs-small); color: var(--muted); font-weight: 500; }
 .fmt-pick .seg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
+.fmt-pick .seg.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .fmt-pick .seg button { justify-content: center; min-height: 40px; }
 .fmt-pick .seg button.on { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
 /* The card is the size container, so the container query below can restyle .fv itself (an element cannot query its own container). */
@@ -1063,6 +1064,40 @@ input.te-name { font-size: var(--fs-heading); font-weight: 650; padding: 10px 12
   .fv-newf { flex: 1 1 220px; }
 }
 @media (prefers-reduced-motion: reduce) { .fv-folder, .fv-doc { transition: none; } }
+
+/* Custom document wizard: suggestion card and the section list */
+.cd-sugg { border: 1px solid var(--border); background: var(--surface-2); border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; }
+.cd-sugg-h { display: flex; align-items: center; gap: 10px; }
+.cd-sugg-h > .i { color: var(--violet); flex: none; }
+.cd-tpl { font-size: var(--fs-heading); font-weight: 650; }
+.cd-engine { margin-inline-start: auto; font-size: var(--fs-small); color: var(--muted); }
+.cd-why { margin: 8px 0 0; font-size: var(--fs-body); }
+.cd-wait { display: flex; align-items: center; gap: 10px; }
+.cd-secs { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.cd-sec { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); transition: border-color .15s, background .15s; }
+.cd-sec.off { background: var(--surface-2); border-style: dashed; }
+.cd-sec.off .cd-sec-name { color: var(--muted); }
+.cd-chk { margin-top: 9px; width: 16px; height: 16px; flex: none; accent-color: var(--primary); }
+.cd-sec-body { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.cd-sec-name { font-weight: 600; font-size: var(--fs-body); background: transparent; border-color: transparent; padding: 4px 6px; margin-inline-start: -6px; width: calc(100% + 6px); }
+.cd-sec-name:hover { border-color: var(--border-strong); }
+.cd-src { display: inline-flex; align-items: center; gap: 6px; }
+.cd-src .i { width: 14px; height: 14px; }
+.cd-mv { display: flex; gap: 2px; flex: none; }
+.cd-add { display: flex; gap: 8px; margin-top: 10px; }
+.cd-add input { flex: 1; min-width: 0; }
+.cd-count { margin: 10px 0 14px; }
+.cd-out { margin-bottom: 12px; align-items: end; }
+@media (max-width: 600px) {
+  .cd-sec { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; column-gap: 10px; row-gap: 2px; }
+  .cd-sec-body { display: contents; }
+  .cd-sec-name { grid-column: 2 / 4; width: calc(100% + 6px); }
+  .cd-sec-body > .small { grid-column: 2; }
+  .cd-mv { grid-column: 3; grid-row: 2 / span 2; align-self: end; }
+  .cd-mv .btn { width: 44px; height: 44px; }
+  .cd-add .btn { min-height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) { .cd-sec { transition: none; } }
 
 /* Document creation progress and done screens */
 .gen-run { display: grid; gap: 14px; }

@@ -188,7 +188,7 @@
 
   // ---------- token use and limits ----------
   const FREE = /^\/api\/(auth|me|connections|billing)/;
-  const COST = [[/\/analyze$/, 60e3, 60e3], [/\/generate$/, 40e3, 50e3], [/\/documents$/, 25e3, 35e3], [/\/messages$/, 8e3, 12e3], [/\/sync$/, 15e3, 25e3], [/\/msproject\/import$/, 10e3, 15e3], [/^\/api\/projects$/, 30e3, 50e3]];
+  const COST = [[/\/analyze$/, 60e3, 60e3], [/\/doc-plan$/, 6e3, 8e3], [/\/generate$/, 40e3, 50e3], [/\/documents$/, 25e3, 35e3], [/\/messages$/, 8e3, 12e3], [/\/sync$/, 15e3, 25e3], [/\/msproject\/import$/, 10e3, 15e3], [/^\/api\/projects$/, 30e3, 50e3]];
   const costOf = (m, p) => { if (m !== 'POST') return 0; for (const [re, a, b] of COST) if (re.test(p)) return Math.round(a + Math.random() * b); return 0; };
   function addTokens(n) {
     B.tokens = Math.min(LIMIT, B.tokens + n);

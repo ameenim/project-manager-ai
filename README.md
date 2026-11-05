@@ -76,7 +76,7 @@ Import this repository into Replit, add a Postgres database, add the secrets abo
 
 ## Generated documents
 
-Reports are written by the server and kept with the project. Word, Excel and PowerPoint files are built in the browser with the platform logo, client, project, date and charts, using the libraries in `public/vendor/` (see its README). The format is chosen first and the download uses that same format. The Reports tab has a folder view where documents can be dragged into folders and renamed. The server can also produce the same formats at `/api/generated/:id/docx`, `xlsx`, `pptx` and `md`.
+Reports are written by the server and kept with the project. Word, Excel and PowerPoint files are built in the browser with the platform logo, client, project, date and charts, using the libraries in `public/vendor/` (see its README). The format is chosen first and the download uses that same format. Create a document offers a standard document or a custom document. A custom document takes three steps: the name, the audience and a short description, then a suggestion of the closest template and the sections to include (picked by Claude when ANTHROPIC_API_KEY is set, by rules otherwise, at `/api/projects/:id/doc-plan`), then generation with the default system design template. Sections can be switched off, renamed, reordered or added before generating. The Reports tab has a folder view where documents can be dragged into folders and renamed. The server can also produce the same formats at `/api/generated/:id/docx`, `xlsx`, `pptx` and `md`.
 
 ## Known limits
 

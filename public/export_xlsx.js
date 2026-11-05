@@ -126,7 +126,7 @@
       put(ws, 5, 1, COLS, plan.typeTitle, { size: 12, bold: true, color: T.primary });
       ws.getRow(6).height = 36;
       put(ws, 6, 1, COLS, plan.title, { size: 24, bold: true });
-      const facts = [['Client', meta.client], ['Project', meta.project], ['Project code', meta.code], ['Document date', plan.date], ['Prepared by', meta.pm]].filter((f) => f[1]);
+      const facts = [['Client', meta.client], ['Project', meta.project], ['Project code', meta.code], ['Document date', plan.date], ['Prepared for', meta.audience], ['Prepared by', meta.pm]].filter((f) => f[1]);
       let r = 8;
       facts.forEach(([k, v]) => { ws.getRow(r).height = 22; put(ws, r, 1, 2, k, { color: T.muted }); put(ws, r, 3, 8, String(v), { bold: true, size: 12 }); r++; });
       if (client) { const h = Math.min(90, Math.round((client.h / client.w) * 220)), w = Math.round((client.w / client.h) * h); addPic(ws, client, 9, 7, Math.min(w, 220), h, `${meta.client || 'Client'} logo`); }

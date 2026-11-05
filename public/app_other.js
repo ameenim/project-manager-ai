@@ -246,6 +246,8 @@
         const tpls = templates.filter((x) => x.doc_type === type);
         const opt = (ts) => ts.map((x) => `<option value="${x.id}">${esc(x.title)}</option>`).join('');
         return `<div class="form-grid">
+          <div class="fmt-pick full"><span class="lbl" id="rpKindL">${t('cd_mode_label')}</span>
+            <div class="seg two" role="radiogroup" aria-labelledby="rpKindL"><button type="button" role="radio" aria-checked="true" class="on" data-kind="std">${icon('file')}${t('cd_mode_std')}</button><button type="button" role="radio" aria-checked="false" data-kind="custom">${icon('spark')}${t('cd_mode_custom')}</button></div></div>
           <div class="fmt-pick full"><span class="lbl" id="rpOutL">${t('doc_output')}</span>
             <div class="seg" role="radiogroup" aria-labelledby="rpOutL">${Object.keys(FMT).map((k) => `<button type="button" role="radio" aria-checked="${out === k}" class="${out === k ? 'on' : ''}" data-fmt="${k}" data-tip="${esc(t(FMT[k].name))}">${icon(FMT[k].icon)}${FMT[k].label}</button>`).join('')}</div>
             <div class="small muted">${t(FMT[out].hint)}</div></div>
@@ -265,6 +267,7 @@
         $('#rpFolder', el).value = form.folder != null ? form.folder : (/^\d+$/.test(sel) ? sel : '');
         if (isProg) $('#rpPeriod', el).value = String(form.period || (type === 'progress_biweekly' ? 14 : 7));
         $$('[data-fmt]', el).forEach((b) => (b.onclick = () => { out = b.dataset.fmt; sessionStorage.setItem('rp_out', out); draw(); }));
+        $('[data-kind="custom"]', el).onclick = () => { m.close(); customDialog(); };
         $('#rpType', el).onchange = (e) => { type = e.target.value; sessionStorage.setItem('rp_type', type); form.tpl = ''; form.period = null; draw(); };
         $('#rpTpl', el).onchange = (e) => { form.tpl = e.target.value; };
         $('#rpName', el).oninput = (e) => { form.name = e.target.value; form.touched = true; };
@@ -279,6 +282,118 @@
         m.close();
         runCreate(body);
       };
+    }
+
+    // ---------- custom document: details, then the suggestion, then generate ----------
+    function customDialog() {
+      const st = { step: 0, name: '', audience: '', desc: '', plan: null, planKey: '', secs: [], fmt: out, folder: /^\d+$/.test(sel) ? sel : '', err: '', loading: false };
+      const STEPS = ['cd_s_details', 'cd_s_suggest', 'cd_s_generate'];
+      const m = modal({ title: t('cd_title'), size: 'lg', body: '<div id="cdBody"></div>', footer: '' });
+      const bar = () => `<ol class="cw-steps" aria-label="${esc(t('cd_progress'))}">${STEPS.map((s, i) => `<li class="${i === st.step ? 'on' : i < st.step ? 'done' : ''}" ${i === st.step ? 'aria-current="step"' : ''}><i>${i < st.step ? icon('check') : i + 1}</i><span>${t(s)}</span></li>`).join('')}</ol>`;
+      const alive = () => document.body.contains(m.el);
+      const body = () => $('#cdBody', m.el);
+
+      function drawDetails() {
+        body().innerHTML = `${bar()}<p class="small muted">${t('cd_intro')}</p><div class="form-grid">
+          <label class="f full">${t('cd_name')}<input type="text" id="cdName" maxlength="120" value="${esc(st.name)}" placeholder="${esc(t('cd_name_ph'))}"></label>
+          <label class="f full">${t('cd_audience')}<input type="text" id="cdAud" maxlength="160" value="${esc(st.audience)}" placeholder="${esc(t('cd_audience_ph'))}"><span class="small muted">${t('cd_audience_hint')}</span></label>
+          <label class="f full">${t('cd_desc')}<textarea id="cdDesc" rows="4" maxlength="1200" placeholder="${esc(t('cd_desc_ph'))}">${esc(st.desc)}</textarea><span class="small muted">${t('cd_desc_hint')}</span></label>
+          ${st.err ? `<div class="fv-err full" role="alert">${esc(st.err)}</div>` : ''}</div>`;
+        m.setFooter(`<button class="btn" data-close>${t('cancel')}</button><button class="btn primary" id="cdNext">${icon('spark')}${t('cd_analyze')}</button>`);
+        $('#cdNext', m.el).onclick = analyze;
+        $$('#cdName, #cdAud, #cdDesc', m.el).forEach((i) => (i.oninput = () => { st.err = ''; const e = $('.fv-err', m.el); if (e) e.remove(); }));
+        const first = [$('#cdName', m.el), $('#cdAud', m.el), $('#cdDesc', m.el)].find((x) => !x.value) || $('#cdName', m.el);
+        first.focus();
+      }
+      const readDetails = () => { st.name = $('#cdName', m.el).value.trim(); st.audience = $('#cdAud', m.el).value.trim(); st.desc = $('#cdDesc', m.el).value.trim(); };
+
+      async function analyze() {
+        readDetails();
+        st.err = !st.name ? t('cd_err_name') : !st.audience ? t('cd_err_aud') : st.desc.length < 10 ? t('cd_err_desc') : '';
+        if (st.err) { drawDetails(); return; }
+        const key = JSON.stringify([st.name, st.audience, st.desc]);
+        if (st.plan && st.planKey === key) { st.step = 1; drawSuggest(); return; }
+        st.step = 1; st.loading = true; drawSuggest();
+        try {
+          const r = await api('POST', `/api/projects/${p.id}/doc-plan`, { name: st.name, audience: st.audience, description: st.desc });
+          if (!alive()) return;
+          st.plan = r.plan; st.planKey = key; st.secs = r.plan.sections.map((s) => ({ ...s, on: true }));
+        } catch (e) { if (!alive()) return; st.step = 0; st.err = e.message || t('err_download'); st.loading = false; drawDetails(); return; }
+        st.loading = false; drawSuggest();
+      }
+
+      const why = () => {
+        const pl = st.plan;
+        if (pl.engine === 'claude' && pl.summary) return pl.summary;
+        const parts = [pl.matched ? t('cd_why_type', { type: pl.base_title }) : t('cd_why_none', { type: pl.base_title })];
+        if (pl.extras && pl.extras.length) parts.push(t('cd_why_added', { list: pl.extras.join(', ') }));
+        if (pl.audience_note) parts.push(t('cd_why_' + pl.audience_note));
+        return parts.join(' ');
+      };
+      const secRow = (s, i) => `<li class="cd-sec ${s.on ? '' : 'off'}" data-i="${i}">
+        <input type="checkbox" class="cd-chk" data-on="${i}" ${s.on ? 'checked' : ''} aria-label="${esc(t('cd_include_sec', { name: s.heading }))}">
+        <div class="cd-sec-body"><input type="text" class="cd-sec-name" data-name="${i}" maxlength="120" value="${esc(s.heading)}" aria-label="${esc(t('cd_sec_name'))}">
+          ${s.guidance ? `<div class="small muted">${esc(s.guidance)}</div>` : ''}
+          <div class="small muted cd-src">${icon(s.key ? 'chart' : 'edit')}${t(s.key ? 'cd_src_data' : 'cd_src_brief')}</div></div>
+        <div class="cd-mv"><button type="button" class="btn ghost icon sm" data-up="${i}" ${i === 0 ? 'disabled' : ''} aria-label="${esc(t('cd_move_up'))}" data-tip="${esc(t('cd_move_up'))}">${icon('chev_u')}</button><button type="button" class="btn ghost icon sm" data-down="${i}" ${i === st.secs.length - 1 ? 'disabled' : ''} aria-label="${esc(t('cd_move_down'))}" data-tip="${esc(t('cd_move_down'))}">${icon('chev_d')}</button></div></li>`;
+      const chosen = () => st.secs.filter((s) => s.on && s.heading.trim());
+      function syncCount() {
+        const n = chosen().length, go = $('#cdGo', m.el);
+        $('#cdCount', m.el).textContent = n ? t('cd_count', { n, total: st.secs.length }) : t('cd_none_sel');
+        $('#cdCount', m.el).classList.toggle('neg', !n);
+        if (go) go.disabled = !n;
+      }
+      function drawList(focus) {
+        $('#cdList', m.el).innerHTML = st.secs.map(secRow).join('');
+        $$('[data-on]', m.el).forEach((c) => (c.onchange = () => { const s = st.secs[Number(c.dataset.on)]; s.on = c.checked; c.closest('.cd-sec').classList.toggle('off', !s.on); syncCount(); }));
+        $$('[data-name]', m.el).forEach((inp) => (inp.oninput = () => { st.secs[Number(inp.dataset.name)].heading = inp.value; syncCount(); }));
+        const move = (i, d) => { const j = i + d; if (j < 0 || j >= st.secs.length) return; [st.secs[i], st.secs[j]] = [st.secs[j], st.secs[i]]; drawList((d < 0 ? '[data-up="' : '[data-down="') + j + '"]'); };
+        $$('[data-up]', m.el).forEach((b) => (b.onclick = () => move(Number(b.dataset.up), -1)));
+        $$('[data-down]', m.el).forEach((b) => (b.onclick = () => move(Number(b.dataset.down), 1)));
+        syncCount();
+        if (focus) { const f = $(focus, m.el); if (f && !f.disabled) f.focus(); else { const alt = $(focus.includes('up') ? focus.replace('up', 'down') : focus.replace('down', 'up'), m.el); if (alt && !alt.disabled) alt.focus(); } }
+      }
+      function drawSuggest() {
+        if (st.loading) {
+          body().innerHTML = `${bar()}<div class="gen-run" role="status" aria-live="polite"><div class="cd-wait"><span class="spinner"></span><strong>${t('cd_analyzing')}</strong></div><div class="small muted">${t('cd_analyzing_note')}</div></div>`;
+          m.setFooter(`<button class="btn" data-close>${t('cancel')}</button>`);
+          return;
+        }
+        const pl = st.plan;
+        body().innerHTML = `${bar()}
+          <div class="cd-sugg"><div class="cd-sugg-h">${icon('spark')}<div><div class="small muted">${t('cd_suggested')}</div><div class="cd-tpl">${esc(pl.base_title)}</div></div><span class="cd-engine">${t(pl.engine === 'claude' ? 'cd_engine_claude' : 'cd_engine_rules')}</span></div><p class="cd-why">${esc(why())}</p></div>
+          <h4>${t('cd_include')}</h4><div class="small muted mb">${t('cd_include_hint')}</div>
+          <ul class="cd-secs" id="cdList"></ul>
+          <div class="cd-add"><input type="text" id="cdAdd" maxlength="120" placeholder="${esc(t('cd_add_ph'))}" aria-label="${esc(t('cd_add_sec'))}"><button type="button" class="btn" id="cdAddBtn">${icon('plus')}${t('cd_add')}</button></div>
+          <div class="small muted cd-count" id="cdCount" role="status"></div>
+          <div class="form-grid cd-out">
+            <div class="fmt-pick"><span class="lbl" id="cdOutL">${t('doc_output')}</span><div class="seg" role="radiogroup" aria-labelledby="cdOutL">${Object.keys(FMT).map((k) => `<button type="button" role="radio" aria-checked="${st.fmt === k}" class="${st.fmt === k ? 'on' : ''}" data-cdfmt="${k}" data-tip="${esc(t(FMT[k].name))}">${icon(FMT[k].icon)}${FMT[k].label}</button>`).join('')}</div></div>
+            <label class="f">${t('save_in_folder')}<select id="cdFolder"><option value="">${t('unfiled')}</option>${folders.map((f) => `<option value="${f.id}">${esc(f.name)}</option>`).join('')}</select></label>
+          </div>
+          <div class="small muted">${icon('check')} ${t('cd_design_note')}</div>`;
+        $('#cdFolder', m.el).value = st.folder;
+        $('#cdFolder', m.el).onchange = (e) => { st.folder = e.target.value; };
+        $$('[data-cdfmt]', m.el).forEach((b) => (b.onclick = () => { st.fmt = b.dataset.cdfmt; $$('[data-cdfmt]', m.el).forEach((x) => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-checked', String(on)); }); }));
+        const add = () => {
+          const inp = $('#cdAdd', m.el), v = inp.value.trim(); if (!v) { inp.focus(); return; }
+          if (st.secs.length >= 20) { toast(t('cd_max')); return; }
+          st.secs.push({ heading: v, key: null, guidance: '', on: true }); inp.value = ''; drawList(); inp.focus();
+        };
+        $('#cdAddBtn', m.el).onclick = add;
+        $('#cdAdd', m.el).onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } };
+        m.setFooter(`<button class="btn" id="cdBack">${t('cd_back')}</button><button class="btn primary" id="cdGo">${icon('spark')}${t('generate')}</button>`);
+        $('#cdBack', m.el).onclick = () => { st.step = 0; drawDetails(); };
+        $('#cdGo', m.el).onclick = () => {
+          const secs = chosen().map((s) => ({ heading: s.heading.trim(), key: s.key || null, guidance: s.guidance || '' }));
+          if (!secs.length) return;
+          out = st.fmt; sessionStorage.setItem('rp_out', out);
+          const payload = { type: pl.base_type, format: st.fmt, folder_id: st.folder ? Number(st.folder) : null, custom: { name: st.name, audience: st.audience, description: st.desc, sections: secs } };
+          m.close();
+          runCreate(payload);
+        };
+        drawList();
+      }
+      drawDetails();
     }
 
     // The progress screen. Each status is a real stage of the work, shown for at least a moment so it can be read.

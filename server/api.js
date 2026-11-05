@@ -1454,22 +1454,71 @@ Rules:
     return g;
   }
   const folderOk = (P, id) => id == null || id === '' || P.folders.some((f) => f.id === Number(id));
-  const gSummary = (g) => ({ id: g.id, doc_type: g.doc_type, title: g.title, template: g.template, created_at: g.created_at, format: g.format || 'docx', folder_id: g.folder_id == null ? null : g.folder_id });
+  const gSummary = (g) => ({ id: g.id, doc_type: g.doc_type, title: g.title, template: g.template, created_at: g.created_at, format: g.format || 'docx', folder_id: g.folder_id == null ? null : g.folder_id, custom: !!g.custom });
+
+  // ---------- custom documents: analyze the need, then generate from the chosen sections ----------
+  const LIBKEYS = new Set(R.GENERATOR_KEYS);
+  const cleanSections = (list) => {
+    const seen = new Set(), out = [];
+    for (const s of Array.isArray(list) ? list : []) {
+      const heading = cleanName(s && s.heading, 120); if (!heading || seen.has(heading.toLowerCase())) continue;
+      seen.add(heading.toLowerCase());
+      out.push({ heading, key: s.key && LIBKEYS.has(s.key) ? s.key : null, guidance: cleanName(s.guidance, 300) });
+      if (out.length >= 20) break;
+    }
+    return out;
+  };
+  // Claude reads the brief and picks the sections. Any failure falls back to the rule based suggestion.
+  async function aiPlan(P, inp) {
+    if (!process.env.ANTHROPIC_API_KEY) return null;
+    const types = Object.entries(R.DEFAULTS).map(([id, d]) => `${id}: ${d.title}`).join('\n');
+    const lib = R.LIBRARY.map(([k, h, about]) => `${k}: ${h}. ${about}`).join('\n');
+    const system = 'You plan professional project management documents. Reply with one JSON object only, with no prose and no code fences. Write in US English. Do not use dashes as punctuation and do not use semicolons.';
+    const user = `Project: ${P.p.name}${P.p.client ? ` for ${P.p.client}` : ''}\nDocument name: ${inp.name}\nAudience: ${inp.audience}\nDescription: ${inp.description}\n\nStandard templates:\n${types}\n\nSections the system can fill from project data (key: heading. what it holds):\n${lib}\n\nReturn {"base_type":"<one template id>","summary":"<one or two plain sentences on what the document is for and why these sections fit this audience>","sections":[{"heading":"...","key":"<library key or null>","guidance":"<one sentence on what the section will say>"}]}. Use 5 to 12 sections in reading order. Use a library key whenever a section matches one. Use null for a section that has to be written from the brief.`;
+    const r = await callClaude({ system, user, max_tokens: 1800 });
+    const a = r.text.indexOf('{'), z = r.text.lastIndexOf('}');
+    if (a < 0 || z < a) return null;
+    const j = JSON.parse(r.text.slice(a, z + 1));
+    const sections = cleanSections(j.sections);
+    if (sections.length < 3) return null;
+    return { base_type: R.DEFAULTS[j.base_type] ? j.base_type : null, summary: cleanName(j.summary, 500), sections };
+  }
+  on('POST', '/api/projects/(\\d+)/doc-plan', async (m, q, b) => {
+    const P = P_(m[1]);
+    const inp = { name: cleanName(b.name, 120), audience: cleanName(b.audience, 160), description: cleanName(b.description, 1200) };
+    if (!inp.name) throw err(400, 'Give the document a name');
+    if (!inp.audience) throw err(400, 'Say who the document is for');
+    if (inp.description.length < 10) throw err(400, 'Describe what the document is for in a sentence or two');
+    const plan = R.suggestPlan(inp);
+    let ai = null;
+    try { ai = await aiPlan(P, inp); } catch (e) { console.error('Document plan by Claude failed:', e.message); }
+    if (ai) { plan.sections = ai.sections; plan.summary = ai.summary; plan.engine = 'claude'; if (ai.base_type) { plan.base_type = ai.base_type; plan.base_title = R.DEFAULTS[ai.base_type].title; } }
+    return { plan };
+  });
 
   on('POST', '/api/projects/(\\d+)/generate', async (m, q, b) => {
     const P = P_(m[1]);
+    let cu = null;
+    if (b.custom) {
+      cu = { name: cleanName(b.custom.name, 120), audience: cleanName(b.custom.audience, 160), description: cleanName(b.custom.description, 1200), sections: cleanSections(b.custom.sections) };
+      if (!cu.name) throw err(400, 'Give the document a name');
+      if (!cu.sections.length) throw err(400, 'Choose at least one section');
+    }
     const def = R.DEFAULTS[b.type]; if (!def) throw err(400, 'Choose a document type');
     const format = FORMATS.includes(b.format) ? b.format : 'docx';
-    const tpl = b.template_id ? DB.templates.find((t) => t.id === Number(b.template_id)) : null;
-    if (b.template_id && !tpl) throw err(404, 'Template not found');
+    const tpl = !cu && b.template_id ? DB.templates.find((t) => t.id === Number(b.template_id)) : null;
+    if (!cu && b.template_id && !tpl) throw err(404, 'Template not found');
     if (!folderOk(P, b.folder_id)) throw err(404, 'Folder not found');
     const today = b.as_of && /^\d{4}-\d{2}-\d{2}$/.test(b.as_of) ? b.as_of : TODAY();
     const periodDays = Number(b.period_days) || def.period || 7;
     const snap = snapshot(P, b.type, today, periodDays);
-    const out = await R.generate({ type: b.type, templateBody: tpl ? tpl.body : null, templateName: tpl ? tpl.name : null, ctx: snap.ctx, useAI: false });
-    const g = { id: nid(), project_id: P.id, doc_type: b.type, title: cleanName(b.title, 120) || out.title, template: out.template, content: out.markdown, created_at: nowTs(), format, folder_id: b.folder_id ? Number(b.folder_id) : null, meta: docMeta(P, today), visuals: snap.visuals };
+    const out = await R.generate(cu
+      ? { type: b.type, templateName: 'Custom document', ctx: snap.ctx, useAI: true, sections: cu.sections, title: cu.name, brief: `Audience: ${cu.audience}. ${cu.description}` }
+      : { type: b.type, templateBody: tpl ? tpl.body : null, templateName: tpl ? tpl.name : null, ctx: snap.ctx, useAI: false });
+    const g = { id: nid(), project_id: P.id, doc_type: b.type, title: cleanName(b.title, 120) || out.title, template: out.template, content: out.markdown, created_at: nowTs(), format, folder_id: b.folder_id ? Number(b.folder_id) : null, meta: { ...docMeta(P, today), ...(cu ? { audience: cu.audience } : {}) }, visuals: snap.visuals };
+    if (cu) g.custom = { audience: cu.audience, description: cu.description };
     P.generated.unshift(g);
-    audit(P, ACTOR(), 'document_generated', { summary: `Generated ${g.title}${tpl ? ` from template "${tpl.name}"` : ''}` });
+    audit(P, ACTOR(), 'document_generated', { summary: `Generated ${g.title}${tpl ? ` from template "${tpl.name}"` : cu ? ' as a custom document' : ''}` });
     return { generated: clone(g), engine: out.engine, unconfirmed: snap.ctx.unconfirmed };
   });
   on('GET', '/api/projects/(\\d+)/generated', async (m) => ({ generated: P_(m[1]).generated.map(gSummary) }));

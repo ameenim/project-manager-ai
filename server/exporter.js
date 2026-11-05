@@ -11,6 +11,9 @@ const MIME = {
   md: 'text/markdown; charset=utf-8',
 };
 
+// The line under the title. A custom document also says who it was prepared for.
+const byline = (g, P) => `${P.p.name}${P.p.client ? ' for ' + P.p.client : ''}${g.custom && g.custom.audience ? `. Prepared for ${g.custom.audience}` : ''}`;
+
 // ---------- backup ----------
 function projectBackup(P, { files = [], by } = {}) {
   const data = JSON.parse(JSON.stringify(P, (k, v) => (k.startsWith('_') ? undefined : v)));
@@ -123,7 +126,7 @@ async function toDocx(g, P) {
   const runs = (text, base = {}) => inline(text).map((r) => new D.TextRun({ text: r.text, bold: r.bold || base.bold, italics: r.italics, font: r.code ? 'Consolas' : undefined, rightToLeft: hasArabic(r.text), size: base.size }));
   const children = [];
   children.push(new D.Paragraph({ heading: D.HeadingLevel.TITLE, children: [new D.TextRun({ text: g.title || 'Report', rightToLeft: hasArabic(g.title) })], bidirectional: hasArabic(g.title) }));
-  children.push(new D.Paragraph({ children: [new D.TextRun({ text: `${P.p.name}${P.p.client ? ' for ' + P.p.client : ''}`, color: '666666' })] }));
+  children.push(new D.Paragraph({ children: [new D.TextRun({ text: byline(g, P), color: '666666' })] }));
   for (const b of parseMarkdown(g.content)) {
     if (b.type === 'heading') children.push(new D.Paragraph({ heading: heads[b.level], children: runs(b.text), bidirectional: hasArabic(b.text), spacing: { before: 240, after: 120 } }));
     else if (b.type === 'paragraph') children.push(new D.Paragraph({ children: runs(b.text), bidirectional: hasArabic(b.text), spacing: { after: 120 } }));
@@ -154,7 +157,7 @@ async function toPptx(g, P) {
   const title = pptx.addSlide();
   title.background = { color: 'F4F7FD' };
   title.addText(g.title || 'Report', { x: 0.7, y: 2.3, w: 11.9, h: 1.2, fontFace: font, fontSize: 36, bold: true, color: ink, rtlMode: hasArabic(g.title) });
-  title.addText(`${P.p.name}${P.p.client ? ' for ' + P.p.client : ''}`, { x: 0.7, y: 3.6, w: 11.9, h: 0.6, fontFace: font, fontSize: 18, color: '5B6477', rtlMode: hasArabic(P.p.name) });
+  title.addText(byline(g, P), { x: 0.7, y: 3.6, w: 11.9, h: 0.6, fontFace: font, fontSize: 18, color: '5B6477', rtlMode: hasArabic(P.p.name) });
   const sections = [];
   for (const b of parseMarkdown(g.content)) {
     if (b.type === 'heading' && b.level <= 2) sections.push({ title: plain(b.text), body: [] });
@@ -194,7 +197,7 @@ function toXlsx(g, P) {
   const XLSX = require('xlsx');
   const wb = XLSX.utils.book_new();
   const blocks = parseMarkdown(g.content);
-  const text = [[g.title || 'Report'], [`${P.p.name}${P.p.client ? ' for ' + P.p.client : ''}`], []];
+  const text = [[g.title || 'Report'], [byline(g, P)], []];
   const tables = [];
   let current = g.title || 'Report';
   for (const b of blocks) {

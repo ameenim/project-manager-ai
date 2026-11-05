@@ -2206,6 +2206,73 @@ function matchGenerator(heading, type) {
   return null;
 }
 
+// ---------- custom documents ----------
+// Every section the system can fill from project data: [generator key, heading, what it holds, words in a brief that call for it].
+const LIBRARY = [
+  ['p_summary', 'Executive Summary', 'A short summary of where the project stands, for busy readers.', /summary|overview|status|brief|update/],
+  ['purpose', 'Purpose and Background', 'Why the project exists, who it is for and the contract basis.', /purpose|background|context|introduc|why/],
+  ['objectives', 'Objectives', 'What the project must achieve.', /objective|goal|outcome|target/],
+  ['deliverables', 'Scope and Deliverables', 'What will be delivered and when.', /scope|deliverable|output/],
+  ['outofscope', 'Out of Scope', 'What is not included and how changes are handled.', /out of scope|exclusion|not included/],
+  ['requirements', 'Requirements', 'The confirmed requirements with priority.', /requirement|specification|acceptance|criteria/],
+  ['timeline', 'Timeline and Milestones', 'Phases and tasks with start, finish and progress.', /timeline|schedule|milestone|roadmap|plan(?:ned)? dates|phase/],
+  ['budget', 'Budget and Payments', 'Contract value and the payment milestones.', /budget|cost|payment|invoice|financ|money|value/],
+  ['risks', 'Key Risks', 'The open risks with probability, impact and mitigation.', /risk|threat|concern/],
+  ['assumptions', 'Assumptions and Constraints', 'What the plan assumes and what limits it.', /assumption|constraint|dependenc/],
+  ['team', 'Team and Stakeholders', 'Who is involved and in what role.', /team|stakeholder|resource|people|roles/],
+  ['governance', 'Governance and Reporting', 'How the project is governed and reported.', /governance|reporting|steering|oversight/],
+  ['comms_matrix', 'Communication Plan', 'Who gets which information, how often and by what channel.', /communicat|meeting|cadence/],
+  ['change_mgmt', 'Change Control', 'How scope, time and cost changes are approved.', /change request|change control|change management/],
+  ['escalation', 'Escalation Path', 'Who to go to when an issue cannot be solved at the working level.', /escalat/],
+  ['quality_obj', 'Quality Objectives', 'The quality targets and how they are checked.', /quality|testing|standard/],
+  ['p_metrics', 'Progress Against Baseline', 'Planned and actual progress and schedule performance.', /progress|baseline|performance|variance|spi/],
+  ['p_activity', 'Recent Activity', 'What happened in the period.', /activity|accomplish|completed|achievement|done/],
+  ['p_variance', 'Schedule Variance', 'Tasks that are late or ahead of the baseline.', /variance|slippage|delay|late/],
+  ['p_next', 'Planned Next Period', 'What is planned next.', /next|upcoming|look ahead|coming/],
+  ['p_deliverables', 'Deliverables Status', 'Each deliverable with due date and status.', /deliverable status|handover|handoff/],
+  ['p_payments', 'Payment Milestones', 'Each milestone with amount, due date and status.', /payment status|invoice|milestone payment/],
+  ['p_risks', 'Risks and Issues', 'Open risks and issues with probability and impact.', /issue|blocker/],
+  ['p_actions', 'Decisions and Support Needed', 'What the audience needs to decide or unblock.', /decision|support|approval needed|ask/],
+  ['approval', 'Approval', 'Names, roles and signatures.', /approval|sign.?off|authoriz/],
+];
+const LIB = Object.fromEntries(LIBRARY.map(([key, heading, about, re]) => [key, { key, heading, about, re }]));
+const TYPE_HINTS = {
+  charter: /charter|kick.?off|initiat|authoriz|launch|justif|approve the project/,
+  pm_plan: /management plan|how the project will be managed|pmp|ways of working/,
+  risk_plan: /risk/,
+  comms_plan: /communicat|stakeholder engagement|meeting cadence/,
+  governance: /governance|steering|decision right|escalat|oversight/,
+  quality_plan: /quality|acceptance|testing|assurance/,
+  progress_weekly: /week|status|progress|update|report|sprint|highlights/,
+  progress_biweekly: /bi.?weekly|fortnight|two weeks|every 2 weeks|2 weeks/,
+};
+const AUDIENCES = [
+  ['exec', /exec|sponsor|board|ceo|cto|cfo|steering|director|leadership|senior|minister|management|committee/],
+  ['tech', /technical|engineer|developer|delivery|team|architect|analyst|qa|test/],
+  ['client', /client|customer|vendor|partner|external|supplier|government|authority/],
+];
+const entry = (key) => ({ heading: LIB[key].heading, key, guidance: LIB[key].about });
+// Rule based suggestion: the closest standard template, then sections from that template plus the ones the brief and the audience call for.
+function suggestPlan({ name = '', audience = '', description = '' }) {
+  const nm = String(name).toLowerCase(), ds = String(description).toLowerCase(), au = String(audience).toLowerCase();
+  const score = (re) => (re.test(nm) ? 2 : 0) + (re.test(ds) ? 1 : 0);
+  let best = null, top = 0;
+  for (const id of Object.keys(TYPE_HINTS)) { const s = score(TYPE_HINTS[id]); if (s > top) { top = s; best = id; } }
+  if (best === 'progress_weekly' && /bi.?weekly|fortnight|two weeks|2 weeks/.test(`${nm} ${ds}`)) best = 'progress_biweekly';
+  const base = best || 'charter';
+  const list = DEFAULTS[base].sections.filter(([, k]) => G[k]).map(([h, k]) => (LIB[k] ? { ...entry(k), heading: h } : { heading: h, key: k, guidance: '' }));
+  const have = new Set(list.map((s) => s.key));
+  const extras = [];
+  const text = `${nm} ${ds}`;
+  const at = (s) => { const i = list.findIndex((x) => x.key === 'approval'); if (i >= 0) list.splice(i, 0, s); else list.push(s); have.add(s.key); extras.push(s.heading); };
+  for (const [key] of LIBRARY) if (!have.has(key) && key !== 'approval' && G[key] && LIB[key].re.test(text)) at(entry(key));
+  const aud = (AUDIENCES.find(([, re]) => re.test(au)) || [null])[0];
+  if (aud === 'exec' && !have.has('p_summary')) { list.unshift(entry('p_summary')); have.add('p_summary'); extras.push(LIB.p_summary.heading); }
+  if (aud === 'tech') for (const k of ['requirements', 'timeline']) if (!have.has(k) && G[k]) at(entry(k));
+  if (aud === 'client' && !have.has('deliverables') && G.deliverables) at(entry('deliverables'));
+  return { base_type: base, base_title: DEFAULTS[base].title, matched: top > 0, audience_note: aud, extras, sections: list.slice(0, 20), engine: 'rules' };
+}
+
 function replaceVars(text, c) {
   const p = c.project, m = c.metrics;
   const map = {
@@ -2217,13 +2284,13 @@ function replaceVars(text, c) {
   return text.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, k) => (k in map ? map[k] : `{{${k}}}`));
 }
 
-async function aiDraft(c, docTitle, heading, facts, guidance) {
+async function aiDraft(c, docTitle, heading, facts, guidance, brief) {
   if (!AI.hasKey()) return null;
   const excerpts = c.docs.filter((d) => ['proposal', 'contract', 'po'].includes(d.kind)).map((d) => `[${d.filename}]\n${d.text.slice(0, 6000)}`).join('\n\n').slice(0, 18000);
   try {
     const out = await AI.claude(
       `You write sections of professional project management documents in US English. Use only the supplied facts and document excerpts. Do not invent figures, dates or names. Write concise, specific, plain prose. Use markdown tables or bullets where they help. Do not use dashes as punctuation and do not use semicolons. Output only the section body, no heading.`,
-      `Document: ${docTitle}\nSection: ${heading}\n${guidance ? `Template guidance for this section:\n${guidance}\n` : ''}\nFacts already compiled for this section:\n${facts || '(none)'}\n\nProject: ${c.project.name} for ${c.project.client || 'client'}. Dates ${c.project.start_date || 'TBC'} to ${c.project.end_date || 'TBC'}. Value ${money(c.project.value, c.project.currency)}.\n\nSource document excerpts:\n${excerpts}`,
+      `Document: ${docTitle}\n${brief ? `Brief from the project manager:\n${brief}\n` : ''}Section: ${heading}\n${guidance ?`Template guidance for this section:\n${guidance}\n` : ''}\nFacts already compiled for this section:\n${facts || '(none)'}\n\nProject: ${c.project.name} for ${c.project.client || 'client'}. Dates ${c.project.start_date || 'TBC'} to ${c.project.end_date || 'TBC'}. Value ${money(c.project.value, c.project.currency)}.\n\nSource document excerpts:\n${excerpts}`,
       1800
     );
     return out && out.trim() ? out.trim() : null;
@@ -2233,11 +2300,16 @@ async function aiDraft(c, docTitle, heading, facts, guidance) {
   }
 }
 
-async function generate({ type, templateBody, templateName, ctx, useAI = true }) {
+// A custom document passes its own sections (and a title and a brief). Sections with no data behind them are written from the brief when the AI is on.
+async function generate({ type, templateBody, templateName, ctx, useAI = true, sections: given, title: customTitle, brief }) {
   const def = DEFAULTS[type];
   if (!def) throw new Error('Unknown document type');
   const sections = [];
-  if (templateBody) {
+  const custom = Array.isArray(given) && given.length > 0;
+  const fallback = (s) => (custom ? `${s.guidance ? `_${s.guidance}_\n\n` : ''}_To be completed by the project manager._` : s.guidance || '_To be completed by the project manager._');
+  if (custom) {
+    for (const s of given) sections.push({ heading: s.heading, key: s.key && G[s.key] ? s.key : null, guidance: s.guidance || '' });
+  } else if (templateBody) {
     const parsed = parseTemplate(templateBody);
     if (!parsed.length) throw new Error('The custom template has no headings. Use "# Heading" lines or Heading 1 styles to mark sections.');
     for (const s of parsed) sections.push({ heading: s.heading, key: matchGenerator(s.heading, type), guidance: replaceVars(s.body, ctx) });
@@ -2253,16 +2325,16 @@ async function generate({ type, templateBody, templateName, ctx, useAI = true })
       let facts = s.key && G[s.key] ? G[s.key](ctx) : '';
       let body = facts;
       if (useAI && AI.hasKey()) {
-        const drafted = await aiDraft(ctx, def.title, s.heading, facts, s.guidance);
+        const drafted = await aiDraft(ctx, customTitle || def.title, s.heading, facts, s.guidance, brief);
         if (drafted) body = drafted;
-        else if (!facts) body = s.guidance;
-      } else if (!facts) body = s.guidance || '_To be completed by the project manager._';
-      if (!body) body = s.guidance || '_To be completed by the project manager._';
+        else if (!facts) body = fallback(s);
+      } else if (!facts) body = fallback(s);
+      if (!body) body = fallback(s);
       results[i] = `# ${s.heading}\n\n${replaceVars(body, ctx)}`;
     }
   };
   await Promise.all(Array.from({ length: 4 }, worker));
-  const title = `${def.title}`;
+  const title = customTitle || `${def.title}`;
   return { title, markdown: results.join('\n\n'), template: templateName || 'System default', engine: useAI && AI.hasKey() ? 'claude' : 'rules', defaultPeriod: def.period || null };
 }
 
@@ -2365,5 +2437,5 @@ async function toDocx({ title, markdown, project, user, today, logoPath }) {
   return Packer.toBuffer(doc);
 }
 
-module.exports = { DEFAULTS, DOC_TYPES, buildContext, generate, toDocx, parseTemplate, replaceVars };
+module.exports = { DEFAULTS, DOC_TYPES, LIBRARY, GENERATOR_KEYS: Object.keys(G), buildContext, generate, suggestPlan, toDocx, parseTemplate, replaceVars };
 ;return module.exports})();

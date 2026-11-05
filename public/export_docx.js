@@ -120,7 +120,7 @@
       new Paragraph({ spacing: { after: 560 }, indent: { right: 6800 }, border: { bottom: { style: BorderStyle.SINGLE, size: 24, color: T.primary, space: 1 } }, children: [] }),
     ];
     if (client) cover.push(new Paragraph({ spacing: { after: 200, line: 240, lineRule: LineRuleType.AUTO }, children: [img(client, Math.min(180, Math.round((client.w / client.h) * 56)), `${meta.client || 'Client'} logo`)] }));
-    const facts = [['Client', meta.client], ['Project', meta.project], ['Project code', meta.code], ['Document date', plan.date], ['Prepared by', meta.pm]].filter((r) => r[1]);
+    const facts = [['Client', meta.client], ['Project', meta.project], ['Project code', meta.code], ['Document date', plan.date], ['Prepared for', meta.audience], ['Prepared by', meta.pm]].filter((r) => r[1]);
     cover.push(new Table({
       width: { size: CW, type: WidthType.DXA }, columnWidths: [2300, CW - 2300], layout: TableLayoutType.FIXED, borders: noBorders,
       rows: facts.map(([k, v]) => new TableRow({
