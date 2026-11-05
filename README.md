@@ -67,7 +67,9 @@ A chat button at the bottom corner of every screen opens a side panel. In a proj
 - Viewers can ask questions and get no change tools. A change always runs as the signed in person through the same routes as the screens.
 - Limits (environment variables, defaults in brackets): `CHAT_PER_MINUTE` (20), `CHAT_PER_DAY` (200), `CHAT_APPLY_PER_HOUR` (50), `CHAT_LOG_DAYS` (90). `CHAT_MODEL` changes the model used for the chat. Without `ANTHROPIC_API_KEY` the chat refuses out of scope requests and says the AI is not set up for the rest.
 - Tables: `chat_threads`, `chat_messages`, `chat_log` (migration 3). A thread belongs to one person and one context and is removed with its project. The log keeps counts and outcomes only.
-- Not in this release: changing dates, progress or links of tasks, baselines, schedule versions, the Updates inbox, generating reports and scheduled summaries.
+- Phase C tools: change the start, duration or progress of one task (the card shows which tasks move and the project end before and after, from the same engine as the Schedule screen, and asks for a second confirmation when more than 5 tasks move), apply or dismiss a suggestion in Updates, and add a pasted message to Updates. Undo restores every task the change moved.
+- Live check: `node scripts/chat-smoke.js` runs real Claude questions against a throwaway database. Run it where `ANTHROPIC_API_KEY` is saved, for example the Replit shell.
+- Not in this release: links between tasks, baselines, schedule versions, report generation, the daily brief and scheduled summaries.
 
 ## Tests
 

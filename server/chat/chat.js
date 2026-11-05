@@ -188,11 +188,11 @@ function createChat({ db, store, api, auth, model }) {
   function buildCard(proposals, A) {
     if (!proposals.length) return null;
     const projectsTouched = [...new Set(proposals.map((p) => p.op.project_id))];
-    const strong = proposals.some((p) => p.destructive) || proposals.length > STRONG_OVER;
+    const strong = proposals.some((p) => p.destructive || (p.impact && p.impact.moved > STRONG_OVER)) || proposals.length > STRONG_OVER;
     return {
       status: 'pending', strong, created_at: new Date().toISOString(),
       ops: proposals.map((p) => p.op),
-      items: proposals.map((p) => ({ summary: p.summary, sum: p.sum || null, project: p.project, destructive: !!p.destructive, noteData: p.noteData || null, changes: p.changes.map(([field, before, after]) => ({ field, before, after })) })),
+      items: proposals.map((p) => ({ summary: p.summary, sum: p.sum || null, project: p.project, destructive: !!p.destructive, noteData: p.noteData || null, impact: p.impact || null, changes: p.changes.map(([field, before, after]) => ({ field, before, after })) })),
       projects: projectsTouched.map((id) => ({ id, name: A.projects[id].p.name })),
     };
   }
