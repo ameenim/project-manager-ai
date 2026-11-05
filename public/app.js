@@ -18,6 +18,7 @@
     cal: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/>', inbox: '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.7 4H7.3a2 2 0 0 0-1.8 1.1Z"/>',
     file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h8"/>', chart: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>',
     gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/>',
+    trend: '<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
     grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>', list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>', coin: '<circle cx="12" cy="12" r="9"/><path d="M14.5 9a2.5 2.5 0 0 0-2.5-1.5c-1.4 0-2.5.8-2.5 2s1 1.7 2.5 2 2.5.8 2.5 2-1.1 2-2.5 2A2.5 2.5 0 0 1 9.5 15M12 6v1.5M12 16.5V18"/>', chev_l: '<path d="m15 18-6-6 6-6"/>', chev_d: '<path d="m6 9 6 6 6-6"/>', chev_u: '<path d="m18 15-6-6-6 6"/>', chev_r: '<path d="m9 18 6-6-6-6"/>',
     minus: '<path d="M5 12h14"/>',
     cols: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M3 9h6M3 15h6"/>',
@@ -203,7 +204,7 @@
   }
   function shell(active, content, projHead) {
     $('#app').innerHTML = `${PM.billing ? PM.billing.ribbon() : ''}<div class="shell"><aside class="sidebar"><div class="brand"><div class="logo">${PM.logo.mark()}</div><span class="grow">${t('app_name')}</span><button class="btn ghost icon sm" id="navHide" type="button" aria-label="${t('nav_hide')}" title="${t('nav_hide')}">${icon('chev_l')}</button></div>
-      <nav class="nav"><a href="#/" class="${active === 'dash' ? 'active' : ''}">${icon('home')}${t('nav_dashboard')}</a><div class="nav-fly" id="navFly"><a href="#/projects" class="${active === 'projects' ? 'active' : ''}" aria-haspopup="true" aria-expanded="false">${icon('folder')}<span class="grow">${t('nav_projects')}</span><span class="nav-caret">${icon('chev_r')}</span></a></div><a href="#/calendar" class="${active === 'calendar' ? 'active' : ''}">${icon('cal')}${t('nav_calendar')}</a><a href="#/billing" class="${active === 'billing' ? 'active' : ''}">${icon('coin')}${t('nav_billing')}</a></nav>
+      <nav class="nav"><a href="#/" class="${active === 'dash' ? 'active' : ''}">${icon('home')}${t('nav_dashboard')}</a><div class="nav-fly" id="navFly"><a href="#/projects" class="${active === 'projects' ? 'active' : ''}" aria-haspopup="true" aria-expanded="false">${icon('folder')}<span class="grow">${t('nav_projects')}</span><span class="nav-caret">${icon('chev_r')}</span></a></div><a href="#/calendar" class="${active === 'calendar' ? 'active' : ''}">${icon('cal')}${t('nav_calendar')}</a><a href="#/trends" class="${active === 'trends' ? 'active' : ''}">${icon('trend')}${t('nav_trends')}</a><a href="#/billing" class="${active === 'billing' ? 'active' : ''}">${icon('coin')}${t('nav_billing')}</a></nav>
       <div class="spacer"></div>
       <div class="side-prefs">
         <div class="pref"><span class="pref-ic">${icon(S.theme === 'dark' ? 'moon' : 'sun')}</span><span class="grow">${t('dark_mode')}</span><button type="button" class="tgl ${S.theme === 'dark' ? 'on' : ''}" id="themeBtn" role="switch" aria-checked="${S.theme === 'dark'}" aria-label="${t('dark_mode')}" data-tip="${t('dark_mode')}"><i>${icon(S.theme === 'dark' ? 'moon' : 'sun')}</i></button></div>
@@ -361,7 +362,7 @@
   };
 
   // ---------- project shell ----------
-  const TABS = [['overview', 'chart'], ['review', 'check'], ['schedule', 'cal'], ['logs', 'list'], ['inbox', 'inbox'], ['documents', 'file'], ['reports', 'spark'], ['settings', 'gear']];
+  const TABS = [['overview', 'chart'], ['review', 'check'], ['schedule', 'cal'], ['trends', 'trend'], ['logs', 'list'], ['inbox', 'inbox'], ['documents', 'file'], ['reports', 'spark'], ['settings', 'gear']];
   // Project shortcuts in the header: icon only buttons, each with a tooltip and an accessible name.
   const projLinks = (p) => {
     const items = [['sharepoint_url', 'folder', 'pl_open_sp'], ['jira_url', 'jira', 'pl_open_jira']].filter(([k]) => p[k]);
@@ -411,6 +412,7 @@
     if (parts[0] === 'billing') { S.project = null; return PM.views.billing(); }
     if (parts[0] === 'brand') { S.project = null; return PM.views.brand(); }
     if (parts[0] === 'projects') { S.project = null; return PM.views.projects(); }
+    if (parts[0] === 'trends') { S.project = null; return PM.views.trends(); }
     if (parts[0] === 'calendar') { S.project = null; return PM.views.calendar(); }
     if (parts[0] === 'account') return PM.views.account();
     if (parts[0] === 'p' && parts[1]) return PM.projectView(Number(parts[1]), parts[2] || 'overview', new URLSearchParams(qs || ''));

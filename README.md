@@ -84,6 +84,7 @@ Import this repository into Replit, add a Postgres database, add the secrets abo
 1. `public` holds the front end: HTML, CSS and the JavaScript modules.
 2. `server.js` starts the server. `server/app.js` is the HTTP layer, `server/api.js` holds the routes, `server/store.js` and `server/db.js` handle Postgres, `server/auth.js` handles accounts, and `server/exporter.js` and `server/importer.js` handle backups and files.
 3. `test` holds the automated tests.
+4. Trends. `server/snapshots.js` keeps one row per project per day in `project_snapshots` (saved hourly and whenever a trends page is read, last capture of the day wins). `GET /api/trends` and `GET /api/projects/:id/trends` return the daily series, and `public/app_trends.js` draws the Trends page and the project Trends tab. Days with no snapshot stay empty and nothing is back filled. History is included in backups.
 
 ## Generated documents
 

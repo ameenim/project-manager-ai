@@ -12,6 +12,7 @@ const { callClaude, MODEL } = require('./claude');
 const { RANK } = require('./store');
 const exporter = require('./exporter');
 const importer = require('./importer');
+const { Snapshots, build: buildTrends, periodOf } = require('./snapshots');
 
 const PUB = path.join(__dirname, '..', 'public');
 const TZ = process.env.APP_TZ || 'Asia/Dubai';
@@ -817,6 +818,60 @@ module.exports = function createApi(store, auth, connectors) {
     };
   }
 
+  // ---------- daily snapshots ----------
+  // The key figures of one project today. This is the only place the snapshot figures are defined. Every number is
+  // read from the same functions the live dashboards use (stats, radar, analytics), so a trend point and the
+  // dashboard tile of that day agree.
+  function snapshotFigures(P) {
+    const today = TODAY(), raw = rawProject(P), st = stats(P), sched = S.schedule(P.tasks, raw);
+    const items = P.items.map((i) => ({ ...i, data: i.data || {} }));
+    const entry = { p: { ...P.p, id: P.id }, stats: st, items: items.filter((i) => ['risk', 'milestone', 'deliverable'].includes(i.kind)), rows: S.progressMetrics(P.tasks, raw, today).rows, sched };
+    const radar = win.__Radar.buildRadar([entry], today), A = win.__Analytics.buildAnalytics([entry], today);
+    const dl = A.deliverables[0] || { open: 0, closed: 0 }, pay = A.payments[0] || {};
+    const fe = st.forecast_end || null, ce = P.p.end_date || null;
+    return {
+      v: 1, health: st.health, progress: st.progress, planned: st.planned, spi: st.spi,
+      tasks: st.tasks, overdue: st.overdue, high_risks: radar.counts.high, pending_review: st.pendingItems + st.pendingInbox,
+      deliv_open: dl.open, deliv_closed: dl.closed,
+      forecast_end: fe, contract_end: ce, slip_days: fe && ce ? Math.round(dnum(fe) - dnum(ce)) : null,
+      currency: P.p.currency || '', value: P.p.value || 0,
+      pay: { paid: pay.paid || 0, invoiced: pay.invoiced || 0, pending: pay.pending || 0, late: pay.late || 0, total: pay.total || 0 },
+    };
+  }
+  const snapshots = new Snapshots(store.db);
+  // Records today's row for each project (archived projects are left out, like on the dashboards). One broken
+  // project never stops the others.
+  async function capture(list) {
+    const date = TODAY();
+    let saved = 0;
+    for (const P of list) {
+      if (!P || !P.p || P.p.status === 'archived') continue;
+      try { await snapshots.save(P.id, date, snapshotFigures(P)); saved++; } catch (e) { console.error('snapshot failed for project', P.id, e.message); }
+    }
+    return saved;
+  }
+  // The daily job: every project in the database, in small groups so a large workspace never loads at once.
+  // Projects already in memory are used as they are because they hold changes that are not saved yet.
+  async function captureAll() {
+    const ids = (await store.db.query('SELECT id FROM projects ORDER BY id')).rows.map((r) => r.id);
+    let saved = 0;
+    for (let i = 0; i < ids.length; i += 20) {
+      const list = [], need = [];
+      for (const id of ids.slice(i, i + 20)) { const c = store.cache.get(id); if (c && c.P) list.push(c.P); else need.push(id); }
+      if (need.length) for (const row of (await store.db.query('SELECT id, data FROM projects WHERE id = ANY($1::bigint[])', [need])).rows) { if (row.data && row.data.id == null) row.data.id = row.id; list.push(row.data); }
+      saved += await capture(list);
+      await new Promise((ok) => setImmediate(ok));
+    }
+    return saved;
+  }
+  // Opening a trends screen first records today's point, so the newest point is never older than the screen.
+  async function trendsFor(list, days) {
+    const today = TODAY();
+    await capture(list);
+    const rows = await snapshots.range(list.map((P) => P.id), dstr(dnum(today) - days), today);
+    return buildTrends(rows, { today, days, projects: list.map((P) => ({ id: P.id, name: P.p.name, currency: P.p.currency })) });
+  }
+
   const fileToDataUrl = async (f, maxBytes = 1.5 * 1024 * 1024) => {
     if (!/^image\/(png|jpe?g|webp|gif|svg\+xml)$/.test(f.type || '')) throw err(400, 'Choose a picture in PNG, JPG, WebP, GIF or SVG format');
     if (f.buffer.length > maxBytes) throw err(413, 'The picture is too large. Use one under 1.5 MB.');
@@ -887,7 +942,9 @@ module.exports = function createApi(store, auth, connectors) {
     }
     return { today: TODAY(), projects: list.map((P) => ({ id: P.id, name: P.p.name, currency: P.p.currency })), tasks, payments };
   });
-  on('GET', '/api/dashboard', async () => dashboard());
+  // the overview carries a 30 day trend so its trend widgets draw from the same response
+  const activeList = () => DB.order.map((id) => DB.projects[id]).filter((P) => P.p.status !== 'archived');
+  on('GET', '/api/dashboard', async () => ({ ...dashboard(), trends: await trendsFor(activeList(), 30) }));
   // one project's dashboard: radar, schedule and critical path, deliverables, payments and cash flow
   on('GET', '/api/projects/(\\d+)/dashboard', async (mm) => {
     const P = P_(mm[1]), raw = rawProject(P), st = stats(P);
@@ -896,8 +953,11 @@ module.exports = function createApi(store, auth, connectors) {
     const entry = { p: { ...clone(P.p), id: P.id }, stats: st, items: items.filter((i) => i.status !== 'ignored' && ['risk', 'milestone', 'deliverable'].includes(i.kind)), rows: S.progressMetrics(P.tasks, raw, TODAY()).rows, sched };
     const audit = P.audit.slice(0, 12).map((a) => ({ ...a, detail: a.detail || {} }));
     return { project: { ...projectView(P) }, radar: win.__Radar.buildRadar([entry], TODAY()), analytics: win.__Analytics.buildAnalytics([entry], TODAY()),
-      ...win.__ProjDash.buildProjectDash({ project: raw, tasks: sched, items, inbox: P.inbox, audit, today: TODAY() }) };
+      ...win.__ProjDash.buildProjectDash({ project: raw, tasks: sched, items, inbox: P.inbox, audit, today: TODAY() }), trends: await trendsFor([P], 30) };
   });
+  // trends over time, drawn only from the daily snapshots. days is one of 7, 14, 30, 90, 180, 365.
+  on('GET', '/api/trends', async (m, q) => trendsFor(DB.order.map((id) => DB.projects[id]).filter((P) => P.p.status !== 'archived'), periodOf(q.days)));
+  on('GET', '/api/projects/(\\d+)/trends', async (m, q) => trendsFor([P_(m[1])], periodOf(q.days)));
   on('GET', '/api/projects', async () => ({ projects: DB.order.map((id) => DB.projects[id]).reverse().map(projectView) }));
   on('POST', '/api/projects', async (m, q, fd) => {
     const get = (k) => (typeof fd.get === 'function' ? fd.get(k) : fd[k]);
@@ -1626,12 +1686,12 @@ Rules:
   on('GET', '/api/projects/(\\d+)/export', async (m, q) => {
     const P = P_(m[1]);
     const files = q.files === '1' ? await store.filesOf(P.id) : [];
-    const out = exporter.projectBackup(P, { files, by: DB.user.email });
+    const out = exporter.projectBackup(P, { files, by: DB.user.email, snapshots: await snapshots.all(P.id) });
     return new FileResult(Buffer.from(JSON.stringify(out)), 'application/json', `${safeName(P.p.name)}.pmai.json`);
   });
   on('GET', '/api/workspace/export', async () => {
     const list = [];
-    for (const id of DB.order) { const P = DB.projects[id]; if (RANK[roleOf(P)] >= RANK.editor) list.push(exporter.projectBackup(P, { by: DB.user.email })); }
+    for (const id of DB.order) { const P = DB.projects[id]; if (RANK[roleOf(P)] >= RANK.editor) list.push(exporter.projectBackup(P, { by: DB.user.email, snapshots: await snapshots.all(P.id) })); }
     const out = { format: 'pmai-workspace', version: exporter.VERSION, exported_at: new Date().toISOString(), projects: list, templates: DB.templates };
     return new FileResult(Buffer.from(JSON.stringify(out)), 'application/json', 'project-manager-ai-workspace.pmai.json');
   });
@@ -1642,6 +1702,7 @@ Rules:
     if (clash) P.p.name = `${P.p.name} (imported)`;
     P.p.owner_id = DB.user.id; P.p.status = P.p.status === 'archived' ? 'archived' : 'active'; P.p.analyzing = 0; P.analysis = null;
     await store.create(P, DB.user.id);
+    await snapshots.restore(P.id, checked.snapshots);
     for (const f of checked.files) { const d = P.documents.find((x) => x.id === f.doc_id); if (d) await store.putFile(P.id, d.id, { name: f.filename, type: f.mime, buffer: f.buffer }); }
     DB.projects[P.id] = P; DB.order.push(P.id); ctx().roles[P.id] = 'manager';
     audit(P, ACTOR(), 'project_imported', { summary: `Imported from a backup made ${checked.exported_at || 'earlier'}` });
@@ -1767,6 +1828,6 @@ Rules:
     });
   }
 
-  return { handle, runAs, FileResult, userView, saveUserFor: null, running, TODAY };
+  return { handle, runAs, FileResult, userView, saveUserFor: null, running, TODAY, captureAll, snapshots };
 };
 module.exports.FileResult = FileResult;

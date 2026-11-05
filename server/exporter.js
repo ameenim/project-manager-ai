@@ -15,11 +15,12 @@ const MIME = {
 const byline = (g, P) => `${P.p.name}${P.p.client ? ' for ' + P.p.client : ''}${g.custom && g.custom.audience ? `. Prepared for ${g.custom.audience}` : ''}`;
 
 // ---------- backup ----------
-function projectBackup(P, { files = [], by } = {}) {
+function projectBackup(P, { files = [], by, snapshots = [] } = {}) {
   const data = JSON.parse(JSON.stringify(P, (k, v) => (k.startsWith('_') ? undefined : v)));
   return {
     format: 'pmai-project', version: VERSION, app: 'Project Manager AI', exported_at: new Date().toISOString(), exported_by: by || null,
     project: data,
+    snapshots, // the daily key figures behind the trends dashboards, oldest first
     files: files.map((f) => ({ doc_id: f.doc_id, filename: f.filename, mime: f.mime || null, size: f.size, data_base64: f.buffer.toString('base64') })),
   };
 }

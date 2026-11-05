@@ -107,6 +107,17 @@ async function createApp(opts = {}) {
   }
   setInterval(() => auth.purgeExpired().catch(() => {}), 3600e3).unref();
 
+  // Daily snapshots of every project's key figures. The first capture runs shortly after start, then every hour.
+  // A later capture on the same day replaces that day's row, so each day ends with its latest figures, and a
+  // repeated run never adds a second row. Pass snapshotJob: false to turn the timer off (tests do).
+  let snapRun = Promise.resolve();
+  const snapTimers = [];
+  if (opts.snapshotJob !== false) {
+    const run = () => { snapRun = api.captureAll().catch((e) => console.error('daily snapshot failed', e.message)); return snapRun; };
+    snapTimers.push(setTimeout(run, 8000), setInterval(run, 3600e3));
+    snapTimers.forEach((x) => x.unref());
+  }
+
   async function handleApi(req, res, url) {
     const method = req.method;
     const p = url.pathname;
@@ -209,7 +220,9 @@ async function createApp(opts = {}) {
   server.keepAliveTimeout = 65e3;
 
   async function close() {
+    snapTimers.forEach((x) => { clearTimeout(x); clearInterval(x); });
     await new Promise((ok) => server.close(ok));
+    await snapRun;
     await store.flush();
     await db.close();
   }

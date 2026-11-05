@@ -1263,3 +1263,16 @@ body.chat-open .an-dock { inset-inline-end: calc(var(--chat-w) + 16px); inset-bl
   .cht-composer textarea { min-height: 44px; }
 }
 @media (prefers-reduced-motion: reduce) { .cht-panel, .cht-fab { transition: none; } .cht-typing i { animation: none; opacity: .6; } }
+/* Trends dashboards */
+.tr-chart { max-height: 240px; }
+.tr-line { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; stroke: var(--c1); }
+.tr-line.ok { stroke: var(--success); } .tr-line.bad { stroke: var(--danger); } .tr-line.c1 { stroke: var(--c1); } .tr-line.c2 { stroke: var(--c2); }
+.tr-line.gap { stroke-dasharray: 4 4; opacity: .7; }
+.tr-dot { stroke: var(--surface); stroke-width: 1.5; fill: var(--c1); } .tr-dot.ok { fill: var(--success); } .tr-dot.bad { fill: var(--danger); } .tr-dot.c2 { fill: var(--c2); }
+.tr-ref { stroke: var(--faint); stroke-width: 1; stroke-dasharray: 3 3; } .viz .tr-ref-lab { font-size: var(--fs-micro); }
+.tr-hit { fill: transparent; } .tr-hit:hover { fill: var(--primary-soft); opacity: .5; }
+.cb .hit { fill: transparent; } .cb:hover .hit { fill: var(--primary-soft); opacity: .5; }
+.kd { font-size: var(--fs-small); font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; } .kd.good { color: var(--success); } .kd.bad { color: var(--danger); } .kd .muted { font-weight: 400; }
+.tr-note .banner { margin-bottom: 14px; }
+.page-head .seg { margin-inline-start: auto; }
+@media (max-width: 600px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
