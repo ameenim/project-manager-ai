@@ -47,7 +47,9 @@ const score = (topic, q) => {
   return s;
 };
 function lookup(query) {
-  const ranked = TOPICS.map((t) => ({ t, s: score(t, query) })).filter((x) => x.s > 0).sort((a, b) => b.s - a.s).slice(0, 2);
+  const all = TOPICS.map((t) => ({ t, s: score(t, query) })).filter((x) => x.s > 0).sort((a, b) => b.s - a.s);
+  // a second topic is only kept when it is nearly as good a match, so sources stay relevant
+  const ranked = all.filter((x, i) => i === 0 || (i === 1 && x.s >= all[0].s * 0.7));
   return ranked.map((x) => ({ id: x.t.id, title: x.t.title, text: x.t.text, screen: x.t.screen }));
 }
 
