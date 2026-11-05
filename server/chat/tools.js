@@ -46,6 +46,9 @@ WRITE_TOOLS.push(
   { name: 'dismiss_update', description: 'Propose dismissing a suggestion in the Updates inbox.', input_schema: { type: 'object', properties: { ...proj, update: str('Update id, or part of its summary') }, required: ['update'] } },
   { name: 'add_update', description: 'Propose adding a pasted message or note to the Updates inbox, where it becomes suggestions to review.', input_schema: { type: 'object', properties: { ...proj, body: str('The message text'), sender: str('Who sent it, optional'), subject: str('Optional subject') }, required: ['body'] } },
 );
+WRITE_TOOLS.push(
+  { name: 'generate_report', description: 'Propose generating a standard project document from the project data: charter, pm_plan, risk_plan, comms_plan, governance, quality_plan, progress_weekly or progress_biweekly. It appears in the Reports tab. Custom documents and templates are not available here.', input_schema: { type: 'object', properties: { ...proj, type: { type: 'string', enum: ['charter', 'pm_plan', 'risk_plan', 'comms_plan', 'governance', 'quality_plan', 'progress_weekly', 'progress_biweekly'] }, format: { type: 'string', enum: ['docx', 'xlsx', 'pptx'], description: 'Word, Excel or PowerPoint. Default docx.' } }, required: ['type'] } },
+);
 const WRITE_NAMES = new Set(WRITE_TOOLS.map((t) => t.name));
 const catalog = (canWrite) => (canWrite ? READ_TOOLS.concat(WRITE_TOOLS) : READ_TOOLS).map((t) => ({ name: t.name, description: t.description, input_schema: t.input_schema }));
 
@@ -316,6 +319,17 @@ WRITE.add_update = function (h, input, scope) {
   return { op: { op: 'add_update', project_id: pid, body, sender: cleanText(input.sender, 160), subject: cleanText(input.subject, 200) }, summary: 'Add a message to the Updates inbox', sum: { op: 'add_update', title: '' }, project: P.p.name, changes: [['message', null, clip(body, 200)]] };
 };
 
+const FORMAT_LABEL = { docx: 'Word', xlsx: 'Excel', pptx: 'PowerPoint' };
+WRITE.generate_report = async function (h, input, scope) {
+  const pid = pickProject(h, scope, input); const P = h.P(pid, 'editor');
+  const types = (await h.call('GET', '/api/doc-types')).types || [];
+  const want = String(input.type || '').toLowerCase().replace(/[\s-]+/g, '_');
+  const ty = types.find((x) => x.id === want) || types.find((x) => String(x.title).toLowerCase().replace(/[\s-]+/g, '_') === want);
+  if (!ty) throw bad('That document type is not available. The available types are: ' + types.map((x) => `${x.id} (${x.title})`).join(', ') + '.', { not_found: true });
+  const format = input.format && FORMAT_LABEL[input.format] ? input.format : 'docx';
+  return { op: { op: 'generate_report', project_id: pid, type: ty.id, format }, summary: `Generate "${ty.title}" as ${FORMAT_LABEL[format]}`, sum: { op: 'generate', title: ty.title }, project: P.p.name, changes: [['type', null, ty.title], ['format', null, FORMAT_LABEL[format]]] };
+};
+
 // ---------- applying and undoing ----------
 // Apply runs inside one runAs, so every operation succeeds or none is kept. Each operation returns what it needs to be undone.
 async function applyOp(h, op) {
@@ -363,6 +377,10 @@ async function applyOp(h, op) {
     await h.call('POST', `/api/projects/${P.id}/schedule/apply`, { changes: { [t.id]: { deleted: true } } });
     return { undo: { op: 'restore_deleted_task', project_id: P.id, task: snap, kids, links }, refs: { task_id: t.id }, label: `task "${t.name}"` };
   }
+  if (op.op === 'generate_report') {
+    const r = await h.call('POST', `/api/projects/${P.id}/generate`, { type: op.type, format: op.format });
+    return { undo: { op: 'remove_generated', project_id: P.id, generated_id: r.generated.id }, refs: { generated_id: r.generated.id }, label: r.generated.title, generated: r.generated.id };
+  }
   if (op.op === 'change_schedule') {
     const t = P.tasks.find((x) => x.id === op.task_id); if (!t) throw bad('That task no longer exists.', { gone: true });
     if (op.stamp !== schedStamp(t)) throw bad('changed', { stale: true });
@@ -390,6 +408,16 @@ async function applyOp(h, op) {
 
 async function applyOps(api, user, ops, thread) {
   const done = [];
+  try { await applyAll(api, user, ops, thread, done); }
+  catch (e) {
+    // generated documents are kept outside the all or nothing snapshot, so a failed card removes the ones it made
+    const made = done.filter((d) => d.undo && d.undo.op === 'remove_generated').map((d) => d.undo);
+    if (made.length) await undoOps(api, user, made, thread).catch(() => {});
+    throw e;
+  }
+  return done;
+}
+async function applyAll(api, user, ops, thread, done) {
   await api.runAs({
     user, write: true,
     async fn(h) {
@@ -403,7 +431,6 @@ async function applyOps(api, user, ops, thread) {
       for (const [P, before] of seen) for (const a of P.audit) if (!before.has(a.id)) a.detail = { ...(a.detail || {}), source: 'chat', chat_thread: thread };
     },
   });
-  return done;
 }
 
 async function undoOps(api, user, undos, thread) {
@@ -438,7 +465,10 @@ async function undoOps(api, user, undos, thread) {
           P.tasks.sort((a, b) => (a.position ?? 0) - (b.position ?? 0) || a.id - b.id);
           h.recalc(P); h.recordVersion(P, 'edit'); h.audit(P, h.ACTOR(), 'task_added', { summary: `Restored task "${u.task.name}"` });
         }
-        else if (u.op === 'restore_schedule') {
+        else if (u.op === 'remove_generated') {
+          if (!P.generated.some((x) => x.id === u.generated_id)) { notes.push('skipped'); continue; }
+          await h.call('DELETE', `/api/generated/${u.generated_id}`, {});
+        } else if (u.op === 'restore_schedule') {
           if (!P.tasks.some((x) => x.id === u.task_id)) { notes.push('skipped'); continue; }
           const ch = {}; for (const [id, v] of Object.entries(u.before)) if (P.tasks.some((x) => x.id === Number(id))) ch[id] = v;
           await h.call('POST', `/api/projects/${P.id}/schedule/apply`, { changes: ch });

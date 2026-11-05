@@ -19,7 +19,7 @@
     cht_f_type: 'Type', cht_f_title: 'Title', cht_f_description: 'Description', cht_f_owner: 'Owner', cht_f_due_date: 'Due date', cht_f_probability: 'Probability', cht_f_impact: 'Impact', cht_f_mitigation: 'Mitigation', cht_f_amount: 'Amount', cht_f_percent: 'Percent', cht_f_status: 'Status', cht_f_name: 'Name', cht_f_start: 'Start', cht_f_duration: 'Duration', cht_f_notes: 'Notes', cht_f_task: 'Task', cht_f_deliverable: 'Deliverable', cht_f_requirement: 'Requirement', cht_f_risk: 'Risk', cht_f_payment: 'Payment',
     cht_empty_title: 'Ask me about your projects', cht_none: 'none', cht_days: '{n} days',
     cht_sum_add: 'Add {kind} "{title}"', cht_sum_upd: 'Update {kind} "{title}"', cht_sum_del: 'Delete {kind} "{title}"', cht_sum_pay: 'Mark payment "{title}" as {state}', cht_sum_addtask: 'Add task "{title}"', cht_sum_updtask: 'Update task "{title}"', cht_sum_deltask: 'Delete task "{title}"',
-    cht_sum_sched: 'Change the schedule of task "{title}"', cht_sum_applyupd: 'Apply update "{title}"', cht_sum_dismiss: 'Dismiss update "{title}"', cht_sum_addupd: 'Add a message to the Updates inbox',
+    cht_sum_gen: 'Generate the document "{title}"', cht_f_format: 'Format', cht_open_reports: 'Open Reports', cht_sum_sched: 'Change the schedule of task "{title}"', cht_sum_applyupd: 'Apply update "{title}"', cht_sum_dismiss: 'Dismiss update "{title}"', cht_sum_addupd: 'Add a message to the Updates inbox',
     cht_f_progress: 'Progress', cht_f_update: 'Update', cht_f_message: 'Message', cht_impact_h: 'Impact on the schedule', cht_impact_none: 'No other task moves.', cht_impact_n: '{n} other tasks move.', cht_impact_n1: '1 other task moves.', cht_impact_end: 'Project end: {a} to {b}.', cht_impact_same: 'Project end stays {b}.',
     cht_brief_h: 'Today', cht_brief_clear: 'Nothing needs your attention right now.',
     cht_b_late_tasks: '{n} late tasks', cht_b_late_payments: '{n} late payments', cht_b_updates: '{n} updates waiting', cht_b_at_risk: '{n} projects off track', cht_b_high_risks: '{n} high risks open',
@@ -39,7 +39,7 @@
     cht_f_type: 'النوع', cht_f_title: 'العنوان', cht_f_description: 'الوصف', cht_f_owner: 'المسؤول', cht_f_due_date: 'تاريخ الاستحقاق', cht_f_probability: 'الاحتمال', cht_f_impact: 'الأثر', cht_f_mitigation: 'المعالجة', cht_f_amount: 'المبلغ', cht_f_percent: 'النسبة', cht_f_status: 'الحالة', cht_f_name: 'الاسم', cht_f_start: 'البداية', cht_f_duration: 'المدة', cht_f_notes: 'ملاحظات', cht_f_task: 'المهمة', cht_f_deliverable: 'مخرج', cht_f_requirement: 'متطلب', cht_f_risk: 'خطر', cht_f_payment: 'دفعة',
     cht_empty_title: 'اسألني عن مشاريعك', cht_none: 'لا شيء', cht_days: '{n} أيام',
     cht_sum_add: 'إضافة {kind} "{title}"', cht_sum_upd: 'تحديث {kind} "{title}"', cht_sum_del: 'حذف {kind} "{title}"', cht_sum_pay: 'تحديد الدفعة "{title}" على أنها {state}', cht_sum_addtask: 'إضافة المهمة "{title}"', cht_sum_updtask: 'تحديث المهمة "{title}"', cht_sum_deltask: 'حذف المهمة "{title}"',
-    cht_sum_sched: 'تغيير جدول المهمة "{title}"', cht_sum_applyupd: 'تطبيق التحديث "{title}"', cht_sum_dismiss: 'تجاهل التحديث "{title}"', cht_sum_addupd: 'إضافة رسالة إلى صندوق التحديثات',
+    cht_sum_gen: 'إنشاء المستند "{title}"', cht_f_format: 'الصيغة', cht_open_reports: 'افتح التقارير', cht_sum_sched: 'تغيير جدول المهمة "{title}"', cht_sum_applyupd: 'تطبيق التحديث "{title}"', cht_sum_dismiss: 'تجاهل التحديث "{title}"', cht_sum_addupd: 'إضافة رسالة إلى صندوق التحديثات',
     cht_f_progress: 'التقدم', cht_f_update: 'التحديث', cht_f_message: 'الرسالة', cht_impact_h: 'الأثر على الجدول', cht_impact_none: 'لا تتحرك مهام أخرى.', cht_impact_n: 'تتحرك {n} مهام أخرى.', cht_impact_n1: 'تتحرك مهمة أخرى واحدة.', cht_impact_end: 'نهاية المشروع: من {a} إلى {b}.', cht_impact_same: 'تبقى نهاية المشروع {b}.',
     cht_brief_h: 'اليوم', cht_brief_clear: 'لا شيء يحتاج إلى انتباهك الآن.',
     cht_b_late_tasks: '{n} مهام متأخرة', cht_b_late_payments: '{n} دفعات متأخرة', cht_b_updates: '{n} تحديثات بالانتظار', cht_b_at_risk: '{n} مشاريع خارج المسار', cht_b_high_risks: '{n} مخاطر عالية مفتوحة',
@@ -70,7 +70,7 @@
   const sumText = (it) => {
     const x = it.sum; if (!x) return it.summary;
     const kind = x.kind && has('cht_f_' + x.kind) ? t('cht_f_' + x.kind).toLowerCase() : (x.kind || '');
-    const map = { change_schedule: 'cht_sum_sched', apply_update: 'cht_sum_applyupd', dismiss_update: 'cht_sum_dismiss', add_update: 'cht_sum_addupd', create_item: 'cht_sum_add', update_item: 'cht_sum_upd', delete_item: 'cht_sum_del', set_payment: 'cht_sum_pay', create_task: 'cht_sum_addtask', update_task: 'cht_sum_updtask', delete_task: 'cht_sum_deltask' };
+    const map = { generate: 'cht_sum_gen', change_schedule: 'cht_sum_sched', apply_update: 'cht_sum_applyupd', dismiss_update: 'cht_sum_dismiss', add_update: 'cht_sum_addupd', create_item: 'cht_sum_add', update_item: 'cht_sum_upd', delete_item: 'cht_sum_del', set_payment: 'cht_sum_pay', create_task: 'cht_sum_addtask', update_task: 'cht_sum_updtask', delete_task: 'cht_sum_deltask' };
     return t(map[x.op] || 'cht_sum_upd', { kind, title: '\u2068' + x.title + '\u2069', state: x.state && has('cht_v_' + x.state) ? t('cht_v_' + x.state).toLowerCase() : x.state });
   };
   const impactHtml = (it) => {
@@ -170,7 +170,7 @@
     let foot = '';
     if (live && !confirming) foot = `<div class="cht-card-foot"><button class="btn primary sm" type="button" data-act="apply" data-id="${id}">${esc(t('cht_apply'))}</button><button class="btn sm" type="button" data-act="edit" data-id="${id}">${esc(t('cht_edit'))}</button><button class="btn ghost sm" type="button" data-act="cancel" data-id="${id}">${esc(t('cht_cancel'))}</button></div>`;
     else if (confirming) foot = `<div class="cht-warn small" role="alert">${esc(c.items.some((x) => x.destructive) ? t('cht_strong') : t('cht_many'))}</div><div class="cht-card-foot"><button class="btn danger sm" type="button" data-act="confirm" data-id="${id}">${esc(t('cht_yes'))}</button><button class="btn ghost sm" type="button" data-act="back" data-id="${id}">${esc(t('cht_back'))}</button></div>`;
-    else if (c.status === 'applied') foot = `<div class="cht-card-foot"><button class="btn sm" type="button" data-act="undo" data-id="${id}">${icon('undo')}${esc(t('cht_undo'))}</button></div>`;
+    else if (c.status === 'applied') foot = `<div class="cht-card-foot">${c.items.some((x) => x.sum && x.sum.op === 'generate') ? `<a class="btn primary sm" href="#/p/${(c.projects[0] || {}).id}/reports" data-act="nav">${esc(t('cht_open_reports'))}</a>` : ''}<button class="btn sm" type="button" data-act="undo" data-id="${id}">${icon('undo')}${esc(t('cht_undo'))}</button></div>`;
     return `<div class="cht-card ${live ? 'live' : ''}" data-card="${id}"><div class="cht-card-h"><span class="small muted">${icon('spark')}${esc((c.projects || []).map((p) => p.name).join(', '))}</span>${state}</div><ul class="cht-items">${items}</ul>${msg}${foot}</div>`;
   }
   function emptyHtml() {

@@ -423,3 +423,32 @@ test('the Arabic scope gate passes project requests and declines the rest', () =
   for (const t of pass) assert.equal(gate.decide(t).decision, 'pass', t);
   for (const t of no) assert.notEqual(gate.decide(t).decision, 'pass', t);
 });
+
+// ---------- reports ----------
+test('a report is generated only after Apply, shows in Reports, and undo removes it', async () => {
+  const { u, p } = await setup();
+  say(use('generate_report', { type: 'progress_weekly', format: 'docx' }, 't1')); say(text('Prepared the weekly status report.'));
+  const r = await talk(u.token, { project_id: p.id, text: 'Generate the weekly status report for this project' });
+  assert.equal(r.message.card.items[0].sum.op, 'generate');
+  assert.equal((await s.call('GET', `/api/projects/${p.id}/generated`, null, u.token)).data.generated.length, 0, 'nothing before Apply');
+  const ap = await s.call('POST', `/api/chat/messages/${r.message.id}/apply`, {}, u.token);
+  assert.equal(ap.status, 200, JSON.stringify(ap.data));
+  const list = (await s.call('GET', `/api/projects/${p.id}/generated`, null, u.token)).data.generated;
+  assert.equal(list.length, 1);
+  assert.equal(list[0].format, 'docx');
+  await s.call('POST', `/api/chat/messages/${r.message.id}/undo`, {}, u.token);
+  assert.equal((await s.call('GET', `/api/projects/${p.id}/generated`, null, u.token)).data.generated.length, 0);
+});
+
+test('an unknown document type is rejected and a failed card leaves no generated document behind', async () => {
+  const { u, p, risk } = await setup();
+  say(use('generate_report', { type: 'lessons_learned' }, 't1')); say(text('That type is not available.'));
+  const r = await talk(u.token, { project_id: p.id, text: 'Generate a lessons learned report for the project' });
+  assert.equal(r.message.card, null);
+  say(use('generate_report', { type: 'charter' }, 't2')); say(use('update_item', { item: 'Vendor delay', mitigation: 'Dual source' }, 't3')); say(text('Prepared both.'));
+  const c = await talk(u.token, { project_id: p.id, text: 'Generate the charter and set a mitigation on the vendor delay risk' });
+  await s.call('PUT', `/api/items/${risk.id}`, { title: 'Vendor delay changed' }, u.token);
+  const ap = await s.call('POST', `/api/chat/messages/${c.message.id}/apply`, {}, u.token);
+  assert.equal(ap.status, 409);
+  assert.equal((await s.call('GET', `/api/projects/${p.id}/generated`, null, u.token)).data.generated.length, 0, 'the charter was removed with the failed card');
+});

@@ -90,7 +90,7 @@ function systemPrompt({ today, tz, ctx, lang, role, projects, declined }) {
     '- If a required field is missing, ask ONE short question. Use sensible defaults for optional fields and say which defaults you used.',
     '- If a name matches more than one record, list the matches and ask which one. Never guess. If nothing matches, say so and offer to create it.',
     '- One request can need several write tools (for example a risk and its mitigation task). Call them all, they appear on one card.',
-    '- Dates, durations and progress of one task can be proposed with change_task_schedule, and the card shows the impact. Updates in the inbox can be applied, dismissed or added with the update tools. Links between tasks, setting a baseline, restoring a schedule version and generating reports are not available in the chat in this release. Say so briefly and offer the navigate tool to open the right screen.',
+    '- Dates, durations and progress of one task can be proposed with change_task_schedule, and the card shows the impact. Updates in the inbox can be applied, dismissed or added with the update tools. Links between tasks, setting a baseline, restoring a schedule version, custom documents and templates are not available in the chat in this release. Say so briefly and offer the navigate tool to open the right screen.',
     '',
     'STYLE',
     `- Reply in the language of the user's latest message (English or Arabic). The user's interface language is ${lang === 'ar' ? 'Arabic' : 'English'}.`,
