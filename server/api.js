@@ -959,6 +959,26 @@ module.exports = function createApi(store, auth, connectors) {
     if (src.length) analyzeDocs(P, src).catch((e) => console.error(e));
     return { results: out };
   });
+  // Finds the passages of stored document text that match a question, with the file name and the exact sentence.
+  const SEARCH_STOP = new Set(['the', 'a', 'an', 'of', 'to', 'and', 'or', 'in', 'on', 'for', 'is', 'are', 'was', 'what', 'does', 'do', 'say', 'says', 'about', 'my', 'our', 'this', 'that', 'with', 'by', 'it', 'at', 'as', 'be', 'any', 'there', 'contract', 'document', 'من', 'في', 'على', 'ما', 'هو', 'هي', 'عن', 'هل', 'الى', 'إلى', 'و', 'ماذا', 'يقول']);
+  const searchTokens = (s) => [...new Set((String(s || '').toLowerCase().match(/[\p{L}\p{N}]+/gu) || []).filter((w) => w.length > 1 && !SEARCH_STOP.has(w)))];
+  const wordHit = (w, tok) => w === tok || (tok.length >= 4 && w.length >= 4 && (w.startsWith(tok.slice(0, Math.max(4, tok.length - 2))) || tok.startsWith(w.slice(0, Math.max(4, w.length - 2)))));
+  on('GET', '/api/projects/(\\d+)/documents/search', async (m, q) => {
+    const P = P_(m[1]); const qs = searchTokens(q.q).slice(0, 12);
+    if (!qs.length) throw err(400, 'Type what to look for');
+    const need = Math.max(1, Math.ceil(qs.length * 0.5)), found = [];
+    for (const d of P.documents) {
+      const text = String(P.texts[d.id] || ''); if (!text) continue;
+      const parts = text.split(/(?<=[.!?؟])\s+|\n+/).map((s) => s.trim()).filter((s) => s.length > 3);
+      for (let i = 0; i < parts.length; i++) {
+        const words = searchTokens(parts[i]);
+        const score = qs.filter((tok) => words.some((w) => wordHit(w, tok))).length;
+        if (score >= need) found.push({ doc_id: d.id, filename: d.filename, quote: parts[i].slice(0, 400), score, at: i });
+      }
+    }
+    found.sort((a, z) => z.score - a.score || a.at - z.at);
+    return { query: String(q.q).slice(0, 200), found: found.length > 0, passages: found.slice(0, 5).map(({ at, ...x }) => x) };
+  });
   on('POST', '/api/projects/(\\d+)/documents/(\\d+)/link', async (m, q, b) => {
     const P = P_(m[1]); const d = P.documents.find((x) => x.id === Number(m[2])); const it = P.items.find((x) => x.id === Number(b.deliverable_id) && x.kind === 'deliverable');
     if (!d || !it) throw err(404, 'Document or deliverable not found');
@@ -1693,27 +1713,60 @@ Rules:
     await store.db.query('UPDATE users SET name = $2, avatar = $3, prefs = $4::jsonb WHERE id = $1', [u.id, u.name, u.avatar, JSON.stringify(prefs)]);
   }
 
-  async function handle({ user, method, path: p, query, body, origin }) {
+  async function makeCtx(user, origin, level) {
     const { projects, roles, order } = await store.forUser(user.id);
     for (const id of order) settleInterrupted(projects[id]);
     const prefs = user.prefs || {};
     const view = userView(user);
     if (!view.ingest_key) view.ingest_key = require('crypto').randomBytes(16).toString('hex');
-    const c = { origin: origin || 'http://localhost', user, store, auth, roles, touched: new Set(), level: method === 'GET' ? 'viewer' : 'editor', DB: { user: view, templates: Array.isArray(prefs.templates) ? prefs.templates : [], connections: prefs.connections || {}, projects, order: order.slice() } };
+    return { origin: origin || 'http://localhost', user, store, auth, roles, touched: new Set(), level, DB: { user: view, templates: Array.isArray(prefs.templates) ? prefs.templates : [], connections: prefs.connections || {}, projects, order: order.slice() } };
+  }
+  async function dispatch(c, method, p, query, body) {
+    for (const [mth, re, fn] of routes) {
+      if (mth !== method) continue;
+      const m = p.match(re);
+      if (!m) continue;
+      c.level = method === 'GET' ? 'viewer' : 'editor';
+      return fn(m, query || {}, body == null ? {} : body);
+    }
+    throw err(404, 'Not found');
+  }
+
+  async function handle({ user, method, path: p, query, body, origin }) {
+    const c = await makeCtx(user, origin, method === 'GET' ? 'viewer' : 'editor');
     return als.run(c, async () => {
-      for (const [mth, re, fn] of routes) {
-        if (mth !== method) continue;
-        const m = p.match(re);
-        if (!m) continue;
-        const out = await fn(m, query || {}, body == null ? {} : body);
-        // a change is saved before the answer is sent, so "saved" on screen always means saved in the database
-        if (method !== 'GET') for (const P of c.touched) if (c.DB.projects[P.id]) await store.save(P);
-        return out;
-      }
-      throw err(404, 'Not found');
+      const out = await dispatch(c, method, p, query, body);
+      // a change is saved before the answer is sent, so "saved" on screen always means saved in the database
+      if (method !== 'GET') for (const P of c.touched) if (c.DB.projects[P.id]) await store.save(P);
+      return out;
     });
   }
 
-  return { handle, FileResult, userView, saveUserFor: null, running, TODAY };
+  // The Project Chat works through the same routes and helpers as the screens, as the signed in person. A run that
+  // changes data either saves everything or nothing: the touched projects are put back as they were when anything fails.
+  const NO_SNAP = new Set(['texts', 'generated', 'documents']);
+  const snapOf = (P) => { const o = {}; for (const k of Object.keys(P)) if (!k.startsWith('_') && !NO_SNAP.has(k)) o[k] = P[k]; return JSON.parse(JSON.stringify(o)); };
+  function putBack(P, snap) { for (const k of Object.keys(P)) if (!k.startsWith('_') && !NO_SNAP.has(k)) delete P[k]; Object.assign(P, JSON.parse(JSON.stringify(snap))); }
+  async function runAs({ user, fn, write = false, origin }) {
+    const c = await makeCtx(user, origin, write ? 'editor' : 'viewer');
+    return als.run(c, async () => {
+      const snaps = new Map();
+      const h = {
+        user: c.DB.user, roles: c.roles, order: c.DB.order, projects: c.DB.projects, S, TODAY, clone, nid, nowTs, audit, recalc, recordVersion, scheduleResponse, itemView, taskView, rawProject, stats, projectView, ACTOR,
+        P(id, level) { const P = P_(id, level || (write ? 'editor' : 'viewer')); if (write && !snaps.has(P)) snaps.set(P, snapOf(P)); return P; },
+        call(method, p, body, query) { return dispatch(c, method, p, query, body); },
+      };
+      try {
+        const out = await fn(h);
+        if (write) for (const P of c.touched) if (c.DB.projects[P.id]) await store.save(P);
+        return out;
+      } catch (e) {
+        for (const [P, snap] of snaps) putBack(P, snap);
+        throw e;
+      }
+    });
+  }
+
+  return { handle, runAs, FileResult, userView, saveUserFor: null, running, TODAY };
 };
 module.exports.FileResult = FileResult;

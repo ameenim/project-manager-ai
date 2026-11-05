@@ -12,6 +12,7 @@ const authm = require('./auth');
 const { Connectors } = require('./connectors');
 const createApi = require('./api');
 const { MODEL } = require('./claude');
+const { createChat } = require('./chat/chat');
 
 const ROOT = path.join(__dirname, '..', 'public');
 const MAX_UPLOAD = 40 * 1024 * 1024;       // one file
@@ -89,6 +90,8 @@ async function createApp(opts = {}) {
   const auth = authm.make(db);
   const connectors = new Connectors(db, opts.connectorOptions || {});
   const api = createApi(store, auth, connectors);
+  // The Project Chat. opts.chatModel lets tests replace the model with a scripted one.
+  const chat = createChat({ db, store, api, auth, model: opts.chatModel });
   const apiLimit = limiter(Number(process.env.API_RATE || 900), 60e3);
   const signupLimit = limiter(30, 3600e3);
   const origin = (req) => { const proto = String(req.headers['x-forwarded-proto'] || 'http').split(',')[0].trim(); return (process.env.SITE_URL || `${proto}://${req.headers['x-forwarded-host'] || req.headers.host || 'localhost'}`).replace(/\/+$/, ''); };
@@ -123,6 +126,8 @@ async function createApp(opts = {}) {
     const token = bearer(req);
     const user = await auth.userForToken(token);
     if (!user) return json(res, 401, { error: 'Your session has expired. Sign in again.' });
+
+    if (p.startsWith('/api/chat') && (await chat.route(req, res, url, user, { json, readBody, SECURITY }))) return;
 
     let body = null;
     if (method !== 'GET' && method !== 'HEAD') {
@@ -208,7 +213,7 @@ async function createApp(opts = {}) {
     await store.flush();
     await db.close();
   }
-  return { server, store, db, auth, api, close };
+  return { server, store, db, auth, api, chat, close };
 }
 
 module.exports = { createApp };

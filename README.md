@@ -58,6 +58,17 @@ Every change is saved to Postgres before the server answers, so a refresh, a new
 
 When a project is created or a document is uploaded, PDF, Word, PowerPoint and Excel files are read by the server and analyzed by Claude. The browser never sees the API key. Long documents are split into parts and every part is read. A fact is kept only when its source quote is found in the document text. If the key is missing, rejected or out of credit, or a file cannot be read, the Review tab says so for that file and a basic rule based reading is used instead. Progress is polled from `GET /api/analysis/events`.
 
+## Project Chat
+
+A chat button at the bottom corner of every screen opens a side panel. In a project it is about that project. On the portfolio screens it is about all projects, and a change there must name its project. The chat answers from the person's own data and shows its sources, explains how the platform works, and drafts short project messages. It never writes code or unrelated content and never manages accounts, billing or access.
+
+- Changes are proposals. The model has tools that only prepare an action card. Nothing is saved until the person presses Apply. The server rechecks the role and that each record is unchanged, applies every change or none, writes one history entry per change marked as coming from the chat, and offers Undo for 7 days. Deleting, or changing more than 5 records, asks for a second confirmation.
+- Rules live on the server: `server/chat/gate.js` (scope check before any AI cost), `guard.js` (blocks code and secrets in replies, scrubs tool data, flags instructions hidden in documents), `prompt.js` (system prompt and refusal wording in English and Arabic), `tools.js` (read tools, proposal tools, apply and undo), `chat.js` (threads, limits, log, http).
+- Viewers can ask questions and get no change tools. A change always runs as the signed in person through the same routes as the screens.
+- Limits (environment variables, defaults in brackets): `CHAT_PER_MINUTE` (20), `CHAT_PER_DAY` (200), `CHAT_APPLY_PER_HOUR` (50), `CHAT_LOG_DAYS` (90). `CHAT_MODEL` changes the model used for the chat. Without `ANTHROPIC_API_KEY` the chat refuses out of scope requests and says the AI is not set up for the rest.
+- Tables: `chat_threads`, `chat_messages`, `chat_log` (migration 3). A thread belongs to one person and one context and is removed with its project. The log keeps counts and outcomes only.
+- Not in this release: changing dates, progress or links of tasks, baselines, schedule versions, the Updates inbox, generating reports and scheduled summaries.
+
 ## Tests
 
     npm test
