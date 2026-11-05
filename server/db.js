@@ -70,6 +70,48 @@ const MIGRATIONS = [
     expires_at TIMESTAMPTZ NOT NULL
   );
   `,
+  // 3: the Project Chat. A thread belongs to one person and one context (a project or the whole portfolio) and is
+  // deleted with its project. The log keeps counts and outcomes, never secrets, and is purged after 90 days.
+  `
+  CREATE TABLE IF NOT EXISTS chat_threads (
+    id BIGINT PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    project_id BIGINT REFERENCES projects(id) ON DELETE CASCADE,
+    summary TEXT NOT NULL DEFAULT '',
+    archived BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS chat_threads_active_idx ON chat_threads(user_id, COALESCE(project_id, 0)) WHERE archived = false;
+  CREATE INDEX IF NOT EXISTS chat_threads_project_idx ON chat_threads(project_id);
+  CREATE TABLE IF NOT EXISTS chat_messages (
+    id BIGINT PRIMARY KEY,
+    thread_id BIGINT NOT NULL REFERENCES chat_threads(id) ON DELETE CASCADE,
+    role TEXT NOT NULL CHECK (role IN ('user','assistant','tool')),
+    text TEXT NOT NULL DEFAULT '',
+    tool_calls JSONB,
+    card JSONB,
+    feedback SMALLINT,
+    meta JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS chat_messages_thread_idx ON chat_messages(thread_id, id);
+  CREATE TABLE IF NOT EXISTS chat_log (
+    id BIGINT PRIMARY KEY,
+    user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+    project_id BIGINT,
+    kind TEXT NOT NULL,
+    category TEXT,
+    tool TEXT,
+    outcome TEXT,
+    input_tokens INT NOT NULL DEFAULT 0,
+    output_tokens INT NOT NULL DEFAULT 0,
+    billable BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS chat_log_user_idx ON chat_log(user_id, created_at);
+  CREATE INDEX IF NOT EXISTS chat_log_kind_idx ON chat_log(kind, created_at);
+  `,
 ];
 
 async function openPg(url) {
@@ -112,7 +154,7 @@ async function prepareSchema(db, { managedProduction = false } = {}) {
   if (managedProduction) {
     // Replit Publish owns production DDL. Its schema copy need not include the
     // development migration-history rows, so do not replay migrations here.
-    const required = ['users', 'sessions', 'projects', 'project_members', 'project_files', 'app_secrets', 'oauth_states', 'schema_migrations', 'id_blocks'];
+    const required = ['users', 'sessions', 'projects', 'project_members', 'project_files', 'app_secrets', 'oauth_states', 'chat_threads', 'chat_messages', 'chat_log', 'schema_migrations', 'id_blocks'];
     const result = await db.query(
       "SELECT name FROM unnest($1::text[]) AS required(name) WHERE to_regclass('public.' || name) IS NULL",
       [required],
