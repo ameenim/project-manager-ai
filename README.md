@@ -69,7 +69,8 @@ A chat button at the bottom corner of every screen opens a side panel. In a proj
 - Tables: `chat_threads`, `chat_messages`, `chat_log` (migration 3). A thread belongs to one person and one context and is removed with its project. The log keeps counts and outcomes only.
 - Phase C tools: change the start, duration or progress of one task (the card shows which tasks move and the project end before and after, from the same engine as the Schedule screen, and asks for a second confirmation when more than 5 tasks move), apply or dismiss a suggestion in Updates, and add a pasted message to Updates. Undo restores every task the change moved.
 - Live check: `node scripts/chat-smoke.js` runs real Claude questions against a throwaway database. Run it where `ANTHROPIC_API_KEY` is saved, for example the Replit shell.
-- Not in this release: links between tasks, baselines, schedule versions, report generation, the daily brief and scheduled summaries.
+- Phase D: an empty chat shows a Today brief (late tasks, late payments, waiting updates, off track projects or open high risks) as plain counts from the same routes as the screens, and each count opens the matching question. Suggestions follow the screen. `GET /api/chat/feedback` lists your own thumbs down answers with the question that led to each, for quality review. The Arabic scope check has its own test set.
+- Not in this release: links between tasks, baselines, schedule versions, report generation, scheduled summaries and a link to a notification center (the platform has none yet).
 
 ## Tests
 

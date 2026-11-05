@@ -83,7 +83,7 @@ function clauseRule(raw) {
   if (re('\\b' + CODE_WORDS + '\\s+(?:script|code|snippet|function|program|macro|query|class)\\b').test(plain) && re('\\b(?:write|create|generate|give|show|build|make|fix|debug|need|want|provide|how (?:do|can) i)\\b').test(plain)) return { reason: 'code' };
   if (re('^' + L + '(?:how (?:do|can|would) (?:i|you) (?:write|code|program|script|automate)|fix (?:this|my) (?:code|script|query|formula|function|bug)|debug (?:this|my)|refactor|convert this (?:code|script))').test(plain)) return { reason: 'code' };
   if (re('^' + L + MAKE + '\\s+' + ART + '(?:[\\w-]+\\s+){0,3}' + BUILD_THINGS + '\\b(?!\\s+(?:task|milestone|risk|deliverable|requirement))').test(plain) && !/\b(?:task|milestone|risk|deliverable|requirement|payment)\b.{0,20}\b(?:called|named|titled)\b/i.test(c) && !/\b(?:called|named|titled)\b/i.test(c)) return { reason: 'code' };
-  if (/(اكتب|أكتب|انشئ|أنشئ|اعطني|أعطني|ابنِ|ابن|صمم|صمّم)[^.؟!]{0,30}(كود|سكربت|برنامج|برمجي|بايثون|جافاسكربت|موقع إلكتروني|موقع ويب|تطبيق|صفحة هبوط|استعلام|ماكرو)/.test(plain)) return { reason: 'code' };
+  if (/(اكتب|أكتب|انشئ|أنشئ|اعطني|أعطني|ابنِ|ابن|صمم|صمّم)[^.؟!]{0,30}(كود|سكربت|برنامج|برمجي|بايثون|جافاسكربت|موقع[اً]?\s+(?:إلكتروني|الكتروني|ويب)\S*|تطبيق|صفحة هبوط|استعلام|ماكرو)/.test(plain)) return { reason: 'code' };
 
   // content that is not a project artifact
   if (re('^' + L + MAKE + '\\s+' + ART + '(?:[\\w-]+\\s+){0,3}' + CONTENT_THINGS + '\\b').test(plain) && !/\b(?:status|progress|steering|committee|project risk|task update)\b/i.test(plain.replace(/\b(?:about|on|regarding)\b.*$/i, ''))) return { reason: 'content' };

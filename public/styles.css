@@ -1252,6 +1252,11 @@ body.chat-open .an-dock { inset-inline-end: calc(var(--chat-w) + 16px); inset-bl
 .cht-empty { margin: auto 0; text-align: center; padding: 8px 4px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .cht-empty p { max-width: 320px; margin: 0 0 8px; font-size: var(--fs-body); }
 .cht-empty-ic { width: 44px; height: 44px; border-radius: 50%; background: var(--violet-soft); color: var(--violet); display: grid; place-items: center; }
+.cht-brief { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; width: 100%; max-width: 340px; margin: 8px 0 4px; }
+.cht-brief > .small { width: 100%; }
+.cht-tile { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); cursor: pointer; font: inherit; font-size: var(--fs-small); transition: background .15s var(--ease); }
+.cht-tile b { font-size: var(--fs-heading); font-weight: 650; }
+.cht-tile:hover { background: var(--primary-soft); }
 .cht-sugs { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 340px; }
 .cht-sug { justify-content: flex-start; text-align: start; white-space: normal; }
 .cht-foot { border-top: 1px solid var(--border); padding: 10px 14px 14px; display: flex; flex-direction: column; gap: 6px; }

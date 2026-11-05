@@ -370,7 +370,37 @@ function createChat({ db, store, api, auth, model }) {
     const ui = uiLang(user);
     const key = A.projectId ? (prompt.SUGGESTIONS[screen] ? screen : 'overview') : 'portfolio';
     const used = Number((await q("SELECT COUNT(*) AS n FROM chat_log WHERE user_id = $1 AND kind = 'message' AND created_at >= $2", [user.id, dayStart()])).rows[0].n);
-    return { thread: thread ? { id: thread.id } : null, messages: rows.map(msgView), suggestions: prompt.SUGGESTIONS[key][ui], capabilities: prompt.CAPABILITIES[ui], ai: hasModel(), role: A.role, project: A.project, remaining_today: Math.max(0, DAY_LIMIT - used), can_write: A.projectId ? RANK[A.role] >= 2 : A.role !== 'viewer' };
+    return { thread: thread ? { id: thread.id } : null, messages: rows.map(msgView), suggestions: prompt.SUGGESTIONS[key][ui], capabilities: prompt.CAPABILITIES[ui], ai: hasModel(), role: A.role, project: A.project, remaining_today: Math.max(0, DAY_LIMIT - used), brief: rows.length ? [] : await brief(user, A.projectId), can_write: A.projectId ? RANK[A.role] >= 2 : A.role !== 'viewer' };
+  }
+  // Today at a glance. Plain counts from the same routes as the screens, with no AI, so the numbers always match.
+  async function brief(user, projectId) {
+    try {
+      return await api.runAs({
+        user,
+        async fn(h) {
+          const today = h.TODAY();
+          if (!projectId) {
+            const g = await h.call('GET', '/api/dashboard');
+            return [['late_tasks', (g.overdue || []).length], ['late_payments', (g.payments || []).filter((p) => p.late).length], ['updates', g.pendingInbox || 0], ['at_risk', (g.counts && g.counts.red) || 0]].filter((x) => x[1] > 0).map(([key, n]) => ({ key, n }));
+          }
+          h.P(projectId);
+          const [sc, it, inb] = await Promise.all([h.call('GET', `/api/projects/${projectId}/schedule`), h.call('GET', `/api/projects/${projectId}/items`), h.call('GET', `/api/projects/${projectId}/inbox`)]);
+          const live = (it.items || []).filter((i) => i.status !== 'ignored');
+          const rows = [
+            ['late_tasks', (sc.tasks || []).filter((t) => !t.summary && (t.progress || 0) < 100 && t.finish < today).length],
+            ['late_payments', live.filter((i) => i.kind === 'milestone' && i.state === 'pending' && i.data && i.data.due_date && i.data.due_date < today).length],
+            ['updates', (inb.inbox || []).filter((r) => r.status === 'pending').length],
+            ['high_risks', live.filter((i) => i.kind === 'risk' && i.state === 'open' && i.data && i.data.probability === 'High' && i.data.impact === 'High').length],
+          ];
+          return rows.filter((x) => x[1] > 0).map(([key, n]) => ({ key, n }));
+        },
+      });
+    } catch (e) { return []; }
+  }
+  // The person's own thumbs down answers, with the question that led to each, so quality problems can be reviewed.
+  async function feedbackList(user) {
+    const r = await q("SELECT m.id, m.text AS answer, m.created_at, t.project_id, (SELECT u.text FROM chat_messages u WHERE u.thread_id = m.thread_id AND u.role = 'user' AND u.id < m.id ORDER BY u.id DESC LIMIT 1) AS question FROM chat_messages m JOIN chat_threads t ON t.id = m.thread_id WHERE t.user_id = $1 AND m.feedback = -1 ORDER BY m.id DESC LIMIT 50", [user.id]);
+    return { items: r.rows.map((x) => ({ id: x.id, project_id: x.project_id, question: x.question, answer: clip(x.answer, 600), created_at: x.created_at })) };
   }
   async function clear(user, projectId) {
     await access(user, projectId);
@@ -393,6 +423,7 @@ function createChat({ db, store, api, auth, model }) {
     const read = async () => { const raw = await io.readBody(req, 64 * 1024); if (!raw.length) return {}; try { return JSON.parse(raw.toString('utf8')); } catch (e) { throw err(400, 'The request body is not valid JSON'); } };
     const pid = (v) => (v == null || v === '' || v === 'null' ? null : Number(v));
     if (method === 'GET' && p === '/api/chat') { io.json(res, 200, await view(user, pid(url.searchParams.get('project_id')), url.searchParams.get('screen'))); return true; }
+    if (method === 'GET' && p === '/api/chat/feedback') { io.json(res, 200, await feedbackList(user)); return true; }
     if (method === 'POST' && p === '/api/chat/clear') { const b = await read(); io.json(res, 200, await clear(user, pid(b.project_id))); return true; }
     let m;
     if (method === 'POST' && (m = p.match(/^\/api\/chat\/messages\/(\d+)\/(apply|cancel|undo|feedback)$/))) {
@@ -416,7 +447,7 @@ function createChat({ db, store, api, auth, model }) {
     throw err(404, 'Not found');
   }
 
-  return { route, message, view, clear, applyCard, cancelCard, undoCard, feedback, purge };
+  return { route, message, view, brief, feedbackList, clear, applyCard, cancelCard, undoCard, feedback, purge };
 }
 
 module.exports = { createChat };
