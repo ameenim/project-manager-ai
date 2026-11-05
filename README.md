@@ -87,6 +87,7 @@ Import this repository into Replit, add a Postgres database, add the secrets abo
 1. `public` holds the front end: HTML, CSS and the JavaScript modules.
 2. `server.js` starts the server. `server/app.js` is the HTTP layer, `server/api.js` holds the routes, `server/store.js` and `server/db.js` handle Postgres, `server/auth.js` handles accounts, and `server/exporter.js` and `server/importer.js` handle backups and files.
 3. `test` holds the automated tests.
+4. Trends. `server/snapshots.js` keeps one row per project per day in `project_snapshots` (saved hourly and whenever a trends page is read, last capture of the day wins). `GET /api/trends` and `GET /api/projects/:id/trends` return the daily series, and `public/app_trends.js` draws the Trends page and the project Trends tab. Days with no snapshot stay empty and nothing is back filled. History is included in backups.
 
 ## Generated documents
 
@@ -108,3 +109,7 @@ Reports are written by the server and kept with the project. Word, Excel and Pow
 
 
 The prompts live in server/extract2.js (document roles, extraction, risks) and public/engine.js (schedule synthesis). They are written for a principal project manager persona and ask for references, prices, acceptance events, payment terms, durations and owners.
+
+## Sync history and automatic sync
+
+The Updates tab shows when the project was last synced, when the next automatic sync is due, and a Sync history view with the last 50 runs (time, manual or scheduled, what each source found, and any errors). Auto sync is set per project (off, hourly, every 4 hours, daily or weekdays at a chosen time). The schedule is stored on the project, and the server checks for due syncs every minute and runs them as the person who set the schedule, so it keeps working when nobody has the page open. Endpoints: `GET /api/projects/:id/sync-history` and `PUT /api/projects/:id/sync-schedule`.

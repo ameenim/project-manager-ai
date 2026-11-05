@@ -3,6 +3,7 @@
 // clashes with an existing project, and references between tasks, items and documents are checked.
 'use strict';
 const { VERSION } = require('./exporter');
+const { cleanList } = require('./snapshots');
 
 const bad = (message) => Object.assign(new Error(message), { status: 400 });
 const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
@@ -119,7 +120,7 @@ function prepare(backup, nid, opts = {}) {
     if (buffer.length > 40 * 1024 * 1024) { warnings.push(`${f.filename} is too large to import and was skipped.`); continue; }
     files.push({ doc_id: docId, filename: f.filename.slice(0, 250), mime: typeof f.mime === 'string' ? f.mime.slice(0, 120) : null, buffer });
   }
-  return { P: out, files, warnings, exported_at: backup.exported_at || null };
+  return { P: out, files, snapshots: cleanList(backup.snapshots), warnings, exported_at: backup.exported_at || null };
 }
 
 module.exports = { prepare };
