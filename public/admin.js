@@ -2,7 +2,8 @@
 (function () {
   'use strict';
   const KEY = 'pm_admin_token';
-  const S = { token: null, me: null, timer: null };
+  const BUILD = '1.2.2';
+  const S = { token: null, me: null, timer: null, errs: [] };
   try { S.token = localStorage.getItem(KEY); } catch (e) { /* storage blocked */ }
   try { const th = localStorage.getItem('pm_theme'); if (th) document.documentElement.dataset.theme = th; } catch (e) { /* storage blocked */ }
 
@@ -136,7 +137,7 @@
     $('#app').innerHTML = `<div class="shell" id="shell"><button class="btn icon ad-menu-btn" id="menuBtn" aria-label="Open the menu">${ic('menu')}</button>
       <aside class="sidebar"><div class="brand"><img src="brand/mark.svg" alt="" width="30" height="30"><span>Project Manager AI</span></div><span class="ad-tag" style="align-self:flex-start;margin:0 0 6px 8px">Super admin</span>
       <nav class="nav" aria-label="Super admin">${NAV.map(([k, l, i]) => `<a href="#/${k}" data-nav="${k}">${ic(i)}<span class="nl">${l}</span></a>`).join('')}</nav>
-      <div class="ad-side-foot"><b>${esc(S.me.name)}</b><span style="overflow:hidden;text-overflow:ellipsis">${esc(S.me.email)}</span>
+      <div class="ad-side-foot"><b>${esc(S.me.name)}</b><a href="#/diag" class="small muted" ${tip('Open diagnostics')}>Diagnostics, build ${BUILD}</a><span style="overflow:hidden;text-overflow:ellipsis">${esc(S.me.email)}</span>
       <div class="row"><a class="btn sm" href="/app.html">${ic('back')}App</a><button class="btn sm" id="themeBtn" ${tip('Switch between light and dark')}>${ic(dark ? 'sun' : 'moon')}</button><button class="btn sm" id="outBtn" ${tip('Sign out')}>${ic('logout')}</button></div></div></aside>
       <main class="ad-main" id="main"><div id="view"></div></main></div>`;
     $('#outBtn').onclick = signOut;
@@ -404,6 +405,23 @@
     await draw();
   };
 
+
+  // ---------- diagnostics (open #/diag) ----------
+  VIEWS.diag = async () => {
+    const rows = [];
+    const t0 = Date.now(); let hz = 'no answer';
+    try { const r = await fetch('/healthz', { cache: 'no-store' }); hz = `${r.status} ${(await r.text()).slice(0, 160)}`; } catch (e) { hz = 'failed: ' + e.message; }
+    rows.push(['Page script build', BUILD], ['Server /healthz', hz], ['Signed in as', S.me ? `${S.me.email}` : 'not signed in'], ['Browser', navigator.userAgent], ['Window size', `${innerWidth} x ${innerHeight}`]);
+    for (const p of ['me', 'overview', 'users', 'subscriptions', 'finance', 'ai', 'projects', 'widgets', 'config', 'health', 'errors', 'audit']) {
+      const t = Date.now();
+      try { const r = await fetch(`/api/admin/${p}`, { headers: { Authorization: `Bearer ${S.token}` }, cache: 'no-store' }); const x = await r.text(); let ok = 'JSON'; try { JSON.parse(x); } catch (e) { ok = 'NOT JSON'; } rows.push([`GET /api/admin/${p}`, `${r.status}, ${Date.now() - t} ms, ${x.length} characters, ${ok}${r.ok ? '' : ': ' + x.slice(0, 120)}`]); }
+      catch (e) { rows.push([`GET /api/admin/${p}`, 'failed: ' + e.message]); }
+    }
+    rows.push(['Script errors in this visit', S.errs.length ? S.errs.join(' || ') : 'None']);
+    setView(`<div class="page">${head('Diagnostics', '<button class="btn" id="dgCopy">Copy</button>', 'Send this to support if a screen looks empty.')}<div class="card"><div class="table-wrap"><table><tbody>${rows.map(([k, v]) => `<tr><td><b>${esc(k)}</b></td><td style="word-break:break-word">${esc(v)}</td></tr>`).join('')}</tbody></table></div></div></div>`);
+    $('#dgCopy').onclick = () => { const txt = rows.map(([k, v]) => `${k}: ${v}`).join('\n'); (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => toast('Copied'), () => toast('Select the text and copy it', 'err')); };
+  };
+
   // ---------- start ----------
   async function boot() {
     if (!S.token) return showLogin();
@@ -416,6 +434,6 @@
     shell(); if (!S.bound) { S.bound = true; window.addEventListener('hashchange', route); } route();
   }
   window.addEventListener('unhandledrejection', (e) => { const v = view(); if (v && !v.firstElementChild) fail(e.reason instanceof Error ? e.reason : new Error(String(e.reason))); });
-  window.addEventListener('error', (e) => { try { navigator.sendBeacon && navigator.sendBeacon('/api/client-error', new Blob([JSON.stringify({ message: e.message, stack: e.error && e.error.stack, url: location.pathname + location.hash })], { type: 'application/json' })); } catch (x) { /* best effort */ } });
+  window.addEventListener('error', (e) => { S.errs.push(`${e.message} (${e.filename || ''}:${e.lineno || ''})`); try { navigator.sendBeacon && navigator.sendBeacon('/api/client-error', new Blob([JSON.stringify({ message: e.message, stack: e.error && e.error.stack, url: location.pathname + location.hash })], { type: 'application/json' })); } catch (x) { /* best effort */ } });
   boot();
 })();
