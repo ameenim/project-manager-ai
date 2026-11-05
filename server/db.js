@@ -171,6 +171,97 @@ const MIGRATIONS = [
   );
   CREATE UNIQUE INDEX IF NOT EXISTS dash_layouts_name_idx ON dash_layouts(user_id, scope, lower(name));
   `,
+  // 6: the super admin area. user_flags holds the super admin switch, the suspended state and last seen (a separate table
+  // so the users table is never altered). app_config is the runtime configuration. subscriptions is one row per person.
+  // payments is the income ledger. ai_usage records every metered AI call. error_log holds server and browser errors.
+  // health_beats is one row per minute while the server runs, the base for uptime. admin_audit records every admin change.
+  `
+  CREATE TABLE IF NOT EXISTS user_flags (
+    user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    is_super BOOLEAN NOT NULL DEFAULT false,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','suspended')),
+    last_seen_at TIMESTAMPTZ
+  );
+  CREATE TABLE IF NOT EXISTS app_config (
+    key TEXT PRIMARY KEY,
+    value JSONB NOT NULL,
+    updated_by BIGINT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE TABLE IF NOT EXISTS subscriptions (
+    user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'trial' CHECK (status IN ('trial','active','cancelled')),
+    plan TEXT NOT NULL DEFAULT 'Monthly',
+    trial_start TIMESTAMPTZ NOT NULL DEFAULT now(),
+    trial_end TIMESTAMPTZ NOT NULL,
+    period_start TIMESTAMPTZ,
+    period_end TIMESTAMPTZ,
+    price_cents INT NOT NULL DEFAULT 2500,
+    token_limit BIGINT NOT NULL DEFAULT 10000000,
+    auto_renew BOOLEAN NOT NULL DEFAULT true,
+    notes TEXT NOT NULL DEFAULT '',
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE TABLE IF NOT EXISTS payments (
+    id BIGINT PRIMARY KEY,
+    user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+    email TEXT NOT NULL DEFAULT '',
+    amount_cents BIGINT NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'USD',
+    kind TEXT NOT NULL DEFAULT 'payment' CHECK (kind IN ('payment','refund')),
+    status TEXT NOT NULL DEFAULT 'paid' CHECK (status IN ('paid','demo')),
+    method TEXT NOT NULL DEFAULT '',
+    reference TEXT NOT NULL DEFAULT '',
+    note TEXT NOT NULL DEFAULT '',
+    paid_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_by BIGINT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS payments_paid_idx ON payments(paid_at);
+  CREATE INDEX IF NOT EXISTS payments_user_idx ON payments(user_id);
+  CREATE TABLE IF NOT EXISTS ai_usage (
+    id BIGINT PRIMARY KEY,
+    user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+    project_id BIGINT,
+    source TEXT NOT NULL DEFAULT 'ai',
+    model TEXT NOT NULL DEFAULT '',
+    input_tokens INT NOT NULL DEFAULT 0,
+    output_tokens INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS ai_usage_time_idx ON ai_usage(created_at);
+  CREATE INDEX IF NOT EXISTS ai_usage_user_idx ON ai_usage(user_id, created_at);
+  CREATE TABLE IF NOT EXISTS error_log (
+    id BIGINT PRIMARY KEY,
+    user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('server','browser')),
+    status INT,
+    method TEXT NOT NULL DEFAULT '',
+    path TEXT NOT NULL DEFAULT '',
+    message TEXT NOT NULL DEFAULT '',
+    stack TEXT NOT NULL DEFAULT '',
+    ref TEXT NOT NULL DEFAULT '',
+    agent TEXT NOT NULL DEFAULT '',
+    resolved BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS error_log_time_idx ON error_log(created_at);
+  CREATE TABLE IF NOT EXISTS health_beats (
+    beat TIMESTAMPTZ PRIMARY KEY,
+    db_ms INT NOT NULL DEFAULT 0,
+    mem_mb INT NOT NULL DEFAULT 0
+  );
+  CREATE TABLE IF NOT EXISTS admin_audit (
+    id BIGINT PRIMARY KEY,
+    admin_id BIGINT,
+    admin_email TEXT NOT NULL DEFAULT '',
+    action TEXT NOT NULL,
+    target TEXT NOT NULL DEFAULT '',
+    detail JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS admin_audit_time_idx ON admin_audit(created_at);
+  `,
 ];
 
 async function openPg(url) {
@@ -213,7 +304,7 @@ async function prepareSchema(db, { managedProduction = false } = {}) {
   if (managedProduction) {
     // Replit Publish owns production DDL. Its schema copy need not include the
     // development migration-history rows, so do not replay migrations here.
-    const required = ['users', 'sessions', 'projects', 'project_members', 'project_files', 'app_secrets', 'oauth_states', 'chat_threads', 'chat_messages', 'chat_log', 'project_snapshots', 'widgets', 'widget_ratings', 'widget_installs', 'dash_layouts', 'schema_migrations', 'id_blocks'];
+    const required = ['users', 'sessions', 'projects', 'project_members', 'project_files', 'app_secrets', 'oauth_states', 'chat_threads', 'chat_messages', 'chat_log', 'project_snapshots', 'widgets', 'widget_ratings', 'widget_installs', 'dash_layouts', 'user_flags', 'app_config', 'subscriptions', 'payments', 'ai_usage', 'error_log', 'health_beats', 'admin_audit', 'schema_migrations', 'id_blocks'];
     const result = await db.query(
       "SELECT name FROM unnest($1::text[]) AS required(name) WHERE to_regclass('public.' || name) IS NULL",
       [required],

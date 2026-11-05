@@ -30,7 +30,7 @@ const dayStart = () => { const d = new Date(); d.setUTCHours(0, 0, 0, 0); return
 const ago = (ms) => new Date(Date.now() - ms).toISOString();
 const clip = (s, n) => { const t = String(s == null ? '' : s); return t.length > n ? t.slice(0, n) : t; };
 
-function createChat({ db, store, api, auth, model }) {
+function createChat({ db, store, api, auth, ops, model }) {
   const modelFn = model || claude.streamClaude;
   const hasModel = () => !!model || !!process.env.ANTHROPIC_API_KEY;
   const perMinute = new Map();
@@ -236,6 +236,9 @@ function createChat({ db, store, api, auth, model }) {
       emit({ type: 'text', text: reply });
       return finishWith(reply, { unavailable: 'no_key' });
     }
+
+    const limitMsg = ops ? await ops.allowance(user) : null;
+    if (limitMsg) { emit({ type: 'text', text: limitMsg }); return finishWith(limitMsg, { unavailable: 'limit' }); }
 
     let askText = gt.decision === 'mixed' ? gt.rest : text;
     // a message with no sign of a project topic gets a separate, cheap AI check before anything is answered

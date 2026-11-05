@@ -43,6 +43,26 @@ Sign up and sign in use the server. Passwords are hashed with scrypt, sessions a
 
 A person only ever sees projects they belong to. The manager adds people by email from the project Settings screen (the person must already have an account). The last manager of a project cannot be removed.
 
+## Super admin console
+
+Open `/admin` and sign in with an existing account. Only accounts flagged as super admin can enter. The first super admin is ameenim@gmail.com. Set `SUPER_ADMIN_EMAILS` (comma separated) to change the list. That account must already exist, because the list only promotes existing accounts. Set `SUPER_ADMIN_ALLOW_REGISTER=1` once if the account does not exist yet and you want to sign up with it.
+
+The console covers:
+
+- Users: create, edit, suspend, reset passwords, sign out everywhere, delete.
+- Subscriptions: trial, plan, token limit, activate or extend.
+- Finance: income ledger, monthly totals, CSV export. There is no payment processor, so income is a manual ledger and demo payments are excluded.
+- AI: tokens and estimated cost by user, source and day. Cost uses the editable rates in Configuration.
+- Projects and widgets: edit, transfer owner, delete.
+- Configuration: trial days, plan price, token limit, AI rates, signup switch, limit enforcement, maintenance mode.
+- Health: uptime from a per minute heartbeat, request and error counts.
+- Errors: end user error log with resolve and clear.
+- Audit: every admin change is recorded.
+
+Super admins cannot suspend, demote or delete themselves, and the last active super admin is protected.
+
+On a managed production database, run Publish in Replit after pulling. Migration 6 adds the tables the new version requires at startup.
+
 ## Widget marketplace
 
 The Widgets screen lets each project manager add or remove widgets on the portfolio overview and on every project overview. Widgets are grouped (overview, schedule, financials, risk, delivery, team, trends, other), can be searched and filtered by group, source and rating, and can be previewed with the person's own project data before they are added. The Layouts button on an overview saves the shown widgets, their order and size under a name.

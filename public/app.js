@@ -205,7 +205,7 @@
   }
   function shell(active, content, projHead) {
     $('#app').innerHTML = `${PM.billing ? PM.billing.ribbon() : ''}<div class="shell"><aside class="sidebar"><div class="brand"><div class="logo">${PM.logo.mark()}</div><span class="grow">${t('app_name')}</span><button class="btn ghost icon sm" id="navHide" type="button" aria-label="${t('nav_hide')}" title="${t('nav_hide')}">${icon('chev_l')}</button></div>
-      <nav class="nav"><a href="#/" class="${active === 'dash' ? 'active' : ''}">${icon('home')}${t('nav_dashboard')}</a><div class="nav-fly" id="navFly"><a href="#/projects" class="${active === 'projects' ? 'active' : ''}" aria-haspopup="true" aria-expanded="false">${icon('folder')}<span class="grow">${t('nav_projects')}</span><span class="nav-caret">${icon('chev_r')}</span></a></div><a href="#/calendar" class="${active === 'calendar' ? 'active' : ''}">${icon('cal')}${t('nav_calendar')}</a><a href="#/widgets" class="${active === 'widgets' ? 'active' : ''}">${icon('grid')}${t('nav_widgets')}</a><a href="#/billing" class="${active === 'billing' ? 'active' : ''}">${icon('coin')}${t('nav_billing')}</a></nav>
+      <nav class="nav"><a href="#/" class="${active === 'dash' ? 'active' : ''}">${icon('home')}${t('nav_dashboard')}</a><div class="nav-fly" id="navFly"><a href="#/projects" class="${active === 'projects' ? 'active' : ''}" aria-haspopup="true" aria-expanded="false">${icon('folder')}<span class="grow">${t('nav_projects')}</span><span class="nav-caret">${icon('chev_r')}</span></a></div><a href="#/calendar" class="${active === 'calendar' ? 'active' : ''}">${icon('cal')}${t('nav_calendar')}</a><a href="#/widgets" class="${active === 'widgets' ? 'active' : ''}">${icon('grid')}${t('nav_widgets')}</a><a href="#/billing" class="${active === 'billing' ? 'active' : ''}">${icon('coin')}${t('nav_billing')}</a>${S.user && S.user.is_super ? `<a href="/admin">${icon('gear')}${t('nav_admin')}</a>` : ''}</nav>
       <div class="spacer"></div>
       <div class="side-prefs">
         <div class="pref"><span class="pref-ic">${icon(S.theme === 'dark' ? 'moon' : 'sun')}</span><span class="grow">${t('dark_mode')}</span><button type="button" class="tgl ${S.theme === 'dark' ? 'on' : ''}" id="themeBtn" role="switch" aria-checked="${S.theme === 'dark'}" aria-label="${t('dark_mode')}" data-tip="${t('dark_mode')}"><i>${icon(S.theme === 'dark' ? 'moon' : 'sun')}</i></button></div>
@@ -428,6 +428,16 @@
   PM.route = route;
   // page transitions: cross fade the whole view where the browser supports it
   PM.vt = (fn) => { const rm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches; if (document.startViewTransition && !rm && S.token) { try { const tr = document.startViewTransition(fn); ['ready', 'finished'].forEach((k) => tr[k] && tr[k].catch(() => {})); return tr; } catch (e) { /* fall through */ } } return fn(); };
+  // Problems in the browser are reported to the server so the super admin can see them. At most five per page visit.
+  (function reportErrors() {
+    let sent = 0; const seen = new Set();
+    const send = (message, stack) => {
+      const key = String(message).slice(0, 120); if (sent >= 5 || seen.has(key)) return; seen.add(key); sent++;
+      try { fetch('/api/client-error', { method: 'POST', keepalive: true, headers: Object.assign({ 'content-type': 'application/json' }, S.token ? { Authorization: `Bearer ${S.token}` } : {}), body: JSON.stringify({ message: String(message).slice(0, 500), stack: String(stack || '').slice(0, 3000), url: location.pathname + location.hash }) }).catch(() => {}); } catch (e) { /* best effort */ }
+    };
+    window.addEventListener('error', (e) => { if (e.message && !/ResizeObserver loop/.test(e.message)) send(e.message, e.error && e.error.stack); });
+    window.addEventListener('unhandledrejection', (e) => { const r = e.reason; send('Unhandled promise rejection: ' + ((r && r.message) || r), r && r.stack); });
+  })();
   PM.start = () => { window.addEventListener('hashchange', () => PM.vt(route)); route(); };
   document.addEventListener('click', (e) => { const a = e.target.closest('[data-go]'); if (a && a.tagName !== 'TR') location.hash = a.dataset.go; });
 })();

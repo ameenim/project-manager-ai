@@ -33,7 +33,8 @@ async function callClaude(payload) {
             if (!line.startsWith('data:')) continue;
             let ev; try { ev = JSON.parse(line.slice(5)); } catch (e) { continue; }
             if (ev.type === 'content_block_delta' && ev.delta && ev.delta.type === 'text_delta') text += ev.delta.text;
-            else if (ev.type === 'message_delta') { if (ev.delta && ev.delta.stop_reason) stop = ev.delta.stop_reason; if (ev.usage) usage = ev.usage; }
+            else if (ev.type === 'message_start' && ev.message && ev.message.usage) usage = { ...(usage || {}), ...ev.message.usage };
+            else if (ev.type === 'message_delta') { if (ev.delta && ev.delta.stop_reason) stop = ev.delta.stop_reason; if (ev.usage) usage = { ...(usage || {}), ...ev.usage }; }
             else if (ev.type === 'error') throw Object.assign(new Error('Claude stream error: ' + ((ev.error && ev.error.message) || '')), { status: 502 });
           }
         }

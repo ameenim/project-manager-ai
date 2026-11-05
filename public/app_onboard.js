@@ -7,7 +7,8 @@
   const { esc, t, icon, $, $$ } = PM;
   const S = PM.state;
 
-  const DAY = 86400000, TRIAL_DAYS = 15, PERIOD_DAYS = 30, PRICE = 25, LIMIT = 10000000;
+  const DAY = 86400000;
+  let TRIAL_DAYS = 15, PERIOD_DAYS = 30, PRICE = 25, LIMIT = 10000000; // replaced by the server's numbers once they load
   const delay = (ms) => new Promise((r) => setTimeout(r, ms));
   const later = (fn) => setTimeout(fn, 60);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -104,7 +105,7 @@
   const mem = {};
   const load = (k) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : mem[k] || null; } catch (e) { return mem[k] || null; } };
   const save = (k, v) => { mem[k] = v; try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage blocked, memory copy is used */ } };
-  const freshBilling = () => ({ trialStart: Date.now(), paidAt: null, tokens: 0, shift: 0, usage: {}, invoices: [], auto: true, warned: 0, rbHide: null });
+  const freshBilling = () => ({ trialStart: Date.now(), paidAt: null, tokens: 0, shift: 0, usage: {}, invoices: [], auto: true, warned: 0, rbHide: null, srvEnd: null, srvExpired: false });
   let B = load('pm_billing') || freshBilling();
   let O = load('pm_onboard') || { done: false, tour: false, phone: '', hide: false };
   const saveB = () => save('pm_billing', B);
@@ -124,22 +125,43 @@
   }
   const invoice = (ms) => ({ no: 'PM-' + String(1001 + B.invoices.length), at: ms, amount: PRICE });
   function roll() {
-    if (!B.paidAt || !B.auto) return;
+    if (B.srvEnd || !B.paidAt || !B.auto) return;
     let end = B.paidAt + PERIOD_DAYS * DAY, guard = 0;
     while (now() >= end && guard++ < 24) { B.paidAt = end; B.tokens = 0; B.warned = 0; B.invoices.unshift(invoice(end)); end = B.paidAt + PERIOD_DAYS * DAY; saveB(); }
   }
   function info() {
     roll();
     const paid = !!B.paidAt;
-    const end = paid ? B.paidAt + PERIOD_DAYS * DAY : B.trialStart + TRIAL_DAYS * DAY;
+    const end = B.srvEnd || (paid ? B.paidAt + PERIOD_DAYS * DAY : B.trialStart + TRIAL_DAYS * DAY);
     const left = Math.ceil((end - now()) / DAY);
-    const days = Math.max(0, left), expired = left <= 0;
+    const days = Math.max(0, left), expired = left <= 0 || !!B.srvExpired;
     const pct = Math.min(100, Math.round((B.tokens / LIMIT) * 100));
     let tone = paid ? 'paid' : 'ok';
     if ((!paid && days <= 5) || (paid && days <= 3) || pct >= 80) tone = 'warn';
     if (expired || pct >= 100) tone = 'bad';
     return { paid, end, days, expired, pct, tone, out: pct >= 100, tokensLeft: Math.max(0, LIMIT - B.tokens) };
   }
+
+  // ---------- the server is the source of truth ----------
+  // Plan dates, the token limit, tokens used and invoices come from the server, so what a super admin changes is what
+  // the person sees. The numbers saved in the browser only show until the first answer arrives.
+  let syncTimer = null, synced = false;
+  async function syncServer() {
+    if (!S.token) return;
+    try {
+      const r = await PM.api('GET', '/api/billing'); const v = r.billing;
+      const paid = v.status !== 'trial' && !!v.period_start;
+      PRICE = v.price_cents / 100; LIMIT = v.token_limit || 1e15; PERIOD_DAYS = v.period_days; TRIAL_DAYS = v.trial_days;
+      B.trialStart = v.trial_start; B.paidAt = paid ? v.period_start : null; B.srvEnd = paid ? v.period_end : v.trial_end;
+      B.srvExpired = v.state === 'expired' || v.state === 'ended'; B.tokens = v.tokens_used; B.usage = v.usage; B.auto = v.auto_renew; B.shift = 0; B.selfServe = v.self_serve;
+      B.invoices = v.invoices.map((x) => ({ no: x.no, at: x.at, amount: x.amount_cents / 100 }));
+      const pct = (B.tokens / LIMIT) * 100;
+      if (pct >= 100 && B.warned < 2) { B.warned = 2; PM.toast(t('rb_err_tokens', { date: dfmt(info().end) }), 'err'); }
+      else if (pct >= 80 && B.warned < 1) { B.warned = 1; PM.toast(t('rb_warn80')); }
+      synced = true; saveB(); refresh();
+    } catch (e) { /* keeps the saved numbers until the next try */ }
+  }
+  const syncSoon = () => { clearTimeout(syncTimer); syncTimer = setTimeout(syncServer, 1200); };
 
   // ---------- plan ribbon ----------
   // The ribbon can be closed. It stays closed until the plan state gets worse (warning, then limit reached or ended).
@@ -190,14 +212,6 @@
   const FREE = /^\/api\/(auth|me|connections|billing)/;
   const COST = [[/\/analyze$/, 60e3, 60e3], [/\/doc-plan$/, 6e3, 8e3], [/\/generate$/, 40e3, 50e3], [/\/documents$/, 25e3, 35e3], [/\/messages$/, 8e3, 12e3], [/\/sync$/, 15e3, 25e3], [/\/msproject\/import$/, 10e3, 15e3], [/^\/api\/projects$/, 30e3, 50e3]];
   const costOf = (m, p) => { if (m !== 'POST') return 0; for (const [re, a, b] of COST) if (re.test(p)) return Math.round(a + Math.random() * b); return 0; };
-  function addTokens(n) {
-    B.tokens = Math.min(LIMIT, B.tokens + n);
-    const k = dkey(now()); B.usage[k] = (B.usage[k] || 0) + n;
-    const pct = (B.tokens / LIMIT) * 100;
-    if (pct >= 100 && B.warned < 2) { B.warned = 2; PM.toast(t('rb_err_tokens', { date: dfmt(info().end) }), 'err'); }
-    else if (pct >= 80 && B.warned < 1) { B.warned = 1; PM.toast(t('rb_warn80')); }
-    saveB(); refresh();
-  }
   const blocked = (msg) => new Response(JSON.stringify({ error: msg }), { status: 402, headers: { 'content-type': 'application/json' } });
   const prevFetch = window.fetch.bind(window);
   window.fetch = async function (input, init) {
@@ -210,7 +224,7 @@
       const cost = costOf(method, path);
       if (cost && i.out) { if (!i.paid) later(() => subscribe()); return blocked(t('rb_err_tokens', { date: dfmt(i.end) })); }
       const res = await prevFetch(input, init);
-      if (cost && res.ok) addTokens(cost);
+      if (cost && res.ok) syncSoon();
       return res;
     }
     return prevFetch(input, init);
@@ -239,9 +253,8 @@
       m.setFooter(`<button class="btn" id="subBack">${t('ob_back')}</button><button class="btn good" id="subPay">${t('sub_pay')}</button>`);
       m.$('#subBack').onclick = step1;
       m.$('#subPay').onclick = async () => {
-        const r = await PM.busy(m.$('#subPay'), async () => { await delay(900); return true; });
+        const r = await PM.busy(m.$('#subPay'), async () => { await PM.api('POST', '/api/billing/subscribe', {}); await syncServer(); B.warned = 0; B.rbHide = null; saveB(); refresh(); return true; });
         if (!r) return;
-        B.paidAt = now(); B.tokens = 0; B.warned = 0; B.rbHide = null; B.auto = true; B.invoices.unshift(invoice(now())); saveB(); refresh();
         step3();
       };
       m.$('#subPay').focus();
@@ -469,31 +482,23 @@
         </section>
       </div>
       <section class="card mt"><div class="card-head"><h3>${t('bl_daily')}</h3></div>${useRows.length ? `<div class="table-wrap"><table class="t"><thead><tr><th>${t('bl_day')}</th><th>${t('bl_tokens_col')}</th><th aria-hidden="true"></th></tr></thead><tbody>${shownUse.map(([k, v]) => `<tr><td class="nowrap">${dfmt(Date.parse(k + 'T12:00:00Z'))}</td><td class="nowrap" style="font-variant-numeric:tabular-nums">${num(v)}</td><td style="min-width:120px"><div class="progress"><i style="width:${Math.round((v / maxUse) * 100)}%"></i></div></td></tr>`).join('')}</tbody></table></div>${toggle('use', useRows.length)}` : `<p class="small muted" style="margin:0">${t('bl_daily_empty')}</p>`}</section>
-      <section class="card mt"><div class="card-head"><h3>${t('bl_inv')}</h3></div>${B.invoices.length ? `<div class="table-wrap"><table class="t"><thead><tr><th>${t('bl_inv_no')}</th><th>${t('bl_inv_date')}</th><th>${t('bl_inv_amt')}</th><th></th></tr></thead><tbody>${invRows.map((v) => `<tr><td>${esc(v.no)}</td><td class="nowrap">${dfmt(v.at)}</td><td dir="ltr" style="text-align:start">$${v.amount}.00</td><td><span class="chip green">${t('bl_paid')}</span></td></tr>`).join('')}</tbody></table></div>${toggle('inv', B.invoices.length)}` : `<p class="small muted" style="margin:0">${t('bl_inv_empty')}</p>`}</section>
-      <section class="card mt"><div class="card-head"><h3>${t('bl_demo_h')}</h3><span class="chip amber">Demo</span></div><p class="small muted" style="margin-top:0">${t('bl_demo_p')}</p>
-        <div class="form-grid"><label class="f">${t('bl_demo_days')}<select id="dmDays">${[15, 10, 5, 3, 2, 1, 0].map((d) => `<option value="${d}" ${d === i.days ? 'selected' : ''}>${d}</option>`).join('')}</select></label>
-        <label class="f">${t('bl_demo_tokens')}<select id="dmTok">${[0, 50, 80, 100].map((p) => `<option value="${p}" ${p === i.pct || (p === 50 && i.pct > 0 && i.pct < 80 && ![0, 80, 100].includes(i.pct)) ? 'selected' : ''}>${p}%</option>`).join('')}</select></label></div>
-        <div class="row mt"><button type="button" class="btn" id="dmReset">${t('bl_demo_reset')}</button></div></section>`;
+      <section class="card mt"><div class="card-head"><h3>${t('bl_inv')}</h3></div>${B.invoices.length ? `<div class="table-wrap"><table class="t"><thead><tr><th>${t('bl_inv_no')}</th><th>${t('bl_inv_date')}</th><th>${t('bl_inv_amt')}</th><th></th></tr></thead><tbody>${invRows.map((v) => `<tr><td>${esc(v.no)}</td><td class="nowrap">${dfmt(v.at)}</td><td dir="ltr" style="text-align:start">$${Number(v.amount).toFixed(2)}</td><td><span class="chip green">${t('bl_paid')}</span></td></tr>`).join('')}</tbody></table></div>${toggle('inv', B.invoices.length)}` : `<p class="small muted" style="margin:0">${t('bl_inv_empty')}</p>`}</section>`;
     $$('[data-subscribe]', host).forEach((b) => (b.onclick = () => subscribe()));
     $$('[data-more]', host).forEach((b) => (b.onclick = () => { expand[b.dataset.more] = !expand[b.dataset.more]; draw(); }));
     const auto = $('#blAuto', host);
     if (auto) auto.onclick = () => {
       const prev = B.auto; B.auto = !B.auto; saveB();
-      PM.toast(t(B.auto ? 'bl_auto_on' : 'bl_auto_off', { date: dfmt(info().end) }), '', { label: t('bl_undo'), fn: () => { B.auto = prev; saveB(); refresh(); } });
+      PM.api('POST', '/api/billing/auto-renew', { auto: B.auto }).catch(() => { B.auto = prev; saveB(); refresh(); });
+      PM.toast(t(B.auto ? 'bl_auto_on' : 'bl_auto_off', { date: dfmt(info().end) }), '', { label: t('bl_undo'), fn: () => { B.auto = prev; saveB(); PM.api('POST', '/api/billing/auto-renew', { auto: prev }).catch(() => {}); refresh(); } });
       refresh();
     };
-    $('#dmDays', host).onchange = (e) => { const target = Number(e.target.value); B.shift = i.end - Date.now() - (target - 0.5) * DAY; saveB(); refresh(); };
-    $('#dmTok', host).onchange = (e) => {
-      const p = Number(e.target.value); B.tokens = Math.round((LIMIT * p) / 100); B.warned = p >= 100 ? 2 : p >= 80 ? 1 : 0; B.usage = {};
-      if (B.tokens) [0.1, 0.15, 0.2, 0.25, 0.3].forEach((w, n) => { B.usage[dkey(now() - (4 - n) * DAY)] = Math.round(B.tokens * w); });
-      saveB(); refresh();
-    };
-    $('#dmReset', host).onclick = () => { B = freshBilling(); saveB(); refresh(); };
+
   }
 
   // ---------- first load gate ----------
   let gated = false;
   function gate() {
+    syncServer();
     if (gated) return; gated = true;
     (async () => {
       await waitFor('.shell', 5000); await delay(400);
@@ -502,6 +507,7 @@
   }
   function reset() { ['pm_billing', 'pm_onboard'].forEach((k) => { delete mem[k]; try { localStorage.removeItem(k); } catch (e) { /* storage blocked */ } }); }
 
-  PM.billing = { ribbon, bind: bindRibbon, refresh, subscribe, info };
+  setTimeout(syncServer, 0);
+  PM.billing = { ribbon, bind: bindRibbon, refresh, subscribe, info, sync: syncServer };
   PM.onboard = { gate, wizard, tour, banner, bind, accountCards, bindAccount, phone: () => O.phone, validatePhone, savePhone, reset };
 })();

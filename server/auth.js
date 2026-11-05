@@ -54,18 +54,19 @@ function make(db) {
     email = String(email || '').trim().toLowerCase(); password = String(password || '');
     const key = `${ip || ''}|${email}`;
     if (tooMany(key)) throw err(429, 'Too many attempts. Wait a few minutes and try again.');
-    const row = (await db.query('SELECT id, name, email, pw_salt, pw_hash FROM users WHERE email = $1', [email])).rows[0];
+    const row = (await db.query("SELECT u.id, u.name, u.email, u.pw_salt, u.pw_hash, COALESCE(f.status, 'active') AS status FROM users u LEFT JOIN user_flags f ON f.user_id = u.id WHERE u.email = $1", [email])).rows[0];
     // The hash is computed even for an unknown email so response time does not reveal which emails exist.
     const hash = await scrypt(password, row ? row.pw_salt : 'x'.repeat(32));
     const ok = row && crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(row.pw_hash, 'hex'));
     if (!ok) { noteFail(key); throw err(401, 'Email or password is not correct'); }
     fails.delete(key);
+    if (row.status === 'suspended') throw err(403, 'This account is suspended. Contact support.');
     return { user: publicUser(row), token: await newSession(row.id) };
   }
 
   async function userForToken(token) {
     if (!token || !/^[0-9a-f]{64}$/.test(token)) return null;
-    const row = (await db.query('SELECT u.id, u.name, u.email, u.prefs, u.avatar FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = $1 AND s.expires_at > now()', [sha(token)])).rows[0];
+    const row = (await db.query("SELECT u.id, u.name, u.email, u.prefs, u.avatar, COALESCE(f.is_super, false) AS is_super, COALESCE(f.status, 'active') AS status FROM sessions s JOIN users u ON u.id = s.user_id LEFT JOIN user_flags f ON f.user_id = u.id WHERE s.token_hash = $1 AND s.expires_at > now()", [sha(token)])).rows[0];
     return row || null;
   }
 

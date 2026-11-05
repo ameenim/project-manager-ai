@@ -41,7 +41,12 @@ function loadBundles() {
       if (!process.env.ANTHROPIC_API_KEY) return res(503, { error: 'ANTHROPIC_API_KEY is not set on the server', code: 'no_key' });
       let payload; try { payload = JSON.parse(init.body); } catch (e) { return res(400, { error: 'Invalid request' }); }
       payload.max_tokens = Math.min(Math.max(parseInt(payload.max_tokens, 10) || 4000, 200), 32000);
-      try { return res(200, await callClaude(payload)); } catch (e) {
+      try {
+        if (meter) { const stop = await meter.before(); if (stop) return res(402, { error: stop, code: 'limit' }); }
+        const r = await callClaude(payload);
+        if (meter) await meter.after('document reading', r);
+        return res(200, r);
+      } catch (e) {
         const code = e.status === 401 ? 'bad_key' : e.status === 429 ? 'rate' : e.status === 400 && /credit|billing|balance/i.test(e.message) ? 'budget' : 'upstream';
         return res(502, { error: code === 'bad_key' ? 'The Anthropic API key was rejected' : code === 'budget' ? 'The Anthropic account has no credit left' : 'Claude could not be reached', code, status: e.status || null });
       }
@@ -52,10 +57,18 @@ function loadBundles() {
   for (const [dir, f] of [[PUB, 'engine.js'], [PUB, 'visuals.js'], [PUB, 'widgetspec.js'], [__dirname, 'seed.js'], [__dirname, 'extract2.js']]) vm.runInContext(fs.readFileSync(path.join(dir, f), 'utf8'), win, { filename: f });
   return win;
 }
+// set by createApi so the in process AI calls are metered per person
+let meter = null;
 const win = loadBundles();
 
-module.exports = function createApi(store, auth, connectors) {
+module.exports = function createApi(store, auth, connectors, ops) {
   const S = win.__Sched, R = win.__Reports, AI = win.__AI, Pipe = win.__Pipe;
+  // every in process AI call is recorded against the signed in person, and can be refused when limits are enforced
+  const who = () => { try { return ctx().DB.user; } catch (e) { return null; } };
+  meter = ops ? {
+    before: async () => { const u = who(); return u ? ops.allowance(u) : null; },
+    after: async (source, r) => { const u = who(); await ops.recordUsage({ userId: u && u.id, source, model: MODEL, input: r.usage && r.usage.input_tokens, output: r.usage && r.usage.output_tokens }); },
+  } : null;
   const RAW = win.DEMO_SEED;
   const nid = () => store.nid();
   const ensurePipe = async () => {};
@@ -889,6 +902,39 @@ module.exports = function createApi(store, auth, connectors) {
     return out;
   };
   on('GET', '/api/me', async () => ({ user: DB.user, status: { jira: !!CONN.jira, graph: !!CONN.outlook, claude: !!process.env.ANTHROPIC_API_KEY, model: MODEL } }));
+  // ---------- plan, tokens and invoices (the person's own view of their subscription) ----------
+  const DAYMS2 = 86400000;
+  async function billingView() {
+    const uid = ctx().user.id; const cfg = await ops.config();
+    await ops.ensureSubscription(uid);
+    const s = (await ops.q('SELECT * FROM subscriptions WHERE user_id = $1', [uid])).rows[0];
+    const since = ops.periodStart(s);
+    const used = await ops.tokensUsedSince(uid, since);
+    const days = (await ops.q(`SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') AS d, SUM(n) AS n FROM (
+      SELECT created_at, input_tokens + output_tokens AS n FROM ai_usage WHERE user_id = $1 AND created_at >= $2
+      UNION ALL SELECT created_at, input_tokens + output_tokens FROM chat_log WHERE user_id = $1 AND billable AND created_at >= $2) t GROUP BY 1 ORDER BY 1 DESC LIMIT 60`, [uid, since])).rows;
+    const pays = (await ops.q("SELECT id, amount_cents, currency, kind, status, paid_at FROM payments WHERE user_id = $1 AND kind = 'payment' ORDER BY paid_at ASC, id ASC", [uid])).rows;
+    const t = (v) => (v ? new Date(v).getTime() : null);
+    return {
+      state: ops.constructor.state(s), status: s.status, plan: s.plan, price_cents: Number(s.price_cents), currency: cfg.currency, token_limit: Number(s.token_limit), tokens_used: used,
+      trial_start: t(s.trial_start), trial_end: t(s.trial_end), period_start: t(s.period_start), period_end: t(s.period_end), auto_renew: !!s.auto_renew, period_days: cfg.period_days, trial_days: cfg.trial_days, self_serve: !!cfg.self_serve_subscribe,
+      usage: Object.fromEntries(days.map((r) => [r.d, Number(r.n)])),
+      invoices: pays.map((p, i) => ({ no: 'PM-' + (1001 + i), at: t(p.paid_at), amount_cents: Number(p.amount_cents), currency: p.currency, demo: p.status === 'demo' })).reverse(),
+    };
+  }
+  on('GET', '/api/billing', async () => ({ billing: await billingView() }));
+  on('POST', '/api/billing/auto-renew', async (m, q, b) => { await ops.ensureSubscription(ctx().user.id); await ops.q('UPDATE subscriptions SET auto_renew = $2, updated_at = now() WHERE user_id = $1', [ctx().user.id, !!b.auto]); return { billing: await billingView() }; });
+  // No payment processor is connected, so this records a demo payment. Demo payments never count as income.
+  on('POST', '/api/billing/subscribe', async () => {
+    const cfg = await ops.config(); const uid = ctx().user.id;
+    if (!cfg.self_serve_subscribe) throw err(403, 'Subscriptions are set up by our team. Contact support to subscribe.');
+    await ops.ensureSubscription(uid);
+    const cur = (await ops.q('SELECT * FROM subscriptions WHERE user_id = $1', [uid])).rows[0];
+    const from = cur.status === 'active' && cur.period_end && new Date(cur.period_end) > new Date() ? new Date(cur.period_end) : new Date();
+    await ops.q("UPDATE subscriptions SET status = 'active', period_start = $2, period_end = $3, auto_renew = true, updated_at = now() WHERE user_id = $1", [uid, from, new Date(from.getTime() + cfg.period_days * DAYMS2)]);
+    await ops.q("INSERT INTO payments(id, user_id, email, amount_cents, currency, kind, status, method, note) VALUES ($1,$2,$3,$4,$5,'payment','demo','in app demo','Subscribed in the app')", [nid(), uid, ctx().user.email, Number(cur.price_cents), cfg.currency]);
+    return { billing: await billingView() };
+  });
   on('GET', '/api/connections', async () => { await connectors.loadConfig(); return { connections: connView() }; });
   // the owner pastes the app id and secret once, so nobody has to edit secrets or restart
   on('POST', '/api/connections/(jira|outlook)/setup', async (mm, q, b) => { await connectors.saveConfig(mm[1], b.client_id, b.client_secret); return { connections: connView() }; });
@@ -1616,7 +1662,9 @@ Rules:
     const lib = R.LIBRARY.map(([k, h, about]) => `${k}: ${h}. ${about}`).join('\n');
     const system = 'You plan professional project management documents. Reply with one JSON object only, with no prose and no code fences. Write in US English. Do not use dashes as punctuation and do not use semicolons.';
     const user = `Project: ${P.p.name}${P.p.client ? ` for ${P.p.client}` : ''}\nDocument name: ${inp.name}\nAudience: ${inp.audience}\nDescription: ${inp.description}\n\nStandard templates:\n${types}\n\nSections the system can fill from project data (key: heading. what it holds):\n${lib}\n\nReturn {"base_type":"<one template id>","summary":"<one or two plain sentences on what the document is for and why these sections fit this audience>","sections":[{"heading":"...","key":"<library key or null>","guidance":"<one sentence on what the section will say>"}]}. Use 5 to 12 sections in reading order. Use a library key whenever a section matches one. Use null for a section that has to be written from the brief.`;
+    if (meter) { const stop = await meter.before(); if (stop) return null; }
     const r = await callClaude({ system, user, max_tokens: 1800 });
+    if (meter) await meter.after('document planning', r);
     const a = r.text.indexOf('{'), z = r.text.lastIndexOf('}');
     if (a < 0 || z < a) return null;
     const j = JSON.parse(r.text.slice(a, z + 1));
@@ -1838,7 +1886,7 @@ Rules:
     store.saveSoon(P);
   }
 
-  const userView = (u) => ({ id: u.id, name: u.name, email: u.email, language: (u.prefs && u.prefs.language) || 'en', theme: (u.prefs && u.prefs.theme) || 'light', avatar: u.avatar || null, ingest_key: (u.prefs && u.prefs.ingest_key) || null, dash_layout: (u.prefs && u.prefs.dash_layout) || null, sample_loaded: !!(u.prefs && u.prefs.sample_loaded) });
+  const userView = (u) => ({ id: u.id, name: u.name, email: u.email, language: (u.prefs && u.prefs.language) || 'en', theme: (u.prefs && u.prefs.theme) || 'light', avatar: u.avatar || null, ingest_key: (u.prefs && u.prefs.ingest_key) || null, dash_layout: (u.prefs && u.prefs.dash_layout) || null, sample_loaded: !!(u.prefs && u.prefs.sample_loaded), is_super: !!u.is_super });
   async function saveUser() {
     const c = ctx(), u = c.DB.user;
     const prefs = { ...(c.user.prefs || {}), language: u.language, theme: u.theme, dash_layout: u.dash_layout || null, ingest_key: u.ingest_key || null, templates: c.DB.templates, connections: c.DB.connections || {}, sample_loaded: !!u.sample_loaded };

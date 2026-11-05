@@ -13,6 +13,8 @@ const { Connectors } = require('./connectors');
 const createApi = require('./api');
 const { MODEL } = require('./claude');
 const { createChat } = require('./chat/chat');
+const { Ops } = require('./ops');
+const createAdmin = require('./admin');
 
 const ROOT = path.join(__dirname, '..', 'public');
 const MAX_UPLOAD = 40 * 1024 * 1024;       // one file
@@ -88,12 +90,18 @@ async function createApp(opts = {}) {
   catch (error) { await db.close().catch(() => {}); throw error; }
   stage('store ready');
   const auth = authm.make(db);
+  const ops = new Ops(db, store);
+  await ops.backfillSubscriptions();
+  await ops.bootstrapSuperAdmins();
+  if (opts.opsJobs !== false) ops.start();
+  const admin = createAdmin({ db, store, auth, ops });
   const connectors = new Connectors(db, opts.connectorOptions || {});
-  const api = createApi(store, auth, connectors);
+  const api = createApi(store, auth, connectors, ops);
   // The Project Chat. opts.chatModel lets tests replace the model with a scripted one.
-  const chat = createChat({ db, store, api, auth, model: opts.chatModel });
+  const chat = createChat({ db, store, api, auth, ops, model: opts.chatModel });
   const apiLimit = limiter(Number(process.env.API_RATE || 900), 60e3);
   const signupLimit = limiter(30, 3600e3);
+  const clientErrLimit = limiter(30, 60e3);
   const origin = (req) => { const proto = String(req.headers['x-forwarded-proto'] || 'http').split(',')[0].trim(); return (process.env.SITE_URL || `${proto}://${req.headers['x-forwarded-host'] || req.headers.host || 'localhost'}`).replace(/\/+$/, ''); };
 
   // The optional demo account. It is off unless asked for, because everyone who knows its password shares its data.
@@ -130,14 +138,33 @@ async function createApp(opts = {}) {
       if (kind === 'logout') { await auth.logout(bearer(req)); return json(res, 200, { ok: true }); }
       if (kind === 'register' && signupLimit(clientIp(req))) return json(res, 429, { error: 'Too many new accounts from this address. Try again later.' });
       let body; try { body = JSON.parse((await readBody(req, 64 * 1024)).toString('utf8') || '{}'); } catch (e) { return json(res, e.status || 400, { error: e.status === 413 ? 'The request is too large' : 'Invalid request' }); }
+      if (kind === 'register') {
+        if (!(await ops.config()).signup_enabled) return json(res, 403, { error: 'New sign ups are paused right now. Please try again later.' });
+        // a super admin address cannot be claimed by signing up, so nobody can take the admin account by registering first
+        if (ops.isReservedEmail(body && body.email) && process.env.SUPER_ADMIN_ALLOW_REGISTER !== '1') return json(res, 403, { error: 'This email address is reserved. Contact the administrator.' });
+      }
       const r = kind === 'register' ? await auth.register(body) : await auth.login(body, clientIp(req));
+      if (kind === 'register') { const u0 = await auth.userForToken(r.token); await ops.ensureSubscription(u0.id); await ops.bootstrapSuperAdmins(); }
       const user = await auth.userForToken(r.token);
       return json(res, 200, { token: r.token, user: api.userView(user) });
+    }
+
+    // browser error reports. Anyone may send one, a signed in person is attached to it.
+    if (method === 'POST' && p === '/api/client-error') {
+      if (clientErrLimit(clientIp(req))) return json(res, 429, { error: 'Too many reports' });
+      let b = {}; try { b = JSON.parse((await readBody(req, 16 * 1024)).toString('utf8') || '{}'); } catch (e) { return json(res, 400, { error: 'Invalid request' }); }
+      const who = await auth.userForToken(bearer(req)).catch(() => null);
+      await ops.logError({ kind: 'browser', userId: who && who.id, path: b.url, message: b.message || 'Unknown error', stack: b.stack, agent: req.headers['user-agent'] });
+      return json(res, 200, { ok: true });
     }
 
     const token = bearer(req);
     const user = await auth.userForToken(token);
     if (!user) return json(res, 401, { error: 'Your session has expired. Sign in again.' });
+    if (user.status === 'suspended') return json(res, 403, { error: 'This account is suspended. Contact support.' });
+    ops.touchSeen(user.id);
+    if (await admin.route(req, res, url, user, { json, readBody, SECURITY })) return;
+    if (!user.is_super && (await ops.config()).maintenance_mode && !/^\/api\/(me|billing)/.test(p)) return json(res, 503, { error: (await ops.config()).maintenance_message });
 
     if (p.startsWith('/api/chat') && (await chat.route(req, res, url, user, { json, readBody, SECURITY }))) return;
 
@@ -179,7 +206,7 @@ async function createApp(opts = {}) {
 
   function serveStatic(req, res, url) {
     const o = origin(req);
-    if (req.method === 'GET' && url.pathname === '/robots.txt') { res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-cache', ...SECURITY }); return res.end('User-agent: *\nAllow: /\nDisallow: /app.html\nDisallow: /api/\n\nSitemap: ' + o + '/sitemap.xml\n'); }
+    if (req.method === 'GET' && url.pathname === '/robots.txt') { res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-cache', ...SECURITY }); return res.end('User-agent: *\nAllow: /\nDisallow: /app.html\nDisallow: /admin\nDisallow: /api/\n\nSitemap: ' + o + '/sitemap.xml\n'); }
     if (req.method === 'GET' && url.pathname === '/sitemap.xml') { res.writeHead(200, { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'no-cache', ...SECURITY }); return res.end('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>' + o + '/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>\n</urlset>\n'); }
     if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405, { Allow: 'GET, HEAD', ...SECURITY }); return res.end(); }
     if (url.pathname === '/' || url.pathname === '/index.html') {
@@ -188,6 +215,13 @@ async function createApp(opts = {}) {
         const tags = '<link rel="canonical" href="' + o + '/">\n<meta property="og:url" content="' + o + '/">\n<meta property="og:image" content="' + o + '/brand/mark-512.png">\n<meta name="twitter:image" content="' + o + '/brand/mark-512.png">\n';
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache', ...SECURITY });
         res.end(html.replace('</head>', tags + '</head>'));
+      });
+    }
+    if (url.pathname === '/admin' || url.pathname === '/admin/') {
+      return fs.readFile(path.join(ROOT, 'admin.html'), (err, html) => {
+        if (err) { res.writeHead(404, { 'Content-Type': 'text/plain' }); return res.end('Not found'); }
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache', ...SECURITY });
+        res.end(req.method === 'HEAD' ? undefined : html);
       });
     }
     let urlPath; try { urlPath = decodeURIComponent(url.pathname); } catch (e) { res.writeHead(400); return res.end('Bad request'); }
@@ -203,6 +237,7 @@ async function createApp(opts = {}) {
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
+    ops.counters.requests++;
     try {
       if (url.pathname === '/healthz') { await db.query('SELECT 1'); return json(res, 200, { ok: true }); }
       if (req.method === 'GET' && url.pathname === '/srv/ai/status') return json(res, 200, { configured: !!process.env.ANTHROPIC_API_KEY, model: MODEL });
@@ -211,7 +246,7 @@ async function createApp(opts = {}) {
       return serveStatic(req, res, url);
     } catch (e) {
       const status = e.status && e.status >= 400 && e.status < 600 ? e.status : 500;
-      if (status >= 500 && !e.expose) { const id = crypto.randomBytes(4).toString('hex'); console.error(`[${id}] ${req.method} ${url.pathname}`, e); if (!res.headersSent) return json(res, 500, { error: `Something went wrong on the server (reference ${id}). Try again.` }); return res.end(); }
+      if (status >= 500 && !e.expose) { const id = crypto.randomBytes(4).toString('hex'); console.error(`[${id}] ${req.method} ${url.pathname}`, e); ops.logError({ kind: 'server', status, method: req.method, path: url.pathname, message: e.message, stack: e.stack, ref: id }); if (!res.headersSent) return json(res, 500, { error: `Something went wrong on the server (reference ${id}). Try again.` }); return res.end(); }
       if (!res.headersSent) return json(res, status, { error: e.message });
       res.end();
     }
@@ -222,12 +257,13 @@ async function createApp(opts = {}) {
 
   async function close() {
     snapTimers.forEach((x) => { clearTimeout(x); clearInterval(x); });
+    ops.stop();
     await new Promise((ok) => server.close(ok));
     await snapRun;
     await store.flush();
     await db.close();
   }
-  return { server, store, db, auth, api, chat, close };
+  return { server, store, db, auth, api, chat, ops, admin, close };
 }
 
 module.exports = { createApp };
