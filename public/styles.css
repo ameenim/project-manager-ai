@@ -881,7 +881,7 @@ input.te-name { font-size: var(--fs-heading); font-weight: 650; padding: 10px 12
 .an-card.warn { border-inline-start: 3px solid var(--warning); }
 .an-card .an-name { display: block; font-size: var(--fs-body); font-weight: 600; overflow-wrap: anywhere; }
 .an-card .progress { margin-top: 8px; }
-.an-card .spinner { margin-top: 2px; flex: none; }
+.an-card .pmld { margin-top: 0; flex: none; }
 .an-ic { width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; flex: none; }
 .an-ic.ok { background: var(--success-soft); color: var(--success); }
 .an-ic.warn { background: var(--warning-soft); color: var(--warning); }
@@ -1508,21 +1508,22 @@ body.ded-open { overflow: hidden; }
 .ded-pop .cust input { flex: none; width: 44px; height: 28px; min-height: 0; }
 
 /* ---------- Platform loader: the mark with circles around it ---------- */
-.pmld { --ld: 72px; display: flex; flex-direction: column; align-items: center; gap: 18px; }
-.pmld.sm { --ld: 28px; flex-direction: row; gap: 0; }
-.pmld.lg { --ld: 104px; }
+.pmld { --ld: 120px; display: inline-flex; flex-direction: column; align-items: center; gap: 18px; }
+.pmld.sm { --ld: 28px; flex-direction: row; gap: 0; vertical-align: middle; }
+.pmld.lg { --ld: 168px; }
+.btn .pmld.sm { --ld: 22px; }
 .pmld-orbit { position: relative; width: var(--ld); height: var(--ld); display: grid; place-items: center; flex: none; }
-.pmld-mark { position: relative; z-index: 1; width: 46%; height: 46%; display: block; animation: pmld-breathe 1.8s var(--ease) infinite; }
-.pmld-mark svg { width: 100%; height: 100%; display: block; }
+.pmld-mark { position: relative; z-index: 1; width: 52%; height: 52%; display: block; animation: pmld-breathe 1.8s var(--ease) infinite; }
+.pmld-mark svg, .pmld-mark img { width: 100%; height: 100%; display: block; }
 .pmld-ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--primary); opacity: 0; animation: pmld-ripple 2.1s var(--ease) infinite; }
 .pmld-ring.r2 { border-color: var(--violet); animation-delay: .7s; }
 .pmld-ring.r3 { animation-delay: 1.4s; }
 .pmld-arm { position: absolute; inset: 0; animation: pmld-spin 2.4s linear infinite; }
-.pmld-arm b { position: absolute; top: 0; inset-inline-start: 50%; width: calc(var(--ld) * .11); height: calc(var(--ld) * .11); margin-inline-start: calc(var(--ld) * -.055); border-radius: 50%; background: var(--primary); }
-.pmld-arm.a2 { inset: calc(var(--ld) * .1); animation-duration: 3.4s; animation-direction: reverse; }
+.pmld-arm b { position: absolute; top: 0; inset-inline-start: 50%; width: calc(var(--ld) * .09); height: calc(var(--ld) * .09); margin-inline-start: calc(var(--ld) * -.045); border-radius: 50%; background: var(--primary); }
+.pmld-arm.a2 { inset: calc(var(--ld) * .08); animation-duration: 3.4s; animation-direction: reverse; }
 .pmld-arm.a2 b { background: var(--violet); }
-.pmld-arm.a3 { inset: calc(var(--ld) * .04); animation-duration: 4.6s; animation-delay: -1.2s; }
-.pmld-arm.a3 b { background: var(--c1); width: calc(var(--ld) * .07); height: calc(var(--ld) * .07); margin-inline-start: calc(var(--ld) * -.035); }
+.pmld-arm.a3 { inset: calc(var(--ld) * .03); animation-duration: 4.6s; animation-delay: -1.2s; }
+.pmld-arm.a3 b { background: var(--c1); width: calc(var(--ld) * .06); height: calc(var(--ld) * .06); margin-inline-start: calc(var(--ld) * -.03); }
 .pmld.sm .pmld-ring { border-width: 1.5px; }
 .pmld.sm .pmld-arm.a3 { display: none; }
 .pmld-label { font-size: var(--fs-body); font-weight: 500; color: var(--muted); }
@@ -1530,13 +1531,11 @@ body.ded-open { overflow: hidden; }
 @keyframes pmld-ripple { 0% { transform: scale(.45); opacity: .55; } 100% { transform: scale(1); opacity: 0; } }
 @keyframes pmld-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
 @keyframes pmld-soft { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
-.pmld-screen { position: fixed; inset: 0; z-index: 110; display: grid; place-items: center; opacity: 0; transition: opacity .2s var(--ease); }
-.pmld-screen::before { content: ''; position: absolute; inset: 0; background: var(--bg); opacity: .8; }
-.pmld-screen .pmld { position: relative; }
+/* the loading screen: centered on the whole window, everything behind it dimmed and blurred */
+.pmld-screen { position: fixed; inset: 0; z-index: 250; display: grid; place-items: center; padding: 20px; background: rgba(10, 16, 32, .55); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); opacity: 0; transition: opacity .2s var(--ease); }
 .pmld-screen.on { opacity: 1; }
-body.chat-open .pmld-screen { inset-inline-end: var(--chat-w); }
+.pmld-screen .pmld { padding: 28px 44px 24px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-lg); }
 .cht-busy { align-items: center; gap: 10px; color: var(--muted); }
-@media (max-width: 600px) { body.chat-open .pmld-screen { inset-inline-end: 0; } }
 @media (prefers-reduced-motion: reduce) {
   .pmld-ring, .pmld-arm { animation: none !important; }
   .pmld-arm { display: none; }

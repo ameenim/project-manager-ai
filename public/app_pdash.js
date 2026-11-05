@@ -103,7 +103,7 @@
       $$('.drawer-tabs .tab', el).forEach((a) => a.classList.toggle('active', a.dataset.tab === k));
       $('#dwFull', el).setAttribute('href', `#/p/${pid}/${k}`);
       const body = $('#drawerBody', el);
-      body.innerHTML = `<div class="empty"><span class="spinner"></span></div>`;
+      body.innerHTML = `<div class="empty">${PM.loader.html({ size: 'md' })}</div>`;
       try { p = (await api('GET', `/api/projects/${pid}`)).project; S.project = p; } catch { /* keep the last copy */ }
       const view = PM.views['tab_' + k];
       try { await view(body, p, new URLSearchParams(), token, { nav: show, embedded: true }); } catch (e) { console.error(e); body.innerHTML = `<div class="card empty">${esc(e.message)}</div>`; }

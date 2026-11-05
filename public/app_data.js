@@ -88,7 +88,7 @@
   function projectCards(p) {
     return `<div class="card"><div class="card-head"><h3>${t('dt_exp_h')}</h3></div><p class="small muted" style="margin-top:0">${t('dt_exp_p')}</p>
       <div class="row wrap"><button class="btn" data-dtx="json">${icon('dl')}${t('dt_exp_json')}</button><button class="btn" data-dtx="files">${icon('dl')}${t('dt_exp_json_files')}</button><button class="btn" data-dtx="csv">${icon('dl')}${t('dt_exp_csv')}</button><button class="btn" data-dtx="xlsx">${icon('dl')}${t('dt_exp_xlsx')}</button></div></div>
-      <div class="card"><div class="card-head"><h3>${t('dt_team_h')}</h3></div><p class="small muted" style="margin-top:0">${t('dt_team_p')}</p>${p.can_edit === false ? `<div class="banner small mb">${t('dt_viewer_note')}</div>` : ''}<div id="dtMembers"><span class="spinner"></span></div></div>`;
+      <div class="card"><div class="card-head"><h3>${t('dt_team_h')}</h3></div><p class="small muted" style="margin-top:0">${t('dt_team_p')}</p>${p.can_edit === false ? `<div class="banner small mb">${t('dt_viewer_note')}</div>` : ''}<div id="dtMembers">${PM.loader.html({ size: 'sm' })}</div></div>`;
   }
   function bindProject(root, p) {
     const slug = (p.name || 'project').replace(/[^\w .-]+/g, '_').trim().slice(0, 80) || 'project';

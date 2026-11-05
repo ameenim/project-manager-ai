@@ -34,7 +34,7 @@
 
   PM.views.widgetBuilder = async function (id) {
     const token = S.nav;
-    PM.shell('widgets', `<div class="page wb"><div class="empty"><span class="spinner"></span></div></div>`);
+    PM.shell('widgets', `${PM.loader.html({ size: 'page' })}`);
     let st = emptyState(), saved = null;
     try {
       if (id) { const w = (await api('GET', `/api/widgets/${id}`)).widget; if (!w.mine) throw new Error(t('wb_not_yours')); st = fromSpec(w); saved = w; }

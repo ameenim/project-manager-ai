@@ -397,7 +397,7 @@
       }
       function drawSuggest() {
         if (st.loading) {
-          body().innerHTML = `${bar()}<div class="gen-run" role="status" aria-live="polite"><div class="cd-wait"><span class="spinner"></span><strong>${t('cd_analyzing')}</strong></div><div class="small muted">${t('cd_analyzing_note')}</div></div>`;
+          body().innerHTML = `${bar()}<div class="gen-run" role="status" aria-live="polite"><div class="cd-wait">${PM.loader.html({ size: 'md' })}<strong>${t('cd_analyzing')}</strong></div><div class="small muted">${t('cd_analyzing_note')}</div></div>`;
           m.setFooter(`<button class="btn" data-close>${t('cancel')}</button>`);
           return;
         }

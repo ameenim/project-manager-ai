@@ -113,7 +113,7 @@
       const cov = d.coverage ? t('an_coverage', { sent: d.coverage.chars_sent.toLocaleString('en-US'), total: d.coverage.chars_total.toLocaleString('en-US') }) : '';
       const drop = d.coverage && d.coverage.dropped_no_quote ? t('an_dropped', { n: d.coverage.dropped_no_quote }) : '';
       const detail = [d.status === 'reading' && d.progress ? d.progress : '', d.message, d.status === 'done' || d.status === 'partial' ? t('an_found', { n: found }) : '', cov, drop].filter(Boolean).map((s) => String(s).replace(/\.$/, '')).join('. ');
-      return `<div class="list-item"><div class="grow"><b>${esc(d.filename)}</b>${detail ? `<div class="small muted">${esc(detail)}</div>` : ''}</div><span class="chip ${AN_CHIP[d.status] || ''}">${d.status === 'reading' ? '<span class="spinner" style="width:12px;height:12px;border-width:2px"></span>' : ''}${t(AN_KEY[d.status] || 'an_waiting')}</span></div>`;
+      return `<div class="list-item"><div class="grow"><b>${esc(d.filename)}</b>${detail ? `<div class="small muted">${esc(detail)}</div>` : ''}</div><span class="chip ${AN_CHIP[d.status] || ''}">${d.status === 'reading' ? PM.loader.html({ size: 'sm' }) : ''}${t(AN_KEY[d.status] || 'an_waiting')}</span></div>`;
     }).join('');
     const retry = !analyzing ? `<button class="btn sm primary" id="anRetry">${icon('refresh')}${t('reanalyze')}</button>` : '';
     const failed = an.failed ? `<div class="banner err mb">${icon('x')}<div class="grow"><b>${t('ap_failed')}</b><div class="small">${esc(an.failed.message)}</div></div></div>` : '';
@@ -152,7 +152,7 @@
     const fin = an.finished && !p.analyzing;
     const cf = an.confidence || {};
     const rows = (an.stages || []).map((st, i) => {
-      const ic = st.status === 'done' ? `<span class="ap-ic done">${icon('check')}</span>` : st.status === 'active' ? '<span class="ap-ic act"><span class="spinner" style="width:14px;height:14px;border-width:2px"></span></span>' : st.status === 'failed' ? `<span class="ap-ic fail">${icon('x')}</span>` : `<span class="ap-ic">${i + 1}</span>`;
+      const ic = st.status === 'done' ? `<span class="ap-ic done">${icon('check')}</span>` : st.status === 'active' ? `<span class="ap-ic act">${PM.loader.html({ size: 'sm' })}</span>` : st.status === 'failed' ? `<span class="ap-ic fail">${icon('x')}</span>` : `<span class="ap-ic">${i + 1}</span>`;
       return `<div class="ap-step ${st.status}">${ic}<div class="grow"><b>${t('stage_' + st.key)}</b>${st.detail ? `<div class="small muted">${esc(st.detail)}</div>` : ''}</div></div>`;
     }).join('');
     const kinds = [['info', 'kind_field'], ['deliverable', 'kind_deliverable'], ['requirement', 'kind_requirement'], ['payment', 'kind_milestone'], ['schedule', 'kind_schedule'], ['risk', 'kind_risk']];
@@ -160,7 +160,7 @@
     const files = (an.docs || []).map((d) => {
       const found = d.counts ? d.counts.deliverable + d.counts.requirement + d.counts.risk + d.counts.milestone + d.counts.schedule + d.counts.field : 0;
       const detail = [d.role_label, d.status === 'reading' && d.progress ? d.progress : '', d.message, d.status === 'done' || d.status === 'partial' ? t('an_found', { n: found }) : '', d.coverage ? t('an_coverage', { sent: d.coverage.chars_sent.toLocaleString('en-US'), total: d.coverage.chars_total.toLocaleString('en-US') }) : ''].filter(Boolean).map((x) => String(x).replace(/\.$/, '')).join('. ');
-      return `<div class="list-item"><div class="grow"><b>${esc(d.filename)}</b>${detail ? `<div class="small muted">${esc(detail)}</div>` : ''}</div><span class="chip ${AN_CHIP[d.status] || ''}">${d.status === 'reading' ? '<span class="spinner" style="width:12px;height:12px;border-width:2px"></span>' : ''}${t(AN_KEY[d.status] || 'an_waiting')}</span></div>`;
+      return `<div class="list-item"><div class="grow"><b>${esc(d.filename)}</b>${detail ? `<div class="small muted">${esc(detail)}</div>` : ''}</div><span class="chip ${AN_CHIP[d.status] || ''}">${d.status === 'reading' ? PM.loader.html({ size: 'sm' }) : ''}${t(AN_KEY[d.status] || 'an_waiting')}</span></div>`;
     }).join('');
     const f = an.filled;
     const total = (an.docs || []).reduce((n, d) => n + (d.counts ? d.counts.deliverable + d.counts.requirement + d.counts.risk + d.counts.milestone + d.counts.schedule + d.counts.field : 0), 0);
@@ -311,7 +311,7 @@
         <div class="rv-sel" id="rvSel" ${picked.size ? '' : 'hidden'}><b>${t('rv_selected', { n: picked.size })}</b><button class="btn sm primary" id="selOk">${icon('check')}${t('rv_confirm_sel')}</button><button class="btn sm ghost" id="selClear">${t('rv_clear')}</button></div>`;
       const rows = !list.length ? `<div class="empty">${status === 'proposed' ? t('rv_none_review') : t('nothing_here')}</div>` : kind === 'schedule' ? scheduleList(list, p, picked) : list.map((i) => rowHtml(kind, i, p, picked, false)).join('');
       root.innerHTML = `<div class="page rv">
-        ${p.analyzing ? `<div class="banner mb"><span class="spinner"></span><div class="grow"><b>${t('ai_reading')}</b><div class="small muted">${t('ai_reading_hint')}</div></div></div>` : ''}
+        ${p.analyzing ? `<div class="banner mb">${PM.loader.html({ size: 'sm' })}<div class="grow"><b>${t('ai_reading')}</b><div class="small muted">${t('ai_reading_hint')}</div></div></div>` : ''}
         ${!p.analyzing && items.length ? hero : ''}
         ${analysisCard(an, p.analyzing, items.length)}
         ${p.analyzing ? '' : planCard(an, items.filter((i) => i.kind === 'schedule' && i.status === 'proposed').length)}

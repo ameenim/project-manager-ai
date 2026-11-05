@@ -116,7 +116,7 @@
   Object.assign(PM, { toast, modal, confirmDlg });
 
   async function busy(btn, fn) {
-    if (btn) { btn.disabled = true; btn.dataset.html = btn.innerHTML; btn.innerHTML = `<span class="spinner"></span>`; }
+    if (btn) { btn.disabled = true; btn.dataset.html = btn.innerHTML; btn.innerHTML = PM.loader.html({ size: 'sm' }); }
     try { return await fn(); } catch (e) { toast(e.message, 'err'); } finally { if (btn && btn.isConnected) { btn.disabled = false; btn.innerHTML = btn.dataset.html; } }
   }
   PM.busy = busy;
@@ -377,7 +377,7 @@
     const items = [['sharepoint_url', 'folder', 'pl_open_sp'], ['jira_url', 'jira', 'pl_open_jira']].filter(([k]) => p[k]);
     return items.length ? `<div class="proj-links" role="group" aria-label="${esc(t('pl_title'))}">${items.map(([k, ic, name]) => `<a class="btn ghost icon" href="${esc(p[k])}" target="_blank" rel="noopener noreferrer" aria-label="${esc(t(name))}" data-tip="${esc(t(name))}">${icon(ic)}</a>`).join('')}</div>` : '';
   };
-  const spot = () => `<div class="page"><div class="empty">${PM.loader.html({ size: 'md' })}</div></div>`;
+  const spot = () => `${PM.loader.html({ size: 'page' })}`;
   // A soft refresh keeps the side menu and the page frame and only reloads the project header and the open tab.
   PM.projectView = async function (id, tab, query, opts) {
     const soft = !!(opts && opts.soft) && S.project && S.project.id === id && !!$('#main > .proj-head') && !!$('#content');
@@ -397,13 +397,15 @@
       const big = d === 0 ? t('end_counter_today') : String(Math.abs(d));
       return `<div class="endctr ${cls}" data-tip="${esc(tip)}" role="status" aria-label="${esc(tip)}"><b>${big}</b><span>${d === 0 ? '' : d < 0 ? t('end_counter_past') : t('end_counter_left')}</span></div>`;
     };
-    const head = `<div class="proj-head"><div class="proj-title">${p.client_logo ? `<img class="logo" src="${esc(p.client_logo)}" alt="">` : ''}<h1>${esc(p.name)}</h1>${healthChip(p.stats.health)}<span class="muted small">${esc(p.client || '')}</span><span class="grow"></span>${projLinks(p)}${endCounter(p)}${p.analyzing ? `<span class="chip blue"><span class="spinner" style="width:12px;height:12px;border-width:2px"></span>${t('analyzing')}</span>` : ''}</div>
+    const head = `<div class="proj-head"><div class="proj-title">${p.client_logo ? `<img class="logo" src="${esc(p.client_logo)}" alt="">` : ''}<h1>${esc(p.name)}</h1>${healthChip(p.stats.health)}<span class="muted small">${esc(p.client || '')}</span><span class="grow"></span>${projLinks(p)}${endCounter(p)}${p.analyzing ? `<span class="chip blue">${PM.loader.html({ size: 'sm' })}${t('analyzing')}</span>` : ''}</div>
       <div class="tabs">${TABS.map(([k, ic]) => `<a class="tab ${k === tab ? 'active' : ''}" href="#/p/${id}/${k}">${icon(ic)}${t('tab_' + k)}${badge(k)}</a>`).join('')}</div></div>`;
     if (soft) $('#main > .proj-head').outerHTML = head; else shell('', spot(), head);
     const view = PM.views['tab_' + tab];
     if (!view) { $('#content').innerHTML = ''; return; }
     const token = ++S.nav;
-    try { await view($('#content'), p, query, token); } catch (e) { console.error(e); $('#content').innerHTML = `<div class="page"><div class="card empty">${esc(e.message)}</div></div>`; }
+    // a tab that is still fetching its data shows the loading screen instead of an empty page
+    const endLoad = PM.loader.show(t('ld_loading'));
+    try { await view($('#content'), p, query, token); } catch (e) { console.error(e); $('#content').innerHTML = `<div class="page"><div class="card empty">${esc(e.message)}</div></div>`; } finally { endLoad(); }
   };
   PM.stale = (token) => token !== S.nav;
 

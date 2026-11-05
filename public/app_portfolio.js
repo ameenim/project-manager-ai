@@ -16,7 +16,7 @@
 
   PM.views.projects = async function () {
     S.project = null;
-    PM.shell('projects', `<div class="page"><div class="empty"><span class="spinner"></span></div></div>`);
+    PM.shell('projects', `${PM.loader.html({ size: 'page' })}`);
     await PM.loadProjects();
     PM.shell('projects', '');
     let mode = store.get('pm_proj_view', 'cards');
@@ -76,7 +76,7 @@
 
   PM.views.calendar = async function () {
     const token = S.nav;
-    PM.shell('calendar', `<div class="page"><div class="empty"><span class="spinner"></span></div></div>`);
+    PM.shell('calendar', `${PM.loader.html({ size: 'page' })}`);
     let data;
     const load = async () => { data = await api('GET', '/api/calendar'); };
     await Promise.all([load(), PM.loadProjects()]);

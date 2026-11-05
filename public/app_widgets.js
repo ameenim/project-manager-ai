@@ -178,7 +178,7 @@
 
   // ---------------- saved layouts ----------------
   async function layoutsDialog({ scope, key, current }) {
-    const m = PM.modal({ title: t('wl_title'), size: '', body: `<div class="wl"><div class="field"><label for="wlName">${esc(t('wl_save_as'))}</label><div class="row" style="gap:8px"><input id="wlName" maxlength="40" placeholder="${esc(t('wl_name_ph'))}" class="grow"><button class="btn primary" id="wlSave" type="button">${esc(t('save'))}</button></div><div class="small muted">${esc(t('wl_hint'))}</div></div><div id="wlList" class="wl-list"><div class="empty small"><span class="spinner"></span></div></div></div>` });
+    const m = PM.modal({ title: t('wl_title'), size: '', body: `<div class="wl"><div class="field"><label for="wlName">${esc(t('wl_save_as'))}</label><div class="row" style="gap:8px"><input id="wlName" maxlength="40" placeholder="${esc(t('wl_name_ph'))}" class="grow"><button class="btn primary" id="wlSave" type="button">${esc(t('save'))}</button></div><div class="small muted">${esc(t('wl_hint'))}</div></div><div id="wlList" class="wl-list"><div class="empty small">${PM.loader.html({ size: 'md' })}</div></div></div>` });
     let layouts = [];
     const cwIds = (lay) => lay.order.filter((x) => /^cw_\d+$/.test(x)).map((x) => Number(x.slice(3)));
     const draw = () => {
@@ -258,7 +258,7 @@
       title: t('wp_title', { title }), size: 'lg',
       onClose: () => { PM.fx.mode = prevMode; },
       body: `<div class="wp"><div class="wp-bar row">${canPick ? `<label class="wp-pick" for="wpData">${esc(t('wp_data'))}</label><select id="wpData" ${projects.length ? '' : 'disabled'}>${opts}</select>` : `<span class="small muted">${esc(t('wp_data_all'))}</span>`}<span class="grow"></span><div class="seg" id="wpSize" role="group" aria-label="${esc(t('dash_size'))}">${['s', 'm', 'l'].map((s) => `<button type="button" data-s="${s}" class="${st.size === s ? 'on' : ''}" aria-pressed="${st.size === s}">${t('dash_size_' + s)}</button>`).join('')}</div></div>
-        ${needProject && !projects.length ? `<div class="empty small">${esc(t('wp_need_project'))}</div>` : `<div class="wp-stage"><section class="dw wp-frame sz-${st.size}" id="wpFrame"><header class="dw-h"><h3>${esc(title)}</h3></header><div class="dw-body wp-inert" id="wpBody"><div class="empty"><span class="spinner"></span></div></div></section></div><p class="small muted wp-note">${esc(t('wp_note'))}</p>`}</div>`,
+        ${needProject && !projects.length ? `<div class="empty small">${esc(t('wp_need_project'))}</div>` : `<div class="wp-stage"><section class="dw wp-frame sz-${st.size}" id="wpFrame"><header class="dw-h"><h3>${esc(title)}</h3></header><div class="dw-body wp-inert" id="wpBody"><div class="empty">${PM.loader.html({ size: 'md' })}</div></div></section></div><p class="small muted wp-note">${esc(t('wp_note'))}</p>`}</div>`,
       footer: `<button class="btn" data-close type="button">${esc(t('close'))}</button><span class="grow"></span><button class="btn primary" id="wpAdd" type="button"></button>`,
     });
     const body = $('#wpBody', m.el), frame = $('#wpFrame', m.el);
@@ -290,7 +290,7 @@
     };
     let cache = null;
     const load = async () => {
-      body.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+      body.innerHTML = PM.loader.html({ size: 'md' });
       try {
         if (isBuilt) cache = { d: await api('GET', needProject ? `/api/projects/${st.pid}/dashboard` : '/api/dashboard') };
         else { const r = await api('GET', `/api/widgets/datasets${needProject && st.pid ? `?project_id=${st.pid}` : st.pid ? `?project_id=${st.pid}` : ''}`); cache = { pack: { datasets: r.datasets, today: r.today, truncated: r.truncated || {} } }; }
@@ -347,7 +347,7 @@
       scope: params.get('scope') === 'project' ? 'project' : 'portfolio', tab: params.get('tab') === 'mine' ? 'mine' : 'market',
       q: '', group: '', source: 'all', sort: 'rating', min: 0, items: [], mine: [], loading: true, truncated: false,
     };
-    PM.shell('widgets', `<div class="page wm"><div class="empty"><span class="spinner"></span></div></div>`);
+    PM.shell('widgets', `${PM.loader.html({ size: 'page' })}`);
     await PM.loadProjects();
     if (PM.stale(token)) return;
     const SOURCES = ['all', 'builtin', 'community', 'added', 'mine'], SORTS = ['rating', 'installs', 'newest', 'name'];
@@ -423,14 +423,14 @@
     function drawMarket() {
       const { built, comm } = visibleItems();
       const all = built.concat(comm);
-      if (st.loading && !all.length) return `<div class="empty"><span class="spinner"></span></div>`;
+      if (st.loading && !all.length) return `<div class="empty">${PM.loader.html({ size: 'md' })}</div>`;
       if (!all.length) return `<div class="empty">${esc(t('wm_none'))}</div>`;
       const sections = WS.GROUPS.map((g) => ({ g, list: all.filter((x) => x.group === g) })).filter((s) => s.list.length);
       return sections.map((s) => `<section class="wm-section"><h2 class="wm-h">${esc(groupLabel(s.g))} <span class="small muted">${s.list.length}</span></h2><div class="wm-grid">${s.list.map(cardHtml).join('')}</div></section>`).join('') + (st.truncated ? `<p class="small muted">${esc(t('wm_truncated'))}</p>` : '');
     }
 
     function drawMine() {
-      if (st.loading && !st.mine.length) return `<div class="empty"><span class="spinner"></span></div>`;
+      if (st.loading && !st.mine.length) return `<div class="empty">${PM.loader.html({ size: 'md' })}</div>`;
       if (!st.mine.length) return `<div class="empty"><p>${esc(t('wm_mine_none'))}</p><a class="btn primary" href="#/widgets/new">${icon('plus')}${esc(t('wb_build'))}</a></div>`;
       return `<div class="card wm-mine">${st.mine.map((w) => {
         const on = w.added[st.scope], pub = w.status === 'published';

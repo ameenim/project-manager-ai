@@ -81,11 +81,11 @@
     });
   }
   async function busy(btn, fn) {
-    if (btn) { btn.disabled = true; btn.dataset.h = btn.innerHTML; btn.innerHTML = '<span class="spinner"></span>'; }
+    if (btn) { btn.disabled = true; btn.dataset.h = btn.innerHTML; btn.innerHTML = PM.loader.html({ size: 'sm' }); }
     try { return await fn(); } catch (e) { toast(e.message, 'err'); return undefined; } finally { if (btn && btn.isConnected) { btn.disabled = false; btn.innerHTML = btn.dataset.h; } }
   }
   const tip = (s) => `title="${esc(s)}" aria-label="${esc(s)}"`;
-  const loading = () => '<div style="display:grid;place-items:center;gap:10px;padding:60px"><span class="spinner"></span><span class="muted small">Loading</span></div>';
+  const loading = () => '<div style="display:grid;place-items:center;padding:40px">' + PM.loader.html({ size: 'md' }) + '</div>';
   const empty = (t) => `<div class="empty">${esc(t)}</div>`;
   const kpi = (v, l, h, tone) => `<div class="sa-kpi ${tone || ''}"><div class="v">${v}</div><div class="l">${esc(l)}</div>${h ? `<div class="h">${esc(h)}</div>` : ''}</div>`;
   const note = (t, cls) => `<div class="sa-note ${cls || ''}" role="note">${esc(t)}</div>`;
@@ -155,7 +155,7 @@
     document.title = `${(NAV.find((n) => n[0] === key) || ['', 'Super admin'])[1]} | Super admin`;
     const fn = VIEWS[key] || VIEWS.overview;
     setView(loading());
-    const slow = setTimeout(() => { const v = view(); if (v && v.querySelector('.spinner') && !v.querySelector('.page')) v.insertAdjacentHTML('beforeend', '<p class="muted small" style="text-align:center;margin:0">Still loading. This is taking longer than usual.</p>'); }, 6000);
+    const slow = setTimeout(() => { const v = view(); if (v && v.querySelector('.pmld') && !v.querySelector('.page')) v.insertAdjacentHTML('beforeend', '<p class="muted small" style="text-align:center;margin:0">Still loading. This is taking longer than usual.</p>'); }, 6000);
     try { await fn(parts.slice(1)); if (view() && !view().firstElementChild) fail(new Error('This screen returned no content. Reload the page.')); } catch (e) { console.error('admin view failed', key, e); fail(e); } finally { clearTimeout(slow); }
     window.scrollTo(0, 0); const m = $('#main'); if (m) m.scrollTop = 0;
   }

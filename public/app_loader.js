@@ -1,20 +1,29 @@
 /* Platform loader: the Project Manager AI mark sits in the middle and circles move around it.
-   PM.loader.html(opts) gives the markup for an inline spot (a page that is still loading, a card that is applying).
-   PM.loader.show(label) covers the main area with a loading screen until the matching hide(). The screen waits a
+   PM.loader.html(opts) gives the markup: size page (whole screen), md (a spot in a panel) or sm (inline).
+   PM.loader.show(label) puts the same loading screen over everything until the matching hide(). The screen waits a
    moment before it appears, so quick actions never flash it, and once it shows it stays long enough to read.
    Only transform and opacity move. Reduced motion keeps a still mark with a soft pulse of opacity. */
 (function () {
   'use strict';
   const PM = window.PM = window.PM || {};
-  Object.assign(PM.I18N.en, { ld_loading: 'Loading', ld_working: 'Working on it', ld_applying: 'Applying your changes', ld_undoing: 'Undoing your changes' });
-  Object.assign(PM.I18N.ar, { ld_loading: 'جار التحميل', ld_working: 'جار العمل على الطلب', ld_applying: 'جار تطبيق التغييرات', ld_undoing: 'جار التراجع عن التغييرات' });
-  const tr = (k) => (PM.t ? PM.t(k) : k);
+  const EN = { ld_loading: 'Loading', ld_working: 'Working on it', ld_applying: 'Applying your changes', ld_undoing: 'Undoing your changes' };
+  if (PM.I18N) {
+    Object.assign(PM.I18N.en, EN);
+    Object.assign(PM.I18N.ar, { ld_loading: 'جار التحميل', ld_working: 'جار العمل على الطلب', ld_applying: 'جار تطبيق التغييرات', ld_undoing: 'جار التراجع عن التغييرات' });
+  }
+  const tr = (k) => (PM.t ? PM.t(k) : EN[k] || k);
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const mark = () => (PM.logo ? PM.logo.mark() : '<img src="brand/mark.svg" alt="">');
 
-  // size is sm (inline in a card), md (a page spot) or lg (the loading screen)
+  // The loader itself: the mark with rings and orbiting circles. Spans only, so it can sit inside buttons and sentences.
+  function core(size, label) {
+    return `<span class="pmld ${size}" role="status" aria-live="polite" aria-label="${esc(label)}"><span class="pmld-orbit" aria-hidden="true"><i class="pmld-ring r1"></i><i class="pmld-ring r2"></i><i class="pmld-ring r3"></i><span class="pmld-arm a1"><b></b></span><span class="pmld-arm a2"><b></b></span><span class="pmld-arm a3"><b></b></span><span class="pmld-mark">${mark()}</span></span>${size === 'sm' || !label ? '' : `<span class="pmld-label">${esc(label)}</span>`}</span>`;
+  }
+  // size is page (the whole screen: centered, with everything behind it dimmed and blurred),
+  // md (a spot inside a panel, a list or a dialog) or sm (inline in a button, a banner or a card)
   function html(o) {
     const x = o || {}; const size = x.size || 'md'; const label = x.label == null ? tr('ld_loading') : x.label;
-    return `<div class="pmld ${size}" role="status" aria-live="polite" aria-label="${esc(label)}"><div class="pmld-orbit" aria-hidden="true"><i class="pmld-ring r1"></i><i class="pmld-ring r2"></i><i class="pmld-ring r3"></i><span class="pmld-arm a1"><b></b></span><span class="pmld-arm a2"><b></b></span><span class="pmld-arm a3"><b></b></span><span class="pmld-mark">${PM.logo ? PM.logo.mark() : ''}</span></div>${x.size === 'sm' || !label ? '' : `<div class="pmld-label">${esc(label)}</div>`}</div>`;
+    return size === 'page' ? `<div class="pmld-screen on">${core('lg', label)}</div>` : core(size, label);
   }
 
   const WAIT = 140;    // ms before the screen appears
@@ -23,7 +32,7 @@
   function mount(label) {
     el = document.createElement('div');
     el.className = 'pmld-screen';
-    el.innerHTML = html({ size: 'lg', label });
+    el.innerHTML = core('lg', label);
     document.body.appendChild(el);
     requestAnimationFrame(() => { if (el) el.classList.add('on'); });
     shownAt = Date.now();

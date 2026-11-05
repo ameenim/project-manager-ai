@@ -65,7 +65,7 @@
     // step 2: sign in at the service in a separate window
     function drawSignin(msg, waiting) {
       m.setBody(frame(waiting
-        ? `<div class="cx-wait"><span class="spinner"></span><div><b>${t('cx_waiting', { name: K.name })}</b><div class="small muted">${t('cx_waiting_hint')}</div></div></div>`
+        ? `<div class="cx-wait">${PM.loader.html({ size: 'sm' })}<div><b>${t('cx_waiting', { name: K.name })}</b><div class="small muted">${t('cx_waiting_hint')}</div></div></div>`
         : `<p style="margin-top:0">${t('cx_signin_intro', { name: K.name })}</p><p class="small muted">${t('cx_signin_hint')}</p>`, msg));
       foot(`<button class="btn" id="cxBack">${t('cw_back')}</button><button class="btn primary" id="cxOpen">${icon('link')}${waiting ? t('cx_open_again') : t('cx_open', { name: K.name })}</button>`);
       m.$('#cxBack').onclick = () => { stop(); step = 0; draw(); };
@@ -90,17 +90,17 @@
     async function arrived() {
       if (step === 2) return;
       stop(); try { popup && popup.close(); } catch { /* already closed */ }
-      step = 2; m.setBody(frame(`<div class="cx-wait"><span class="spinner"></span><b>${t('cx_testing')}</b></div>`)); foot('');
+      step = 2; m.setBody(frame(`<div class="cx-wait">${PM.loader.html({ size: 'sm' })}<b>${t('cx_testing')}</b></div>`)); foot('');
       try { await load(); } catch (e) { return draw({ text: e.message }); }
       drawDone();
     }
     async function drawDone(msg) {
       const sites = info.sites || [];
       const pick = sites.length > 1 ? `<label class="f">${t('cx_site')}<select id="cxSite">${sites.map((s) => `<option value="${esc(s.id)}" ${s.id === info.site_id ? 'selected' : ''}>${esc(s.name)} (${esc(String(s.url).replace(/^https:\/\//, ''))})</option>`).join('')}</select></label>` : '';
-      m.setBody(frame(`<div class="cw-done">${icon('check')}<h3>${t('cw_done_title', { name: K.name })}</h3><p class="muted" id="cxLabel">${esc(info.label || '')}</p></div>${pick}<div class="cx-test small muted" id="cxTest"><span class="spinner"></span> ${t('cx_testing')}</div><p class="small muted">${t('cw_done_hint')}</p>`, msg));
+      m.setBody(frame(`<div class="cw-done">${icon('check')}<h3>${t('cw_done_title', { name: K.name })}</h3><p class="muted" id="cxLabel">${esc(info.label || '')}</p></div>${pick}<div class="cx-test small muted" id="cxTest">${PM.loader.html({ size: 'sm' })} ${t('cx_testing')}</div><p class="small muted">${t('cw_done_hint')}</p>`, msg));
       foot(`<button class="btn" id="cxRetest">${t('cx_test_again')}</button><button class="btn primary" id="cxFinish">${t('cw_finish')}</button>`);
       const test = async () => {
-        const box = m.$('#cxTest'); box.innerHTML = `<span class="spinner"></span> ${t('cx_testing')}`;
+        const box = m.$('#cxTest'); box.innerHTML = `${PM.loader.html({ size: 'sm' })} ${t('cx_testing')}`;
         try { const r = await api('POST', `/api/connections/${kind}/test`, {}); box.innerHTML = `<span class="chip green">${icon('check')}${t('cx_test_ok')}</span>`; if (r.label) m.$('#cxLabel').textContent = r.label; }
         catch (e) { box.innerHTML = `<span class="chip red">${esc(e.message)}</span>`; }
       };
@@ -148,7 +148,7 @@
       if (step === 1) return drawSignin(msg, false);
       return drawDone(msg);
     }
-    m.setBody(`<div class="empty small"><span class="spinner"></span></div>`);
+    m.setBody(`<div class="empty small">${PM.loader.html({ size: 'md' })}</div>`);
     load().then((x) => { if (x.connected) { step = 2; return drawDone(); } draw(); }).catch((e) => { m.setBody(`<div class="empty small">${esc(e.message)}</div>`); });
   }
 
@@ -173,7 +173,7 @@
         try { const r = await api('DELETE', `/api/connections/${b.dataset.connOff}`); draw(r.connections); await refreshStatus(); } catch (e) { toast(e.message, 'err'); }
       }));
     };
-    host.innerHTML = `<div class="empty small"><span class="spinner"></span></div>`;
+    host.innerHTML = `<div class="empty small">${PM.loader.html({ size: 'md' })}</div>`;
     try { draw((await api('GET', '/api/connections')).connections); } catch (e) { host.innerHTML = `<div class="empty small">${esc(e.message)}</div>`; }
   }
   PM.connect = { wizard, mountRows };

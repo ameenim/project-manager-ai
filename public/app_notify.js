@@ -36,7 +36,7 @@
   function runCard(id, e) {
     const pct = Math.max(1, Math.min(99, e.pct || 1));
     const stage = e.stage ? t('stage_' + e.stage) : '';
-    return `<div class="an-card running" data-an="${id}"><span class="spinner"></span><div class="grow"><b class="an-name">${esc(e.name || '')}</b><div class="small muted">${esc(t('nt_running'))}${stage ? ` · ${esc(stage)}` : ''} · ${pct}%</div><div class="progress"><i style="width:${pct}%"></i></div></div><a class="btn sm" href="#/p/${id}/review">${esc(t('nt_view'))}</a></div>`;
+    return `<div class="an-card running" data-an="${id}">${PM.loader.html({ size: 'sm' })}<div class="grow"><b class="an-name">${esc(e.name || '')}</b><div class="small muted">${esc(t('nt_running'))}${stage ? ` · ${esc(stage)}` : ''} · ${pct}%</div><div class="progress"><i style="width:${pct}%"></i></div></div><a class="btn sm" href="#/p/${id}/review">${esc(t('nt_view'))}</a></div>`;
   }
   function doneCard(id, c) {
     const bad = c.failed || (c.warning && !c.filled);

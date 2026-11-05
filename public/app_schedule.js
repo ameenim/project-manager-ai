@@ -161,7 +161,7 @@
       };
       const confChip = (c) => `<span class="conf ${c >= 0.85 ? 'hi' : c >= 0.7 ? 'mid' : 'lo'}">${t(c >= 0.85 ? 'rv_c_hi' : c >= 0.7 ? 'rv_c_mid' : 'rv_c_lo')} · ${Math.round(c * 100)}%</span>`;
       const aiHtml = () => {
-        if (running) return `<div class="asst"><span class="spinner"></span><div class="grow"><b>${t('asst_running')}</b><div class="small muted">${t('asst_running_hint')}</div></div></div>`;
+        if (running) return `<div class="asst">${PM.loader.html({ size: 'sm' })}<div class="grow"><b>${t('asst_running')}</b><div class="small muted">${t('asst_running_hint')}</div></div></div>`;
         if (!ai) return `<div class="asst"><span class="asst-ic">${icon('spark')}</span><div class="grow"><b>${t('asst_title')}</b><div class="small muted">${t('asst_hint')}</div></div><button class="btn primary" id="asstRun">${icon('spark')}${t('asst_btn')}</button></div>`;
         const sugg = ai.suggestions.filter((x) => !dismissed.has(x.key));
         const warn = ai.note ? `<div class="banner mb">${icon('x')}<div class="grow small">${t(ai.note === 'budget' || ai.note === 'bad_key' ? 'asst_note_key' : 'asst_note_rules')}</div></div>` : '';
