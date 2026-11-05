@@ -262,7 +262,6 @@ const MIGRATIONS = [
   );
   CREATE INDEX IF NOT EXISTS admin_audit_time_idx ON admin_audit(created_at);
   `,
-<<<<<<< HEAD
   // 7: how project managers use the product. One row per observed step (a screen opened, an action used, a repeated
   // click, a slow or failed call). It holds screen and action names only, never project content, and is purged after 90 days.
   `
@@ -279,8 +278,8 @@ const MIGRATIONS = [
   );
   CREATE INDEX IF NOT EXISTS usage_events_time_idx ON usage_events(created_at);
   CREATE INDEX IF NOT EXISTS usage_events_user_idx ON usage_events(user_id, created_at);
-=======
-  // 7: support tickets. A ticket is a problem report or an idea from a signed in person (or an automatic draft from a
+  `,
+  // 8: support tickets. A ticket is a problem report or an idea from a signed in person (or an automatic draft from a
   // repeated server error). context is the sanitized debugging package, triage is the AI briefing for the super admin,
   // fix is the state of the AI fix job. A report that matches an open ticket becomes a child of it (duplicate_of), so each
   // person keeps their own words and sees the status of the main ticket. ticket_events is the timeline. visible says
@@ -328,7 +327,6 @@ const MIGRATIONS = [
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
   );
   CREATE INDEX IF NOT EXISTS ticket_events_ticket_idx ON ticket_events(ticket_id, id);
->>>>>>> e92b19d (Add support tickets with AI triage and Fix it)
   `,
 ];
 

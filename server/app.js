@@ -15,11 +15,8 @@ const { MODEL } = require('./claude');
 const { createChat } = require('./chat/chat');
 const { Ops } = require('./ops');
 const createAdmin = require('./admin');
-<<<<<<< HEAD
 const { createUsage } = require('./usage');
-=======
 const { Tickets } = require('./tickets');
->>>>>>> e92b19d (Add support tickets with AI triage and Fix it)
 
 const ROOT = path.join(__dirname, '..', 'public');
 const PKG = require('../package.json');
@@ -104,14 +101,10 @@ async function createApp(opts = {}) {
   await ops.backfillSubscriptions();
   await ops.bootstrapSuperAdmins();
   if (opts.opsJobs !== false) ops.start();
-<<<<<<< HEAD
-  const usage = createUsage({ db, store });
-  const admin = createAdmin({ db, store, auth, ops, usage });
-=======
   // Support tickets. opts.ticketAi and opts.ticketDispatcher let tests replace the Claude call and the GitHub dispatch.
   const tickets = new Tickets({ db, store, ops, ai: opts.ticketAi, dispatcher: opts.ticketDispatcher, version: PKG.version });
-  const admin = createAdmin({ db, store, auth, ops, tickets });
->>>>>>> e92b19d (Add support tickets with AI triage and Fix it)
+  const usage = createUsage({ db, store });
+  const admin = createAdmin({ db, store, auth, ops, usage, tickets });
   const connectors = new Connectors(db, opts.connectorOptions || {});
   const api = createApi(store, auth, connectors, ops);
   // The Project Chat. opts.chatModel lets tests replace the model with a scripted one.
@@ -185,17 +178,13 @@ async function createApp(opts = {}) {
     if (!user) return json(res, 401, { error: 'Your session has expired. Sign in again.' });
     if (user.status === 'suspended') return json(res, 403, { error: 'This account is suspended. Contact support.' });
     ops.touchSeen(user.id);
-<<<<<<< HEAD
     // usage steps from the browser (screen names and action names only). Never fails the page that sends them.
     if (method === 'POST' && p === '/api/usage') {
       if (usageLimit(clientIp(req))) return json(res, 429, { error: 'Too many reports' });
       let b = {}; try { b = JSON.parse((await readBody(req, 32 * 1024)).toString('utf8') || '{}'); } catch (e) { return json(res, 400, { error: 'Invalid request' }); }
       return json(res, 200, await usage.ingest(user, b));
     }
-    if (await admin.route(req, res, url, user, { json, readBody, SECURITY })) return;
-=======
     if (await admin.route(req, res, url, user, { json, readBody, SECURITY, origin })) return;
->>>>>>> e92b19d (Add support tickets with AI triage and Fix it)
     if (!user.is_super && (await ops.config()).maintenance_mode && !/^\/api\/(me|billing)/.test(p)) return json(res, 503, { error: (await ops.config()).maintenance_message });
 
     if (p.startsWith('/api/tickets') && (await tickets.route(req, res, url, user, { json, readBody, SECURITY }))) return;

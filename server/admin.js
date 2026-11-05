@@ -12,11 +12,7 @@ const scrypt = (pw, salt) => new Promise((ok, no) => crypto.scrypt(pw, salt, 64,
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const csvCell = (v) => { const s = String(v == null ? '' : v); return /[",\n\r]/.test(s) || /^[=+\-@]/.test(s) ? '"' + (/^[=+\-@]/.test(s) ? "'" : '') + s.replace(/"/g, '""') + '"' : s; };
 
-<<<<<<< HEAD
-module.exports = function createAdmin({ db, store, auth, ops, usage }) {
-=======
-module.exports = function createAdmin({ db, store, auth, ops, tickets }) {
->>>>>>> e92b19d (Add support tickets with AI triage and Fix it)
+module.exports = function createAdmin({ db, store, auth, ops, usage, tickets }) {
   const q = (t, p) => db.query(t, p);
   const routes = [];
   const on = (method, re, fn) => routes.push([method, new RegExp('^/api/admin' + re + '$'), fn]);
