@@ -17,6 +17,8 @@ const { Ops } = require('./ops');
 const createAdmin = require('./admin');
 
 const ROOT = path.join(__dirname, '..', 'public');
+const PKG = require('../package.json');
+const STARTED = new Date().toISOString();
 const MAX_UPLOAD = 40 * 1024 * 1024;       // one file
 const MAX_JSON = 8 * 1024 * 1024;          // a normal JSON request
 const MAX_IMPORT = 64 * 1024 * 1024;       // a backup file, which can carry original documents
@@ -239,7 +241,7 @@ async function createApp(opts = {}) {
     const url = new URL(req.url, 'http://localhost');
     ops.counters.requests++;
     try {
-      if (url.pathname === '/healthz') { await db.query('SELECT 1'); return json(res, 200, { ok: true }); }
+      if (url.pathname === '/healthz') { await db.query('SELECT 1'); return json(res, 200, { ok: true, version: PKG.version, started: STARTED, admin: true }); }
       if (req.method === 'GET' && url.pathname === '/srv/ai/status') return json(res, 200, { configured: !!process.env.ANTHROPIC_API_KEY, model: MODEL });
       if (req.method === 'GET' && /^\/oauth\/callback\/(jira|outlook)$/.test(url.pathname)) return await oauthCallback(req, res, url);
       if (url.pathname.startsWith('/api/')) return await handleApi(req, res, url);
