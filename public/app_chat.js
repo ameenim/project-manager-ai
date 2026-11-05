@@ -168,7 +168,8 @@
     const state = live ? '' : `<span class="chip ${c.status === 'applied' || c.status === 'applied_final' ? 'green' : c.status === 'failed' ? 'red' : c.status === 'undone' ? 'blue' : ''}">${esc(t('cht_s_' + c.status))}</span>`;
     const msg = c.message ? `<div class="small ${c.status === 'failed' ? 'cht-err' : 'muted'}" role="${c.status === 'failed' ? 'alert' : 'status'}">${esc(c.message)}</div>` : '';
     let foot = '';
-    if (live && !confirming) foot = `<div class="cht-card-foot"><button class="btn primary sm" type="button" data-act="apply" data-id="${id}">${esc(t('cht_apply'))}</button><button class="btn sm" type="button" data-act="edit" data-id="${id}">${esc(t('cht_edit'))}</button><button class="btn ghost sm" type="button" data-act="cancel" data-id="${id}">${esc(t('cht_cancel'))}</button></div>`;
+    if (c.busy === 'apply' || c.busy === 'undo') foot = `<div class="cht-card-foot cht-busy small" role="status">${PM.loader.html({ size: 'sm', label: t(c.busy === 'undo' ? 'cht_s_undoing' : 'cht_s_applying') })}<span>${esc(t(c.busy === 'undo' ? 'cht_s_undoing' : 'cht_s_applying'))}</span></div>`;
+    else if (live && !confirming) foot = `<div class="cht-card-foot"><button class="btn primary sm" type="button" data-act="apply" data-id="${id}">${esc(t('cht_apply'))}</button><button class="btn sm" type="button" data-act="edit" data-id="${id}">${esc(t('cht_edit'))}</button><button class="btn ghost sm" type="button" data-act="cancel" data-id="${id}">${esc(t('cht_cancel'))}</button></div>`;
     else if (confirming) foot = `<div class="cht-warn small" role="alert">${esc(c.items.some((x) => x.destructive) ? t('cht_strong') : t('cht_many'))}</div><div class="cht-card-foot"><button class="btn danger sm" type="button" data-act="confirm" data-id="${id}">${esc(t('cht_yes'))}</button><button class="btn ghost sm" type="button" data-act="back" data-id="${id}">${esc(t('cht_back'))}</button></div>`;
     else if (c.status === 'applied') foot = `<div class="cht-card-foot">${c.items.some((x) => x.sum && x.sum.op === 'generate') ? `<a class="btn primary sm" href="#/p/${(c.projects[0] || {}).id}/reports" data-act="nav">${esc(t('cht_open_reports'))}</a>` : ''}<button class="btn sm" type="button" data-act="undo" data-id="${id}">${icon('undo')}${esc(t('cht_undo'))}</button></div>`;
     return `<div class="cht-card ${live ? 'live' : ''}" data-card="${id}"><div class="cht-card-h"><span class="small muted">${icon('spark')}${esc((c.projects || []).map((p) => p.name).join(', '))}</span>${state}</div><ul class="cht-items">${items}</ul>${msg}${foot}</div>`;
@@ -241,23 +242,29 @@
   const find = (id) => S.msgs.find((m) => String(m.id) === String(id));
   async function cardCall(id, what, body) {
     const m = find(id); if (!m || !m.card || m.card.busy) return;
-    m.card.busy = true;
+    // the card answers at once: buttons are replaced by a progress line, and apply and undo cover the page with the loading screen
+    m.card.busy = what; S.confirming = null; paint();
+    const long = what === 'apply' || what === 'undo';
+    const endLoad = long ? PM.loader.show(t(what === 'apply' ? 'ld_applying' : 'ld_undoing')) : null;
     try {
       const r = await PM.api('POST', `/api/chat/messages/${id}/${what}`, body || {});
-      m.card = r.card; S.confirming = null;
-      if (what === 'apply' && !r.already) { PM.toast(t('cht_applied_toast'), 'ok'); refreshScreen(); }
-      if (what === 'undo' && !r.already) { PM.toast(t('cht_undone_toast'), 'ok'); refreshScreen(); }
+      m.card = r.card;
+      if (long && !r.already) {
+        PM.toast(t(what === 'apply' ? 'cht_applied_toast' : 'cht_undone_toast'), 'ok');
+        m.card.busy = false; paint();
+        await refreshScreen();
+      }
     } catch (e) {
       m.card.busy = false;
       // the server says what happened. A refused card shows its reason on the card itself.
       if (what === 'apply') { try { const v = await PM.api('GET', '/api/chat?' + new URLSearchParams({ ...(S.ctx.projectId ? { project_id: S.ctx.projectId } : {}), screen: S.ctx.screen })); const fresh = v.messages.find((x) => String(x.id) === String(id)); if (fresh) { m.card = fresh.card; } } catch (x) { /* keep the card as is */ } }
       PM.toast(e.message, 'err');
-      S.confirming = null;
-    }
+    } finally { if (endLoad) endLoad(); }
     if (m.card) m.card.busy = false;
     paint();
   }
-  function refreshScreen() { try { if (PM.route) PM.route(); } catch (e) { /* the screen reloads on the next visit */ } }
+  // the page frame stays, only the project header and the open tab reload
+  function refreshScreen() { try { return Promise.resolve(PM.refresh ? PM.refresh() : PM.route && PM.route()).catch(() => {}); } catch (e) { return Promise.resolve(); } }
   function onClick(e) {
     const el = e.target.closest('[data-act]'); if (!el || !root.contains(el)) return;
     const act = el.dataset.act; const id = el.dataset.id;

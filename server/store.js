@@ -3,6 +3,7 @@
 // a project that another server instance has changed.
 'use strict';
 
+const crypto = require('crypto');
 const BLOCK = 10_000_000;
 const err = (status, message) => Object.assign(new Error(message), { status });
 const ROLES = ['manager', 'editor', 'viewer'];
@@ -48,8 +49,8 @@ class Store {
       for (const row of res.rows) {
         const old = this.cache.get(row.id);
         // the project object is replaced in place so a running analysis keeps writing to the object everyone reads
-        if (old && old.P) { for (const k of Object.keys(old.P)) if (!k.startsWith('_')) delete old.P[k]; Object.assign(old.P, row.data); old.version = row.version; }
-        else this.cache.set(row.id, { P: row.data, version: row.version });
+        if (old && old.P) { for (const k of Object.keys(old.P)) if (!k.startsWith('_')) delete old.P[k]; Object.assign(old.P, row.data); old.version = row.version; old.sums = null; }
+        else this.cache.set(row.id, { P: row.data, version: row.version, sums: null });
       }
     }
     const projects = {}, roles = {}, order = [];
@@ -68,18 +69,35 @@ class Store {
       await t.query('INSERT INTO projects(id, owner_id, data) VALUES ($1, $2, $3::jsonb)', [P.id, ownerId, data]);
       await t.query("INSERT INTO project_members(project_id, user_id, role) VALUES ($1, $2, 'manager')", [P.id, ownerId]);
     });
-    this.cache.set(P.id, { P, version: 1 });
+    this.cache.set(P.id, { P, version: 1, sums: null });
   }
 
+  // A project is one JSON document, but most of its weight (extracted document text, schedule version history) almost
+  // never changes. Every top level part is fingerprinted when it is saved, and the next save sends only the parts whose
+  // fingerprint changed. A small edit on a project with megabytes of history is then a small write, not a full rewrite.
   save(P) {
     const id = P.id;
     const prev = this.chain.get(id) || Promise.resolve();
     const run = prev.catch(() => {}).then(async () => {
-      if (!this.cache.has(id)) return false;
-      const data = JSON.stringify(P, replacer);
-      const r = await this.db.query('UPDATE projects SET data = $2::jsonb, version = version + 1, updated_at = now() WHERE id = $1 RETURNING version', [id, data]);
+      const c0 = this.cache.get(id);
+      if (!c0) return false;
+      const keys = Object.keys(P).filter((k) => !k.startsWith('_') && P[k] !== undefined);
+      const parts = {}, sums = {};
+      for (const k of keys) { const s = JSON.stringify(P[k]); if (s === undefined) continue; parts[k] = s; sums[k] = crypto.createHash('md5').update(s).digest('hex'); }
+      const known = c0.sums;
+      let r;
+      if (!known) {
+        // nothing is known about what is stored (just loaded or created), so this first save writes everything
+        const data = '{' + Object.keys(parts).map((k) => JSON.stringify(k) + ':' + parts[k]).join(',') + '}';
+        r = await this.db.query('UPDATE projects SET data = $2::jsonb, version = version + 1, updated_at = now() WHERE id = $1 RETURNING version', [id, data]);
+      } else {
+        const changed = Object.keys(parts).filter((k) => known[k] !== sums[k]);
+        const gone = Object.keys(known).filter((k) => !(k in parts));
+        const patch = '{' + changed.map((k) => JSON.stringify(k) + ':' + parts[k]).join(',') + '}';
+        r = await this.db.query('UPDATE projects SET data = (data - $3::text[]) || $2::jsonb, version = version + 1, updated_at = now() WHERE id = $1 RETURNING version', [id, patch, gone]);
+      }
       if (!r.rows[0]) { this.cache.delete(id); return false; } // deleted meanwhile
-      const c = this.cache.get(id); if (c) { c.P = P; c.version = r.rows[0].version; }
+      const c = this.cache.get(id); if (c) { c.P = P; c.version = r.rows[0].version; c.sums = sums; }
       return true;
     });
     this.chain.set(id, run);

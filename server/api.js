@@ -1978,8 +1978,21 @@ Rules:
   // The Project Chat works through the same routes and helpers as the screens, as the signed in person. A run that
   // changes data either saves everything or nothing: the touched projects are put back as they were when anything fails.
   const NO_SNAP = new Set(['texts', 'generated', 'documents']);
-  const snapOf = (P) => { const o = {}; for (const k of Object.keys(P)) if (!k.startsWith('_') && !NO_SNAP.has(k)) o[k] = P[k]; return JSON.parse(JSON.stringify(o)); };
-  function putBack(P, snap) { for (const k of Object.keys(P)) if (!k.startsWith('_') && !NO_SNAP.has(k)) delete P[k]; Object.assign(P, JSON.parse(JSON.stringify(snap))); }
+  // The version history is the largest part of a project and is only ever appended to, except that the newest entry can be
+  // updated in place. So it is kept by reference with a copy of the newest entry, not deep cloned on every chat change.
+  const snapOf = (P) => {
+    const o = {};
+    for (const k of Object.keys(P)) if (!k.startsWith('_') && !NO_SNAP.has(k) && k !== 'versions') o[k] = P[k];
+    const snap = JSON.parse(JSON.stringify(o));
+    if (Array.isArray(P.versions)) { const v = P.versions.slice(); if (v.length) v[v.length - 1] = { ...v[v.length - 1] }; snap.versions = v; }
+    return snap;
+  };
+  function putBack(P, snap) {
+    const { versions, ...rest } = snap;
+    for (const k of Object.keys(P)) if (!k.startsWith('_') && !NO_SNAP.has(k)) delete P[k];
+    Object.assign(P, JSON.parse(JSON.stringify(rest)));
+    if (versions) P.versions = versions.slice();
+  }
   async function runAs({ user, fn, write = false, origin }) {
     const c = await makeCtx(user, origin, write ? 'editor' : 'viewer');
     return als.run(c, async () => {

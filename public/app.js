@@ -287,7 +287,7 @@
 
   // ---------- dashboard ----------
   PM.views.dashboard = async function () {
-    shell('dash', `<div class="page"><div class="empty"><span class="spinner"></span></div></div>`);
+    shell('dash', spot());
     const [d] = await Promise.all([api('GET', '/api/dashboard'), loadProjects()]);
     if (S.projects.length) shell('dash', '<div class="page"></div>');
     const unassigned = d.unassigned ? (await api('GET', '/api/inbox/unassigned')).inbox : [];
@@ -313,7 +313,7 @@
   };
 
   PM.views.projects = async function () {
-    shell('projects', `<div class="page"><div class="empty"><span class="spinner"></span></div></div>`);
+    shell('projects', spot());
     await loadProjects();
     shell('projects', '');
     const cards = S.projects.map((p) => `<a class="card" href="#/p/${p.id}/overview" style="text-decoration:none;color:inherit;display:block"><div class="row">${p.client_logo ? `<img src="${esc(p.client_logo)}" alt="" style="height:30px;max-width:90px;object-fit:contain">` : ''}<div class="grow"><h3>${esc(p.name)}</h3><div class="small muted">${esc(p.client || t('no_client'))}</div></div>${healthChip(p.stats.health)}</div>
@@ -377,12 +377,15 @@
     const items = [['sharepoint_url', 'folder', 'pl_open_sp'], ['jira_url', 'jira', 'pl_open_jira']].filter(([k]) => p[k]);
     return items.length ? `<div class="proj-links" role="group" aria-label="${esc(t('pl_title'))}">${items.map(([k, ic, name]) => `<a class="btn ghost icon" href="${esc(p[k])}" target="_blank" rel="noopener noreferrer" aria-label="${esc(t(name))}" data-tip="${esc(t(name))}">${icon(ic)}</a>`).join('')}</div>` : '';
   };
-  PM.projectView = async function (id, tab, query) {
-    if (!S.project || S.project.id !== id) shell('', `<div class="page"><div class="empty"><span class="spinner"></span></div></div>`);
+  const spot = () => `<div class="page"><div class="empty">${PM.loader.html({ size: 'md' })}</div></div>`;
+  // A soft refresh keeps the side menu and the page frame and only reloads the project header and the open tab.
+  PM.projectView = async function (id, tab, query, opts) {
+    const soft = !!(opts && opts.soft) && S.project && S.project.id === id && !!$('#main > .proj-head') && !!$('#content');
+    if (!soft && (!S.project || S.project.id !== id)) shell('', spot());
     let p;
-    try { p = (await api('GET', `/api/projects/${id}`)).project; } catch (e) { toast(e.message, 'err'); location.hash = '#/projects'; return; }
+    // the project and the project list are independent, so they load together
+    try { p = (await Promise.all([api('GET', `/api/projects/${id}`), loadProjects()]))[0].project; } catch (e) { toast(e.message, 'err'); location.hash = '#/projects'; return; }
     S.project = p;
-    await loadProjects();
     const badge = (k) => (k === 'review' && p.stats.pendingItems ? `<span class="badge-count">${p.stats.pendingItems}</span>` : k === 'inbox' && p.stats.pendingInbox ? `<span class="badge-count">${p.stats.pendingInbox}</span>` : '');
     const endCounter = (pr) => {
       const end = pr.end_date || pr.stats.forecast_end; if (!end) return '';
@@ -396,7 +399,7 @@
     };
     const head = `<div class="proj-head"><div class="proj-title">${p.client_logo ? `<img class="logo" src="${esc(p.client_logo)}" alt="">` : ''}<h1>${esc(p.name)}</h1>${healthChip(p.stats.health)}<span class="muted small">${esc(p.client || '')}</span><span class="grow"></span>${projLinks(p)}${endCounter(p)}${p.analyzing ? `<span class="chip blue"><span class="spinner" style="width:12px;height:12px;border-width:2px"></span>${t('analyzing')}</span>` : ''}</div>
       <div class="tabs">${TABS.map(([k, ic]) => `<a class="tab ${k === tab ? 'active' : ''}" href="#/p/${id}/${k}">${icon(ic)}${t('tab_' + k)}${badge(k)}</a>`).join('')}</div></div>`;
-    shell('', '<div class="page"><div class="empty"><span class="spinner"></span></div></div>', head);
+    if (soft) $('#main > .proj-head').outerHTML = head; else shell('', spot(), head);
     const view = PM.views['tab_' + tab];
     if (!view) { $('#content').innerHTML = ''; return; }
     const token = ++S.nav;
@@ -406,6 +409,7 @@
 
   // ---------- router ----------
   async function route() {
+    const soft = S.soft; S.soft = false;
     applyPrefs();
     const h = location.hash.replace(/^#/, '') || '/';
     const [pathPart, qs] = h.split('?');
@@ -430,10 +434,12 @@
       return PM.views.widgets(new URLSearchParams(qs || ''));
     }
     if (parts[0] === 'account') return PM.views.account();
-    if (parts[0] === 'p' && parts[1]) return PM.projectView(Number(parts[1]), parts[2] && parts[2] !== 'trends' ? parts[2] : 'overview', new URLSearchParams(qs || ''));
+    if (parts[0] === 'p' && parts[1]) return PM.projectView(Number(parts[1]), parts[2] && parts[2] !== 'trends' ? parts[2] : 'overview', new URLSearchParams(qs || ''), { soft });
     location.hash = '#/';
   }
   PM.route = route;
+  // reload what is on screen after a change made somewhere else (the chat), without rebuilding the page frame
+  PM.refresh = () => { S.soft = true; return route(); };
   // page transitions: cross fade the whole view where the browser supports it
   PM.vt = (fn) => { const rm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches; if (document.startViewTransition && !rm && S.token) { try { const tr = document.startViewTransition(fn); ['ready', 'finished'].forEach((k) => tr[k] && tr[k].catch(() => {})); return tr; } catch (e) { /* fall through */ } } return fn(); };
   // Problems in the browser are reported to the server so the super admin can see them. At most five per page visit.
