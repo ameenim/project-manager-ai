@@ -40,6 +40,12 @@ const WRITE_TOOLS = [
   { name: 'delete_task', description: 'Propose deleting a task. Needs a strong confirmation.', input_schema: { type: 'object', properties: { ...proj, task: str('Task id, or its exact name') }, required: ['task'] } },
   { name: 'delete_item', description: 'Propose deleting a deliverable, requirement, risk or payment. Needs a strong confirmation.', input_schema: { type: 'object', properties: { ...proj, item: ref.item }, required: ['item'] } },
 ];
+WRITE_TOOLS.push(
+  { name: 'change_task_schedule', description: 'Propose a new start date, duration (working days) or progress (0 to 100) for a task. The card shows which other tasks move and the project end before and after. Links, baselines and schedule versions cannot be changed here.', input_schema: { type: 'object', properties: { ...proj, task: str('Task id, or its exact name'), start: str('YYYY-MM-DD'), duration: num('Working days'), progress: num('0 to 100') }, required: ['task'] } },
+  { name: 'apply_update', description: 'Propose applying a suggestion that waits in the Updates inbox.', input_schema: { type: 'object', properties: { ...proj, update: str('Update id, or part of its summary') }, required: ['update'] } },
+  { name: 'dismiss_update', description: 'Propose dismissing a suggestion in the Updates inbox.', input_schema: { type: 'object', properties: { ...proj, update: str('Update id, or part of its summary') }, required: ['update'] } },
+  { name: 'add_update', description: 'Propose adding a pasted message or note to the Updates inbox, where it becomes suggestions to review.', input_schema: { type: 'object', properties: { ...proj, body: str('The message text'), sender: str('Who sent it, optional'), subject: str('Optional subject') }, required: ['body'] } },
+);
 const WRITE_NAMES = new Set(WRITE_TOOLS.map((t) => t.name));
 const catalog = (canWrite) => (canWrite ? READ_TOOLS.concat(WRITE_TOOLS) : READ_TOOLS).map((t) => ({ name: t.name, description: t.description, input_schema: t.input_schema }));
 
@@ -72,6 +78,7 @@ function findRecord(list, ref, nameKey) {
 
 const itemStamp = (it) => JSON.stringify([it.title, it.description || '', it.state, it.data || {}]);
 const taskStamp = (t) => JSON.stringify([t.name, t.assignee || null, t.notes || null, t.parent_id || null]);
+const schedStamp = (t) => JSON.stringify([t.start, t.duration, t.progress || 0]);
 const lateTask = (t, today) => !t.summary && (t.progress || 0) < 100 && t.finish < today;
 const dueOf = (it) => { const d = it.data || {}; return d.due_date || (it.kind === 'risk' ? d.review_date : null) || null; };
 const itemRow = (it, today) => {
@@ -273,6 +280,42 @@ const WRITE = {
   },
 };
 
+WRITE.change_task_schedule = async function (h, input, scope) {
+  const pid = pickProject(h, scope, input); const P = h.P(pid, 'editor');
+  const t = findRecord(P.tasks.filter((x) => !x.summary), input.task, 'name');
+  const ch = {}; const changes = [];
+  if (input.start != null) { const d = cleanDate(input.start, 'The start date'); if (d && d !== t.start) { ch.start = d; changes.push(['start', t.start, d]); } }
+  if (input.duration != null) { const n = Math.round(Number(input.duration)); if (!Number.isFinite(n) || n < (t.is_milestone ? 0 : 1) || n > 3650) throw bad('The duration must be a whole number of working days, at least 1.'); if (n !== t.duration) { ch.duration = n; changes.push(['duration', t.duration, n]); } }
+  if (input.progress != null) { const n = Math.round(Number(input.progress)); if (!Number.isFinite(n) || n < 0 || n > 100) throw bad('Progress must be between 0 and 100.'); if (n !== (t.progress || 0)) { ch.progress = n; changes.push(['progress', t.progress || 0, n]); } }
+  if (!changes.length) throw bad('Nothing would change. The task already has those values.', { no_change: true });
+  // the same engine and route as the Schedule screen, so the impact matches what the screen would show
+  const pv = await h.call('POST', `/api/projects/${pid}/schedule/preview`, { changes: { [t.id]: ch } });
+  const others = (pv.impacts || []).filter((i) => !i.direct);
+  const impact = { moved: others.length, endBefore: pv.projectEnd.before, endAfter: pv.projectEnd.after, constrained: (pv.constrained || []).length, examples: others.slice(0, 5).map((i) => ({ name: i.name, from: i.before && i.before.finish, to: i.after && i.after.finish })) };
+  return { op: { op: 'change_schedule', project_id: pid, task_id: t.id, change: ch, stamp: schedStamp(t) }, summary: `Change the schedule of task "${t.name}"`, sum: { op: 'change_schedule', title: t.name }, project: P.p.name, changes, impact };
+};
+const pendingRows = (P) => P.inbox.filter((r) => r.status === 'pending');
+const rowStamp = (r) => JSON.stringify([r.status, r.action || null]);
+function pickRow(P, ref) {
+  const rows = pendingRows(P);
+  if (!rows.length) throw bad('Nothing is waiting in the Updates inbox.', { not_found: true });
+  return findRecord(rows, ref, 'summary');
+}
+WRITE.apply_update = function (h, input, scope) {
+  const pid = pickProject(h, scope, input); const P = h.P(pid, 'editor'); const r = pickRow(P, input.update);
+  if (!r.action) throw bad('That entry has no change to apply. It can only be dismissed.');
+  return { op: { op: 'apply_inbox', project_id: pid, row_id: r.id, stamp: rowStamp(r) }, summary: `Apply update "${clip(r.summary, 80)}"`, sum: { op: 'apply_update', title: clip(r.summary, 80) }, project: P.p.name, changes: [['update', null, clip(r.summary, 200)]] };
+};
+WRITE.dismiss_update = function (h, input, scope) {
+  const pid = pickProject(h, scope, input); const P = h.P(pid, 'editor'); const r = pickRow(P, input.update);
+  return { op: { op: 'dismiss_inbox', project_id: pid, row_id: r.id, stamp: rowStamp(r) }, summary: `Dismiss update "${clip(r.summary, 80)}"`, sum: { op: 'dismiss_update', title: clip(r.summary, 80) }, project: P.p.name, changes: [['update', clip(r.summary, 200), null]] };
+};
+WRITE.add_update = function (h, input, scope) {
+  const pid = pickProject(h, scope, input); const P = h.P(pid, 'editor');
+  const body = cleanText(input.body, 4000); if (!body) throw bad('Paste the message text.');
+  return { op: { op: 'add_update', project_id: pid, body, sender: cleanText(input.sender, 160), subject: cleanText(input.subject, 200) }, summary: 'Add a message to the Updates inbox', sum: { op: 'add_update', title: '' }, project: P.p.name, changes: [['message', null, clip(body, 200)]] };
+};
+
 // ---------- applying and undoing ----------
 // Apply runs inside one runAs, so every operation succeeds or none is kept. Each operation returns what it needs to be undone.
 async function applyOp(h, op) {
@@ -319,6 +362,28 @@ async function applyOp(h, op) {
     const links = P.tasks.filter((x) => (x.deps || []).some((d) => d.id === t.id)).map((x) => ({ task_id: x.id, dep: h.clone(x.deps.find((d) => d.id === t.id)) }));
     await h.call('POST', `/api/projects/${P.id}/schedule/apply`, { changes: { [t.id]: { deleted: true } } });
     return { undo: { op: 'restore_deleted_task', project_id: P.id, task: snap, kids, links }, refs: { task_id: t.id }, label: `task "${t.name}"` };
+  }
+  if (op.op === 'change_schedule') {
+    const t = P.tasks.find((x) => x.id === op.task_id); if (!t) throw bad('That task no longer exists.', { gone: true });
+    if (op.stamp !== schedStamp(t)) throw bad('changed', { stale: true });
+    // every task the change moves is remembered, so undo puts all of them back and not only the one that was edited
+    const was = new Map(P.tasks.filter((x) => !x.summary).map((x) => [x.id, { start: x.start, duration: x.duration, progress: x.progress || 0 }]));
+    await h.call('POST', `/api/projects/${P.id}/schedule/apply`, { changes: { [t.id]: op.change } });
+    const before = {};
+    for (const x of P.tasks) { const w = was.get(x.id); if (w && (w.start !== x.start || w.duration !== x.duration || w.progress !== (x.progress || 0))) before[x.id] = w; }
+    return { undo: { op: 'restore_schedule', project_id: P.id, task_id: t.id, before }, refs: { task_id: t.id }, label: `task "${t.name}"` };
+  }
+  if (op.op === 'apply_inbox' || op.op === 'dismiss_inbox') {
+    const r = P.inbox.find((x) => x.id === op.row_id); if (!r) throw bad('That update no longer exists.', { gone: true });
+    if (op.stamp !== rowStamp(r)) throw bad('changed', { stale: true });
+    await h.call('POST', `/api/inbox/${r.id}/${op.op === 'apply_inbox' ? 'apply' : 'dismiss'}`, {});
+    return { undo: { op: op.op === 'apply_inbox' ? 'undo_inbox' : 'restore_inbox', project_id: P.id, row_id: r.id }, refs: { row_id: r.id }, label: 'update' };
+  }
+  if (op.op === 'add_update') {
+    const seen = new Set(P.inbox.map((x) => x.id));
+    await h.call('POST', `/api/projects/${P.id}/messages`, { body: op.body, sender: op.sender || undefined, subject: op.subject || undefined });
+    const made = P.inbox.filter((x) => !seen.has(x.id)).map((x) => x.id);
+    return { undo: { op: 'dismiss_rows', project_id: P.id, ids: made }, refs: { rows: made }, label: 'message' };
   }
   throw bad('That change is not supported.');
 }
@@ -372,6 +437,17 @@ async function undoOps(api, user, undos, thread) {
           for (const l of u.links) { const o = P.tasks.find((x) => x.id === l.task_id); if (o && !(o.deps || []).some((d) => d.id === l.dep.id)) o.deps = (o.deps || []).concat([l.dep]); }
           P.tasks.sort((a, b) => (a.position ?? 0) - (b.position ?? 0) || a.id - b.id);
           h.recalc(P); h.recordVersion(P, 'edit'); h.audit(P, h.ACTOR(), 'task_added', { summary: `Restored task "${u.task.name}"` });
+        }
+        else if (u.op === 'restore_schedule') {
+          if (!P.tasks.some((x) => x.id === u.task_id)) { notes.push('skipped'); continue; }
+          const ch = {}; for (const [id, v] of Object.entries(u.before)) if (P.tasks.some((x) => x.id === Number(id))) ch[id] = v;
+          await h.call('POST', `/api/projects/${P.id}/schedule/apply`, { changes: ch });
+        } else if (u.op === 'undo_inbox' || u.op === 'restore_inbox') {
+          const r = P.inbox.find((x) => x.id === u.row_id); const ok = r && (u.op === 'undo_inbox' ? ['applied', 'auto_applied'].includes(r.status) : ['dismissed', 'undone'].includes(r.status));
+          if (!ok) { notes.push('skipped'); continue; }
+          await h.call('POST', `/api/inbox/${u.row_id}/${u.op === 'undo_inbox' ? 'undo' : 'restore'}`, {});
+        } else if (u.op === 'dismiss_rows') {
+          for (const id of u.ids) { const r = P.inbox.find((x) => x.id === id); if (!r) continue; if (r.status === 'pending') await h.call('POST', `/api/inbox/${id}/dismiss`, {}); else if (['applied', 'auto_applied'].includes(r.status)) await h.call('POST', `/api/inbox/${id}/undo`, {}); }
         }
         for (const a of P.audit) if (!before.has(a.id)) a.detail = { ...(a.detail || {}), source: 'chat', chat_thread: thread };
       }

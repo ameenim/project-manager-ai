@@ -1244,6 +1244,9 @@ body.chat-open .an-dock { inset-inline-end: calc(var(--chat-w) + 16px); inset-bl
 .cht-new { color: var(--text); }
 .cht-arrow { width: 12px; height: 12px; transform: rotate(-90deg); vertical-align: -2px; }
 [dir="rtl"] .cht-arrow { transform: rotate(90deg); }
+.cht-impact { margin-top: 6px; padding: 8px 10px; background: var(--surface-2); border-radius: 8px; display: flex; flex-direction: column; gap: 3px; }
+.cht-ex { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.cht-exn { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
 .cht-card-foot { display: flex; flex-wrap: wrap; gap: 8px; }
 .cht-warn { background: var(--warning-soft); color: var(--warning); border-radius: 8px; padding: 8px 10px; }
 .cht-empty { margin: auto 0; text-align: center; padding: 8px 4px; display: flex; flex-direction: column; align-items: center; gap: 4px; }

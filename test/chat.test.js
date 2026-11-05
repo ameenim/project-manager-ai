@@ -287,3 +287,98 @@ test('the scope gate: false positive checks on normal project requests', () => {
     assert.notEqual(gate.decide(t).decision, 'pass', t);
   }
 });
+
+// ---------- Phase C: schedule changes with impact, and the Updates inbox ----------
+async function chain(u, p) {
+  const add = (b) => s.call('POST', `/api/projects/${p.id}/tasks`, b, u.token);
+  const a = await add({ name: 'Design', duration: 5, start: '2027-03-01' });
+  const b = await add({ name: 'Build', duration: 5, start: '2027-03-08' });
+  const c = await add({ name: 'Test', duration: 5, start: '2027-03-15' });
+  await s.call('POST', `/api/projects/${p.id}/schedule/apply`, { changes: { [b.data.created]: { deps: [{ id: a.data.created, lag: 0, type: 'FS' }] }, [c.data.created]: { deps: [{ id: b.data.created, lag: 0, type: 'FS' }] } } }, u.token);
+  return { a: a.data.created, b: b.data.created, c: c.data.created };
+}
+const sched = async (u, p) => (await s.call('GET', `/api/projects/${p.id}/schedule`, null, u.token)).data;
+
+test('a schedule change shows the impact, matches the screen preview, and undo restores the dates', async () => {
+  const u = await s.user(); const p = await s.project(u.token, 'Sched chat'); const t = await chain(u, p);
+  const before = await sched(u, p);
+  say(use('change_task_schedule', { task: 'Design', duration: 10 }, 't1')); say(text('Prepared with the impact.'));
+  const r = await talk(u.token, { project_id: p.id, text: 'Make the design task 10 days long' });
+  const item = r.message.card.items[0];
+  assert.ok(item.impact.moved >= 2, 'the dependent tasks move');
+  const pv = (await s.call('POST', `/api/projects/${p.id}/schedule/preview`, { changes: { [t.a]: { duration: 10 } } }, u.token)).data;
+  assert.equal(item.impact.endAfter, pv.projectEnd.after, 'same project end as the screen preview');
+  assert.equal(item.impact.endBefore, pv.projectEnd.before);
+  assert.deepEqual(await sched(u, p).then((x) => x.tasks.map((k) => k.finish)), before.tasks.map((k) => k.finish), 'nothing changed before Apply');
+  await s.call('POST', `/api/chat/messages/${r.message.id}/apply`, {}, u.token);
+  const after = await sched(u, p);
+  assert.equal(after.tasks.find((k) => k.id === t.a).duration, 10);
+  assert.notEqual(after.tasks.find((k) => k.id === t.c).finish, before.tasks.find((k) => k.id === t.c).finish);
+  await s.call('POST', `/api/chat/messages/${r.message.id}/undo`, {}, u.token);
+  const back = await sched(u, p);
+  assert.deepEqual(back.tasks.map((k) => [k.id, k.start, k.finish]), before.tasks.map((k) => [k.id, k.start, k.finish]));
+});
+
+test('a schedule change that moves more than 5 tasks needs a second confirmation', async () => {
+  const u = await s.user(); const p = await s.project(u.token, 'Big move');
+  let prev = null; const ids = [];
+  for (let i = 0; i < 8; i++) { const r = await s.call('POST', `/api/projects/${p.id}/tasks`, { name: 'Step ' + i, duration: 2, start: '2027-03-01' }, u.token); ids.push(r.data.created); }
+  const changes = {}; ids.forEach((id, i) => { if (i) changes[id] = { deps: [{ id: ids[i - 1], lag: 0, type: 'FS' }] }; });
+  await s.call('POST', `/api/projects/${p.id}/schedule/apply`, { changes }, u.token);
+  say(use('change_task_schedule', { task: 'Step 0', duration: 6 }, 't1')); say(text('Prepared.'));
+  const r = await talk(u.token, { project_id: p.id, text: 'Make the Step 0 task six days long' });
+  assert.equal(r.message.card.strong, true);
+  assert.equal((await s.call('POST', `/api/chat/messages/${r.message.id}/apply`, {}, u.token)).status, 400);
+});
+
+test('invalid schedule values are rejected before a card exists', async () => {
+  const u = await s.user(); const p = await s.project(u.token, 'Bad values'); await chain(u, p);
+  say(use('change_task_schedule', { task: 'Design', progress: 150 }, 't1')); say(text('That is not valid.'));
+  const r = await talk(u.token, { project_id: p.id, text: 'Set design progress to 150 percent' });
+  assert.equal(r.message.card, null);
+  say(use('change_task_schedule', { task: 'Design', start: 'next week' }, 't2')); say(text('I need a date.'));
+  const r2 = await talk(u.token, { project_id: p.id, text: 'Move design to next week' });
+  assert.equal(r2.message.card, null);
+});
+
+test('an inbox suggestion can be applied from the chat and undone', async () => {
+  const u = await s.user(); const p = await s.project(u.token, 'Inbox chat'); const t = await chain(u, p);
+  const P = s.app.store.cache.get(p.id).P;
+  P.inbox.push({ id: 987001, project_id: p.id, source: 'manual', status: 'pending', summary: 'Design is 60 percent complete', confidence: 0.9, action: { type: 'update_task', task_id: t.a, progress: 60 }, created_at: '2027-03-02 09:00' });
+  say(use('apply_update', { update: 'Design is 60 percent' }, 't1')); say(text('Prepared.'));
+  const r = await talk(u.token, { project_id: p.id, text: 'Apply the design progress update' });
+  assert.equal(r.message.card.items[0].sum.op, 'apply_update');
+  await s.call('POST', `/api/chat/messages/${r.message.id}/apply`, {}, u.token);
+  assert.equal((await sched(u, p)).tasks.find((k) => k.id === t.a).progress, 60);
+  await s.call('POST', `/api/chat/messages/${r.message.id}/undo`, {}, u.token);
+  assert.equal((await sched(u, p)).tasks.find((k) => k.id === t.a).progress, 0);
+});
+
+test('dismissing an update from the chat can be undone, and a handled update cannot be proposed again', async () => {
+  const u = await s.user(); const p = await s.project(u.token, 'Dismiss chat');
+  const P = s.app.store.cache.get(p.id).P;
+  P.inbox.push({ id: 987002, project_id: p.id, source: 'manual', status: 'pending', summary: 'Vendor sent a note', confidence: 0.4, action: { type: 'update_task', task_id: 1, progress: 10 }, created_at: '2027-03-02 09:00' });
+  say(use('dismiss_update', { update: 'Vendor sent' }, 't1')); say(text('Prepared.'));
+  const r = await talk(u.token, { project_id: p.id, text: 'Dismiss the vendor update' });
+  await s.call('POST', `/api/chat/messages/${r.message.id}/apply`, {}, u.token);
+  assert.equal((await s.call('GET', `/api/projects/${p.id}/inbox`, null, u.token)).data.inbox.find((x) => x.id === 987002).status, 'dismissed');
+  say(use('dismiss_update', { update: 'Vendor sent' }, 't2')); say(text('Nothing is waiting.'));
+  const again = await talk(u.token, { project_id: p.id, text: 'Dismiss the vendor update again' });
+  assert.equal(again.message.card, null);
+  await s.call('POST', `/api/chat/messages/${r.message.id}/undo`, {}, u.token);
+  assert.equal((await s.call('GET', `/api/projects/${p.id}/inbox`, null, u.token)).data.inbox.find((x) => x.id === 987002).status, 'pending');
+});
+
+test('a pasted message is added to the inbox through a card, and undo dismisses what it created', async () => {
+  const u = await s.user(); const p = await s.project(u.token, 'Paste chat');
+  say(use('add_update', { body: 'Hi team, the design review is done and approved.', sender: 'dana@client.com' }, 't1')); say(text('Prepared.'));
+  const r = await talk(u.token, { project_id: p.id, text: 'Add this message to updates: Hi team, the design review is done and approved.' });
+  assert.equal((await s.call('GET', `/api/projects/${p.id}/inbox`, null, u.token)).data.inbox.length, 0, 'nothing before Apply');
+  const ap = await s.call('POST', `/api/chat/messages/${r.message.id}/apply`, {}, u.token);
+  assert.equal(ap.status, 200, JSON.stringify(ap.data));
+  const rows = (await s.call('GET', `/api/projects/${p.id}/inbox`, null, u.token)).data.inbox;
+  assert.ok(rows.length >= 1);
+  await s.call('POST', `/api/chat/messages/${r.message.id}/undo`, {}, u.token);
+  const left = (await s.call('GET', `/api/projects/${p.id}/inbox`, null, u.token)).data.inbox.filter((x) => x.status === 'pending');
+  assert.equal(left.length, 0);
+});
