@@ -18,17 +18,42 @@
     const lh = (w, im) => (w * im.h) / im.w;
 
     // ----- masters -----
+    const lay = plan.layout || X.DEFAULT_LAYOUT;
+    const POSX = { left: MX, center: SW / 2, right: SW - MX };
+    const hdr = [], ftr = [];
+    const LW_ = 1.8;
+    const lx = lay.logo.header === 'left' ? MX : lay.logo.header === 'center' ? SW / 2 - LW_ / 2 : SW - MX - LW_;
+    if (lay.logo.header !== 'hidden') hdr.push({ image: { x: lx, y: 0.28, w: LW_, h: lh(LW_, logo), data: png(logo) } });
+    for (const k of ['left', 'center', 'right']) {
+      const txt = X.fillTokens(lay.header[k], plan).replace(/\{\{\s*pages?\s*\}\}/g, '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 2);
+      if (!txt.length) continue;
+      const same = lay.logo.header === k;
+      const w = 5.2;
+      let x = k === 'left' ? MX : k === 'center' ? SW / 2 - w / 2 : SW - MX - w;
+      let y = 0.18, h = 0.6;
+      if (same && k === 'center') { y = 0.62; h = 0.2; }
+      else if (same && k === 'left') { x = MX + LW_ + 0.2; }
+      else if (same && k === 'right') { x = SW - MX - LW_ - 0.2 - w; }
+      hdr.push({ text: { text: txt.map((t2, i) => ({ text: t2, options: { bold: i === 0, fontSize: i === 0 ? 11 : 10, color: i === 0 ? T.text : T.muted, breakLine: i < txt.length - 1 } })), options: { x, y, w, h, align: k, valign: 'middle', fontFace: F, margin: 0 } } });
+    }
+    let slideNum = null;
+    for (const k of ['left', 'center', 'right']) {
+      const raw = lay.footer[k] || '';
+      const hasPage = /\{\{\s*pages?\s*\}\}/.test(raw);
+      const txt = hasPage ? '' : X.fillTokens(raw, plan).replace(/\s*\n\s*/g, '  ');
+      const w = 5.2, x = k === 'left' ? MX : k === 'center' ? SW / 2 - w / 2 : SW - MX - w;
+      if (txt) ftr.push({ text: { text: txt, options: { x, y: 7.05, w, h: 0.3, align: k, fontSize: 9, color: T.muted, fontFace: F, margin: 0 } } });
+      if (hasPage) slideNum = { x: k === 'left' ? MX : k === 'center' ? SW / 2 - 0.4 : SW - MX - 0.8, y: 7.05, w: 0.8, h: 0.3, fontFace: F, fontSize: 9, color: T.muted, align: k };
+    }
     pptx.defineSlideMaster({
       title: 'CONTENT', background: { color: T.surface },
       objects: [
-        { image: { x: MX, y: 0.28, w: 1.8, h: lh(1.8, logo), data: png(logo) } },
-        { text: { text: meta.project || '', options: { x: SW - MX - 6, y: 0.2, w: 6, h: 0.3, align: 'right', valign: 'middle', fontFace: F, fontSize: 11, bold: true, color: T.text, margin: 0 } } },
-        { text: { text: meta.client || '', options: { x: SW - MX - 6, y: 0.48, w: 6, h: 0.28, align: 'right', valign: 'middle', fontFace: F, fontSize: 10, color: T.muted, margin: 0 } } },
+        ...hdr,
         { rect: { x: MX, y: 0.82, w: CWI, h: 0.012, fill: { color: T.border } } },
         { rect: { x: MX, y: 7.0, w: CWI, h: 0.012, fill: { color: T.border } } },
-        { text: { text: `${plan.title}  ·  ${plan.date}`, options: { x: MX, y: 7.05, w: 9, h: 0.3, fontSize: 9, color: T.muted, fontFace: F, margin: 0 } } },
+        ...ftr,
       ],
-      slideNumber: { x: SW - MX - 0.8, y: 7.05, w: 0.8, h: 0.3, fontFace: F, fontSize: 9, color: T.muted, align: 'right' },
+      ...(slideNum ? { slideNumber: slideNum } : {}),
     });
     pptx.defineSlideMaster({ title: 'COVER', background: { color: T.surface }, objects: [] });
 
@@ -47,7 +72,7 @@
         const r = Math.min((bw - 0.4) / client.w, (bh - 0.3) / client.h);
         s.addImage({ data: png(client), x: bx + (bw - client.w * r) / 2, y: by + (bh - client.h * r) / 2, w: client.w * r, h: client.h * r, altText: `${meta.client || 'Client'} logo` });
       }
-      s.addImage({ data: png(logo), x: 0.7, y: 0.65, w: 2.7, h: lh(2.7, logo), altText: 'Project Manager AI logo' });
+      if (lay.logo.cover !== 'hidden') s.addImage({ data: png(logo), x: lay.logo.cover === 'left' ? 0.7 : lay.logo.cover === 'center' ? 2.9 : 5.3, y: 0.65, w: 2.7, h: lh(2.7, logo), altText: 'Project Manager AI logo' });
       s.addText(plan.typeTitle, { x: 0.7, y: 2.1, w: 7.3, h: 0.4, fontFace: F, fontSize: 16, bold: true, color: T.primary, margin: 0 });
       s.addText(plan.title, { x: 0.7, y: 2.55, w: 7.3, h: 1.7, fontFace: F, fontSize: 38, bold: true, color: T.text, valign: 'top', margin: 0, fit: 'shrink' });
       s.addShape(SH_.rect, { x: 0.7, y: 4.4, w: 1.2, h: 0.07, fill: { color: T.primary }, line: { color: T.primary, width: 0 } });

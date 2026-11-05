@@ -2331,7 +2331,12 @@ async function generate({ type, templateBody, templateName, ctx, useAI = true, s
   } else if (templateBody) {
     const parsed = parseTemplate(templateBody);
     if (!parsed.length) throw new Error('The custom template has no headings. Use "# Heading" lines or Heading 1 styles to mark sections.');
-    for (const s of parsed) sections.push({ heading: s.heading, key: matchGenerator(s.heading, type), guidance: replaceVars(s.body, ctx) });
+    for (const s of parsed) {
+      // A section marked as fixed keeps the text the project manager wrote. The others are refreshed from project data.
+      const fixed = /^<!--\s*fixed\s*-->/i.test(s.body);
+      const body = fixed ? s.body.replace(/^<!--\s*fixed\s*-->\s*/i, '') : s.body;
+      sections.push({ heading: s.heading, key: fixed ? null : matchGenerator(s.heading, type), guidance: replaceVars(body, ctx) });
+    }
   } else {
     for (const [h, k] of def.sections) sections.push({ heading: h, key: k, guidance: '' });
   }
@@ -2456,5 +2461,5 @@ async function toDocx({ title, markdown, project, user, today, logoPath }) {
   return Packer.toBuffer(doc);
 }
 
-module.exports = { DEFAULTS, DOC_TYPES, LIBRARY, GENERATOR_KEYS: Object.keys(G), activityLines, nextRows, decisionLines, buildContext, generate, suggestPlan, toDocx, parseTemplate, replaceVars };
+module.exports = { DEFAULTS, DOC_TYPES, LIBRARY, GENERATOR_KEYS: Object.keys(G), activityLines, nextRows, decisionLines, buildContext, generate, suggestPlan, toDocx, parseTemplate, replaceVars, matchGenerator };
 ;return module.exports})();

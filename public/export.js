@@ -6,7 +6,7 @@
 (function () {
   'use strict';
   const PM = window.PM;
-  const VERSION = '3';
+  const VERSION = '4';
 
   // ---------- design tokens (light theme of styles.css, hex without the hash) ----------
   const T = {
@@ -160,6 +160,30 @@
     return [];
   }
 
+  // ---------- page layout: logo position, header and footer text ----------
+  // A document with no saved layout looks as it always did. {{page}} and {{pages}} are filled by the file itself.
+  const DEFAULT_LAYOUT = {
+    v: 1, logo: { cover: 'left', header: 'left' },
+    header: { left: '', center: '', right: '{{project}}\n{{client}}' },
+    footer: { left: '{{title}}  \u00b7  {{date}}', center: '', right: 'Page {{page}} of {{pages}}' },
+  };
+  const LAYOUT_TOKENS = ['project', 'client', 'title', 'date', 'code', 'pm', 'page', 'pages'];
+  function layoutOf(g) {
+    const l = g && g.layout;
+    if (!l || typeof l !== 'object') return JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
+    const part = (o, d) => ({ left: o && typeof o.left === 'string' ? o.left : d.left, center: o && typeof o.center === 'string' ? o.center : d.center, right: o && typeof o.right === 'string' ? o.right : d.right });
+    const pos = (v, d) => (['left', 'center', 'right', 'hidden'].includes(v) ? v : d);
+    return { v: 1, logo: { cover: pos(l.logo && l.logo.cover, 'left'), header: pos(l.logo && l.logo.header, 'left') }, header: part(l.header, DEFAULT_LAYOUT.header), footer: part(l.footer, DEFAULT_LAYOUT.footer) };
+  }
+  // Fills every token except page and pages.
+  function fillTokens(text, plan) {
+    const m = plan.meta || {};
+    const map = { project: m.project || '', client: m.client || '', title: plan.title || '', date: plan.date || '', code: m.code || '', pm: m.pm || '' };
+    return String(text || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (all, k) => (k in map ? map[k] : all));
+  }
+  // The same text with page numbers resolved, for formats with no page fields.
+  const fillPlain = (text, plan, page, pages) => fillTokens(text, plan).replace(/\{\{\s*page\s*\}\}/g, page == null ? '' : String(page)).replace(/\{\{\s*pages\s*\}\}/g, pages == null ? '' : String(pages));
+
   // ---------- plan: cover facts and ordered sections ----------
   function splitSections(blocks, fallbackHeading) {
     const out = [];
@@ -185,7 +209,7 @@
     const glanceIds = ['phases', 'status'].filter((id) => has(id, V));
     const all = glanceIds.length ? [{ heading: 'Project at a glance', blocks: [], ids: glanceIds, glance: true }, ...sections] : sections;
     for (const s of all) s.specs = s.ids.flatMap((id) => specsFor(id, V, meta));
-    return { title: g.title || (def && def.title) || 'Document', typeTitle: g.custom ? 'Custom document' : (def && def.title) || '', meta, date: fmtDate(meta.date), kpis: (V && V.kpis) || [], sections: all, onepager: def && def.oneSlide && !g.custom && V ? V.onepager || null : null, oneSlide: !!(def && def.oneSlide && !g.custom) };
+    return { layout: layoutOf(g), title: g.title || (def && def.title) || 'Document', typeTitle: g.custom ? 'Custom document' : (def && def.title) || '', meta, date: fmtDate(meta.date), kpis: (V && V.kpis) || [], sections: all, onepager: def && def.oneSlide && !g.custom && V ? V.onepager || null : null, oneSlide: !!(def && def.oneSlide && !g.custom) };
   }
 
   // ---------- canvas chart rendering ----------
@@ -459,7 +483,7 @@
     return loading[src];
   }
   const LIBS = { docx: ['vendor/docx.min.js', 'export_docx.js'], pptx: ['vendor/pptxgen.bundle.js', 'export_pptx.js'], xlsx: ['vendor/exceljs.min.js', 'export_xlsx.js'] };
-  const ex = { T, TONE, SOFT, FONT_NAME, FORMATS, STATUS, tone, statusTone, fmtDate, safeName, money, inlineRuns, plain, parseMarkdown, plan, specsFor, specTable, heatTone, renderSpec, asset, b64, builders: {} };
+  const ex = { DEFAULT_LAYOUT, LAYOUT_TOKENS, layoutOf, fillTokens, fillPlain, T, TONE, SOFT, FONT_NAME, FORMATS, STATUS, tone, statusTone, fmtDate, safeName, money, inlineRuns, plain, parseMarkdown, plan, specsFor, specTable, heatTone, renderSpec, asset, b64, builders: {} };
 
   async function build(g) {
     const fmt = FORMATS[g.format] ? g.format : 'docx';

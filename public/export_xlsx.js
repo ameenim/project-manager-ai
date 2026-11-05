@@ -22,11 +22,21 @@
       used.add(n.toLowerCase());
       return n;
     };
+    // Printed header and footer from the page layout. Excel has its own page fields.
+    const lay = plan.layout || X.DEFAULT_LAYOUT;
+    const hf = (t) => X.fillTokens(t, plan).replace(/&/g, '&&').replace(/\s*\n\s*/g, '  ').replace(/\{\{\s*page\s*\}\}/g, '&P').replace(/\{\{\s*pages\s*\}\}/g, '&N');
+    const printHF = () => {
+      const f = (o, size) => ['L', 'C', 'R'].map((c, i) => { const v = hf(o[['left', 'center', 'right'][i]]); return v ? `&${c}&"${FONT},Regular"&${size}${v}` : ''; }).join('');
+      const out = { oddFooter: f(lay.footer, 8) };
+      const h = f(lay.header, 8);
+      if (h) out.oddHeader = h;
+      return out;
+    };
     const newSheet = (name) => {
       const ws = wb.addWorksheet(sheetName(name), {
         properties: { tabColor: { argb: A(T.primary) }, defaultRowHeight: 15 }, views: [{ showGridLines: false }],
         pageSetup: { orientation: 'landscape', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.5, right: 0.5, top: 0.7, bottom: 0.7, header: 0.3, footer: 0.3 } },
-        headerFooter: { oddFooter: `&L&"${FONT},Regular"&8${meta.project || ''}  ·  ${plan.date}&R&8Page &P of &N` },
+        headerFooter: printHF(),
       });
       ws.columns = Array.from({ length: COLS }, () => ({ width: CWID }));
       return ws;
@@ -56,9 +66,16 @@
     // header band with the platform logo, project and client
     function band(ws) {
       ws.getRow(1).height = 36; ws.getRow(2).height = 18; ws.getRow(3).height = 6;
-      addPic(ws, logo, 0, 0, 170, Math.round((170 * logo.h) / logo.w), 'Project Manager AI logo');
-      put(ws, 1, 7, 12, meta.project || '', { bold: true, align: 'right' });
-      put(ws, 2, 7, 12, meta.client || '', { size: 10, color: T.muted, align: 'right' });
+      const zones = { left: [1, 4], center: [5, 8], right: [9, 12] };
+      const logoCol = { left: 0, center: 4, right: 10 };
+      if (lay.logo.header !== 'hidden') addPic(ws, logo, logoCol[lay.logo.header], 0, 170, Math.round((170 * logo.h) / logo.w), 'Project Manager AI logo');
+      for (const k of ['left', 'center', 'right']) {
+        const ln = X.fillTokens(lay.header[k], plan).replace(/\{\{\s*pages?\s*\}\}/g, '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 2);
+        if (!ln.length) continue;
+        let [c1, c2] = zones[k];
+        if (lay.logo.header === k) { if (k === 'right') c2 -= 2; else c1 += 2; }
+        ln.forEach((x, i) => put(ws, 1 + i, c1, c2, x, i === 0 ? { bold: true, align: k } : { size: 10, color: T.muted, align: k }));
+      }
       for (let c = 1; c <= COLS; c++) ws.getCell(3, c).border = { bottom: thin(T.border) };
     }
     const heading = (ws, r, text) => {

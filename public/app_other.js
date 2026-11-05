@@ -265,7 +265,7 @@
     let sel = sessionStorage.getItem(selKey) || 'all';
     if (!['all', 'none'].includes(sel) && !folders.some((f) => String(f.id) === sel)) sel = 'all';
     const setSel = (v) => { sel = String(v); try { sessionStorage.setItem(selKey, sel); } catch (e) { /* storage blocked */ } };
-    const titleOf = (id) => (types.find((x) => x.id === id) || {}).title || id;
+    const titleOf = (id) => (id === '*' ? t('all_types') : (types.find((x) => x.id === id) || {}).title || id);
     const isOne = () => !!(types.find((x) => x.id === type) || {}).oneSlide;
     const form = { name: '', touched: false, tpl: '', folder: null, asOf: PM.today(), period: null };
     const defName = () => `${titleOf(type)} ${p.name}`;
@@ -285,7 +285,7 @@
       const body = () => {
         const isProg = type.startsWith('progress');
         const one = isOne(), cur = one ? 'pptx' : out;
-        const tpls = templates.filter((x) => x.doc_type === type);
+        const tpls = templates.filter((x) => x.doc_type === type || x.doc_type === '*');
         const opt = (ts) => ts.map((x) => `<option value="${x.id}">${esc(x.title)}</option>`).join('');
         return `<div class="form-grid">
           <div class="fmt-pick full"><span class="lbl" id="rpKindL">${t('cd_mode_label')}</span>
@@ -466,8 +466,9 @@
     // done screen: the document is ready in the chosen format
     function ready(g, built) {
       const f = fmtOf(g.format);
-      const m = modal({ title: t('gen_ready'), size: 'sm', body: `<div class="gen-done"><span class="ico">${icon(f.icon)}</span><div><div style="font-weight:600">${esc(g.title)}</div><div class="small muted">${f.label} · ${esc(folderName(g.folder_id))}</div></div></div>`, footer: `<button class="btn" id="rdOpen">${icon('eye')}${t('open')}</button><button class="btn primary" id="rdDl">${icon('dl')}${t('download_fmt', { f: f.label })}</button>` });
+      const m = modal({ title: t('gen_ready'), size: 'sm', body: `<div class="gen-done"><span class="ico">${icon(f.icon)}</span><div><div style="font-weight:600">${esc(g.title)}</div><div class="small muted">${f.label} · ${esc(folderName(g.folder_id))}</div></div></div>`, footer: `${isSlide(g) ? '' : `<button class="btn" id="rdEdit">${icon('edit')}${t('edit')}</button>`}<button class="btn" id="rdOpen">${icon('eye')}${t('open')}</button><button class="btn primary" id="rdDl">${icon('dl')}${t('download_fmt', { f: f.label })}</button>` });
       $('#rdOpen', m.el).onclick = () => { m.close(); openDoc(g.id); };
+      const re = $('#rdEdit', m.el); if (re) re.onclick = () => { m.close(); openDoc(g.id, true); };
       $('#rdDl', m.el).onclick = () => { PM.exporter.save(built.blob, built.filename); toast(t('download_ready'), 'ok'); m.close(); };
     }
 
@@ -495,13 +496,14 @@
       $$('[data-to]', m.el).forEach((b) => (b.onclick = () => { m.close(); moveDoc(g.id, b.dataset.to === '' ? null : Number(b.dataset.to)); }));
     }
 
+    const isSlide = (g) => { const d = window.__Reports && window.__Reports.DEFAULTS[g.doc_type]; return !!(d && d.oneSlide && !g.custom); };
     function docRow(g) {
       const f = fmtOf(g.format), renaming = ui.renamingDoc === g.id;
       return `<div class="fv-doc" draggable="${renaming ? 'false' : 'true'}" data-doc="${g.id}">
         <span class="grip" aria-hidden="true">${icon('grip')}</span><span class="ico">${icon(f.icon)}</span>
         <div class="body">${renaming ? `<div class="rn"><input type="text" id="rnDoc" maxlength="120" value="${esc(g.title)}" aria-label="${esc(t('rename_doc'))}"><button class="btn sm primary" data-rn-ok>${t('save')}</button><button class="btn sm" data-rn-no>${t('cancel')}</button></div>` : `<div class="ttl">${esc(g.title)}</div>`}
           <div class="meta"><span class="chip" data-tip="${esc(t(f.name))}">${(g.format || 'docx').toUpperCase()}</span><span>${esc(g.template)}</span><span>${when(g.created_at)}</span>${sel === 'all' ? `<span>${icon('folder')} ${esc(folderName(g.folder_id))}</span>` : ''}</div>
-          <div class="acts"><button class="btn sm" data-open="${g.id}">${icon('eye')}${t('open')}</button><button class="btn sm primary" data-dl="${g.id}">${icon('dl')}${t('download_fmt', { f: f.label })}</button><button class="btn sm" data-rn="${g.id}">${icon('edit')}${t('rename')}</button><button class="btn sm" data-mv="${g.id}">${icon('folder')}${t('move_to_folder')}</button><button class="btn sm ghost icon" data-gdel="${g.id}" aria-label="${esc(t('delete'))}" data-tip="${esc(t('delete'))}">${icon('trash')}</button></div></div></div>`;
+          <div class="acts"><button class="btn sm" data-open="${g.id}">${icon('eye')}${t('open')}</button>${isSlide(g) ? '' : `<button class="btn sm" data-edit="${g.id}">${icon('edit')}${t('edit')}</button>`}<button class="btn sm primary" data-dl="${g.id}">${icon('dl')}${t('download_fmt', { f: f.label })}</button><button class="btn sm" data-rn="${g.id}">${icon('edit')}${t('rename')}</button><button class="btn sm" data-mv="${g.id}">${icon('folder')}${t('move_to_folder')}</button><button class="btn sm ghost icon" data-gdel="${g.id}" aria-label="${esc(t('delete'))}" data-tip="${esc(t('delete'))}">${icon('trash')}</button></div></div></div>`;
     }
 
     function drawDocs() {
@@ -546,6 +548,7 @@
 
       // documents
       $$('[data-open]', el).forEach((b) => (b.onclick = () => openDoc(Number(b.dataset.open))));
+      $$('[data-edit]', el).forEach((b) => (b.onclick = () => openDoc(Number(b.dataset.edit), true)));
       $$('[data-dl]', el).forEach((b) => (b.onclick = () => downloadDoc(Number(b.dataset.dl), b)));
       $$('[data-mv]', el).forEach((b) => (b.onclick = () => moveDialog(gen.find((x) => x.id === Number(b.dataset.mv)))));
       $$('[data-rn]', el).forEach((b) => (b.onclick = () => { ui.renamingDoc = Number(b.dataset.rn); drawDocs(); const i = $('#rnDoc', root); i.focus(); i.select(); }));
@@ -582,25 +585,18 @@
     }
 
     // ---------- preview, rename and download ----------
-    async function openDoc(id) {
+    async function openDoc(id, startEditing) {
       const g = (await api('GET', `/api/generated/${id}`)).generated;
       const f = fmtOf(g.format);
-      let editing = false;
-      const m = modal({ title: g.title, size: 'xl', body: '<div id="docBody"></div>', footer: '' });
-      const show = () => {
-        $('#docBody', m.el).innerHTML = editing ? `<label class="f" style="margin-bottom:12px">${t('doc_name')}<input type="text" id="docName" maxlength="120" value="${esc(g.title)}"></label><textarea id="docMd" style="min-height:56vh;font-family:ui-monospace,monospace;font-size:var(--fs-body)">${esc(g.content)}</textarea>` : `<div class="md">${PM.mdToHtml(g.content)}</div>`;
-        m.setFooter(`<span class="small muted grow">${t('doc_pages_note')}</span>${editing ? `<button class="btn" id="dEditCancel">${t('cancel')}</button><button class="btn primary" id="dSave">${t('save')}</button>` : `<button class="btn" id="dEdit">${icon('edit')}${t('edit')}</button><button class="btn primary" id="dDl">${icon('dl')}${t('download_fmt', { f: f.label })}</button>`}`);
-        const on = (k, fn) => { const e = $('#' + k, m.el); if (e) e.onclick = fn; };
-        on('dEdit', () => { editing = true; show(); });
-        on('dEditCancel', () => { editing = false; show(); });
-        on('dSave', async () => {
-          const body = { content: $('#docMd', m.el).value, title: $('#docName', m.el).value };
-          const r = await busy($('#dSave', m.el), () => api('PUT', `/api/generated/${id}`, body));
-          if (r) { g.content = body.content; g.title = r.generated.title; $('.modal-head h2', m.el).textContent = g.title; editing = false; toast(t('saved'), 'ok'); show(); reloadAll(); }
-        });
-        on('dDl', async () => { const ok = await busy($('#dDl', m.el), async () => { await PM.exporter.download(g); return true; }); if (ok) toast(t('download_ready'), 'ok'); });
-      };
-      show();
+      const R = window.__Reports;
+      const slide = !!(R && R.DEFAULTS[g.doc_type] && R.DEFAULTS[g.doc_type].oneSlide && !g.custom);
+      const edit = (m) => { if (m) m.close(); PM.docEditor.open(g, { onSaved: () => reloadAll(), onTemplate: () => reloadAll() }); };
+      if (startEditing && !slide) return edit(null);
+      const m = modal({ title: g.title, size: 'xl', body: `<div class="md">${PM.mdToHtml(g.content)}</div>`, footer: '' });
+      m.setFooter(`<span class="small muted grow">${slide ? t('ed_no_edit') : t('doc_pages_note')}</span>${slide ? '' : `<button class="btn" id="dEdit">${icon('edit')}${t('edit')}</button>`}<button class="btn primary" id="dDl">${icon('dl')}${t('download_fmt', { f: f.label })}</button>`);
+      const on = (k, fn) => { const e = $('#' + k, m.el); if (e) e.onclick = fn; };
+      on('dEdit', () => edit(m));
+      on('dDl', async () => { const ok = await busy($('#dDl', m.el), async () => { await PM.exporter.download(g); return true; }); if (ok) toast(t('download_ready'), 'ok'); });
     }
     drawDocs(); drawTpls();
   };

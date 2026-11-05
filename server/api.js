@@ -1546,11 +1546,11 @@ Rules:
 
   // Read from the live report engine, so a new document type shows up without regenerating the demo seed.
   on('GET', '/api/doc-types', async () => ({ types: R.DOC_TYPES }));
-  on('GET', '/api/templates', async () => ({ templates: DB.templates.map((t) => ({ id: t.id, doc_type: t.doc_type, name: t.name, created_at: t.created_at })) }));
+  on('GET', '/api/templates', async () => ({ templates: DB.templates.map((t) => ({ id: t.id, doc_type: t.doc_type, name: t.name, created_at: t.created_at, has_layout: !!t.layout })) }));
   on('GET', '/api/templates/skeleton/([a-z_]+)', async (m) => { if (!RAW.skeletons[m[1]]) throw err(404, 'Unknown document type'); return { body: RAW.skeletons[m[1]] }; });
   on('POST', '/api/templates', async (m, q, fd) => {
     const name = fd.get('name'), doc_type = fd.get('doc_type');
-    if (!name || !RAW.skeletons[doc_type]) throw err(400, 'Choose a document type and give the template a name');
+    if (!name || !(doc_type === '*' || RAW.skeletons[doc_type])) throw err(400, 'Choose a document type and give the template a name');
     let body = fd.get('body') || '';
     const f = fd.get('file');
     if (f && f.name) {
@@ -1559,9 +1559,12 @@ Rules:
       else throw err(400, 'Upload a Markdown, text or Word (.docx) template');
     }
     if (!R.parseTemplate(body).length) throw err(400, 'No section headings found. Use lines starting with "# " in text.');
-    const t = { id: nid(), owner_id: DB.user.id, doc_type, name: String(name).trim(), body, created_at: nowTs() };
+    let layout = null;
+    const rawLay = fd.get('layout');
+    if (rawLay) { try { layout = cleanLayout(JSON.parse(rawLay)); } catch (e) { throw err(400, 'Page layout is not valid'); } }
+    const t = { id: nid(), owner_id: DB.user.id, doc_type, name: String(name).trim().slice(0, 120), body: String(body).slice(0, 400000), created_at: nowTs(), ...(layout ? { layout } : {}) };
     DB.templates.push(t); await saveUser();
-    return { template: { id: t.id, doc_type, name: t.name, created_at: t.created_at }, sections: R.parseTemplate(body).map((s) => s.heading) };
+    return { template: { id: t.id, doc_type, name: t.name, created_at: t.created_at, has_layout: !!layout }, sections: R.parseTemplate(body).map((s) => s.heading) };
   });
   on('DELETE', '/api/templates/(\\d+)', async (m) => { DB.templates = DB.templates.filter((t) => t.id !== Number(m[1])); await saveUser(); return { ok: true }; });
 
@@ -1580,6 +1583,16 @@ Rules:
     if (!g.meta) g.meta = docMeta(P, String(g.created_at || TODAY()).slice(0, 10));
     if (!g.visuals && R.DEFAULTS[g.doc_type]) g.visuals = snapshot(P, g.doc_type, TODAY(), R.DEFAULTS[g.doc_type].period || 7).visuals;
     return g;
+  }
+  // Page layout of a document: where the logo sits and what the header and footer say.
+  const POS = ['left', 'center', 'right', 'hidden'];
+  function cleanLayout(l) {
+    if (l == null) return null;
+    if (typeof l !== 'object' || Array.isArray(l)) throw err(400, 'Page layout is not valid');
+    const txt = (v) => String(v == null ? '' : v).replace(/[\u0000-\u0009\u000b-\u001f]/g, ' ').split(/\r?\n/).slice(0, 3).map((x) => x.trim().slice(0, 160)).join('\n').trim();
+    const pos = (v, d) => (POS.includes(v) ? v : d);
+    const part = (o) => ({ left: txt(o && o.left), center: txt(o && o.center), right: txt(o && o.right) });
+    return { v: 1, logo: { cover: pos(l.logo && l.logo.cover, 'left'), header: pos(l.logo && l.logo.header, 'left') }, header: part(l.header), footer: part(l.footer) };
   }
   const folderOk = (P, id) => id == null || id === '' || P.folders.some((f) => f.id === Number(id));
   const gSummary = (g) => ({ id: g.id, doc_type: g.doc_type, title: g.title, template: g.template, created_at: g.created_at, format: g.format || 'docx', folder_id: g.folder_id == null ? null : g.folder_id, custom: !!g.custom });
@@ -1644,7 +1657,7 @@ Rules:
     const def = R.DEFAULTS[b.type]; if (!def) throw err(400, 'Choose a document type');
     // The one slide status report is a single PowerPoint slide, so it has no other format.
     const format = def.oneSlide && !cu ? 'pptx' : FORMATS.includes(b.format) ? b.format : 'docx';
-    const tpl = !cu && b.template_id ? DB.templates.find((t) => t.id === Number(b.template_id)) : null;
+    const tpl = !cu && b.template_id ? DB.templates.find((t) => t.id === Number(b.template_id) && (t.doc_type === '*' || t.doc_type === b.type)) : null;
     if (!cu && b.template_id && !tpl) throw err(404, 'Template not found');
     if (!folderOk(P, b.folder_id)) throw err(404, 'Folder not found');
     const today = b.as_of && /^\d{4}-\d{2}-\d{2}$/.test(b.as_of) ? b.as_of : TODAY();
@@ -1653,7 +1666,7 @@ Rules:
     const out = await R.generate(cu
       ? { type: b.type, templateName: 'Custom document', ctx: snap.ctx, useAI: true, sections: cu.sections, title: cu.name, brief: `Audience: ${cu.audience}. ${cu.description}` }
       : { type: b.type, templateBody: tpl ? tpl.body : null, templateName: tpl ? tpl.name : null, ctx: snap.ctx, useAI: false });
-    const g = { id: nid(), project_id: P.id, doc_type: b.type, title: cleanName(b.title, 120) || out.title, template: out.template, content: out.markdown, created_at: nowTs(), format, folder_id: b.folder_id ? Number(b.folder_id) : null, meta: { ...docMeta(P, today), ...(cu ? { audience: cu.audience } : {}) }, visuals: snap.visuals };
+    const g = { id: nid(), project_id: P.id, doc_type: b.type, title: cleanName(b.title, 120) || out.title, template: out.template, content: out.markdown, created_at: nowTs(), format, folder_id: b.folder_id ? Number(b.folder_id) : null, meta: { ...docMeta(P, today), ...(cu ? { audience: cu.audience } : {}) }, ...(tpl && tpl.layout ? { layout: tpl.layout } : {}), visuals: snap.visuals };
     if (cu) g.custom = { audience: cu.audience, description: cu.description };
     P.generated.unshift(g);
     audit(P, ACTOR(), 'document_generated', { summary: `Generated ${g.title}${tpl ? ` from template "${tpl.name}"` : cu ? ' as a custom document' : ''}` });
@@ -1665,7 +1678,8 @@ Rules:
   on('PUT', '/api/generated/(\\d+)', async (m, q, b) => {
     const [P, g] = findGen(m[1]);
     if (b.title != null) { const v = cleanName(b.title, 120); if (!v) throw err(400, 'Give the document a name'); g.title = v; }
-    if (b.content != null) g.content = b.content;
+    if (b.content != null) g.content = String(b.content).slice(0, 400000);
+    if ('layout' in b) { const lay = cleanLayout(b.layout); if (lay) g.layout = lay; else delete g.layout; }
     if ('folder_id' in b) { if (!folderOk(P, b.folder_id)) throw err(404, 'Folder not found'); g.folder_id = b.folder_id == null || b.folder_id === '' ? null : Number(b.folder_id); }
     return { generated: gSummary(g) };
   });
@@ -1775,7 +1789,7 @@ Rules:
       if (data.projects.length > 200) throw err(400, 'The workspace backup has too many projects');
       const results = [];
       for (const one of data.projects) results.push(await importOne(one));
-      if (Array.isArray(data.templates)) for (const t of data.templates.slice(0, 100)) if (t && t.name && RAW.skeletons[t.doc_type] && typeof t.body === 'string') DB.templates.push({ id: nid(), owner_id: DB.user.id, doc_type: t.doc_type, name: String(t.name).slice(0, 120), body: t.body, created_at: nowTs() });
+      if (Array.isArray(data.templates)) for (const t of data.templates.slice(0, 100)) if (t && t.name && (t.doc_type === '*' || RAW.skeletons[t.doc_type]) && typeof t.body === 'string') DB.templates.push({ id: nid(), owner_id: DB.user.id, doc_type: t.doc_type, name: String(t.name).slice(0, 120), body: t.body, created_at: nowTs(), ...(t.layout ? (() => { try { return { layout: cleanLayout(t.layout) }; } catch (e) { return {}; } })() : {}) });
       await saveUser();
       return { imported: results };
     }

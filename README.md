@@ -49,6 +49,20 @@ The Widgets screen lets each project manager add or remove widgets on the portfo
 
 The widget builder creates a custom widget from a form. A widget is plain data (a spec with a dataset, filters and one of number, bars, columns, donut or table), never code, so a published widget can only read the projects of the person who runs it. The same file `public/widgetspec.js` validates a spec on the server and draws it in the browser. Publishing copies the draft to what everyone runs, so people who already added a widget change only when its author publishes again. Other project managers rate a widget from 1 to 5 stars with an optional comment after adding it. The marketplace keeps four tables (`widgets`, `widget_ratings`, `widget_installs`, `dash_layouts`, migration 5). On Replit the Publish step applies them to the production database.
 
+## Editing a document and saving templates
+
+Every generated document can be opened in a visual editor (Reports, then Edit, or Edit right after a document is created). The project manager can:
+
+- change any text, with bold and italic, and use Enter to split a paragraph
+- add sections, paragraphs, bulleted and numbered lists, and tables (add or remove rows and columns, Tab moves between cells)
+- change the order of the headings by dragging a section or using the arrows (each section moves with its content and its charts)
+- set the logo position on the cover and in the header, and the header and footer text, using tokens such as `{{project}}`, `{{client}}`, `{{title}}`, `{{date}}`, `{{pm}}`, `{{page}}` and `{{pages}}`
+- undo and redo, download the current state, and save
+
+The document is still stored as Markdown. The page layout is stored next to it as `layout` (`PUT /api/generated/:id` accepts `content`, `title` and `layout`). Word uses the full layout. PowerPoint and Excel use the header, footer and logo position as far as the format allows. The one slide status report is built from live project data, so it has no editor.
+
+**Save as template** keeps the order, headings, text and page layout. For each section the project manager chooses between Refresh from project data (new figures every time) and Keep my text (reused exactly, stored with a `<!-- fixed -->` marker). A template can be limited to one document type or offered for all types (`doc_type` of `*`). Choosing a template in Create a document applies its sections and its layout.
+
 ## One slide status report
 
 Reports, Create a document, One Slide Status Report makes a single PowerPoint slide with the whole weekly status of a project. It shows the key facts, the stages, an activity table, the top risks, the project brief, completion with last week and this week, the status, reasons for delay, achievements, next steps and the decisions needed. It is always one slide in the platform colors with the platform logo. The full lists are in the speaker notes.

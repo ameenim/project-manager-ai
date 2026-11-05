@@ -113,8 +113,10 @@
     }
 
     // ----- cover page -----
+    const lay = plan.layout || X.DEFAULT_LAYOUT;
+    const ALIGN = { left: AlignmentType.LEFT, center: AlignmentType.CENTER, right: AlignmentType.RIGHT };
     const cover = [
-      new Paragraph({ spacing: { after: 1700, line: 240, lineRule: LineRuleType.AUTO }, children: [img(logo, 240, 'Project Manager AI logo')] }),
+      new Paragraph({ alignment: ALIGN[lay.logo.cover] || AlignmentType.LEFT, spacing: { after: 1700, line: 240, lineRule: LineRuleType.AUTO }, children: lay.logo.cover === 'hidden' ? [] : [img(logo, 240, 'Project Manager AI logo')] }),
       new Paragraph({ spacing: { after: 120 }, children: [tr(plan.typeTitle, { size: 24, bold: true, color: T.primary })] }),
       new Paragraph({ spacing: { after: 240, line: 240, lineRule: LineRuleType.AUTO }, children: [tr(plan.title, { size: 60, bold: true, color: T.text })] }),
       new Paragraph({ spacing: { after: 560 }, indent: { right: 6800 }, border: { bottom: { style: BorderStyle.SINGLE, size: 24, color: T.primary, space: 1 } }, children: [] }),
@@ -142,27 +144,43 @@
       for (const b of s.blocks) body.push(...block(b));
     }
 
-    // ----- header and footer -----
+    // ----- header and footer, from the page layout -----
+    // Text keeps its line breaks. {{page}} and {{pages}} become live page fields.
+    const fieldRuns = (text, o) => {
+      const out = [];
+      String(text || '').split(/(\{\{\s*pages?\s*\}\})/).forEach((part) => {
+        if (/^\{\{\s*page\s*\}\}$/.test(part)) out.push(new TextRun({ font: FONT, ...o, children: [PageNumber.CURRENT] }));
+        else if (/^\{\{\s*pages\s*\}\}$/.test(part)) out.push(new TextRun({ font: FONT, ...o, children: [PageNumber.TOTAL_PAGES] }));
+        else if (part) out.push(tr(part, o));
+      });
+      return out;
+    };
+    const lines = (text, al, o) => X.fillTokens(text, plan).split('\n').filter((x, i, a) => x.trim() || a.length === 1).map((ln) => new Paragraph({ alignment: al, spacing: { after: 0, line: 240, lineRule: LineRuleType.AUTO }, children: fieldRuns(ln, o) }));
+    const hasHeader = lay.logo.header !== 'hidden' || ['left', 'center', 'right'].some((k) => lay.header[k].trim());
+    // The middle column is narrow when it holds nothing, so left and right text get more room.
+    const wide = (grp) => (lay[grp].center.trim() || (grp === 'header' && lay.logo.header === 'center') ? Math.floor(CW / 3) : Math.floor(CW * 0.45));
+    const colW = (grp) => { const l = wide(grp); const r = l; return [l, CW - l - r, r]; };
+    const headCell = (k, w) => {
+      const kids = [];
+      if (lay.logo.header === k) kids.push(new Paragraph({ alignment: ALIGN[k], spacing: { after: 0, line: 240, lineRule: LineRuleType.AUTO }, children: [img(logo, 120, 'Project Manager AI logo')] }));
+      kids.push(...lines(lay.header[k], ALIGN[k], { size: 18, color: T.text }));
+      return new TableCell({ width: { size: w, type: WidthType.DXA }, verticalAlign: VerticalAlign.CENTER, margins: { bottom: 100 }, children: kids.length ? kids : [new Paragraph({ children: [] })] });
+    };
     const header = new Header({
-      children: [new Table({
-        width: { size: CW, type: WidthType.DXA }, columnWidths: [4000, CW - 4000], layout: TableLayoutType.FIXED,
+      children: hasHeader ? [new Table({
+        width: { size: CW, type: WidthType.DXA }, columnWidths: colW('header'), layout: TableLayoutType.FIXED,
         borders: { top: none, left: none, right: none, insideVertical: none, insideHorizontal: none, bottom: line(T.border, 6) },
-        rows: [new TableRow({
-          children: [
-            new TableCell({ width: { size: 4000, type: WidthType.DXA }, verticalAlign: VerticalAlign.CENTER, margins: { bottom: 100 }, children: [new Paragraph({ spacing: { after: 0, line: 240, lineRule: LineRuleType.AUTO }, children: [img(logo, 120, 'Project Manager AI logo')] })] }),
-            new TableCell({ width: { size: CW - 4000, type: WidthType.DXA }, verticalAlign: VerticalAlign.CENTER, margins: { bottom: 100 }, children: [
-              new Paragraph({ alignment: AlignmentType.RIGHT, spacing: { after: 0 }, children: [tr(meta.project || '', { size: 18, bold: true, color: T.text })] }),
-              new Paragraph({ alignment: AlignmentType.RIGHT, spacing: { after: 0 }, children: [tr(meta.client || '', { size: 17, color: T.muted })] }),
-            ] }),
-          ],
-        })],
-      })],
+        rows: [new TableRow({ children: [headCell('left', colW('header')[0]), headCell('center', colW('header')[1]), headCell('right', colW('header')[2])] })],
+      })] : [new Paragraph({ children: [] })],
     });
+    const hasFooter = ['left', 'center', 'right'].some((k) => lay.footer[k].trim());
+    const footCell = (k, w) => new TableCell({ width: { size: w, type: WidthType.DXA }, margins: { top: 80 }, children: (() => { const l = lines(lay.footer[k], ALIGN[k], { size: 16, color: T.muted }); return l.length ? l : [new Paragraph({ children: [] })]; })() });
     const footer = new Footer({
-      children: [new Paragraph({
-        tabStops: [{ type: TabStopType.RIGHT, position: CW }], border: { top: { style: BorderStyle.SINGLE, size: 4, color: T.border, space: 6 } },
-        children: [tr(`${plan.title}  ·  ${plan.date}`, { size: 16, color: T.muted }), new TextRun({ font: FONT, size: 16, color: T.muted, children: ['\tPage ', PageNumber.CURRENT, ' of ', PageNumber.TOTAL_PAGES] })],
-      })],
+      children: hasFooter ? [new Table({
+        width: { size: CW, type: WidthType.DXA }, columnWidths: colW('footer'), layout: TableLayoutType.FIXED,
+        borders: { top: line(T.border, 4), left: none, right: none, bottom: none, insideVertical: none, insideHorizontal: none },
+        rows: [new TableRow({ children: [footCell('left', colW('footer')[0]), footCell('center', colW('footer')[1]), footCell('right', colW('footer')[2])] })],
+      })] : [new Paragraph({ children: [] })],
     });
     const blank = () => new Paragraph({ children: [] });
 
