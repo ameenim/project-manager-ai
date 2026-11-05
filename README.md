@@ -196,4 +196,4 @@ In Replit Secrets: `GITHUB_DISPATCH_TOKEN` (a fine grained token with contents w
 
 In GitHub repository secrets: `ANTHROPIC_API_KEY` and the same `TICKET_WEBHOOK_SECRET`. Allow GitHub Actions to create pull requests in the repository settings.
 
-Migration 7 adds the `tickets` and `ticket_events` tables. Replit Publish applies it. Limits (attempts per ticket, fixes per day, automatic error tickets, AI triage) are in Configuration.
+Migration 8 adds the `tickets` and `ticket_events` tables. Replit Publish applies it. Limits (attempts per ticket, fixes per day, automatic error tickets, AI triage) are in Configuration.
