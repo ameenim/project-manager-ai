@@ -1683,7 +1683,14 @@ Rules:
     const txt = (v) => String(v == null ? '' : v).replace(/[\u0000-\u0009\u000b-\u001f]/g, ' ').split(/\r?\n/).slice(0, 3).map((x) => x.trim().slice(0, 160)).join('\n').trim();
     const pos = (v, d) => (POS.includes(v) ? v : d);
     const part = (o) => ({ left: txt(o && o.left), center: txt(o && o.center), right: txt(o && o.right) });
-    return { v: 1, logo: { cover: pos(l.logo && l.logo.cover, 'left'), header: pos(l.logo && l.logo.header, 'left') }, header: part(l.header), footer: part(l.footer) };
+    let logoImg = null;
+    if (l.logoImg) {
+      const li = l.logoImg;
+      if (typeof li.dataUrl !== 'string' || !/^data:image\/(png|jpeg|gif|svg\+xml);base64,[A-Za-z0-9+/=]+$/.test(li.dataUrl)) throw err(400, 'The logo must be a PNG, JPEG, GIF or SVG image');
+      if (li.dataUrl.length > 1000000) throw err(413, 'The logo is too large. Use an image under 700 KB.');
+      logoImg = { dataUrl: li.dataUrl, w: Math.max(0, Math.min(10000, Number(li.w) || 0)), h: Math.max(0, Math.min(10000, Number(li.h) || 0)) };
+    }
+    return { v: 1, logo: { cover: pos(l.logo && l.logo.cover, 'left'), header: pos(l.logo && l.logo.header, 'left') }, header: part(l.header), footer: part(l.footer), ...(logoImg ? { logoImg } : {}) };
   }
   const folderOk = (P, id) => id == null || id === '' || P.folders.some((f) => f.id === Number(id));
   const gSummary = (g) => ({ id: g.id, doc_type: g.doc_type, title: g.title, template: g.template, created_at: g.created_at, format: g.format || 'docx', folder_id: g.folder_id == null ? null : g.folder_id, custom: !!g.custom, branded: !!g.brand });

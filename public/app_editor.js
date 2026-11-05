@@ -9,7 +9,11 @@
 
   // ---------- inline text: Markdown <-> HTML ----------
   const INL = /(\*\*[^*]+\*\*|(?<!\w)__[^_]+__(?!\w)|(?<!\w)_[^_]+_(?!\w))/g;
-  function inlineToHtml(md) {
+  // {#RRGGBB:text} is colored text. It is the same markup the exported files read.
+  const CRE = /(\{#[0-9a-fA-F]{6}:[^{}]*\})/g, CSEG = /^\{#([0-9a-fA-F]{6}):([^{}]*)\}$/;
+  const stripColor = (s) => String(s).replace(/\{#[0-9a-fA-F]{6}:([^{}]*)\}/g, '$1');
+  let defaultInk = '1B2437';
+  function inl(md) {
     return String(md == null ? '' : md).split(INL).filter((s) => s !== '').map((p) => {
       let m;
       if ((m = p.match(/^\*\*([^*]+)\*\*$/)) || (m = p.match(/^__([^_]+)__$/))) return `<b>${esc(m[1])}</b>`;
@@ -17,6 +21,22 @@
       return esc(p);
     }).join('');
   }
+  function inlineToHtml(md) {
+    return String(md == null ? '' : md).split(CRE).filter((s) => s !== '').map((seg) => {
+      const m = seg.match(CSEG);
+      return m ? `<span style="color:#${m[1].toUpperCase()}">${inl(m[2])}</span>` : inl(seg);
+    }).join('');
+  }
+  const cssHex = (v) => {
+    v = String(v || '').trim(); let m;
+    if ((m = v.match(/^#([0-9a-f]{6})$/i))) return m[1].toUpperCase();
+    if ((m = v.match(/^#([0-9a-f])([0-9a-f])([0-9a-f])$/i))) return (m[1] + m[1] + m[2] + m[2] + m[3] + m[3]).toUpperCase();
+    if ((m = v.match(/^rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/i))) return [m[1], m[2], m[3]].map((x) => Math.min(255, +x).toString(16).padStart(2, '0')).join('').toUpperCase();
+    return null;
+  };
+  // apply fn to every piece of text, keeping colored pieces intact
+  const mapText = (r, fn) => r.split(CRE).map((seg) => { const m = seg.match(CSEG); return m ? `{#${m[1]}:${fn(m[2])}}` : fn(seg); }).join('');
+  const wrapCore = (mark) => (x) => { if (!x.trim()) return x; return `${x.match(/^\s*/)[0]}${mark}${x.trim()}${mark}${x.match(/\s*$/)[0]}`; };
   function htmlToInline(el) {
     const walk = (n) => {
       let out = '';
@@ -28,11 +48,12 @@
         const inner = walk(c);
         const bold = tag === 'B' || tag === 'STRONG' || /^(bold|[6-9]00)$/.test(st.fontWeight || '');
         const ital = tag === 'I' || tag === 'EM' || st.fontStyle === 'italic';
+        const col = cssHex(tag === 'FONT' ? c.getAttribute('color') : st.color);
         let r = inner;
         if (r.trim()) {
-          const lead = r.match(/^\s*/)[0], trail = r.match(/\s*$/)[0], core = r.trim();
-          if (ital) r = `${lead}_${core}_${trail}`;
-          if (bold) r = `${lead}**${ital ? `_${core}_` : core}**${trail}`;
+          if (ital) r = mapText(r, wrapCore('_'));
+          if (bold) r = mapText(r, wrapCore('**'));
+          if (col && col !== defaultInk) r = r.split(CRE).map((seg) => (CSEG.test(seg) || !seg.trim() ? seg : `${seg.match(/^\s*/)[0]}{#${col}:${seg.trim().replace(/[{}]/g, '')}}${seg.match(/\s*$/)[0]}`)).join('');
         }
         out += (tag === 'DIV' || tag === 'P') && out && !/\s$/.test(out) ? ' ' + r : r;
       });
@@ -51,7 +72,11 @@
       const l = lines[i];
       if (!l.trim()) continue;
       let m;
-      if ((m = l.match(/^(#{1,3})\s+(.*)$/))) { out.push(nb('h' + m[1].length, { html: inlineToHtml(m[2].replace(/[*_]/g, '').trim()) })); continue; }
+      if ((m = l.match(/^(#{1,3})\s+(.*)$/))) { out.push(nb('h' + m[1].length, { html: inlineToHtml(stripColor(m[2]).replace(/[*_]/g, '').trim()) })); continue; }
+      if ((m = l.match(/^:::chart\s+(\{.*\})\s*$/))) {
+        let spec = null; try { spec = JSON.parse(m[1]); } catch (e) { /* kept as text */ }
+        if (spec && Array.isArray(spec.labels) && Array.isArray(spec.series)) { out.push(nb('chart', { spec })); continue; }
+      }
       if (/^\s*\|/.test(l)) {
         const rows = [];
         while (i < lines.length && /^\s*\|/.test(lines[i])) { rows.push(lines[i]); i++; }
@@ -73,14 +98,15 @@
         i--; out.push(nb('ol', { items })); continue;
       }
       const para = [l.trim()];
-      while (i + 1 < lines.length && lines[i + 1].trim() && !/^\s*(#{1,3}\s|\||[-*]\s+|\d+[.)]\s+)/.test(lines[i + 1])) { i++; para.push(lines[i].trim()); }
+      while (i + 1 < lines.length && lines[i + 1].trim() && !/^\s*(#{1,3}\s|\||[-*]\s+|\d+[.)]\s+|:::chart\s)/.test(lines[i + 1])) { i++; para.push(lines[i].trim()); }
       out.push(nb('p', { html: inlineToHtml(para.join(' ')) }));
     }
     return out;
   }
   const htmlMd = (h) => { const d = document.createElement('div'); d.innerHTML = h; return htmlToInline(d); };
   function blockMd(b) {
-    if (b.type === 'h1' || b.type === 'h2' || b.type === 'h3') return `${'#'.repeat(+b.type[1])} ${htmlMd(b.html).replace(/[*_]/g, '')}`;
+    if (b.type === 'h1' || b.type === 'h2' || b.type === 'h3') return `${'#'.repeat(+b.type[1])} ${stripColor(htmlMd(b.html)).replace(/[*_]/g, '')}`;
+    if (b.type === 'chart') return `:::chart ${JSON.stringify(b.spec)}`;
     if (b.type === 'p') return htmlMd(b.html);
     if (b.type === 'ul') return b.items.map((x) => `- ${htmlMd(x)}`).join('\n');
     if (b.type === 'ol') return b.items.map((x, i) => `${i + 1}. ${htmlMd(x)}`).join('\n');
@@ -94,8 +120,29 @@
   }
   const toMd = (blocks) => blocks.map(blockMd).filter((x) => x.trim()).join('\n\n') + '\n';
 
+  // ---------- bullets <-> table ----------
+  const textOf = (h) => { const d = document.createElement('div'); d.innerHTML = h; return d.textContent.replace(/\s+/g, ' ').trim(); };
+  const splitItem = (x) => {
+    let m = x.match(/^(.{1,80}?):\s+(.+)$/);
+    if (!m) m = x.match(/^(.{1,80}?)\s[-–—]\s(.+)$/);
+    return m ? [m[1].trim(), m[2].trim()] : null;
+  };
+  // "Label: detail" points become two columns. Other points become one column.
+  function listToTable(items) {
+    const texts = items.map(textOf).filter(Boolean);
+    const parts = texts.map(splitItem);
+    const two = texts.length > 0 && parts.filter(Boolean).length >= Math.ceil(texts.length * 0.6);
+    const head = two ? ['Item', 'Details'] : ['Item'];
+    const body = texts.map((x, i) => (two ? (parts[i] ? [parts[i][0], parts[i][1]] : [x, '']) : [x]));
+    return [head, ...body].map((r) => r.map((c) => esc(c)));
+  }
+  function tableToList(rows) {
+    return rows.slice(1).map((r) => r.map(textOf)).filter((r) => r.some(Boolean)).map((r) => esc(r.length > 1 ? `${r[0]}${r.slice(1).some(Boolean) ? ': ' + r.slice(1).filter(Boolean).join(', ') : ''}` : r[0]));
+  }
+
   // ---------- layout ----------
   const POS = ['left', 'center', 'right', 'hidden'];
+  const CHART_TYPES = ['column', 'bar', 'line', 'pie'];
   const TOKENS = [['project', 'ed_tok_project'], ['client', 'ed_tok_client'], ['title', 'ed_tok_title'], ['date', 'ed_tok_date'], ['code', 'ed_tok_code'], ['pm', 'ed_tok_pm'], ['page', 'ed_tok_page'], ['pages', 'ed_tok_pages']];
   const clone = (o) => JSON.parse(JSON.stringify(o));
   const sameLayout = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -116,8 +163,9 @@
     const meta = g.meta || {};
     // A document made from a client template is drawn with the client's colors, fonts and logo.
     const brand = g.brand || null;
-    const logoSrc = brand ? (brand.logo ? brand.logo.dataUrl : null) : 'brand/full-light.png';
-    const logoImg = () => (logoSrc ? `<img src="${logoSrc}" alt="" class="lg">` : '');
+    const logoSrc = () => (layout.logoImg ? layout.logoImg.dataUrl : brand ? (brand.logo ? brand.logo.dataUrl : null) : 'brand/full-light.png');
+    const logoImg = () => (logoSrc() ? `<img src="${logoSrc()}" alt="" class="lg">` : '');
+    defaultInk = brand ? X.brandTokens(brand).text : '1B2437';
 
     const ov = document.createElement('div');
     ov.className = 'ded-ov';
@@ -137,6 +185,7 @@
         <span class="sep"></span>
         <button class="btn sm icon fmt" id="tBold" aria-label="${esc(t('ed_bold'))}" data-tip="${esc(t('ed_bold'))}"><b>B</b></button>
         <button class="btn sm icon fmt" id="tItal" aria-label="${esc(t('ed_italic'))}" data-tip="${esc(t('ed_italic'))}"><i>I</i></button>
+        <span class="ded-color"><button class="btn sm icon fmt" id="tColor" aria-label="${esc(t('ed_color'))}" aria-haspopup="true" aria-expanded="false" data-tip="${esc(t('ed_color'))}"><span class="A">A</span><i id="tColorBar"></i></button><div class="ded-pop" id="colorPop" role="menu" hidden></div></span>
         <span class="sep"></span>
         <span class="lbl">${t('ed_insert')}</span>
         <button class="btn sm" data-ins="h1">${t('ed_h')}</button><button class="btn sm" data-ins="p">${t('ed_p')}</button><button class="btn sm" data-ins="ul">${t('ed_ul')}</button><button class="btn sm" data-ins="ol">${t('ed_ol')}</button><button class="btn sm" data-ins="table">${icon('plus')}${t('ed_table')}</button>
@@ -186,18 +235,20 @@
     function changed() { clearTimeout(histTimer); histTimer = setTimeout(() => { collect(); snap(); outline(); drawPreviewStrips(); }, 500); }
     function structural(fn) { collect(); fn(); draw(); snap(); }
 
+    const chartUrl = (spec) => { try { return X.chartPreview(spec, brand); } catch (e) { return ''; } };
     function blockHtml(b) {
-      const lbl = { h1: 'ed_h1', h2: 'ed_h2', h3: 'ed_h3', p: 'ed_p', ul: 'ed_ul', ol: 'ed_ol', table: 'ed_table' }[b.type];
-      const styleSel = b.type === 'table' ? '' : `<select class="ded-style" aria-label="${esc(t('ed_style'))}">${[['p', 'ed_p'], ['h1', 'ed_h1'], ['h2', 'ed_h2'], ['h3', 'ed_h3'], ['ul', 'ed_ul'], ['ol', 'ed_ol']].map(([v, k]) => `<option value="${v}" ${v === b.type ? 'selected' : ''}>${esc(t(k))}</option>`).join('')}</select>`;
+      const lbl = { h1: 'ed_h1', h2: 'ed_h2', h3: 'ed_h3', p: 'ed_p', ul: 'ed_ul', ol: 'ed_ol', table: 'ed_table', chart: 'ed_chart' }[b.type];
+      const styleSel = b.type === 'table' || b.type === 'chart' ? '' :  `<select class="ded-style" aria-label="${esc(t('ed_style'))}">${[['p', 'ed_p'], ['h1', 'ed_h1'], ['h2', 'ed_h2'], ['h3', 'ed_h3'], ['ul', 'ed_ul'], ['ol', 'ed_ol'], ...(b.type === 'ul' || b.type === 'ol' ? [['table', 'ed_table']] : [])].map(([v, k]) => `<option value="${v}" ${v === b.type ? 'selected' : ''}>${esc(t(k))}</option>`).join('')}</select>`;
       const sec = b.type === 'h1';
       const tools = `<div class="ded-tools"><span class="grip" data-grip aria-hidden="true" data-tip="${esc(t('ed_drag'))}">${icon('grip')}</span>${styleSel || `<span class="tag">${esc(t(lbl))}</span>`}
         <button class="btn sm ghost icon" data-up aria-label="${esc(t(sec ? 'ed_move_sec_up' : 'ed_move_up'))}" data-tip="${esc(t(sec ? 'ed_move_sec_up' : 'ed_move_up'))}"><span style="display:inline-flex;transform:rotate(180deg)">${icon('down')}</span></button>
         <button class="btn sm ghost icon" data-down aria-label="${esc(t(sec ? 'ed_move_sec_down' : 'ed_move_down'))}" data-tip="${esc(t(sec ? 'ed_move_sec_down' : 'ed_move_down'))}">${icon('down')}</button>
         <button class="btn sm ghost icon" data-del aria-label="${esc(t('ed_delete'))}" data-tip="${esc(t('ed_delete'))}">${icon('trash')}</button></div>`;
       let body;
-      if (b.type === 'ul' || b.type === 'ol') body = `<${b.type} class="ded-list" contenteditable="true" spellcheck="true">${b.items.map((x) => `<li>${x}</li>`).join('') || '<li><br></li>'}</${b.type}>`;
+      if (b.type === 'ul' || b.type === 'ol') body = `<div class="ded-ttools"><button class="btn sm" data-totable>${icon('grid')}${t('ed_to_table')}</button></div><${b.type} class="ded-list" contenteditable="true" spellcheck="true">${b.items.map((x) => `<li>${x}</li>`).join('') || '<li><br></li>'}</${b.type}>`;
+      else if (b.type === 'chart') body = `<figure class="ded-chart"><img alt="${esc(t('ed_chart'))}" src="${chartUrl(b.spec)}"><figcaption>${esc(b.spec.title || '')}</figcaption><button class="btn sm" data-chartedit>${icon('edit')}${t('ed_chart_edit')}</button></figure>`;
       else if (b.type === 'table') {
-        body = `<div class="ded-ttools" role="group" aria-label="${esc(t('ed_table'))}"><button class="btn sm" data-tt="row">${icon('plus')}${t('ed_add_row')}</button><button class="btn sm" data-tt="col">${icon('plus')}${t('ed_add_col')}</button><button class="btn sm" data-tt="delrow">${icon('minus')}${t('ed_del_row')}</button><button class="btn sm" data-tt="delcol">${icon('minus')}${t('ed_del_col')}</button></div>
+        body = `<div class="ded-ttools" role="group" aria-label="${esc(t('ed_table'))}"><button class="btn sm" data-tt="row">${icon('plus')}${t('ed_add_row')}</button><button class="btn sm" data-tt="col">${icon('plus')}${t('ed_add_col')}</button><button class="btn sm" data-tt="delrow">${icon('minus')}${t('ed_del_row')}</button><button class="btn sm" data-tt="delcol">${icon('minus')}${t('ed_del_col')}</button><button class="btn sm" data-tt="tolist">${icon('list')}${t('ed_to_list')}</button><button class="btn sm primary" data-tt="chart">${icon('chart')}${t('ed_chart_make')}</button></div>
           <div class="ded-twrap"><table class="ded-table"><tbody>${b.rows.map((r, ri) => `<tr>${r.map((c) => `<${ri ? 'td' : 'th'} contenteditable="true">${c}</${ri ? 'td' : 'th'}>`).join('')}</tr>`).join('')}</tbody></table></div>`;
       } else body = `<div class="ded-txt ${b.type}" contenteditable="true" role="textbox" aria-label="${esc(t(lbl))}" spellcheck="true" data-ph="${esc(t('ed_ph'))}">${b.html}</div>`;
       return `<div class="ded-blk" data-id="${b.id}" data-type="${b.type}">${tools}${body}</div>`;
@@ -228,6 +279,7 @@
       });
     }
     function convert(b, to) {
+      if (to === 'table' && (b.type === 'ul' || b.type === 'ol')) return { ...b, type: 'table', rows: listToTable(b.items), items: undefined, html: undefined };
       const txt = b.type === 'ul' || b.type === 'ol' ? b.items.join(' ') : b.html || '';
       if (to === 'ul' || to === 'ol') { const items = b.type === 'ul' || b.type === 'ol' ? b.items : [txt]; return { ...b, type: to, items, html: undefined }; }
       return { ...b, type: to, html: txt, items: undefined };
@@ -303,7 +355,9 @@
             if (cells[k]) cells[k].focus();
           });
         });
-        $$('[data-tt]', el).forEach((btn) => { btn.onmousedown = (e) => e.preventDefault(); btn.onclick = () => tableOp(id, btn.dataset.tt, cellPos && cellPos.id === id ? cellPos : null); });
+        $$('[data-tt]', el).forEach((btn) => { btn.onmousedown = (e) => e.preventDefault(); btn.onclick = () => { if (btn.dataset.tt === 'chart') return chartFromTable(id); tableOp(id, btn.dataset.tt, cellPos && cellPos.id === id ? cellPos : null); }; });
+        const tt = $('[data-totable]', el); if (tt) { tt.onmousedown = (e) => e.preventDefault(); tt.onclick = () => structural(() => { const i = idxOf(id); blocks[i] = convert(blocks[i], 'table'); focusId = null; }); }
+        const ce = $('[data-chartedit]', el); if (ce) ce.onclick = () => chartDialog({ spec: byId(id).spec, onDone: (spec) => structural(() => { byId(id).spec = spec; focusId = null; }) });
       });
       q('#dAddEnd').onclick = () => insertAfter('p', blocks.length ? blocks[blocks.length - 1].id : null);
     }
@@ -315,6 +369,7 @@
         else if (op === 'col') b.rows.forEach((row, i) => row.splice(c + 1, 0, i ? '' : esc(t('ed_col_n', { n: cols + 1 }))));
         else if (op === 'delrow') { if (b.rows.length > 1) b.rows.splice(Math.max(r, 1) === r ? r : 1, 1); }
         else if (op === 'delcol') { if (cols > 1) b.rows.forEach((row) => row.splice(c, 1)); }
+        else if (op === 'tolist') { const i = idxOf(id); blocks[i] = { id: b.id, type: 'ul', items: tableToList(b.rows) }; if (!blocks[i].items.length) blocks[i].items = ['']; }
         focusId = null;
       });
       if (focusNew) { const cell = $$('tr', $(`.ded-blk[data-id="${id}"]`, page)).pop(); if (cell && cell.children[0]) cell.children[0].focus(); }
@@ -362,7 +417,12 @@
     const posRow = (key, label) => `<div class="f"><span class="lb" id="lb_${key}">${esc(label)}</span><div class="seg" role="radiogroup" aria-labelledby="lb_${key}">${POS.map((p) => `<button type="button" role="radio" aria-checked="${layout.logo[key] === p}" class="${layout.logo[key] === p ? 'on' : ''}" data-pos="${key}:${p}">${esc(t('ed_pos_' + p))}</button>`).join('')}</div></div>`;
     function drawLayout() {
       const field = (grp, k, rows) => `<label class="f"><span class="lb">${esc(t('ed_pos_' + k))}</span>${rows > 1 ? `<textarea rows="${rows}" data-lay="${grp}.${k}" maxlength="320">${esc(layout[grp][k])}</textarea>` : `<input type="text" data-lay="${grp}.${k}" maxlength="160" value="${esc(layout[grp][k])}">`}</label>`;
-      q('#dLay').innerHTML = `${posRow('cover', t('ed_logo_cover'))}${posRow('header', t('ed_logo_header'))}
+      const hasLogo = !!logoSrc(), allHidden = layout.logo.cover === 'hidden' && layout.logo.header === 'hidden';
+      q('#dLay').innerHTML = `<h4>${t('ed_logo')}</h4>
+        <div class="ded-logo"><div class="pv">${hasLogo ? `<img src="${logoSrc()}" alt="">` : `<span class="small muted">${t('ed_logo_none')}</span>`}</div>
+          <div class="acts"><button class="btn sm" id="lgUp">${icon('plus')}${t('ed_logo_upload')}</button>${layout.logoImg ? `<button class="btn sm" id="lgOrig">${icon('undo')}${t('ed_logo_original')}</button>` : ''}<button class="btn sm" id="lgRm" ${allHidden && !layout.logoImg ? 'disabled' : ''}>${icon('trash')}${t('ed_logo_remove')}</button></div>
+          <input type="file" id="lgFile" accept="image/png,image/jpeg,image/gif,image/svg+xml" hidden></div>
+        ${posRow('cover', t('ed_logo_cover'))}${posRow('header', t('ed_logo_header'))}
         <h4>${t('ed_header')}</h4>${['left', 'center', 'right'].map((k) => field('header', k, 2)).join('')}
         <h4>${t('ed_footer')}</h4>${['left', 'center', 'right'].map((k) => field('footer', k, 1)).join('')}
         <div class="small muted" style="margin:8px 0 6px">${t('ed_tokens_hint')}</div>
@@ -374,6 +434,20 @@
         f.addEventListener('input', () => { const [grp, k] = f.dataset.lay.split('.'); layout[grp][k] = f.value; drawPreviewStrips(); clearTimeout(histTimer); histTimer = setTimeout(() => { collect(); snap(); }, 500); });
       });
       $$('[data-tok]', ov).forEach((b) => { b.onmousedown = (e) => e.preventDefault(); b.onclick = () => { const f = lastField && lastField.isConnected ? lastField : $('[data-lay="footer.left"]', ov); f.focus(); const s = f.selectionStart == null ? f.value.length : f.selectionStart, e2 = f.selectionEnd == null ? s : f.selectionEnd; f.setRangeText(`{{${b.dataset.tok}}}`, s, e2, 'end'); f.dispatchEvent(new Event('input')); }; });
+      const lf = q('#lgFile');
+      q('#lgUp').onclick = () => lf.click();
+      lf.onchange = async () => {
+        const file = lf.files[0]; lf.value = ''; if (!file) return;
+        try {
+          const img = await PM.clientTpl.readLogo(file);
+          if (img.dataUrl.length > 900000) { toast(t('ed_logo_big'), 'err'); return; }
+          collect(); layout.logoImg = img;
+          for (const k of ['cover', 'header']) if (layout.logo[k] === 'hidden') layout.logo[k] = 'left';
+          snap(); drawLayout(); draw();
+        } catch (e) { toast(e.message, 'err'); }
+      };
+      const lo = q('#lgOrig'); if (lo) lo.onclick = () => { collect(); delete layout.logoImg; snap(); drawLayout(); draw(); };
+      q('#lgRm').onclick = () => { collect(); delete layout.logoImg; layout.logo.cover = 'hidden'; layout.logo.header = 'hidden'; snap(); drawLayout(); draw(); };
       q('#lReset').onclick = () => { collect(); layout = clone(defLayout); snap(); drawLayout(); draw(); };
     }
     function drawPreviewStrips() {
@@ -385,6 +459,97 @@
       head.innerHTML = layout.logo.header === 'hidden' && !['left', 'center', 'right'].some((k) => layout.header[k].trim()) ? '' : ['left', 'center', 'right'].map((k) => cell('header', k)).join('');
       foot.innerHTML = ['left', 'center', 'right'].some((k) => layout.footer[k].trim()) ? ['left', 'center', 'right'].map((k) => cell('footer', k)).join('') : '';
       head.classList.toggle('empty', !head.innerHTML); foot.classList.toggle('empty', !foot.innerHTML);
+    }
+
+    // ----- text color -----
+    let savedRange = null, curColor = null;
+    const pop = q('#colorPop'), cbtn = q('#tColor');
+    const keepSel = () => { const sl = getSelection(); if (sl.rangeCount && page.contains(sl.anchorNode)) savedRange = sl.getRangeAt(0).cloneRange(); };
+    const closePop = () => { pop.hidden = true; cbtn.setAttribute('aria-expanded', 'false'); };
+    function swatches() {
+      const base = brand ? [X.brandTokens(brand).primary, brand.colors.secondary, brand.colors.accent, X.brandTokens(brand).text, X.brandTokens(brand).muted] : [];
+      return [...new Set([...base, '2457D6', '12784A', '9A5700', 'B82F2F', '6B4FD1', '5B6680', '000000'].map((x) => String(x).toUpperCase()))];
+    }
+    function applyColor(col) {
+      const sl = getSelection();
+      if (savedRange) { sl.removeAllRanges(); sl.addRange(savedRange); }
+      if (!sl.rangeCount || sl.isCollapsed || !page.contains(sl.anchorNode)) { toast(t('ed_color_select')); closePop(); return; }
+      const a = sl.anchorNode.nodeType === 1 ? sl.anchorNode : sl.anchorNode.parentElement;
+      if (a && a.closest('.ded-txt.h1, .ded-txt.h2, .ded-txt.h3')) { toast(t('ed_color_head')); closePop(); return; }
+      document.execCommand('foreColor', false, '#' + (col === 'auto' ? defaultInk : col));
+      if (col !== 'auto') { curColor = col; q('#tColorBar').style.background = '#' + col; }
+      changed(); keepSel(); closePop();
+    }
+    function drawPop() {
+      pop.innerHTML = `<button type="button" class="auto" data-col="auto">${esc(t('ed_color_auto'))}</button><div class="pal">${swatches().map((h) => `<button type="button" style="background:#${h}" data-col="${h}" aria-label="#${h}" data-tip="#${h}"></button>`).join('')}</div><label class="cust">${esc(t('ed_color_custom'))}<input type="color" id="colorCustom" value="#${(curColor || defaultInk).toLowerCase()}"></label>`;
+      $$('[data-col]', pop).forEach((b) => { b.onmousedown = (e) => e.preventDefault(); b.onclick = () => applyColor(b.dataset.col); });
+      q('#colorCustom').onchange = (e) => applyColor(e.target.value.slice(1).toUpperCase());
+    }
+    cbtn.onmousedown = (e) => e.preventDefault();
+    cbtn.onclick = () => { if (!pop.hidden) { closePop(); return; } keepSel(); drawPop(); pop.hidden = false; cbtn.setAttribute('aria-expanded', 'true'); };
+    ov.addEventListener('mousedown', (e) => { if (!pop.hidden && !e.target.closest('.ded-color')) closePop(); });
+
+    // ----- charts from table data -----
+    const CT = [['column', 'ed_ct_column'], ['bar', 'ed_ct_bar'], ['line', 'ed_ct_line'], ['pie', 'ed_ct_pie']];
+    const numOf = (x) => { const v = parseFloat(String(x == null ? '' : x).replace(/,/g, '').replace(/[^0-9.\-]/g, '')); return Number.isFinite(v) && /\d/.test(String(x)) ? v : NaN; };
+    function chartFromTable(id) {
+      collect();
+      const el = $(`.ded-blk[data-id="${id}"]`, page), tbl = $('table', el);
+      const grid = $$('tr', tbl).map((tr) => $$('th,td', tr).map((c) => c.textContent.replace(/\s+/g, ' ').trim()));
+      const sl = getSelection(); let rs = null, cs = null;
+      if (sl.rangeCount && !sl.isCollapsed) {
+        const trs = $$('tr', tbl), hit = $$('th,td', tbl).filter((c) => sl.containsNode(c, true));
+        if (hit.length > 1) { rs = new Set(hit.map((c) => trs.indexOf(c.parentElement))); cs = new Set(hit.map((c) => [...c.parentElement.children].indexOf(c))); }
+      }
+      let head = ''; for (let i = idxOf(id) - 1; i >= 0; i--) if (/^h[12]$/.test(blocks[i].type)) { head = textOf(blocks[i].html); break; }
+      chartDialog({ grid, rowsSel: rs, colsSel: cs, title: head, onDone: (spec) => structural(() => { blocks.splice(idxOf(id) + 1, 0, nb('chart', { spec })); focusId = null; }) });
+    }
+    function chartDialog(o) {
+      let grid, colOn, rowOn, ctype = 'column', title = o.title || '';
+      const edit = !!o.spec;
+      if (edit) {
+        const sp = o.spec; ctype = CHART_TYPES.includes(sp.ctype) ? sp.ctype : 'column'; title = sp.title || '';
+        grid = [['', ...sp.series.map((x) => x.name)], ...sp.labels.map((l, i) => [l, ...sp.series.map((x) => String(x.values[i] == null ? '' : x.values[i]))])];
+        colOn = grid[0].map((_, c) => c > 0); rowOn = grid.map((_, r) => r > 0);
+      } else {
+        grid = o.grid;
+        const nums = grid[0].map((_, c) => { const vs = grid.slice(1).map((r) => r[c]).filter((x) => x !== '' && x != null); return vs.length && vs.filter((x) => !Number.isNaN(numOf(x))).length / vs.length >= 0.5; });
+        colOn = grid[0].map((_, c) => (c === 0 ? false : o.colsSel && o.colsSel.size > 0 && [...o.colsSel].some((k) => k > 0) ? o.colsSel.has(c) : nums[c]));
+        rowOn = grid.map((_, r) => (r === 0 ? false : o.rowsSel && [...o.rowsSel].some((k) => k > 0) ? o.rowsSel.has(r) : true));
+      }
+      const m = modal({
+        title: t(edit ? 'ed_chart_edit' : 'ed_chart_make'), size: 'xl',
+        body: `<div class="ded-cd"><div class="cd-opts"><div class="f"><span class="lb">${t('ed_chart_type')}</span><div class="seg" id="cdType" role="radiogroup">${CT.map(([v, k]) => `<button type="button" role="radio" data-ct="${v}" aria-checked="${v === ctype}" class="${v === ctype ? 'on' : ''}">${esc(t(k))}</button>`).join('')}</div></div>
+          <label class="f">${t('ed_chart_title')}<input type="text" id="cdTitle" maxlength="120" value="${esc(title)}"></label></div>
+          <div class="lb">${t('ed_chart_data')}</div><div class="small muted">${t('ed_chart_hint')}</div>
+          <div class="cd-grid"><table id="cdGrid"><thead><tr><th><span class="small muted">${t('ed_chart_labels')}</span></th>${grid[0].map((h, c) => (c ? `<th><label class="cd-on"><input type="checkbox" data-cc="${c}" ${colOn[c] ? 'checked' : ''} aria-label="${esc(t('ed_chart_use'))}"></label><input type="text" data-h="${c}" value="${esc(h)}" aria-label="${esc(t('ed_chart_series'))}"></th>` : '')).join('')}</tr></thead>
+            <tbody>${grid.map((r, ri) => (ri ? `<tr><td><label class="cd-on"><input type="checkbox" data-rr="${ri}" ${rowOn[ri] ? 'checked' : ''} aria-label="${esc(t('ed_chart_use'))}"></label><input type="text" data-r="${ri}" data-c="0" value="${esc(r[0])}"></td>${r.slice(1).map((v, c) => `<td><input type="text" inputmode="decimal" data-r="${ri}" data-c="${c + 1}" value="${esc(v)}"></td>`).join('')}</tr>` : '')).join('')}</tbody></table></div>
+          <div class="small cd-msg" id="cdMsg" role="status"></div>
+          <div class="lb">${t('ed_chart_preview')}</div><div class="cd-pv"><img id="cdPv" alt=""></div></div>`,
+        footer: `<button class="btn" data-close>${t('cancel')}</button><button class="btn primary" id="cdOk">${t(edit ? 'ed_chart_update' : 'ed_chart_insert')}</button>`,
+      });
+      const build = () => {
+        const rows = grid.map((_, r) => r).filter((r) => r > 0 && rowOn[r]).slice(0, 24);
+        const cols = grid[0].map((_, c) => c).filter((c) => c > 0 && colOn[c]).slice(0, 6);
+        let bad = 0;
+        const series = cols.map((c) => ({ name: (grid[0][c] || '').trim() || t('ed_chart_series_n', { n: c }), values: rows.map((r) => { const v = numOf(grid[r][c]); if (Number.isNaN(v)) { bad++; return 0; } return v; }) }));
+        return { spec: { ctype, title: title.trim() || t('ed_chart'), labels: rows.map((r) => grid[r][0]), series }, rows, cols, bad, cut: grid.slice(1).filter((_, i) => rowOn[i + 1]).length > 24 || grid[0].filter((_, c) => c > 0 && colOn[c]).length > 6 };
+      };
+      const refresh = () => {
+        const b = build(), ok = b.rows.length > 0 && b.cols.length > 0;
+        m.$('#cdOk').disabled = !ok;
+        m.$('#cdMsg').textContent = !b.cols.length ? t('ed_chart_no_cols') : !b.rows.length ? t('ed_chart_no_rows') : [b.bad ? t('ed_chart_bad', { n: b.bad }) : '', b.cut ? t('ed_chart_limit') : '', ctype === 'pie' && b.cols.length > 1 ? t('ed_chart_pie_note') : ''].filter(Boolean).join(' ');
+        const img = m.$('#cdPv');
+        if (ok) { try { img.src = X.chartPreview(b.spec, brand); img.alt = X.chartSpec(b.spec).alt; img.hidden = false; } catch (e) { img.hidden = true; } } else img.hidden = true;
+      };
+      $$('[data-ct]', m.el).forEach((b) => (b.onclick = () => { ctype = b.dataset.ct; $$('[data-ct]', m.el).forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', x === b); }); refresh(); }));
+      m.$('#cdTitle').oninput = (e) => { title = e.target.value; refresh(); };
+      $$('[data-cc]', m.el).forEach((x) => (x.onchange = () => { colOn[Number(x.dataset.cc)] = x.checked; refresh(); }));
+      $$('[data-rr]', m.el).forEach((x) => (x.onchange = () => { rowOn[Number(x.dataset.rr)] = x.checked; refresh(); }));
+      $$('[data-h]', m.el).forEach((x) => (x.oninput = () => { grid[0][Number(x.dataset.h)] = x.value; refresh(); }));
+      $$('[data-r]', m.el).forEach((x) => (x.oninput = () => { grid[Number(x.dataset.r)][Number(x.dataset.c)] = x.value; refresh(); }));
+      m.$('#cdOk').onclick = () => { const b = build(); if (!b.rows.length || !b.cols.length) return; m.close(); o.onDone(b.spec); };
+      refresh();
     }
 
     // ----- toolbar -----
@@ -464,5 +629,5 @@
     return { close };
   }
 
-  PM.docEditor = { open, parse, toMd, inlineToHtml, htmlToInline };
+  PM.docEditor = { open, parse, toMd, inlineToHtml, htmlToInline, listToTable, tableToList };
 })();

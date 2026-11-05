@@ -35,7 +35,9 @@
       if (same && k === 'center') { y = 0.62; h = 0.2; }
       else if (same && k === 'left') { x = MX + LW_ + 0.2; }
       else if (same && k === 'right') { x = SW - MX - LW_ - 0.2 - w; }
-      hdr.push({ text: { text: txt.map((t2, i) => ({ text: t2, options: { bold: i === 0, fontSize: i === 0 ? 11 : 10, color: i === 0 ? T.text : T.muted, breakLine: i < txt.length - 1 } })), options: { x, y, w, h, align: k, valign: 'middle', fontFace: F, margin: 0 } } });
+      // a slide master takes plain strings, so each line is its own text object
+      const lh2 = Math.min(0.3, h / txt.length), top = y + (h - lh2 * txt.length) / 2;
+      txt.forEach((t2, i) => hdr.push({ text: { text: t2, options: { x, y: top + i * lh2, w, h: lh2, align: k, valign: 'middle', fontFace: F, fontSize: i === 0 ? 11 : 10, bold: i === 0, color: i === 0 ? T.text : T.muted, margin: 0 } } }));
     }
     let slideNum = null;
     for (const k of ['left', 'center', 'right']) {
@@ -111,6 +113,7 @@
 
     // Height each visual needs, in inches
     const visualH = (sp) => {
+      if (sp.kind === 'uchart') return sp.ctype === 'bar' ? Math.min(4.6, 0.95 + sp.labels.length * (sp.series.length > 1 ? 0.55 : 0.42)) : 3.5;
       if (sp.kind === 'hbar') return Math.min(4.6, 0.95 + sp.labels.length * (sp.series.length > 1 ? 0.55 : 0.42));
       if (sp.kind === 'column') return 3.5;
       if (sp.kind === 'donut') return 3.0;
@@ -141,6 +144,12 @@
           s.addShape(SH_.roundRect, { x: x + w - 0.2 - (keys.length - i) * 1.1, y: y + 0.2, w: 0.14, h: 0.14, fill: { color: X.tone(k[0]) }, line: { color: X.tone(k[0]), width: 0 }, rectRadius: 0.03 });
           s.addText(k[1], { x: x + w - 0.2 - (keys.length - i) * 1.1 + 0.2, y: y + 0.12, w: 0.85, h: 0.3, fontFace: F, fontSize: 11, color: T.muted, margin: 0 });
         });
+      } else if (sp.kind === 'uchart') {
+        const pal = [T.primary, T.c2, T.c3, T.c4, T.violet, T.faint], many = sp.series.length > 1;
+        const data = sp.series.map((se) => ({ name: se.name, labels: sp.labels, values: se.values }));
+        if (sp.ctype === 'pie') s.addChart(pptx.charts.PIE, [data[0]], { ...base, chartColors: sp.labels.map((_, i) => pal[i % pal.length]), showLegend: true, legendPos: 'r', showPercent: true, showValue: false, dataLabelColor: T.onPrimary, dataLabelFontBold: true, dataBorder: { pt: 2, color: T.surface } });
+        else if (sp.ctype === 'line') s.addChart(pptx.charts.LINE, data, { ...base, chartColors: pal.slice(0, data.length), lineSize: 3, lineDataSymbolSize: 8, showLegend: many, legendPos: 't', showValue: !many && sp.labels.length <= 10, valAxisLabelFormatCode: '#,##0.##' });
+        else s.addChart(pptx.charts.BAR, data, { ...base, barDir: sp.ctype === 'bar' ? 'bar' : 'col', barGapWidthPct: 60, chartColors: pal.slice(0, data.length), showLegend: many, legendPos: 't', showValue: sp.labels.length * data.length <= 14, dataLabelFormatCode: '#,##0.##', valAxisLabelFormatCode: '#,##0.##', catAxisOrientation: sp.ctype === 'bar' ? 'maxMin' : 'minMax' });
       } else if (sp.kind === 'donut') {
         const data = [{ name: sp.title, labels: sp.parts.map((p) => p.label), values: sp.parts.map((p) => p.n) }];
         s.addChart(pptx.charts.DOUGHNUT, data, { ...base, holeSize: 62, chartColors: colors(sp.parts.map((p) => p.tone)), showLegend: true, legendPos: 'r', showPercent: false, showValue: true, dataLabelColor: T.onPrimary, dataLabelFontBold: true, dataBorder: { pt: 2, color: T.surface } });
@@ -255,6 +264,11 @@
         y += h + 0.2;
       }
       for (const b of sec.blocks) {
+        if (b.t === 'chart') {
+          const h = Math.min(visualH(b.spec), BOTTOM - TOP);
+          if (!room(h)) next();
+          drawVisual(s, b.spec, MX, y, CWI, h, true); y += h + 0.2; continue;
+        }
         if (b.t === 'h2' || b.t === 'h3') {
           if (!room(0.9)) next();
           s.addText(X.plain(b.runs), { x: MX, y, w: CWI, h: 0.4, fontFace: F, fontSize: b.t === 'h2' ? 18 : 15, bold: true, color: b.t === 'h2' ? T.text : T.muted, margin: 0 });
@@ -262,7 +276,7 @@
         } else if (b.t === 'p') {
           const h = textH(X.plain(b.runs).length, 115) + 0.12;
           if (!room(h)) next();
-          s.addText(b.runs.map((r) => ({ text: r.text, options: { bold: r.bold, italic: r.italic } })), { x: MX, y, w: CWI, h, fontFace: F, fontSize: 14, color: T.text, valign: 'top', margin: 0, fit: 'shrink' });
+          s.addText(b.runs.map((r) => ({ text: r.text, options: { bold: r.bold, italic: r.italic, ...(r.color ? { color: r.color } : {}) } })), { x: MX, y, w: CWI, h, fontFace: F, fontSize: 14, color: T.text, valign: 'top', margin: 0, fit: 'shrink' });
           y += h + 0.1;
         } else if (b.t === 'ul' || b.t === 'ol') {
           const ih = (k) => textH(X.plain(b.items[k]).length, 108) + 0.08;
@@ -272,7 +286,7 @@
             let h = 0, take = 0;
             while (i + take < b.items.length && (take === 0 || y + h + ih(i + take) <= BOTTOM)) { h += ih(i + take); take++; }
             const runs = [];
-            b.items.slice(i, i + take).forEach((it, n) => it.forEach((r, k) => runs.push({ text: r.text, options: { bold: r.bold, italic: r.italic, bullet: b.t === 'ol' ? { type: 'number', numberStartAt: i + 1 } : { code: '25CF' }, breakLine: k === it.length - 1, paraSpaceAfter: 6 } })));
+            b.items.slice(i, i + take).forEach((it, n) => it.forEach((r, k) => runs.push({ text: r.text, options: { bold: r.bold, italic: r.italic, ...(r.color ? { color: r.color } : {}), bullet: b.t === 'ol' ? { type: 'number', numberStartAt: i + 1 } : { code: '25CF' }, breakLine: k === it.length - 1, paraSpaceAfter: 6 } })));
             s.addText(runs, { x: MX, y, w: CWI, h, fontFace: F, fontSize: 14, color: T.text, valign: 'top', margin: 0 });
             y += h + 0.1; i += take;
             if (i < b.items.length) next();

@@ -170,3 +170,9 @@ The result is a template that carries a brand. Documents created from it use the
 Open a client template from the card to see its colors, fonts, logo and sections. Change any of them and save. Documents that already exist keep the style they were made with. Fonts are named in the files but not embedded, so the reader needs them installed.
 
 Code: `server/brand.js` (extraction), `public/app_clienttpl.js` (upload and viewer), `public/export.js` (`applyBrand`), tests in `test/clienttpl.test.js`.
+
+## Editor: text color, logo, tables and charts
+
+In the document editor you can color selected text with the A button in the toolbar (headings keep the document style). The Logo panel on the right changes or removes the logo for that document, and the logo travels with the page layout when you save the document as a template. A bulleted or numbered list has a Convert to table button, and a table has Convert to bullets and Create chart. In the chart dialog, tick the columns and rows to chart, edit values if needed, and pick column, bar, line or pie. Charts are stored in the Markdown as a `:::chart {json}` line, and text color as `{#RRGGBB:text}`, so every export (Word, PowerPoint, Excel) reads them. Excel keeps chart pictures and data tables but not text color.
+
+Tests: `test/editor2.test.js`.

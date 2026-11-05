@@ -17,7 +17,7 @@
     const numConfigs = [];
 
     const tr = (text, o) => new TextRun({ text, font: FONT, ...o });
-    const runs = (rs, o) => rs.map((r) => tr(r.text, { bold: r.bold || (o && o.bold), italics: r.italic, size: o && o.size, color: o && o.color }));
+    const runs = (rs, o) => rs.map((r) => tr(r.text, { bold: r.bold || (o && o.bold), italics: r.italic, size: o && o.size, color: (o && o.color) || r.color }));
     const img = (im, width, alt, maxH) => new ImageRun({ type: 'png', data: im.data, transformation: (() => { const w = maxH ? Math.min(width, Math.round((maxH * im.w) / im.h)) : width; return { width: w, height: Math.round((w * im.h) / im.w) }; })(), altText: { title: alt, description: alt, name: alt.slice(0, 40) } });
     const spacer = (after) => new Paragraph({ spacing: { after: after == null ? 120 : after }, children: [] });
     const caption = (text) => new Paragraph({ keepNext: true, spacing: { before: 200, after: 80 }, children: [tr(text, { bold: true, size: 21, color: T.text })] });
@@ -142,7 +142,7 @@
       body.push(new Paragraph({ heading: HeadingLevel.HEADING_1, pageBreakBefore: true, children: [tr(s.heading, { font: HEAD })] }));
       if (s.glance) body.push(new Paragraph({ spacing: { after: 120 }, children: [tr(`Key figures and charts as of ${plan.date}.`, { color: T.muted })] }));
       for (const sp of s.specs) body.push(...(await visual(sp)));
-      for (const b of s.blocks) body.push(...block(b));
+      for (const b of s.blocks) { if (b.t === 'chart') body.push(...(await visual(b.spec))); else body.push(...block(b)); }
     }
 
     // ----- header and footer, from the page layout -----

@@ -1484,3 +1484,25 @@ body.ded-open { overflow: hidden; }
 #rpTpls .card-head { flex-wrap: wrap; gap: 8px; }
 #rpTpls .card-head .row { flex-wrap: wrap; }
 .ct-view .f .small, #ctBody .f + .small { margin-top: 6px; display: block; }
+
+/* editor: text color, logo, charts */
+.ded-color { position: relative; display: inline-flex; }
+.ded-color #tColor .A { font-weight: 700; line-height: 1; } .ded-color #tColor { flex-direction: column; gap: 1px; justify-content: center; }
+.ded-color #tColorBar { display: block; width: 16px; height: 3px; border-radius: 2px; background: var(--primary); }
+.ded-pop { position: absolute; align-content: start; top: calc(100% + 6px); inset-inline-start: 0; z-index: 30; width: 232px; padding: 10px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 12px; box-shadow: var(--shadow-lg, 0 12px 32px rgba(20, 30, 60, .18)); display: grid; gap: 10px; }
+.ded-pop[hidden] { display: none; }
+.ded-pop .auto { text-align: start; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text); font: inherit; cursor: pointer; }
+.ded-pop .pal { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; justify-items: center; }
+.ded-pop .pal button { width: 26px; height: 26px; min-height: 0; min-width: 0; border-radius: 7px; border: 1px solid var(--border-strong); cursor: pointer; padding: 0; }
+.ded-pop .pal button:hover, .ded-pop .pal button:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.ded-pop .cust { display: flex; align-items: center; justify-content: space-between; font-size: var(--fs-small); color: var(--muted); } .ded-pop .cust input { width: 44px; height: 28px; padding: 0; border: 1px solid var(--border-strong); border-radius: 6px; background: none; }
+.ded-logo { display: grid; gap: 8px; margin-bottom: 12px; } .ded-logo .pv { display: grid; place-items: center; min-height: 64px; padding: 10px; border: 1px dashed var(--border-strong); border-radius: 10px; background: var(--surface-2); } .ded-logo .pv img { max-height: 48px; max-width: 100%; object-fit: contain; }
+.ded-logo .acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.ded-chart { margin: 4px 0 8px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); display: grid; gap: 6px; justify-items: start; } .ded-chart img { max-width: 100%; height: auto; border-radius: 6px; } .ded-chart figcaption { font-size: var(--fs-small); color: var(--muted); }
+.md-chart { margin: 10px 0; } .md-chart img { max-width: 100%; height: auto; } .md-chart figcaption { font-size: var(--fs-small); color: var(--muted); }
+.ded-cd { display: grid; gap: 10px; } .ded-cd .cd-opts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: end; } .ded-cd .f { display: grid; gap: 4px; } .ded-cd .lb { font-size: var(--fs-small); color: var(--muted); font-weight: 600; }
+.cd-grid { overflow: auto; max-height: 260px; border: 1px solid var(--border); border-radius: 10px; } .cd-grid table { border-collapse: collapse; width: 100%; } .cd-grid th, .cd-grid td { padding: 4px 6px; border-bottom: 1px solid var(--border); text-align: start; white-space: nowrap; } .cd-grid thead th { background: var(--surface-2); position: sticky; top: 0; }
+.cd-grid input[type=text] { width: 100%; min-width: 90px; padding: 5px 7px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); font: inherit; } .cd-on { display: inline-flex; margin-inline-end: 6px; vertical-align: middle; }
+.cd-msg { min-height: 1.3em; color: var(--warning, #9a5700); } .cd-pv { display: grid; place-items: center; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: #fff; } .cd-pv img { max-width: 100%; max-height: 300px; height: auto; }
+@media (max-width: 700px) { .ded-cd .cd-opts { grid-template-columns: 1fr; } }
+.ded-pop .cust input { flex: none; width: 44px; height: 28px; min-height: 0; }

@@ -177,6 +177,7 @@
       for (const sp of sec.specs) r = await visual(ws, r, sp);
       for (const b of sec.blocks) {
         if (b.t === 'h2' || b.t === 'h3') { ws.getRow(r).height = 24; put(ws, r, 1, COLS, X.plain(b.runs), { bold: true, size: b.t === 'h2' ? 14 : 12, color: b.t === 'h2' ? T.text : T.muted }); r += 2; }
+        else if (b.t === 'chart') r = await visual(ws, r, b.spec);
         else if (b.t === 'p') { const txt = X.plain(b.runs); ws.getRow(r).height = Math.max(20, Math.ceil(txt.length / 150) * 16 + 6); put(ws, r, 1, COLS, txt, { v: 'top' }); r += 2; }
         else if (b.t === 'ul' || b.t === 'ol') {
           b.items.forEach((it, i) => { const txt = `${b.t === 'ol' ? `${i + 1}.` : '•'}  ${X.plain(it)}`; ws.getRow(r).height = Math.max(20, Math.ceil(txt.length / 145) * 16 + 4); put(ws, r, 1, COLS, txt, { v: 'top', indent: 1 }); r++; });

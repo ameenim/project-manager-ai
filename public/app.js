@@ -124,13 +124,21 @@
   // ---------- markdown ----------
   function mdToHtml(md) {
     const lines = String(md || '').split(/\r?\n/);
-    const inline = (s) => esc(s).replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(?<!\w)_([^_]+)_(?!\w)/g, '<i>$1</i>');
+    const inline = (s) => esc(s).replace(/\{#([0-9a-fA-F]{6}):([^{}]*)\}/g, '<span style="color:#$1">$2</span>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(?<!\w)_([^_]+)_(?!\w)/g, '<i>$1</i>');
     let out = '', i = 0, list = false;
     const close = () => { if (list) { out += '</ul>'; list = false; } };
     while (i < lines.length) {
       const l = lines[i];
       let m;
       if (!l.trim()) { close(); i++; continue; }
+      if ((m = l.match(/^:::chart\s+(\{.*\})\s*$/))) {
+        close(); i++;
+        try {
+          const X = PM.exporter, sp = X && X.chartSpec ? X.chartSpec(JSON.parse(m[1])) : null;
+          if (sp) { out += `<figure class="md-chart"><img alt="${esc(sp.alt)}" src="${X.chartPreview(sp)}"><figcaption>${esc(sp.title)}</figcaption></figure>`; continue; }
+        } catch (e) { /* show nothing for a broken chart line */ }
+        continue;
+      }
       if (/^\s*\|/.test(l)) {
         close();
         const rows = [];

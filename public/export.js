@@ -44,7 +44,7 @@
   const dnum = (d) => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10)) / 86400000;
 
   // ---------- Markdown to blocks ----------
-  function inlineRuns(text) {
+  function plainRuns(text) {
     const parts = String(text == null ? '' : text).split(/(\*\*[^*]+\*\*|(?<!\w)__[^_]+__(?!\w)|(?<!\w)_[^_]+_(?!\w))/g).filter((s) => s !== '');
     return parts.map((p) => {
       let m;
@@ -53,8 +53,20 @@
       return { text: p };
     });
   }
+  // {#RRGGBB:text} colors a piece of text. Bold and italic can sit inside it.
+  function inlineRuns(text) {
+    const out = [];
+    String(text == null ? '' : text).split(/(\{#[0-9a-fA-F]{6}:[^{}]*\})/g).forEach((seg) => {
+      if (seg === '') return;
+      const m = seg.match(/^\{#([0-9a-fA-F]{6}):([^{}]*)\}$/);
+      const runs = plainRuns(m ? m[2] : seg);
+      if (m) runs.forEach((r) => { r.color = m[1].toUpperCase(); });
+      out.push(...runs);
+    });
+    return out;
+  }
   const plain = (runs) => runs.map((r) => r.text).join('');
-  const startsBlock = (l) => /^\s*(#{1,3}\s|\||[-*]\s+|\d+[.)]\s+)/.test(l);
+  const startsBlock = (l) => /^\s*(#{1,3}\s|\||[-*]\s+|\d+[.)]\s+|:::chart\s)/.test(l);
 
   function parseMarkdown(md) {
     const lines = String(md || '').split(/\r?\n/);
@@ -64,7 +76,11 @@
       const l = lines[i];
       if (!l.trim()) { i++; continue; }
       let m;
-      if ((m = l.match(/^(#{1,3})\s+(.*)$/))) { out.push({ t: 'h' + m[1].length, runs: inlineRuns(m[2].trim()) }); i++; continue; }
+      if ((m = l.match(/^(#{1,3})\s+(.*)$/))) { out.push({ t: 'h' + m[1].length, runs: inlineRuns(m[2].trim().replace(/\{#[0-9a-fA-F]{6}:([^{}]*)\}/g, '$1')) }); i++; continue; }
+      if ((m = l.match(/^:::chart\s+(\{.*\})\s*$/))) {
+        let spec = null; try { spec = chartSpec(JSON.parse(m[1])); } catch (e) { /* not a chart */ }
+        i++; if (spec) out.push({ t: 'chart', spec }); continue;
+      }
       if (/^\s*\|/.test(l)) {
         const rows = [];
         while (i < lines.length && /^\s*\|/.test(lines[i])) { rows.push(lines[i].trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim())); i++; }
@@ -223,7 +239,8 @@
     if (!l || typeof l !== 'object') return JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
     const part = (o, d) => ({ left: o && typeof o.left === 'string' ? o.left : d.left, center: o && typeof o.center === 'string' ? o.center : d.center, right: o && typeof o.right === 'string' ? o.right : d.right });
     const pos = (v, d) => (['left', 'center', 'right', 'hidden'].includes(v) ? v : d);
-    return { v: 1, logo: { cover: pos(l.logo && l.logo.cover, 'left'), header: pos(l.logo && l.logo.header, 'left') }, header: part(l.header, DEFAULT_LAYOUT.header), footer: part(l.footer, DEFAULT_LAYOUT.footer) };
+    const li = l.logoImg && typeof l.logoImg.dataUrl === 'string' && /^data:image\/(png|jpeg|gif|svg\+xml);base64,/.test(l.logoImg.dataUrl) ? { logoImg: { dataUrl: l.logoImg.dataUrl, w: Number(l.logoImg.w) || 0, h: Number(l.logoImg.h) || 0 } } : {};
+    return { v: 1, logo: { cover: pos(l.logo && l.logo.cover, 'left'), header: pos(l.logo && l.logo.header, 'left') }, header: part(l.header, DEFAULT_LAYOUT.header), footer: part(l.footer, DEFAULT_LAYOUT.footer), ...li };
   }
   // Fills every token except page and pages.
   function fillTokens(text, plan) {
@@ -247,7 +264,7 @@
   }
   function planLayout(g) {
     const l = layoutOf(g);
-    if (g.brand && !g.brand.logo) { l.logo.cover = 'hidden'; l.logo.header = 'hidden'; }
+    if (g.brand && !g.brand.logo && !l.logoImg) { l.logo.cover = 'hidden'; l.logo.header = 'hidden'; }
     return l;
   }
   function plan(g) {
@@ -479,7 +496,119 @@
     return cv;
   }
 
-  const DRAW = { hbar: drawHBar, column: drawColumn, donut: drawDonut, stack: drawStack, gantt: drawGantt, flow: drawFlow };
+  // ---------- charts the project manager builds from a table ----------
+  const CHART_NAMES = { column: 'Column', bar: 'Bar', line: 'Line', pie: 'Pie' };
+  const fmtN = (v) => { const a = Math.abs(v); if (a >= 1e6) return `${+(v / 1e6).toFixed(1)}M`; if (a >= 1e4) return `${+(v / 1e3).toFixed(1)}K`; return String(Math.round(v * 100) / 100); };
+  function chartSpec(o) {
+    if (!o || typeof o !== 'object' || !Array.isArray(o.labels) || !Array.isArray(o.series)) return null;
+    const ctype = CHART_NAMES[o.ctype] ? o.ctype : 'column';
+    const labels = o.labels.slice(0, 24).map((x) => String(x == null ? '' : x).slice(0, 80));
+    const series = o.series.slice(0, 6).map((se, i) => ({ name: String((se && se.name) || `Series ${i + 1}`).slice(0, 60), values: labels.map((_, k) => { const v = Number(se && se.values && se.values[k]); return Number.isFinite(v) ? v : 0; }) })).filter((se) => se.values.length);
+    if (!labels.length || !series.length) return null;
+    const title = String(o.title || '').slice(0, 120) || 'Chart';
+    const alt = `${CHART_NAMES[ctype]} chart, ${title}. ${labels.map((l, k) => `${l}: ${series.map((se) => `${series.length > 1 ? se.name + ' ' : ''}${fmtN(se.values[k])}`).join(', ')}`).join('. ')}.`;
+    return { id: 'uchart', kind: 'uchart', ctype, title, alt, labels, series };
+  }
+  const chartCols = () => [T.primary, T.c2, T.c3, T.c4, T.violet, T.faint];
+  function legendRow(g, series, cols) {
+    let x = 0;
+    series.forEach((se, i) => {
+      g.fillStyle = hex(cols[i % cols.length]); rrect(g, x, 8, 10, 10, 3); g.fill();
+      g.fillStyle = hex(T.muted); g.font = font(400, 12); g.textAlign = 'left'; g.fillText(fit(g, se.name, 150), x + 16, 13);
+      x += 16 + Math.min(150, g.measureText(se.name).width) + 22;
+    });
+  }
+  function drawColLine(s, line) {
+    const many = s.series.length > 1, H = 300, padL = 58, padR = 12, padT = many ? 40 : 20, padB = 64;
+    const cv = canvas(W, H), g = cv.g;
+    const all = s.series.flatMap((se) => se.values), mx = Math.max(0, ...all), mn = Math.min(0, ...all);
+    const hi = mx > 0 ? niceMax(mx) : 0, lo = mn < 0 ? -niceMax(-mn) : 0, span = (hi - lo) || 1;
+    const plotH = H - padT - padB, plotW = W - padL - padR, cols = chartCols();
+    const yOf = (v) => padT + plotH * (1 - (v - lo) / span);
+    g.font = font(400, 11); g.textAlign = 'right';
+    for (let k = 0; k <= 4; k++) {
+      const v = lo + (span * k) / 4, y = yOf(v);
+      g.strokeStyle = hex(T.border); g.lineWidth = 1; g.beginPath(); g.moveTo(padL, y); g.lineTo(W - padR, y); g.stroke();
+      g.fillStyle = hex(T.faint); g.fillText(fmtN(v), padL - 8, y);
+    }
+    if (many) legendRow(g, s.series, cols);
+    const n = s.labels.length, slot = plotW / n, showVal = n * s.series.length <= 14;
+    if (!line) {
+      const gw = Math.min(slot * 0.74, s.series.length * 46), bw = gw / s.series.length, zero = yOf(0);
+      s.series.forEach((se, si) => se.values.forEach((v, i) => {
+        const x = padL + slot * i + (slot - gw) / 2 + si * bw, y = yOf(v), top = Math.min(y, zero), h = Math.max(Math.abs(zero - y), 2);
+        g.fillStyle = hex(cols[si % cols.length]); rrect(g, x + 1, top, Math.max(bw - 2, 3), h, 3); g.fill();
+        if (showVal) { g.fillStyle = hex(T.text); g.font = font(600, 11); g.textAlign = 'center'; g.fillText(fmtN(v), x + bw / 2, v >= 0 ? top - 9 : top + h + 10); }
+      }));
+    } else {
+      s.series.forEach((se, si) => {
+        g.strokeStyle = hex(cols[si % cols.length]); g.lineWidth = 3; g.lineJoin = 'round'; g.beginPath();
+        se.values.forEach((v, i) => { const x = padL + slot * i + slot / 2, y = yOf(v); if (i) g.lineTo(x, y); else g.moveTo(x, y); });
+        g.stroke();
+        se.values.forEach((v, i) => {
+          const x = padL + slot * i + slot / 2, y = yOf(v);
+          g.fillStyle = hex(T.surface); g.beginPath(); g.arc(x, y, 5, 0, Math.PI * 2); g.fill(); g.strokeStyle = hex(cols[si % cols.length]); g.lineWidth = 2.5; g.stroke();
+          if (n <= 10 && !many) { g.fillStyle = hex(T.text); g.font = font(600, 11); g.textAlign = 'center'; g.fillText(fmtN(v), x, y - 14); }
+        });
+      });
+    }
+    g.fillStyle = hex(T.text); g.font = font(400, 11); g.textAlign = 'center';
+    s.labels.forEach((lab, i) => wrap(g, lab, slot - 6, 2).forEach((ln, k) => g.fillText(ln, padL + slot * i + slot / 2, padT + plotH + 16 + k * 14)));
+    return cv;
+  }
+  function drawBarsH(s) {
+    const many = s.series.length > 1, cols = chartCols();
+    const rowH = many ? s.series.length * 15 + 18 : 32, top = many ? 30 : 6, labW = 176, valW = 56;
+    const H = top + s.labels.length * rowH + 6;
+    const cv = canvas(W, H), g = cv.g;
+    if (many) legendRow(g, s.series, cols);
+    const barX = labW, barW = W - labW - valW;
+    const max = niceMax(Math.max(1, ...s.series.flatMap((se) => se.values.map((v) => Math.max(v, 0)))));
+    s.labels.forEach((lab, i) => {
+      const y = top + i * rowH;
+      g.fillStyle = hex(T.text); g.font = font(400, 12); g.textAlign = 'left'; g.fillText(fit(g, lab, labW - 14), 0, y + rowH / 2);
+      const bh = many ? 11 : 14, gap = 4;
+      let by = y + (rowH - (s.series.length * bh + (s.series.length - 1) * gap)) / 2;
+      s.series.forEach((se, si) => {
+        const v = se.values[i];
+        g.fillStyle = hex(T.track); rrect(g, barX, by, barW, bh, 4); g.fill();
+        if (v > 0) { g.fillStyle = hex(cols[si % cols.length]); rrect(g, barX, by, Math.max(8, (barW * Math.min(v, max)) / max), bh, 4); g.fill(); }
+        g.fillStyle = hex(T.text); g.font = font(600, 11); g.textAlign = 'right'; g.fillText(fmtN(v), W - 4, by + bh / 2);
+        by += bh + gap;
+      });
+    });
+    return cv;
+  }
+  function drawPie(s) {
+    const cols = chartCols(), vals = s.series[0].values.map((v) => Math.max(0, v)), total = vals.reduce((a, b) => a + b, 0) || 1;
+    const n = s.labels.length, H = Math.max(230, 40 + n * 30), cx = 130, cy = H / 2, R = 92;
+    const cv = canvas(W, H), g = cv.g;
+    let a0 = -Math.PI / 2;
+    const gap = vals.filter((v) => v > 0).length > 1 ? 0.035 : 0;
+    vals.forEach((v, i) => {
+      const sweep = (v / total) * Math.PI * 2; if (!v) return;
+      g.beginPath(); g.moveTo(cx, cy); g.arc(cx, cy, R, a0 + gap / 2, a0 + sweep - gap / 2); g.closePath();
+      g.fillStyle = hex(cols[i % cols.length]); g.fill(); a0 += sweep;
+    });
+    const rowH = 28, y0 = cy - (n * rowH) / 2 + rowH / 2;
+    s.labels.forEach((lab, i) => {
+      const y = y0 + i * rowH;
+      g.fillStyle = hex(cols[i % cols.length]); rrect(g, 270, y - 6, 12, 12, 3); g.fill();
+      g.fillStyle = hex(T.text); g.font = font(400, 13); g.textAlign = 'left'; g.fillText(fit(g, lab, 230), 292, y);
+      g.font = font(600, 13); g.textAlign = 'right'; g.fillText(fmtN(s.series[0].values[i]), 570, y);
+      g.fillStyle = hex(T.muted); g.font = font(400, 12); g.fillText(`${Math.round((vals[i] / total) * 100)}%`, W - 4, y);
+    });
+    return cv;
+  }
+  const drawUChart = (s) => (s.ctype === 'pie' ? drawPie(s) : s.ctype === 'bar' ? drawBarsH(s) : drawColLine(s, s.ctype === 'line'));
+  // A picture of a chart for the editor, drawn with the document's own colors
+  function chartPreview(spec, brand) {
+    const sp = chartSpec(spec); if (!sp) return '';
+    const restore = brand ? applyBrand(brand) : null;
+    try { return drawUChart(sp).c.toDataURL('image/png'); } finally { if (restore) restore(); }
+  }
+
+  const DRAW = { hbar: drawHBar, column: drawColumn, donut: drawDonut, stack: drawStack, gantt: drawGantt, flow: drawFlow, uchart: drawUChart };
   async function renderSpec(s) {
     const fn = DRAW[s.kind];
     if (!fn) return null;
@@ -496,6 +625,7 @@
     if (s.kind === 'donut' || s.kind === 'stack') return { head: ['Status', 'Count'], rows: s.parts.map((p) => [p.label, p.n]) };
     if (s.kind === 'gantt') return { head: ['Phase', 'Start', 'Finish', 'Actual %', 'Planned %'], rows: s.rows.map((r) => [r.name, r.start, r.finish, r.actual, r.planned == null ? 'n/a' : r.planned]) };
     if (s.kind === 'heat') return { head: ['Probability or impact', ...s.colLabels], rows: s.rowLabels.map((l, i) => [l, ...s.matrix[i]]) };
+    if (s.kind === 'uchart') return { head: ['Item', ...s.series.map((x) => x.name)], rows: s.labels.map((l, i) => [l, ...s.series.map((x) => x.values[i])]) };
     if (s.kind === 'flow') return { head: ['Step', 'Role'], rows: s.steps.map((x) => [x.title, x.sub]) };
     return { head: [], rows: [] };
   }
@@ -538,7 +668,7 @@
     return loading[src];
   }
   const LIBS = { docx: ['vendor/docx.min.js', 'export_docx.js'], pptx: ['vendor/pptxgen.bundle.js', 'export_pptx.js'], xlsx: ['vendor/exceljs.min.js', 'export_xlsx.js'] };
-  const ex = { HEAD_FONT: FONT_NAME, brandTokens, brandLogo, contrast, legible, applyBrand, DEFAULT_LAYOUT, LAYOUT_TOKENS, layoutOf, fillTokens, fillPlain, T, TONE, SOFT, FONT_NAME, FORMATS, STATUS, tone, statusTone, fmtDate, safeName, money, inlineRuns, plain, parseMarkdown, plan, specsFor, specTable, heatTone, renderSpec, asset, b64, builders: {} };
+  const ex = { HEAD_FONT: FONT_NAME, brandTokens, brandLogo, contrast, legible, applyBrand, DEFAULT_LAYOUT, LAYOUT_TOKENS, layoutOf, fillTokens, fillPlain, T, TONE, SOFT, FONT_NAME, FORMATS, STATUS, tone, statusTone, fmtDate, safeName, money, inlineRuns, plain, parseMarkdown, plan, specsFor, specTable, chartSpec, chartPreview, heatTone, renderSpec, asset, b64, builders: {} };
 
   async function build(g) {
     const fmt = FORMATS[g.format] ? g.format : 'docx';
@@ -552,6 +682,8 @@
         const bl = await brandLogo(brand.logo);
         logo = bl; mark = bl; client = bl ? null : await clientLogo(g.meta);
       } else [logo, mark, client] = await Promise.all([asset('brand/full-light.png'), asset('brand/mark-512.png'), clientLogo(g.meta)]);
+      const lg = P.layout && P.layout.logoImg ? await brandLogo(P.layout.logoImg) : null;
+      if (lg) { logo = lg; mark = lg; client = null; }
       const blob = await ex.builders[fmt]({ plan: P, logo, mark, client });
       return { blob, filename: `${safeName(g.title)}.${FORMATS[fmt].ext}`, format: fmt };
     } finally { if (restore) restore(); }
