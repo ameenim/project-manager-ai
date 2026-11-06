@@ -95,7 +95,8 @@ module.exports = function createApi(store, auth, connectors, ops) {
     const today = TODAY();
     const shift = Math.round((dnum(today) - dnum(RAW.today)) / 7) * 7;
     const move = (v) => {
-      if (typeof v === 'string') return /^\d{4}-\d{2}-\d{2}(?:[ T].{0,13})?$/.test(v) ? dstr(dnum(v) + shift) + v.slice(10) : v;
+      // a date with a time is something that already happened (activity, created at), so it never lands after today
+      if (typeof v === 'string') return /^\d{4}-\d{2}-\d{2}(?:[ T].{0,13})?$/.test(v) ? (v.length > 10 && dnum(v) + shift > dnum(today) ? today : dstr(dnum(v) + shift)) + v.slice(10) : v;
       if (Array.isArray(v)) return v.map(move);
       if (v && typeof v === 'object') { const o = {}; for (const k in v) o[k] = k === 'docTexts' || k === 'skeletons' || k === 'templates' ? v[k] : move(v[k]); return o; }
       return v;
@@ -827,7 +828,7 @@ module.exports = function createApi(store, auth, connectors, ops) {
     const totalValue = {};
     for (const P of projects) if (P.p.value) totalValue[P.p.currency] = (totalValue[P.p.currency] || 0) + P.p.value;
     return {
-      today: TODAY(), radar: win.__Radar.buildRadar(radarEntries, TODAY()), analytics: win.__Analytics.buildAnalytics(radarEntries, TODAY()), projects: cards, payments: shown.slice(0, 10), overdue: overdue.slice(0, 12), activity: activity.slice(0, 12), pendingInbox, pendingItems, totalValue, unassigned: 0,
+      today: TODAY(), radar: win.__Radar.buildRadar(radarEntries, TODAY()), analytics: win.__Analytics.buildAnalytics(radarEntries, TODAY()), projects: cards, payments: shown.slice(0, 10), overdue: overdue.slice(0, 12), overdueTotal: overdue.length, activity: activity.slice(0, 12), pendingInbox, pendingItems, totalValue, unassigned: 0,
       counts: { active: projects.filter((p) => p.p.status === 'active').length, red: cards.filter((c) => c.stats.health === 'red').length, amber: cards.filter((c) => c.stats.health === 'amber').length, green: cards.filter((c) => c.stats.health === 'green').length },
     };
   }

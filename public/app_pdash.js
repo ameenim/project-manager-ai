@@ -236,7 +236,7 @@
         const h = H();
         if (!d.phases.length) { body.innerHTML = h.empty(t('no_tasks_hint')); return { csv: () => [] }; }
         const rows = d.phases.slice(0, 14).map((x) => ({ label: x.name, sub: `${x.start} ${t('to')} ${x.finish}`, segs: [{ v: x.progress, cls: x.progress >= 100 ? 'ok' : 'c1' }], max: 100, valueLabel: x.progress + '%', tipHtml: `<b>${esc(x.name)}</b><br>${x.start} ${t('to')} ${x.finish}<br>${x.progress}%` }));
-        body.innerHTML = h.hbars(rows, { max: 100, rowH: 38, labelW: 190, aria: t('phases') });
+        body.innerHTML = h.hbars(rows, { max: 100, labelW: 190, aria: t('phases') });
         return { csv: () => [[t('phase'), t('start'), t('finish'), t('progress')], ...d.phases.map((x) => [x.name, x.start, x.finish, x.progress])] };
       },
     },
@@ -359,7 +359,8 @@
         const cl = PMCL.get('line', { percent: false });
         if (cl.on) {
           const other = { above: 'below', below: 'above', left: 'right', right: 'left', center: 'below' }[cl.pos];
-          C.months.forEach((r, i) => { if (i % every === 0 || i === n - 1) { g += PMCL.text(x(i), y(r.cumPlanned), short(r.cumPlanned), cl.pos); if (r.cumReceived > 0 || i === n - 1) g += PMCL.text(x(i), y(r.cumReceived), short(r.cumReceived), other); } });
+          let lastRec = null; // a flat line is labeled once, not at every point
+          C.months.forEach((r, i) => { if (i % every === 0 || i === n - 1) { g += PMCL.text(x(i), y(r.cumPlanned), short(r.cumPlanned), cl.pos); if ((r.cumReceived > 0 && r.cumReceived !== lastRec) || (i === n - 1 && r.cumReceived !== lastRec)) { g += PMCL.text(x(i), y(r.cumReceived), short(r.cumReceived), other); lastRec = r.cumReceived; } } });
         }
         const last = C.months[n - 1];
         body.innerHTML = `<svg class="viz scurve" viewBox="0 0 ${Wd} ${Ht}" role="img" aria-label="${esc(t('pw_cumulative'))}">${g}</svg>${h.legend([['c1', t('planned'), money(last.cumPlanned, cur)], ['ok', t('state_paid'), money(last.cumReceived, cur)]])}`;
@@ -373,7 +374,7 @@
         const h = H();
         if (!d.owners.length) { body.innerHTML = h.empty(); return { csv: () => [] }; }
         const rows = d.owners.map((o) => ({ label: o.name || t('unassigned'), sub: t('tasks_n', { n: o.total }), segs: [{ v: o.done, cls: 'ok' }, { v: o.active, cls: 'c1' }, { v: o.todo, cls: 'idle' }, { v: o.late, cls: 'bad' }], tipHtml: `<b>${esc(o.name || t('unassigned'))}</b><br>${t('g_l_done')} ${o.done} · ${t('pw_active')} ${o.active}<br>${t('pw_todo')} ${o.todo} · ${t('late')} ${o.late}` }));
-        body.innerHTML = h.hbars(rows, { rowH: 36, aria: t('w_workload') }) + h.legend([['ok', t('g_l_done')], ['c1', t('pw_active')], ['idle', t('pw_todo')], ['bad', t('late')]]);
+        body.innerHTML = h.hbars(rows, { aria: t('w_workload') }) + h.legend([['ok', t('g_l_done')], ['c1', t('pw_active')], ['idle', t('pw_todo')], ['bad', t('late')]]);
         return { csv: () => [[t('g_owner'), t('g_l_done'), t('pw_active'), t('pw_todo'), t('late')], ...d.owners.map((o) => [o.name || '', o.done, o.active, o.todo, o.late])] };
       },
     },

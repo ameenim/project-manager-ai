@@ -50,14 +50,14 @@
       return el;
     }).join('');
     const out = cl.on && cl.pos === 'outside';
-    return `<div class="donut-box"><svg class="viz donut" viewBox="${out ? '-40 -8 220 156' : '0 0 140 140'}" role="img" aria-label="${esc(centerBot)}: ${parts.map((p) => `${p.label} ${p.v}`).join(', ')}"><circle class="dn-track" cx="${C}" cy="${C}" r="${R}"/>${segs}${labs}</svg><div class="dn-center"><b>${centerTop}</b><span>${esc(centerBot)}</span></div></div>`;
+    return `<div class="donut-box" style="width:${out ? 220 : 140}px"><svg class="viz donut" viewBox="${out ? '-40 -8 220 156' : '0 0 140 140'}" role="img" aria-label="${esc(centerBot)}: ${parts.map((p) => `${p.label} ${p.v}`).join(', ')}"><circle class="dn-track" cx="${C}" cy="${C}" r="${R}"/>${segs}${labs}</svg><div class="dn-center"><b>${centerTop}</b><span>${esc(centerBot)}</span></div></div>`;
   }
 
   let CW = 560; // usable chart width of the widget being drawn, set by frame()
   function hbars(rows, opts) {
     // rows: [{label, sub, segs:[{v, cls, label, lab, pct}], mark, tipHtml, href, valueLabel, pctLabel}]
     const cl = PMCL.get('hbar');
-    const W = Math.max(240, Math.min(1600, Math.round(CW))), LW = opts.labelW || 130, PR = 44, RH = opts.rowH || 34, BH = cl.on ? 14 : 10;
+    const W = Math.max(240, Math.min(1600, Math.round(CW))), LW = opts.labelW || 130, PR = 44, RH = opts.rowH || 38, BH = cl.on ? 14 : 10;
     const max = opts.max || Math.max(1, ...rows.map((r) => r.segs.reduce((s, x) => s + x.v, 0)));
     const pw = W - LW - PR;
     const H = rows.length * RH + 6;
@@ -92,8 +92,8 @@
         }
         x += w;
       });
-      g += marks;
       if (r.mark != null) { const mx = LW + (r.mark / max) * pw; g += `<line class="hb-mark" x1="${mx}" x2="${mx}" y1="${y + 2}" y2="${y + 24}"/>`; }
+      g += marks;
       if (!single) g += `<text class="val" x="${W}" y="${y + 17}" text-anchor="end">${esc(r.valueLabel != null ? r.valueLabel : String(total))}</text>`;
       g += '</g>';
     });
@@ -110,7 +110,7 @@
         const A = d.analytics, P = A.projects;
         const avg = (k) => { const v = P.filter((p) => p[k] != null).map((p) => p[k]); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
         const prog = avg('progress'), plan = avg('planned'), spi = avg('spi');
-        const high = d.radar.counts.high, od = d.overdue.length;
+        const high = d.radar.counts.high, od = d.overdueTotal != null ? d.overdueTotal : d.overdue.length;
         const totals = PM.fx.mode === 'native' ? (Object.entries(d.totalValue).map(([c, v]) => money(v, c)).join(' + ') || '0') : PM.fmt(Object.entries(d.totalValue).reduce((a, [c, v]) => a + PM.fx.convert(v, c, PM.fx.mode), 0), PM.fx.mode);
         const tiles = [
           { k: 'kpi_active', v: d.counts.active, n: d.counts.active, sub: t('kpi_on_track_n', { n: d.counts.green }), tone: '' },
@@ -173,7 +173,7 @@
           }
         });
         g += `<line class="tl-today" x1="${x(today)}" x2="${x(today)}" y1="${AX - 4}" y2="${H}"/><text class="tl-todaylab" x="${x(today)}" y="${H + 10}" text-anchor="middle">${esc(t('g_today'))}</text>`;
-        body.innerHTML = `<svg class="viz timeline" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(t('w_schedule'))}">${g}</svg>${legend([['tl-l-prog', t('g_l_prog')], ['tl-l-diamond paid', t('state_paid')], ['tl-l-diamond inv', t('state_invoiced')], ['tl-l-diamond pend', t('state_pending')], ['tl-l-diamond late', t('late')], ['tl-l-end', t('contract_end')]])}`;
+        body.innerHTML = `<svg class="viz timeline" style="width:${W}px;max-width:none;min-width:100%" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(t('w_schedule'))}">${g}</svg>${legend([['tl-l-prog', t('g_l_prog')], ['tl-l-diamond paid', t('state_paid')], ['tl-l-diamond inv', t('state_invoiced')], ['tl-l-diamond pend', t('state_pending')], ['tl-l-diamond late', t('late')], ['tl-l-end', t('contract_end')]])}`;
         return { csv: () => [[t('project'), t('phase'), t('start'), t('finish'), t('progress')], ...rows], chart: true };
       },
     },
@@ -221,7 +221,7 @@
         const P = d.analytics.projects;
         if (!P.length) { body.innerHTML = empty(); return { csv: () => [] }; }
         const rows = P.map((p) => ({ label: p.name, sub: p.planned != null ? `${t('planned')} ${p.planned}%` : '', segs: [{ v: p.progress, cls: p.health === 'red' ? 'bad' : p.health === 'amber' ? 'warn' : 'c1' }], mark: p.planned, valueLabel: p.progress + '%', tipHtml: `<b>${esc(p.name)}</b><br>${t('progress')} ${p.progress}%${p.planned != null ? `<br>${t('planned')} ${p.planned}%` : ''}${p.spi != null ? `<br>${t('kpi_spi')} ${p.spi}` : ''}`, href: `#/p/${p.id}/overview` }));
-        body.innerHTML = hbars(rows, { max: 100, aria: t('w_progress'), rowH: 40 }) + legend([['c1', t('progress')], ['mark', t('planned')]]);
+        body.innerHTML = hbars(rows, { max: 100, aria: t('w_progress') }) + legend([['c1', t('progress')], ['mark', t('planned')]]);
         return { csv: () => [[t('project'), t('progress'), t('planned'), t('kpi_spi')], ...P.map((p) => [p.name, p.progress, p.planned ?? '', p.spi ?? ''])], chart: true };
       },
     },
@@ -231,8 +231,8 @@
       render(body, d) {
         const Wk = d.analytics.workload;
         if (!Wk.length) { body.innerHTML = empty(); return { csv: () => [] }; }
-        const rows = Wk.map((o) => ({ label: o.name, sub: t('tasks_n', { n: o.total }), segs: [{ v: o.done, cls: 'ok' }, { v: o.active, cls: 'c1' }, { v: o.todo, cls: 'idle' }, { v: o.late, cls: 'bad' }], tipHtml: `<b>${esc(o.name)}</b><br>${t('g_l_done')} ${o.done}<br>${t('g_l_prog')} ${o.active}<br>${t('g_l_todo')} ${o.todo}<br>${t('g_l_late')} ${o.late}` }));
-        body.innerHTML = hbars(rows, { aria: t('w_workload'), rowH: 38 }) + legend([['ok', t('g_l_done')], ['c1', t('g_l_prog')], ['idle', t('g_l_todo')], ['bad', t('g_l_late')]]);
+        const rows = Wk.map((o) => ({ label: o.name === 'Unassigned' ? t('unassigned') : o.name, sub: t('tasks_n', { n: o.total }), segs: [{ v: o.done, cls: 'ok' }, { v: o.active, cls: 'c1' }, { v: o.todo, cls: 'idle' }, { v: o.late, cls: 'bad' }], tipHtml: `<b>${esc(o.name)}</b><br>${t('g_l_done')} ${o.done}<br>${t('g_l_prog')} ${o.active}<br>${t('g_l_todo')} ${o.todo}<br>${t('g_l_late')} ${o.late}` }));
+        body.innerHTML = hbars(rows, { aria: t('w_workload') }) + legend([['ok', t('g_l_done')], ['c1', t('g_l_prog')], ['idle', t('g_l_todo')], ['bad', t('g_l_late')]]) + (d.analytics.workloadTotal > Wk.length ? `<div class="small muted dw-note">${esc(t('dash_top_owners', { n: Wk.length, total: d.analytics.workloadTotal }))}</div>` : '');
         return { csv: () => [[t('g_owner'), t('g_l_done'), t('g_l_prog'), t('g_l_todo'), t('g_l_late')], ...Wk.map((o) => [o.name, o.done, o.active, o.todo, o.late])], chart: true };
       },
     },
@@ -264,6 +264,7 @@
       size: 's', title: 'overdue_tasks',
       render(body, d, ctx) {
         body.innerHTML = d.overdue.map((x, i) => listRow({ title: x.task, meta: `${projLink(x.project_id, x.project)}${x.assignee ? ` · ${esc(x.assignee)}` : ''}`, actions: `<button class="btn sm" data-prog="${i}">${t('ra_update')}</button>`, val: x.finish, valCls: 'bad', sub: x.progress + '%' })).join('') || empty(t('nothing_overdue'));
+        if (d.overdueTotal > d.overdue.length) body.insertAdjacentHTML('beforeend', `<div class="small muted dw-note">${esc(t('dash_top_n', { n: d.overdue.length, total: d.overdueTotal }))}</div>`);
         $$('[data-prog]', body).forEach((b) => (b.onclick = () => { const x = d.overdue[Number(b.dataset.prog)]; PM.act.progress({ project_id: x.project_id, task_id: x.task_id, title: x.task, project: x.project, progress: x.progress }, () => ctx.reload()); }));
         return { csv: () => [[t('project'), t('g_task'), t('g_finish'), t('progress'), t('g_owner')], ...d.overdue.map((x) => [x.project, x.task, x.finish, x.progress, x.assignee || ''])] };
       },
@@ -417,7 +418,25 @@
 
     // any widget with more than five rows shows five and a toggle for the rest
     const MAXR = 5, openRows = {};
+    function limitBars(body, id) {
+      const svg = $('svg.hbars', body), gs = svg ? $$('.hb-row', svg) : [];
+      if (gs.length <= MAXR) return;
+      const vb = svg.viewBox.baseVal, rh = (vb.height - 6) / gs.length, shortH = MAXR * rh + 6, fullH = vb.height, extra = gs.length - MAXR;
+      const btn = document.createElement('button');
+      btn.className = 'dw-more-rows'; btn.type = 'button';
+      const apply = () => {
+        const on = !!openRows[id];
+        gs.slice(MAXR).forEach((g) => { g.style.display = on ? '' : 'none'; });
+        svg.setAttribute('viewBox', `0 0 ${vb.width} ${on ? fullH : shortH}`);
+        btn.innerHTML = `${on ? t('dash_show_less') : t('dash_show_more', { n: extra })}${icon('down', on ? 'flip' : '')}`;
+        btn.setAttribute('aria-expanded', String(on));
+      };
+      btn.onclick = () => { openRows[id] = !openRows[id]; apply(); };
+      apply();
+      ($(':scope > .viz-legend', body) || svg).after(btn);
+    }
     function limitRows(el, body, id) {
+      limitBars(body, id);
       const trs = $$('tbody tr', body);
       const rows = trs.length > MAXR ? trs : $$(':scope > .list-item', body);
       if (rows.length <= MAXR) return;
@@ -433,7 +452,8 @@
       };
       btn.onclick = () => { openRows[id] = !openRows[id]; apply(); };
       apply(true);
-      body.appendChild(btn);
+      const note = $(':scope > .dw-note', body);
+      if (note) note.before(btn); else body.appendChild(btn);
     }
 
     // widgets receive a context so an action inside one can refresh the others

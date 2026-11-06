@@ -396,7 +396,7 @@ html[dir="rtl"] .drawer { transform: translateX(-40px); }
 .qa-lab { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; margin-inline-end: 6px; color: var(--muted); font-size: var(--fs-body); } .qa-bar .badge-count { margin-inline-start: 6px; }
 .row.qa { gap: 6px; margin-top: 6px; flex-wrap: wrap; }
 .bad-txt { color: var(--danger); }
-.donut-row { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-bottom: 10px; } .donut-row .donut { max-width: 130px; }
+.donut-row { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-bottom: 10px; }
 .stackbar { display: flex; gap: 2px; height: 12px; border-radius: 6px; overflow: hidden; background: var(--track); margin-bottom: 4px; } .stackbar i { display: block; min-width: 4px; } .stackbar i.ok { background: var(--success); } .stackbar i.c1 { background: var(--c1); } .stackbar i.idle { background: var(--faint); opacity: .55; } .stackbar i.bad { background: var(--danger); }
 .sc-area { fill: var(--c1); opacity: .12; } .sc-line { fill: none; stroke: var(--c1); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; } .sc-act { fill: none; stroke: var(--success); stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 1 0; } .sc-act.ok { stroke: var(--success); }
 .sc-dot { stroke: var(--surface); stroke-width: 2; } .sc-dot.plan { fill: var(--c1); } .sc-dot.act { fill: var(--success); } .hit-dot { fill: transparent; } .hit-dot:hover { fill: var(--c1); opacity: .25; }
@@ -427,14 +427,14 @@ html[dir="rtl"] .drawer { transform: translateX(-40px); }
 .dw { min-width: 0; } .dw-body { container-type: inline-size; min-width: 0; overflow-x: clip; }
 .dw-body:has(.timeline) { overflow-x: auto; }
 @container (max-width: 1040px) { .rd-body { grid-template-columns: 310px minmax(0, 1fr); } .rd-side { grid-column: 1 / -1; } }
-@container (max-width: 700px) { .rd-body { grid-template-columns: minmax(0, 1fr); } .rd-side { grid-column: auto; } .rd-spider { align-items: center; } }
+@container (max-width: 700px) { .rd-body { grid-template-columns: minmax(0, 1fr); } .rd-side { grid-column: auto; } .rd-spider { align-items: center; } .rd-list { max-height: 300px; } }
 @container (max-width: 420px) { .rd-grid { grid-template-columns: auto repeat(3, minmax(0, 1fr)); } .rd-cell { height: 56px; font-size: var(--fs-title); } .rd-head { flex-wrap: wrap; } }
 .viz { max-width: 100%; }
 /* radar: render at 1:1 with its 300 unit viewBox so label text stays the same size as the rest of the UI when the widget is resized */
 .viz.spider { width: 300px; max-width: 100%; min-width: 0; }
 .kpis { container-type: normal; }
 @container (max-width: 760px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@container (max-width: 420px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .kv { font-size: var(--fs-title); } }
+@container (max-width: 420px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .dw-body .list-item { min-width: 0; } .dw-body .list-item .grow { min-width: 0; overflow-wrap: anywhere; }
 .dw-body .row.qa { flex-wrap: wrap; }
 
@@ -498,10 +498,9 @@ html[dir="rtl"] .drawer { transform: translateX(-40px); }
    page title 24, section and widget headers 16, sub headers and body 14, captions and meta 12, micro 11, metrics 28 */
 h1 { font-size: var(--fs-title); } h2, h3 { font-size: var(--fs-heading); } h4, .sub { font-size: var(--fs-body); font-weight: 600; margin: 0; }
 .dw-h h3 { font-size: var(--fs-heading); letter-spacing: -.005em; }
-.donut-box { position: relative; display: inline-block; width: 100%; max-width: 190px; } .donut-row .donut-box { max-width: 130px; } .donut-box .donut { display: block; width: 100%; max-width: none; }
+.donut-box { position: relative; display: inline-block; max-width: 100%; } .donut-box .donut { display: block; width: 100%; max-width: none; }
 .dn-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; pointer-events: none; line-height: 1.15; }
 .dn-center b { font-size: var(--fs-metric); font-weight: 650; letter-spacing: -.02em; font-variant-numeric: tabular-nums; } .dn-center span { font-size: var(--fs-small); color: var(--muted); }
-.donut-row .dn-center b { font-size: var(--fs-heading); } .donut-row .dn-center span { font-size: var(--fs-micro); }
 
 /* ===== Project end counter ===== */
 .endctr { display: inline-flex; align-items: baseline; gap: 8px; padding: 4px 14px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2); line-height: 1.2; animation: pop .4s var(--ease) both; }
@@ -1604,3 +1603,11 @@ body.cht-dragging .cht-resize::after, body.cht-dragging .cht-grip::after { backg
 .lg-views { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; } .lg-vlab { margin-inline-end: 2px; } .lg-vt { padding: 6px 14px; }
 .lg-vact { display: flex; align-items: center; gap: 6px; margin-inline-start: auto; flex-wrap: wrap; }
 @media (max-width: 700px) { .lg-vact { margin-inline-start: 0; } }
+
+/* Widget height standard: widgets of one size share a minimum height, so a short chart never sits beside a tall list as a thin card.
+   Key figure strips keep their natural height. Donuts sit in the middle of their card and lay out in a row when the card is wide. */
+.dw.sz-s, .dw.sz-m { min-height: 360px; } .dw.sz-l { min-height: 200px; }
+.dw[data-w="kpi"], .dw[data-w="pkpi"], .dw[data-w="tr_tkpi"], .dw[data-w="tr_tsnap"] { min-height: 0; }
+.dw-body:has(> .donut-wrap) { display: flex; flex-direction: column; justify-content: center; }
+@container (min-width: 480px) { .donut-wrap { grid-auto-flow: column; justify-content: center; align-items: center; gap: 28px; } .donut-wrap .viz-legend { flex-direction: column; margin-top: 0; gap: 8px; } }
+.dw-note { margin-top: 10px; }

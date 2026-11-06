@@ -6,7 +6,9 @@
   // ---------- helpers ----------
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const t = (k, vars) => {
-    let s = (PM.I18N[S.lang] && PM.I18N[S.lang][k]) ?? PM.I18N.en[k] ?? k;
+    // a key with a _1 twin has its own text when the count is one ("1 task", not "1 tasks")
+    const one = vars && Number(vars.n) === 1 ? ((PM.I18N[S.lang] && PM.I18N[S.lang][k + '_1']) ?? (S.lang === 'ar' ? undefined : PM.I18N.en[k + '_1'])) : undefined;
+    let s = one ?? (PM.I18N[S.lang] && PM.I18N[S.lang][k]) ?? PM.I18N.en[k] ?? k;
     if (vars) for (const [a, b] of Object.entries(vars)) s = s.replaceAll(`{${a}}`, b);
     return s;
   };

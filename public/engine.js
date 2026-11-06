@@ -563,6 +563,7 @@ function buildAnalytics(entries, today) {
     timeline: { min, max, today, projects: timeline },
     payments: Object.values(money),
     workload: [...owners.values()].sort((a, b) => b.total - a.total).slice(0, 8),
+    workloadTotal: owners.size,
     deliverables,
   };
 }
