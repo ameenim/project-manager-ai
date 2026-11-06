@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const KEY = 'pm_admin_token';
-  const BUILD = '1.2.4';
+  const BUILD = '1.3.0';
   const S = { token: null, me: null, timer: null, errs: [] };
   try { S.token = localStorage.getItem(KEY); } catch (e) { /* storage blocked */ }
   try { const th = localStorage.getItem('pm_theme'); if (th) document.documentElement.dataset.theme = th; } catch (e) { /* storage blocked */ }
