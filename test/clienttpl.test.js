@@ -69,7 +69,7 @@ test('placeholder headings are dropped and a bad file is refused', async () => {
   assert.deepEqual(brandLib.cleanHeadings(['Heading 1', 'Click to edit', 'Title', 'Real One']), []);
   assert.deepEqual(brandLib.cleanHeadings(['1. Scope', '2. Schedule', '2. Schedule']), ['Scope', 'Schedule']);
   await assert.rejects(() => brandLib.extract(Buffer.from('not a zip'), 'x.docx'), /could not be opened/);
-  await assert.rejects(() => brandLib.extract(Buffer.from('x'), 'x.pdf'), /Word .* or PowerPoint/);
+  await assert.rejects(() => brandLib.extract(Buffer.from('x'), 'x.pdf'), /Word .* PowerPoint/);
   const z = new JSZip(); z.file('hello.txt', 'hi');
   const zb = await z.generateAsync({ type: 'nodebuffer' });
   await assert.rejects(() => brandLib.extract(zb, 'x.docx'), /does not look like/);
@@ -102,10 +102,10 @@ test('Claude chooses the color roles and cleans the headings, and bad answers fa
 
 test('uploading a client template creates a template the project manager can read and change', async () => {
   const u = await s.user();
-  const r = await s.call('POST', '/api/templates/client', form(await word(), 'Acme.docx', { name: 'Acme standard' }), u.token);
+  const r = await s.call('POST', '/api/templates/client', form(await word(), 'Acme.docx', { name: 'Acme standard', mode: 'both', doc_type: 'progress_weekly' }), u.token);
   assert.equal(r.status, 200, JSON.stringify(r.data).slice(0, 300));
   const t = r.data.template;
-  assert.equal(t.name, 'Acme standard'); assert.equal(t.doc_type, '*');
+  assert.equal(t.name, 'Acme standard'); assert.equal(t.doc_type, 'progress_weekly'); assert.equal(t.mode, 'both');
   assert.equal(t.brand.colors.primary, '7B2D8E'); assert.ok(t.brand.logo.dataUrl);
   assert.equal(t.sections.length, 5);
   assert.equal(t.layout.header.right, 'Acme Corporation | Confidential'); assert.equal(t.layout.footer.left, 'Acme Corporation, Dubai');
@@ -125,13 +125,13 @@ test('uploading a client template creates a template the project manager can rea
   assert.equal((await s.call('PUT', `/api/templates/${t.id}`, { brand: { colors: { primary: 'red' } } }, u.token)).status, 400);
   assert.equal((await s.call('PUT', `/api/templates/${t.id}`, { brand: { logo: { dataUrl: 'javascript:alert(1)' } } }, u.token)).status, 400);
   assert.equal((await s.call('PUT', `/api/templates/${t.id}`, { brand: { logo: null } }, u.token)).data.template.brand.logo, null);
-  assert.equal((await s.call('POST', '/api/templates/client', form(Buffer.from('nope'), 'x.docx'), u.token)).status, 400);
-  assert.equal((await s.call('POST', '/api/templates/client', form(Buffer.from('nope'), 'x.txt'), u.token)).status, 400);
+  assert.equal((await s.call('POST', '/api/templates/client', form(Buffer.from('nope'), 'x.docx', { mode: 'design' }), u.token)).status, 400);
+  assert.equal((await s.call('POST', '/api/templates/client', form(Buffer.from('nope'), 'x.txt', { mode: 'design' }), u.token)).status, 400);
 });
 
 test('a document made from a client template carries its brand, and old documents keep theirs', async () => {
   const u = await s.user(); const p = await s.project(u.token, 'Branded');
-  const t = (await s.call('POST', '/api/templates/client', form(await word(), 'Acme.docx'), u.token)).data.template;
+  const t = (await s.call('POST', '/api/templates/client', form(await word(), 'Acme.docx', { mode: 'both', doc_type: 'progress_weekly' }), u.token)).data.template;
   const g1 = (await s.call('POST', `/api/projects/${p.id}/generate`, { type: 'progress_weekly', format: 'docx', template_id: t.id }, u.token)).data.generated;
   assert.equal(g1.brand.colors.primary, '7B2D8E'); assert.ok(g1.brand.logo.dataUrl);
   assert.deepEqual([...g1.content.matchAll(/^# (.*)$/gm)].map((m) => m[1]), ['Introduction', 'Scope of Work', 'Project Schedule', 'Risks and Mitigation', 'Commercial Terms']);
@@ -141,8 +141,8 @@ test('a document made from a client template carries its brand, and old document
   assert.equal(old.brand.colors.primary, '7B2D8E', 'existing documents keep their style');
   const g2 = (await s.call('POST', `/api/projects/${p.id}/generate`, { type: 'progress_weekly', format: 'docx', template_id: t.id }, u.token)).data.generated;
   assert.equal(g2.brand.colors.primary, '00AA55', 'new documents use the changed style');
-  // a template with no headings still makes a document with the standard sections
-  const t2 = (await s.call('POST', '/api/templates/client', form(await word({ heads: ['Heading 1', 'Title'] }), 'Plain.docx'), u.token)).data.template;
+  // a design pattern has no sections, so the standard sections are used
+  const t2 = (await s.call('POST', '/api/templates/client', form(await word({ heads: ['Heading 1', 'Title'] }), 'Plain.docx', { mode: 'design' }), u.token)).data.template;
   assert.equal(t2.sections.length, 0);
   const g3 = (await s.call('POST', `/api/projects/${p.id}/generate`, { type: 'progress_weekly', format: 'docx', template_id: t2.id }, u.token)).data.generated;
   assert.ok([...g3.content.matchAll(/^# (.*)$/gm)].length >= 5); assert.ok(g3.brand);
@@ -161,6 +161,105 @@ test('a template saved from the editor keeps the brand of its document', async (
   assert.equal(r.status, 200); assert.equal(r.data.template.has_brand, true);
   const t = (await s.call('GET', `/api/templates/${r.data.template.id}`, null, u.token)).data.template;
   assert.equal(t.brand.colors.primary, '123456'); assert.equal(t.brand.fonts.heading, 'Tahoma');
+});
+
+
+async function excel() {
+  const x = new JSZip();
+  x.file('[Content_Types].xml', '<Types/>');
+  x.file('xl/workbook.xml', '<workbook xmlns="x"><sheets><sheet name="Summary" sheetId="1" r:id="rId1"/><sheet name="Schedule" sheetId="2" r:id="rId2"/><sheet name="Risks" sheetId="3" r:id="rId3"/></sheets></workbook>');
+  x.file('xl/theme/theme1.xml', theme('Georgia', 'Verdana'));
+  x.file('xl/styles.xml', '<styleSheet xmlns="x"><fonts count="2"><font><sz val="11"/><color rgb="FF2B2B2B"/><name val="Verdana"/></font><font><b/><sz val="16"/><color rgb="FF7B2D8E"/><name val="Georgia"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF7B2D8E"/></patternFill></fill></fills></styleSheet>');
+  x.file('xl/worksheets/sheet1.xml', '<worksheet xmlns="x"><headerFooter><oddHeader>&amp;LAcme Finance&amp;RConfidential</oddHeader><oddFooter>&amp;CAcme Corporation, Dubai</oddFooter></headerFooter></worksheet>');
+  x.file('xl/drawings/_rels/drawing1.xml.rels', '<Relationships><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/></Relationships>');
+  x.file('xl/media/image1.png', LOGO);
+  return x.generateAsync({ type: 'nodebuffer' });
+}
+
+test('an Excel template gives its colors, fonts, logo, header, footer and sheet names', async () => {
+  const r = await brandLib.extract(await excel(), 'Budget.xlsx');
+  assert.equal(r.brand.source.kind, 'Excel');
+  assert.equal(r.brand.colors.primary, '7B2D8E');
+  assert.equal(r.brand.fonts.heading, 'Georgia'); assert.equal(r.brand.fonts.body, 'Verdana');
+  assert.ok(r.brand.logo && r.brand.logo.dataUrl.startsWith('data:image/png'));
+  assert.deepEqual(r.headings, ['Summary', 'Schedule', 'Risks']);
+  assert.match(r.header, /Acme Finance/); assert.match(r.footer, /Acme Corporation, Dubai/);
+});
+
+test('the intro page logo position is read from Word and PowerPoint files', async () => {
+  const w = await JSZip.loadAsync(await word());
+  const doc = await w.file('word/document.xml').async('string');
+  w.file('word/document.xml', doc.replace('<w:body>', '<w:body><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:drawing><wp:inline/></w:drawing></w:r></w:p>'));
+  const rw = await brandLib.extract(await w.generateAsync({ type: 'nodebuffer' }), 'a.docx');
+  assert.equal(rw.intro.found, true); assert.equal(rw.intro.logo, 'center');
+  const p = await JSZip.loadAsync(await ppt());
+  p.file('ppt/presentation.xml', '<p:presentation xmlns:p="x"><p:sldSz cx="9144000" cy="5143500"/></p:presentation>');
+  const s1 = await p.file('ppt/slides/slide1.xml').async('string');
+  p.file('ppt/slides/slide1.xml', s1.replace('</p:sld>', '<p:pic><p:spPr><a:xfrm><a:off x="7600000" y="300000"/><a:ext cx="1000000" cy="500000"/></a:xfrm></p:spPr></p:pic></p:sld>'));
+  const rp = await brandLib.extract(await p.generateAsync({ type: 'nodebuffer' }), 'a.pptx');
+  assert.equal(rp.intro.found, true); assert.equal(rp.intro.logo, 'right');
+});
+
+test('the project manager chooses design, structure or both, and the document type is required only when the structure is used', async () => {
+  const u = await s.user(); const call = (fd) => s.call('POST', '/api/templates/client', fd, u.token);
+  const doc = await word(), xl = await excel();
+  // no choice, or a wrong choice
+  assert.equal((await call(form(doc, 'a.docx'))).status, 400);
+  assert.equal((await call(form(doc, 'a.docx', { mode: 'everything' }))).status, 400);
+  // structure and both need a valid document type
+  for (const mode of ['structure', 'both']) {
+    const none = await call(form(doc, 'a.docx', { mode })); assert.equal(none.status, 400); assert.match(none.data.error || none.data.message || JSON.stringify(none.data), /document type/i);
+    assert.equal((await call(form(doc, 'a.docx', { mode, doc_type: '*' }))).status, 400, 'all types is not allowed for the structure');
+    assert.equal((await call(form(doc, 'a.docx', { mode, doc_type: 'nonsense' }))).status, 400);
+  }
+  // design needs no type, applies to all types, and drops the headings
+  const d = await call(form(doc, 'a.docx', { mode: 'design', doc_type: 'charter' }));
+  assert.equal(d.status, 200, JSON.stringify(d.data)); assert.equal(d.data.template.doc_type, '*'); assert.equal(d.data.template.mode, 'design');
+  assert.deepEqual(d.data.template.sections, []); assert.ok(d.data.template.brand && d.data.template.layout);
+  // structure keeps the headings and no design
+  const st = await call(form(doc, 'a.docx', { mode: 'structure', doc_type: 'charter' }));
+  assert.equal(st.status, 200); assert.equal(st.data.template.mode, 'structure'); assert.equal(st.data.template.doc_type, 'charter');
+  assert.equal(st.data.template.brand, null); assert.equal(st.data.template.layout, null); assert.equal(st.data.template.sections.length, 5);
+  // Excel works in every mode and its sheet names are the sections
+  const xs = await call(form(xl, 'b.xlsx', { mode: 'both', doc_type: 'pm_plan' }));
+  assert.equal(xs.status, 200, JSON.stringify(xs.data)); assert.deepEqual(xs.data.template.sections, ['Summary', 'Schedule', 'Risks']); assert.equal(xs.data.template.brand.fonts.heading, 'Georgia');
+  // a file with no usable headings can still give a design, but not a structure
+  const plain = await word({ heads: ['Heading 1', 'Title'] });
+  assert.equal((await call(form(plain, 'p.docx', { mode: 'structure', doc_type: 'charter' }))).status, 400);
+  assert.equal((await call(form(plain, 'p.docx', { mode: 'both', doc_type: 'charter' }))).status, 400);
+  assert.equal((await call(form(plain, 'p.docx', { mode: 'design' }))).status, 200);
+  // the list tells each mode apart
+  const list = (await s.call('GET', '/api/templates', null, u.token)).data.templates;
+  assert.equal(list.find((x) => x.id === d.data.template.id).mode, 'design');
+  assert.equal(list.find((x) => x.id === st.data.template.id).brand, undefined);
+  assert.equal(list.find((x) => x.id === st.data.template.id).sections, 5);
+});
+
+test('a design pattern works for every document type, a structure only for its own type', async () => {
+  const u = await s.user(); const p = await s.project(u.token, 'Modes'); const gen = (type, tid) => s.call('POST', `/api/projects/${p.id}/generate`, { type, format: 'docx', template_id: tid }, u.token);
+  const call = (fd) => s.call('POST', '/api/templates/client', fd, u.token);
+  const doc = await word();
+  const d = (await call(form(doc, 'a.docx', { mode: 'design' }))).data.template;
+  const st = (await call(form(doc, 'a.docx', { mode: 'structure', doc_type: 'progress_weekly' }))).data.template;
+  const both = (await call(form(doc, 'a.docx', { mode: 'both', doc_type: 'progress_weekly' }))).data.template;
+  const headings = (g) => [...g.content.matchAll(/^# (.*)$/gm)].map((m) => m[1]);
+  for (const type of ['progress_weekly', 'charter']) {
+    const g = (await gen(type, d.id)).data.generated;
+    assert.equal(g.brand.colors.primary, '7B2D8E', `design applies to ${type}`); assert.ok(g.layout);
+    assert.ok(!headings(g).includes('Scope of Work'), 'a design pattern brings no sections');
+  }
+  const gs = (await gen('progress_weekly', st.id)).data.generated;
+  assert.equal(gs.brand, undefined, 'structure only: no brand'); assert.equal(gs.layout, undefined);
+  assert.deepEqual(headings(gs), ['Introduction', 'Scope of Work', 'Project Schedule', 'Risks and Mitigation', 'Commercial Terms']);
+  const gb = (await gen('progress_weekly', both.id)).data.generated;
+  assert.equal(gb.brand.colors.primary, '7B2D8E'); assert.deepEqual(headings(gb), headings(gs));
+  assert.equal((await gen('charter', st.id)).status, 404, 'a structure is not offered for another type');
+  assert.equal((await gen('charter', both.id)).status, 404);
+  // a design template ignores edits to sections, a structure template ignores edits to the brand
+  const r1 = await s.call('PUT', `/api/templates/${d.id}`, { sections: ['X', 'Y'], brand: { colors: { primary: '00AA55' } } }, u.token);
+  assert.deepEqual(r1.data.template.sections, []); assert.equal(r1.data.template.brand.colors.primary, '00AA55');
+  const r2 = await s.call('PUT', `/api/templates/${st.id}`, { sections: ['A', 'B'], brand: { colors: { primary: '00AA55' } } }, u.token);
+  assert.deepEqual(r2.data.template.sections, ['A', 'B']); assert.equal(r2.data.template.brand, null);
 });
 
 // ---- the files follow the brand ----

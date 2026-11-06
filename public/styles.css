@@ -1458,7 +1458,7 @@ body.ded-open { overflow: hidden; }
 .ct-drop { display: grid; place-items: center; gap: 6px; text-align: center; padding: 28px 16px; border: 2px dashed var(--border-strong); border-radius: 12px; background: var(--surface-2); cursor: pointer; }
 .ct-drop:hover, .ct-drop.over, .ct-drop:focus-visible { border-color: var(--primary); background: var(--primary-soft); outline: none; }
 .ct-drop .ico { color: var(--primary); display: inline-flex; }
-.ct-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; align-items: start; }
+.ct-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; align-items: start; } .ct-grid.one { grid-template-columns: minmax(0, 1fr); }
 .ct-form section { margin-bottom: 20px; } .ct-form h3, .ct-side h3 { margin: 0 0 8px; font-size: var(--fs-heading); }
 .ct-form .lb { font-size: var(--fs-small); color: var(--muted); font-weight: 600; display: block; margin-bottom: 4px; }
 .ct-row { display: grid; grid-template-columns: minmax(0, 1fr) 44px 96px minmax(90px, auto); gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }

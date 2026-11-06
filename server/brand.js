@@ -176,7 +176,7 @@ async function readWord(zip, theme, warnings) {
   for (const p of footerParts) cand.push(...await relImages(zip, `word/_rels/${path.posix.basename(p)}.rels`));
   cand.push(...(await relImages(zip, 'word/_rels/document.xml.rels')).slice(0, 3));
   const logo = await pickLogo(zip, [...new Set(cand)], warnings);
-  return { info, used, headings: h1.length ? h1 : h2, header: hdr[0] || '', footer: ftr[0] || '', logo };
+  return { info, used, headings: h1.length ? h1 : h2, header: hdr[0] || '', footer: ftr[0] || '', logo, intro: wordIntro(doc) };
 }
 
 // ---------- reading a PowerPoint file ----------
@@ -210,7 +210,76 @@ async function readPpt(zip, theme, warnings) {
   for (const p of slides.slice(0, 2)) cand.push(...await relImages(zip, `ppt/slides/_rels/${path.posix.basename(p)}.rels`));
   const logo = await pickLogo(zip, [...new Set(cand)], warnings);
   const font = (f) => (/^\+m[jn]-/.test(f) ? '' : f);
-  return { info: { heading1: { font: font(tfont) || '', color: tcolor, size: null }, body: null, defaults: { font: '', color: null } }, used, headings: heads.slice(1), header: '', footer: '', logo };
+  return { info: { heading1: { font: font(tfont) || '', color: tcolor, size: null }, body: null, defaults: { font: '', color: null } }, used, headings: heads.slice(1), header: '', footer: '', logo, intro: await pptIntro(zip, slides) };
+}
+
+// ---------- the intro page: where the logo sits on the first page or slide ----------
+const thirds = (x, total) => (total > 0 ? (x / total < 0.34 ? 'left' : x / total > 0.62 ? 'right' : 'center') : 'left');
+const JC = { left: 'left', start: 'left', center: 'center', right: 'right', end: 'right' };
+function wordIntro(doc) {
+  const body = String(doc || '');
+  const firstHead = body.search(/<w:pStyle\s+w:val="(Heading1|Heading2)"/);
+  const lead = firstHead > 0 ? body.slice(0, firstHead) : body.slice(0, 12000);
+  const paras = lead.match(/<w:p[ >][\s\S]*?<\/w:p>/g) || [];
+  const withPic = paras.find((p) => /<w:drawing>|<w:pict>/.test(p));
+  const hasTitle = /<w:pStyle\s+w:val="(Title|Subtitle)"/.test(lead);
+  let logo = 'left';
+  if (withPic) {
+    const al = (withPic.match(/<wp:positionH[^>]*>\s*<wp:align>(\w+)<\/wp:align>/) || [])[1];
+    const jc = (withPic.match(/<w:jc\s+w:val="(\w+)"/) || [])[1];
+    logo = JC[al] || JC[jc] || 'left';
+  }
+  return { found: !!(withPic || hasTitle), logo };
+}
+async function pptIntro(zip, slides) {
+  if (!slides.length) return { found: false, logo: 'left' };
+  const pres = await read(zip, 'ppt/presentation.xml');
+  const cx = Number((pres.match(/<p:sldSz[^>]*\scx="(\d+)"/) || [])[1]) || 9144000;
+  const first = await read(zip, slides[0]);
+  let logo = 'left';
+  const pic = first.match(/<p:pic>[\s\S]*?<\/p:pic>/);
+  if (pic) {
+    const off = pic[0].match(/<a:off\s+x="(-?\d+)"/), ext = pic[0].match(/<a:ext\s+cx="(\d+)"/);
+    if (off) logo = thirds(Number(off[1]) + (ext ? Number(ext[1]) / 2 : 0), cx);
+  }
+  return { found: /<p:ph[^>]*type="(title|ctrTitle|subTitle)"/.test(first), logo };
+}
+
+// ---------- reading an Excel file ----------
+const XL_THEME = ['lt1', 'dk1', 'lt2', 'dk2', 'accent1', 'accent2', 'accent3', 'accent4', 'accent5', 'accent6', 'hlink', 'hlink'];
+async function readExcel(zip, theme, warnings) {
+  const styles = await read(zip, 'xl/styles.xml');
+  const wb = await read(zip, 'xl/workbook.xml');
+  const used = new Map();
+  const bump = (hex, w) => { if (hex && isHex(hex)) used.set(clean(hex), (used.get(clean(hex)) || 0) + w); };
+  const colorOf = (tag) => {
+    const rgbV = attr(tag, 'rgb'); if (rgbV && /^[0-9A-Fa-f]{8}$/.test(rgbV)) return clean(rgbV.slice(2));
+    const th = attr(tag, 'theme'); return th != null && XL_THEME[Number(th)] ? theme.colors[XL_THEME[Number(th)]] || null : null;
+  };
+  for (const m of styles.matchAll(/<fgColor\s[^>]*\/?>/g)) bump(colorOf(m[0]), 2);
+  const fontsXml = (styles.match(/<fonts[^>]*>([\s\S]*?)<\/fonts>/) || [])[1] || '';
+  const fonts = [...fontsXml.matchAll(/<font>([\s\S]*?)<\/font>/g)].map((f) => {
+    const col = (f[1].match(/<color\s[^>]*\/?>/) || [])[0];
+    const c = col ? colorOf(col) : null; if (c) bump(c, 1);
+    return { name: attr((f[1].match(/<name\s[^>]*\/?>/) || [''])[0], 'val') || '', bold: /<b\s*\/?>/.test(f[1]), size: Number(attr((f[1].match(/<sz\s[^>]*\/?>/) || [''])[0], 'val')) || 0, color: c };
+  });
+  const bodyFont = fonts[0] || null;
+  const headFont = fonts.filter((f) => f.bold && f.name).sort((a, b) => b.size - a.size)[0] || null;
+  const sheets = [...wb.matchAll(/<sheet\s[^>]*>/g)].map((m) => attr(m[0], 'name')).filter(Boolean);
+  const sheetParts = names(zip, /^xl\/worksheets\/sheet\d+\.xml$/);
+  let header = '', footer = '';
+  const hf = (x) => String(x || '').replace(/&amp;[LCR]/g, ' ').replace(/&amp;(\d+|"[^"]*"|[A-Za-z&]|\d)/g, '').replace(/&amp;/g, '').replace(/\s+/g, ' ').trim();
+  for (const sp of sheetParts) {
+    const x = await read(zip, sp);
+    if (!header) header = hf(ent((x.match(/<oddHeader>([\s\S]*?)<\/oddHeader>/) || [])[1] || ''));
+    if (!footer) footer = hf(ent((x.match(/<oddFooter>([\s\S]*?)<\/oddFooter>/) || [])[1] || ''));
+  }
+  const cand = [];
+  for (const rp of names(zip, /^xl\/drawings\/_rels\/[^/]+\.rels$/)) cand.push(...await relImages(zip, rp));
+  cand.push(...names(zip, /^xl\/media\/[^/]+$/));
+  const logo = await pickLogo(zip, [...new Set(cand)], warnings);
+  const info = { heading1: headFont ? { font: headFont.name, color: headFont.color, size: headFont.size } : null, body: bodyFont ? { font: bodyFont.name, color: bodyFont.color, size: bodyFont.size } : null, defaults: { font: bodyFont ? bodyFont.name : '', color: null } };
+  return { info, used, headings: sheets, header, footer, logo, intro: { found: false, logo: 'left' } };
 }
 
 // ---------- from facts to a brand ----------
@@ -289,18 +358,21 @@ async function refine(facts, base, ai) {
 }
 
 // ---------- entry point ----------
+const KIND_MAIN = { word: 'word/document.xml', ppt: 'ppt/presentation.xml', excel: 'xl/workbook.xml' };
+const KIND_THEME = { word: /^word\/theme\/theme\d+\.xml$/, ppt: /^ppt\/theme\/theme\d+\.xml$/, excel: /^xl\/theme\/theme\d+\.xml$/ };
+const KIND_LABEL = { word: 'Word', ppt: 'PowerPoint', excel: 'Excel' };
 async function extract(buffer, filename, opts) {
   opts = opts || {};
   const ext = path.extname(String(filename || '')).slice(1).toLowerCase();
-  const kind = /^(docx|dotx|docm|dotm)$/.test(ext) ? 'word' : /^(pptx|potx|ppsx|pptm|potm)$/.test(ext) ? 'ppt' : null;
-  if (!kind) throw Object.assign(new Error('Upload a Word (.docx, .dotx) or PowerPoint (.pptx, .potx) template'), { status: 400 });
+  const kind = /^(docx|dotx|docm|dotm)$/.test(ext) ? 'word' : /^(pptx|potx|ppsx|pptm|potm)$/.test(ext) ? 'ppt' : /^(xlsx|xltx|xlsm|xltm)$/.test(ext) ? 'excel' : null;
+  if (!kind) throw Object.assign(new Error('Upload a Word (.docx, .dotx), PowerPoint (.pptx, .potx) or Excel (.xlsx, .xltx) template'), { status: 400 });
   let zip;
   try { zip = await JSZip.loadAsync(buffer); } catch (e) { throw Object.assign(new Error('The file could not be opened. Save it again as .docx or .pptx and try again.'), { status: 400 }); }
-  if (!zip.file(kind === 'word' ? 'word/document.xml' : 'ppt/presentation.xml')) throw Object.assign(new Error('This does not look like a Word or PowerPoint file.'), { status: 400 });
+  if (!zip.file(KIND_MAIN[kind])) throw Object.assign(new Error('This does not look like a Word, PowerPoint or Excel file.'), { status: 400 });
   const warnings = [];
-  const themePath = names(zip, kind === 'word' ? /^word\/theme\/theme\d+\.xml$/ : /^ppt\/theme\/theme\d+\.xml$/)[0];
+  const themePath = names(zip, KIND_THEME[kind])[0];
   const theme = themePath ? parseTheme(await read(zip, themePath)) : { colors: {}, fonts: { major: '', minor: '' } };
-  const part = kind === 'word' ? await readWord(zip, theme, warnings) : await readPpt(zip, theme, warnings);
+  const part = kind === 'word' ? await readWord(zip, theme, warnings) : kind === 'ppt' ? await readPpt(zip, theme, warnings) : await readExcel(zip, theme, warnings);
   const facts = { filename: path.basename(String(filename || '')), kind, theme, styles: part.info, used: part.used, headings: part.headings, header: part.header, footer: part.footer };
   let brand = deriveBrand(facts);
   let engine = 'rules', name = '', sections = cleanHeadings(part.headings);
@@ -315,8 +387,8 @@ async function extract(buffer, filename, opts) {
   return {
     engine, warnings, kind, headings: sections,
     name: name || base || 'Client template',
-    brand: { v: 1, colors: brand.colors, fonts: brand.fonts, logo: part.logo ? { dataUrl: part.logo.dataUrl, w: part.logo.w, h: part.logo.h } : null, source: { filename: facts.filename, kind: kind === 'word' ? 'Word' : 'PowerPoint' } },
-    header: part.header, footer: part.footer,
+    brand: { v: 1, colors: brand.colors, fonts: brand.fonts, logo: part.logo ? { dataUrl: part.logo.dataUrl, w: part.logo.w, h: part.logo.h } : null, source: { filename: facts.filename, kind: KIND_LABEL[kind] } },
+    header: part.header, footer: part.footer, intro: part.intro || { found: false, logo: 'left' },
   };
 }
 

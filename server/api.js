@@ -1593,7 +1593,14 @@ Rules:
 
   // Read from the live report engine, so a new document type shows up without regenerating the demo seed.
   on('GET', '/api/doc-types', async () => ({ types: R.DOC_TYPES }));
-  on('GET', '/api/templates', async () => ({ templates: DB.templates.map((t) => ({ id: t.id, doc_type: t.doc_type, name: t.name, created_at: t.created_at, has_layout: !!t.layout, ...(t.brand ? { brand: { colors: t.brand.colors, fonts: t.brand.fonts, has_logo: !!t.brand.logo, source: t.brand.source || null } } : {}) })) }));
+  // A template is one of three modes. design: colors, fonts, logo, styles and intro page for every document type.
+  // structure: the section list of one document type. both: the design and the structure of one document type.
+  const MODES = ['design', 'structure', 'both'];
+  // Templates saved before modes existed keep working exactly as they did: a look plus sections is both, a look alone is design.
+  const modeOf = (t) => (MODES.includes(t.mode) ? t.mode : t.brand || t.layout ? (R.parseTemplate(t.body || '').length ? 'both' : 'design') : 'structure');
+  const usesDesign = (t) => modeOf(t) !== 'structure';
+  const usesStructure = (t) => modeOf(t) !== 'design';
+  on('GET', '/api/templates', async () => ({ templates: DB.templates.map((t) => ({ id: t.id, doc_type: t.doc_type, mode: modeOf(t), name: t.name, created_at: t.created_at, has_layout: !!t.layout && usesDesign(t), ...(t.brand && usesDesign(t) ? { brand: { colors: t.brand.colors, fonts: t.brand.fonts, has_logo: !!t.brand.logo, source: t.brand.source || null } } : {}), sections: usesStructure(t) ? R.parseTemplate(t.body || '').length : 0 })) }));
   on('GET', '/api/templates/skeleton/([a-z_]+)', async (m) => { if (!RAW.skeletons[m[1]]) throw err(404, 'Unknown document type'); return { body: RAW.skeletons[m[1]] }; });
   on('POST', '/api/templates', async (m, q, fd) => {
     const name = fd.get('name'), doc_type = fd.get('doc_type');
@@ -1613,45 +1620,60 @@ Rules:
     const rawBrand = fd.get('brand');
     if (rawBrand) { try { brand = brandLib.cleanBrand(JSON.parse(rawBrand)); } catch (e) { throw err(e.status || 400, e.status ? e.message : 'The brand is not valid'); } }
     if (DB.templates.length >= 60) throw err(400, 'You have 60 templates. Delete one before adding another.');
-    const t = { id: nid(), owner_id: DB.user.id, doc_type, name: String(name).trim().slice(0, 120), body: String(body).slice(0, 400000), created_at: nowTs(), ...(layout ? { layout } : {}), ...(brand ? { brand } : {}) };
+    const t = { id: nid(), owner_id: DB.user.id, doc_type, mode: layout || brand ? 'both' : 'structure', name: String(name).trim().slice(0, 120), body: String(body).slice(0, 400000), created_at: nowTs(), ...(layout ? { layout } : {}), ...(brand ? { brand } : {}) };
     DB.templates.push(t); await saveUser();
-    return { template: { id: t.id, doc_type, name: t.name, created_at: t.created_at, has_layout: !!layout, has_brand: !!brand }, sections: R.parseTemplate(body).map((s) => s.heading) };
+    return { template: { id: t.id, doc_type, mode: t.mode, name: t.name, created_at: t.created_at, has_layout: !!layout, has_brand: !!brand }, sections: R.parseTemplate(body).map((s) => s.heading) };
   });
   // ---------- client templates: the style of a client's own Word or PowerPoint file ----------
-  const tplFull = (t) => ({ id: t.id, doc_type: t.doc_type, name: t.name, created_at: t.created_at, has_layout: !!t.layout, layout: t.layout || null, brand: t.brand || null, sections: R.parseTemplate(t.body || '').map((x) => x.heading) });
+  const tplFull = (t) => ({ id: t.id, doc_type: t.doc_type, mode: modeOf(t), name: t.name, created_at: t.created_at, has_layout: !!t.layout && usesDesign(t), layout: usesDesign(t) ? t.layout || null : null, brand: usesDesign(t) ? t.brand || null : null, sections: usesStructure(t) ? R.parseTemplate(t.body || '').map((x) => x.heading) : [] });
   const bodyOf = (heads, old) => {
     const prev = new Map(R.parseTemplate(old || '').map((x) => [x.heading.toLowerCase(), x.body]));
     return heads.map((h) => `# ${h}\n\n${prev.get(h.toLowerCase()) || ''}`.trimEnd()).join('\n\n') + (heads.length ? '\n' : '');
   };
+  // The PM chooses what to take from the uploaded Word, PowerPoint or Excel file.
+  // design: the look (logo, fonts, colors, styles, intro page, header and footer) for every document type, so no type is asked for.
+  // structure or both: the document type is required, because the sections belong to one type.
   on('POST', '/api/templates/client', async (m, q, fd) => {
     const f = fd.get('file');
-    if (!f || !f.name || !f.buffer || !f.buffer.length) throw err(400, 'Choose the client template file');
+    if (!f || !f.name || !f.buffer || !f.buffer.length) throw err(400, 'Choose the template file');
+    const mode = String(fd.get('mode') || '');
+    if (!MODES.includes(mode)) throw err(400, 'Choose what to take from the file: the design pattern, the document structure or both');
+    let doc_type = '*';
+    if (mode !== 'design') {
+      doc_type = String(fd.get('doc_type') || '');
+      if (!doc_type || doc_type === '*') throw err(400, 'Choose the document type. It is required when the structure is used.');
+      if (!RAW.skeletons[doc_type]) throw err(400, 'Choose a valid document type');
+    }
     if (DB.templates.length >= 60) throw err(400, 'You have 60 templates. Delete one before adding another.');
     const ai = process.env.ANTHROPIC_API_KEY ? (payload) => callClaude(payload) : null;
     let r;
     try { r = await brandLib.extract(f.buffer, f.name, { ai }); } catch (e) { throw err(e.status || 400, e.message); }
     const name = cleanName(fd.get('name'), 120) || r.name;
-    const hasHead = r.headings.length > 0;
-    const layout = {
-      v: 1, logo: { cover: 'left', header: 'left' },
-      header: { left: '', center: '', right: cleanName(r.header, 160) || '{{project}}\n{{client}}' },
-      footer: { left: cleanName(r.footer, 160) || '{{title}}  \u00b7  {{date}}', center: '', right: 'Page {{page}} of {{pages}}' },
-    };
-    const t = { id: nid(), owner_id: DB.user.id, doc_type: '*', name, body: hasHead ? bodyOf(r.headings, '') : '', layout: cleanLayout(layout), brand: brandLib.cleanBrand(r.brand), created_at: nowTs() };
+    if (mode !== 'design' && !r.headings.length) throw err(400, 'No section headings were found in this file. Use the design pattern only, or upload a file with at least two headings (sheet names for Excel).');
+    const t = { id: nid(), owner_id: DB.user.id, doc_type, mode, name, body: mode === 'design' ? '' : bodyOf(r.headings, ''), created_at: nowTs() };
+    if (mode !== 'structure') {
+      t.layout = cleanLayout({
+        v: 1, logo: { cover: (r.intro && r.intro.logo) || 'left', header: 'left' },
+        header: { left: '', center: '', right: cleanName(r.header, 160) || '{{project}}\n{{client}}' },
+        footer: { left: cleanName(r.footer, 160) || '{{title}}  \u00b7  {{date}}', center: '', right: 'Page {{page}} of {{pages}}' },
+      });
+      t.brand = brandLib.cleanBrand(r.brand);
+    }
     DB.templates.push(t); await saveUser();
-    return { template: tplFull(t), engine: r.engine, warnings: r.warnings, found: { headings: r.headings.length, logo: !!t.brand.logo, header: !!r.header, footer: !!r.footer } };
+    return { template: tplFull(t), engine: r.engine, warnings: r.warnings, found: { headings: mode === 'design' ? 0 : r.headings.length, logo: !!(t.brand && t.brand.logo), header: !!r.header, footer: !!r.footer, intro: !!(r.intro && r.intro.found), intro_logo: (r.intro && r.intro.logo) || 'left', kind: r.brand.source.kind } };
   });
   on('GET', '/api/templates/(\\d+)', async (m) => { const t = DB.templates.find((x) => x.id === Number(m[1])); if (!t) throw err(404, 'Template not found'); return { template: tplFull(t) }; });
   on('PUT', '/api/templates/(\\d+)', async (m, q, b) => {
     const t = DB.templates.find((x) => x.id === Number(m[1])); if (!t) throw err(404, 'Template not found');
     b = b || {};
     if (b.name != null) { const v = cleanName(b.name, 120); if (!v) throw err(400, 'Give the template a name'); t.name = v; }
-    if ('brand' in b) { try { const nbr = brandLib.cleanBrand(b.brand, t.brand); if (nbr) t.brand = nbr; else delete t.brand; } catch (e) { throw err(e.status || 400, e.message); } }
-    if ('layout' in b) { const lay = cleanLayout(b.layout); if (lay) t.layout = lay; else delete t.layout; }
-    if (Array.isArray(b.sections)) {
+    const tm = modeOf(t);
+    if ('brand' in b && tm !== 'structure') { try { const nbr = brandLib.cleanBrand(b.brand, t.brand); if (nbr) t.brand = nbr; else delete t.brand; } catch (e) { throw err(e.status || 400, e.message); } }
+    if ('layout' in b && tm !== 'structure') { const lay = cleanLayout(b.layout); if (lay) t.layout = lay; else delete t.layout; }
+    if (Array.isArray(b.sections) && tm !== 'design') {
       const all = b.sections.map((x) => cleanName(x && typeof x === 'object' ? x.heading : x, 100)).filter(Boolean);
       const seen = new Set(), list = all.filter((h) => { const k = h.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 20);
-      if (!list.length && !t.brand) throw err(400, 'A template needs at least one section');
+      if (!list.length) throw err(400, 'A template needs at least one section');
       t.body = bodyOf(list, t.body);
     }
     await saveUser();
@@ -1757,7 +1779,7 @@ Rules:
     const def = R.DEFAULTS[b.type]; if (!def) throw err(400, 'Choose a document type');
     // The one slide status report is a single PowerPoint slide, so it has no other format.
     const format = def.oneSlide && !cu ? 'pptx' : FORMATS.includes(b.format) ? b.format : 'docx';
-    const tpl = !cu && b.template_id ? DB.templates.find((t) => t.id === Number(b.template_id) && (t.doc_type === '*' || t.doc_type === b.type)) : null;
+    const tpl = !cu && b.template_id ? DB.templates.find((t) => t.id === Number(b.template_id) && (modeOf(t) === 'design' || t.doc_type === '*' || t.doc_type === b.type)) : null;
     if (!cu && b.template_id && !tpl) throw err(404, 'Template not found');
     if (!folderOk(P, b.folder_id)) throw err(404, 'Folder not found');
     const today = b.as_of && /^\d{4}-\d{2}-\d{2}$/.test(b.as_of) ? b.as_of : TODAY();
@@ -1765,8 +1787,8 @@ Rules:
     const snap = snapshot(P, b.type, today, periodDays, def.oneSlide && !cu ? await lastWeekOf(P, today) : null);
     const out = await R.generate(cu
       ? { type: b.type, templateName: 'Custom document', ctx: snap.ctx, useAI: true, sections: cu.sections, title: cu.name, brief: `Audience: ${cu.audience}. ${cu.description}` }
-      : { type: b.type, templateBody: tpl && R.parseTemplate(tpl.body || '').length ? tpl.body : null, templateName: tpl ? tpl.name : null, ctx: snap.ctx, useAI: false });
-    const g = { id: nid(), project_id: P.id, doc_type: b.type, title: cleanName(b.title, 120) || out.title, template: out.template, content: out.markdown, created_at: nowTs(), format, folder_id: b.folder_id ? Number(b.folder_id) : null, meta: { ...docMeta(P, today), ...(cu ? { audience: cu.audience } : {}) }, ...(tpl && tpl.layout ? { layout: tpl.layout } : {}), ...(tpl && tpl.brand ? { brand: clone(tpl.brand) } : {}), visuals: snap.visuals };
+      : { type: b.type, templateBody: tpl && usesStructure(tpl) && R.parseTemplate(tpl.body || '').length ? tpl.body : null, templateName: tpl ? tpl.name : null, ctx: snap.ctx, useAI: false });
+    const g = { id: nid(), project_id: P.id, doc_type: b.type, title: cleanName(b.title, 120) || out.title, template: out.template, content: out.markdown, created_at: nowTs(), format, folder_id: b.folder_id ? Number(b.folder_id) : null, meta: { ...docMeta(P, today), ...(cu ? { audience: cu.audience } : {}) }, ...(tpl && usesDesign(tpl) && tpl.layout ? { layout: tpl.layout } : {}), ...(tpl && usesDesign(tpl) && tpl.brand ? { brand: clone(tpl.brand) } : {}), visuals: snap.visuals };
     if (cu) g.custom = { audience: cu.audience, description: cu.description };
     P.generated.unshift(g);
     audit(P, ACTOR(), 'document_generated', { summary: `Generated ${g.title}${tpl ? ` from template "${tpl.name}"` : cu ? ' as a custom document' : ''}` });
@@ -1889,7 +1911,7 @@ Rules:
       if (data.projects.length > 200) throw err(400, 'The workspace backup has too many projects');
       const results = [];
       for (const one of data.projects) results.push(await importOne(one));
-      if (Array.isArray(data.templates)) for (const t of data.templates.slice(0, 100)) if (t && t.name && (t.doc_type === '*' || RAW.skeletons[t.doc_type]) && typeof t.body === 'string') DB.templates.push({ id: nid(), owner_id: DB.user.id, doc_type: t.doc_type, name: String(t.name).slice(0, 120), body: t.body, created_at: nowTs(), ...(t.layout ? (() => { try { return { layout: cleanLayout(t.layout) }; } catch (e) { return {}; } })() : {}), ...(t.brand ? (() => { try { return { brand: brandLib.cleanBrand(t.brand) }; } catch (e) { return {}; } })() : {}) });
+      if (Array.isArray(data.templates)) for (const t of data.templates.slice(0, 100)) if (t && t.name && (t.doc_type === '*' || RAW.skeletons[t.doc_type]) && typeof t.body === 'string') DB.templates.push({ id: nid(), owner_id: DB.user.id, doc_type: t.doc_type, ...(MODES.includes(t.mode) ? { mode: t.mode } : {}), name: String(t.name).slice(0, 120), body: t.body, created_at: nowTs(), ...(t.layout ? (() => { try { return { layout: cleanLayout(t.layout) }; } catch (e) { return {}; } })() : {}), ...(t.brand ? (() => { try { return { brand: brandLib.cleanBrand(t.brand) }; } catch (e) { return {}; } })() : {}) });
       await saveUser();
       return { imported: results };
     }

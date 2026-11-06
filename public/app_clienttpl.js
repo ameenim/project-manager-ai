@@ -34,26 +34,55 @@
   }
 
   // ---------- upload ----------
-  function upload(opts) {
+  // The PM chooses what to take from the file. A design pattern applies to every document type, so no type is asked for.
+  // The structure and both need one document type, and the dialog will not continue without it.
+  const MODE_KEYS = ['design', 'structure', 'both'];
+  const MODE_ICON = { design: 'spark', structure: 'file', both: 'check' };
+  async function upload(opts) {
     opts = opts || {};
+    let types = opts.types;
+    if (!types) { try { types = (await api('GET', '/api/doc-types')).types; } catch (e) { types = []; } }
+    const typeOpts = (list) => list.map((x) => `<option value="${esc(x.id)}">${esc(x.title)}</option>`).join('');
     const m = modal({
       title: t('ct_upload_title'), size: 'lg', noBackdropClose: true,
       body: `<div id="ctUp"><p class="small muted" style="margin-top:0">${t('ct_upload_intro')}</p>
         <label class="ct-drop" id="ctDrop" tabindex="0"><span class="ico">${icon('dl')}</span><strong id="ctFileName">${t('ct_drop')}</strong><span class="small muted">${t('ct_drop_hint')}</span>
-          <input type="file" id="ctFile" accept=".docx,.dotx,.pptx,.potx,.ppsx" hidden></label>
+          <input type="file" id="ctFile" accept=".docx,.dotx,.pptx,.potx,.ppsx,.xlsx,.xltx" hidden></label>
+        <div class="fmt-pick" style="margin-top:14px"><span class="lbl" id="ctModeL">${t('ct_mode_label')}</span>
+          <div class="seg" role="radiogroup" aria-labelledby="ctModeL">${MODE_KEYS.map((k) => `<button type="button" role="radio" aria-checked="false" data-mode="${k}">${icon(MODE_ICON[k])}${t('ct_mode_' + k)}</button>`).join('')}</div>
+          <div class="small muted" id="ctModeHint" role="status">${t('ct_mode_none_hint')}</div></div>
+        <label class="f" id="ctTypeWrap" style="margin-top:12px" hidden>${t('ct_type_label')}<select id="ctType" required aria-required="true"><option value="">${t('ct_type_ph')}</option>
+          <optgroup label="${t('grp_progress')}">${typeOpts(types.filter((x) => x.progress))}</optgroup><optgroup label="${t('grp_project')}">${typeOpts(types.filter((x) => !x.progress))}</optgroup></select></label>
+        <div class="small muted" id="ctAllNote" style="margin-top:12px" hidden>${icon('check')} ${t('ct_type_all')}</div>
         <label class="f" style="margin-top:12px">${t('template_name')}<input type="text" id="ctName" maxlength="120" placeholder="${esc(t('ct_name_ph'))}"></label>
+        <div class="small muted" id="ctXlNote" style="margin-top:8px" hidden>${t('ct_excel_note')}</div>
         <div class="small muted" style="margin-top:8px">${t('ct_reads')}</div>
         <div id="ctErr" class="fv-err" role="alert" hidden></div></div>`,
       footer: `<button class="btn" data-close>${t('cancel')}</button><button class="btn primary" id="ctGo" disabled>${icon('spark')}${t('ct_read')}</button>`,
     });
-    let file = null;
+    let file = null, mode = null;
+    const needsType = () => mode === 'structure' || mode === 'both';
+    const refresh = () => {
+      $$('[data-mode]', m.el).forEach((b) => { const on = b.dataset.mode === mode; b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); });
+      $('#ctModeHint', m.el).textContent = mode ? t(`ct_mode_${mode}_hint`) : t('ct_mode_none_hint');
+      $('#ctTypeWrap', m.el).hidden = !needsType();
+      $('#ctAllNote', m.el).hidden = mode !== 'design';
+      $('#ctXlNote', m.el).hidden = !(file && /\.(xlsx|xltx)$/i.test(file.name) && needsType());
+      const err = $('#ctErr', m.el);
+      const missingType = needsType() && !$('#ctType', m.el).value;
+      $('#ctGo', m.el).disabled = !(file && mode && !missingType);
+      if (file && mode && missingType) { err.textContent = t('ct_type_need'); err.hidden = false; } else err.hidden = true;
+    };
     const pick = (f) => {
       if (!f) return;
-      file = f; $('#ctFileName', m.el).textContent = f.name; $('#ctGo', m.el).disabled = false; $('#ctErr', m.el).hidden = true;
+      file = f; $('#ctFileName', m.el).textContent = f.name;
       const nm = $('#ctName', m.el); if (!nm.value) nm.placeholder = f.name.replace(/\.[^.]+$/, '');
+      refresh();
     };
     const input = $('#ctFile', m.el), drop = $('#ctDrop', m.el);
     input.onchange = () => pick(input.files[0]);
+    $$('[data-mode]', m.el).forEach((b) => (b.onclick = () => { mode = b.dataset.mode; refresh(); }));
+    $('#ctType', m.el).onchange = refresh;
     drop.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } };
     ['dragenter', 'dragover'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('over'); }));
     ['dragleave', 'drop'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
@@ -61,12 +90,13 @@
     $('#ctGo', m.el).onclick = async () => {
       const steps = ['ct_s_open', 'ct_s_find', 'ct_s_build'];
       const tplName = $('#ctName', m.el).value.trim();
+      const docType = needsType() ? $('#ctType', m.el).value : '';
       $('#ctUp', m.el).innerHTML = `<div class="gen-run" role="status" aria-live="polite"><div class="progress"><i id="ctBar" style="width:8%"></i></div><ul class="gen-steps">${steps.map((k, i) => `<li data-i="${i}" class="${i ? '' : 'on'}"><span class="dot"></span><span>${t(k)}</span></li>`).join('')}</ul></div>`;
       m.setFooter('');
       const lis = $$('.gen-steps li', m.el), bar = $('#ctBar', m.el);
       const at = (i) => { lis.forEach((li, n) => { li.className = n < i ? 'done' : n === i ? 'on' : ''; }); bar.style.width = `${Math.round(((i + 0.5) / steps.length) * 100)}%`; };
       const timer = setTimeout(() => at(1), 700);
-      const fd = new FormData(); fd.append('file', file); fd.append('name', tplName);
+      const fd = new FormData(); fd.append('file', file); fd.append('name', tplName); fd.append('mode', mode); if (docType) fd.append('doc_type', docType);
       try {
         const r = await api('POST', '/api/templates/client', fd);
         clearTimeout(timer); at(2);
@@ -91,6 +121,10 @@
     let layout = tpl.layout ? clone(tpl.layout) : null;
     let sections = tpl.sections.slice();
     let name = tpl.name;
+    const mode = tpl.mode || (tpl.brand ? 'both' : 'structure');
+    const hasDesign = mode !== 'structure', hasStruct = mode !== 'design';
+    const docTypes = opts.types || ((await api('GET', '/api/doc-types').catch(() => ({ types: [] }))).types);
+    const typeTitle = tpl.doc_type === '*' ? t('all_types') : ((docTypes.find((x) => x.id === tpl.doc_type) || {}).title || tpl.doc_type);
     let dirty = false;
     const X = PM.exporter;
     const fresh = opts.fresh;
@@ -127,29 +161,33 @@
       const warnHtml = warn.length ? `<div class="ct-note warn" role="status">${warn.map((k) => `<div>${esc(t(k))}</div>`).join('')}</div>` : '';
       const src = brand && brand.source ? t('ct_source', { f: brand.source.filename, k: brand.source.kind }) : '';
       const engine = fresh ? ` ${t(fresh.engine === 'claude' ? 'ct_by_ai' : 'ct_by_rules')}` : '';
-      const found = fresh ? `<div class="ct-note ok" role="status">${esc(t(fresh.found.logo ? 'ct_found_logo' : 'ct_found_nologo', { h: fresh.found.headings }))}</div>` : '';
-      const colorRows = brand ? COLOR_ROLES.map(([k, lab, hint]) => `<div class="ct-row"><div class="nm"><div>${esc(t(lab))}</div><div class="small muted">${esc(t(hint))}</div></div>
+      const foundKey = mode === 'design' ? (fresh && fresh.found.logo ? 'ct_found_design_logo' : 'ct_found_design_nologo') : mode === 'structure' ? 'ct_found_struct' : (fresh && fresh.found.logo ? 'ct_found_logo' : 'ct_found_nologo');
+      const introLine = fresh && hasDesign ? ` ${t(fresh.found.intro ? 'ct_found_intro' : 'ct_found_nointro', { p: t('ed_pos_' + (fresh.found.intro_logo || 'left')).toLowerCase() })}` : '';
+      const found = fresh ? `<div class="ct-note ok" role="status">${esc(t(foundKey, { h: fresh.found.headings }) + introLine)}</div>` : '';
+      const modeLine = `<div class="small muted" style="margin:10px 0 14px"><span class="chip blue">${esc(t('ct_chip_' + mode))}</span> ${esc(t('ct_type_line', { t: typeTitle }))}</div>`;
+      const colorRows = brand && hasDesign ? COLOR_ROLES.map(([k, lab, hint]) => `<div class="ct-row"><div class="nm"><div>${esc(t(lab))}</div><div class="small muted">${esc(t(hint))}</div></div>
           <input type="color" data-cp="${k}" value="#${brand.colors[k]}" aria-label="${esc(t(lab))}"><input type="text" class="hex" data-ch="${k}" value="${brand.colors[k]}" maxlength="7" aria-label="${esc(t(lab))} hex" spellcheck="false"><span class="rd" data-rd="${k}">${readability(k, brand.colors[k])}</span></div>`).join('') : '';
-      const fontRows = brand ? ['heading', 'body'].map((k) => `<label class="f"><span class="lb">${esc(t('ct_font_' + k))}</span><input type="text" list="ctFonts" data-font="${k}" value="${esc(brand.fonts[k])}" maxlength="60"></label>`).join('') : '';
+      const fontRows = brand && hasDesign ? ['heading', 'body'].map((k) => `<label class="f"><span class="lb">${esc(t('ct_font_' + k))}</span><input type="text" list="ctFonts" data-font="${k}" value="${esc(brand.fonts[k])}" maxlength="60"></label>`).join('') : '';
       const lay = layout || X.DEFAULT_LAYOUT;
       const posRow = (key, lab) => `<div class="f"><span class="lb">${esc(t(lab))}</span><div class="seg">${['left', 'center', 'right', 'hidden'].map((p) => `<button type="button" class="${lay.logo[key] === p ? 'on' : ''}" data-pos="${key}:${p}" aria-pressed="${lay.logo[key] === p}">${esc(t('ed_pos_' + p))}</button>`).join('')}</div></div>`;
       body().innerHTML = `${found}${warnHtml}
-        <div class="ct-grid"><div class="ct-form">
+        <div class="ct-grid${hasDesign ? '' : ' one'}"><div class="ct-form">
           <label class="f"><span class="lb">${t('template_name')}</span><input type="text" id="ctN" maxlength="120" value="${esc(name)}"></label>
+          ${modeLine}
           ${src ? `<div class="small muted" style="margin:-4px 0 12px">${esc(src)}${esc(engine)}</div>` : ''}
-          ${brand ? `<section><h3>${t('ct_colors')}</h3>${colorRows}</section>
+          ${!hasDesign ? '' : brand ? `<section><h3>${t('ct_colors')}</h3>${colorRows}</section>
           <section><h3>${t('ct_fonts')}</h3><div class="ct-fonts">${fontRows}</div><datalist id="ctFonts">${FONTS.map((f) => `<option value="${esc(f)}">`).join('')}</datalist><div class="small muted">${t('ct_font_note')}</div></section>
           <section><h3>${t('ct_logo')}</h3><div class="ct-logo"><div class="box">${brand.logo ? `<img src="${brand.logo.dataUrl}" alt="${esc(t('ct_logo'))}">` : `<span class="small muted">${t('ct_no_logo')}</span>`}</div>
             <div class="col"><label class="btn sm" for="ctLogoIn">${icon('dl')}${t(brand.logo ? 'ct_logo_replace' : 'ct_logo_add')}</label><input type="file" id="ctLogoIn" accept="image/png,image/jpeg,image/gif,image/svg+xml" hidden>
             ${brand.logo ? `<button class="btn sm" id="ctLogoRm">${icon('trash')}${t('ct_logo_remove')}</button>` : ''}<div class="small muted">${t('ct_logo_hint')}</div></div></div>
             ${layout ? `<div class="ct-pos">${posRow('cover', 'ed_logo_cover')}${posRow('header', 'ed_logo_header')}</div>` : ''}</section>`
           : `<section><h3>${t('ct_colors')}</h3><p class="small muted">${t('ct_no_brand_note')}</p><button class="btn sm" id="ctAddBrand">${icon('plus')}${t('ct_add_brand')}</button></section>`}
-          <section><h3>${t('ct_sections')}</h3><div class="small muted mb">${t('ct_sections_hint')}</div><ol class="ct-secs" id="ctSecs">${sections.map((s, i) => `<li><input type="text" data-sec="${i}" value="${esc(s)}" maxlength="100" aria-label="${esc(t('ct_section_n', { n: i + 1 }))}">
+          ${hasStruct ? `<section><h3>${t('ct_sections')}</h3><div class="small muted mb">${t('ct_sections_hint')}</div><ol class="ct-secs" id="ctSecs">${sections.map((s, i) => `<li><input type="text" data-sec="${i}" value="${esc(s)}" maxlength="100" aria-label="${esc(t('ct_section_n', { n: i + 1 }))}">
             <button class="btn sm ghost icon" data-su="${i}" ${i ? '' : 'disabled'} aria-label="${esc(t('ed_move_up'))}"><span style="display:inline-flex;transform:rotate(180deg)">${icon('down')}</span></button><button class="btn sm ghost icon" data-sd="${i}" ${i < sections.length - 1 ? '' : 'disabled'} aria-label="${esc(t('ed_move_down'))}">${icon('down')}</button><button class="btn sm ghost icon" data-sx="${i}" aria-label="${esc(t('delete'))}">${icon('trash')}</button></li>`).join('') || `<li class="small muted">${t('ct_no_sections')}</li>`}</ol>
-            <div class="row" style="gap:8px;margin-top:8px"><input type="text" id="ctNewSec" maxlength="100" placeholder="${esc(t('ct_add_section_ph'))}" style="flex:1"><button class="btn sm" id="ctAddSec">${icon('plus')}${t('ct_add_section')}</button></div></section>
-          ${layout ? `<details class="ct-det"><summary>${t('ct_hf')}</summary><div class="ct-hf">${['header', 'footer'].map((g) => `<div><div class="lb">${esc(t(g === 'header' ? 'ed_header' : 'ed_footer'))}</div>${['left', 'center', 'right'].map((k) => `<label class="f"><span class="small muted">${esc(t('ed_pos_' + k))}</span><input type="text" data-lay="${g}.${k}" value="${esc(String(lay[g][k]).replace(/\n/g, ' / '))}" maxlength="160"></label>`).join('')}</div>`).join('')}<div class="small muted" style="grid-column:1/-1">${t('ed_tokens_hint')}</div></div></details>` : ''}
+            <div class="row" style="gap:8px;margin-top:8px"><input type="text" id="ctNewSec" maxlength="100" placeholder="${esc(t('ct_add_section_ph'))}" style="flex:1"><button class="btn sm" id="ctAddSec">${icon('plus')}${t('ct_add_section')}</button></div></section>` : ''}
+          ${layout && hasDesign ? `<details class="ct-det"><summary>${t('ct_hf')}</summary><div class="ct-hf">${['header', 'footer'].map((g) => `<div><div class="lb">${esc(t(g === 'header' ? 'ed_header' : 'ed_footer'))}</div>${['left', 'center', 'right'].map((k) => `<label class="f"><span class="small muted">${esc(t('ed_pos_' + k))}</span><input type="text" data-lay="${g}.${k}" value="${esc(String(lay[g][k]).replace(/\n/g, ' / '))}" maxlength="160"></label>`).join('')}</div>`).join('')}<div class="small muted" style="grid-column:1/-1">${t('ed_tokens_hint')}</div></div></details>` : ''}
         </div>
-        <aside class="ct-side" aria-label="${esc(t('ct_preview'))}"><h3>${t('ct_preview')}</h3><div id="ctPv">${previewHtml()}</div><div class="small muted" style="margin-top:8px">${t('ct_preview_note')}</div></aside></div>`;
+        ${hasDesign ? `<aside class="ct-side" aria-label="${esc(t('ct_preview'))}"><h3>${t('ct_preview')}</h3><div id="ctPv">${previewHtml()}</div><div class="small muted" style="margin-top:8px">${t('ct_preview_note')}</div></aside>` : ''}</div>`;
       m.setFooter(`<span class="small muted grow">${t('ct_footer_note')}</span><button class="btn" id="ctClose">${t('cancel')}</button>${opts.onUse ? `<button class="btn" id="ctUse">${icon('file')}${t('ct_use')}</button>` : ''}<button class="btn primary" id="ctSave">${icon('check')}${t('save')}</button>`);
       wire();
     }
@@ -174,12 +212,12 @@
       $$('[data-su]', m.el).forEach((b) => (b.onclick = () => mv(Number(b.dataset.su), -1)));
       $$('[data-sd]', m.el).forEach((b) => (b.onclick = () => mv(Number(b.dataset.sd), 1)));
       $$('[data-sx]', m.el).forEach((b) => (b.onclick = () => { sections.splice(Number(b.dataset.sx), 1); mark(); draw(); }));
-      const add = () => { const v = $('#ctNewSec', m.el).value.trim(); if (!v) return; sections.push(v); mark(); draw(); $('#ctNewSec', m.el).focus(); };
-      $('#ctAddSec', m.el).onclick = add; $('#ctNewSec', m.el).onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } };
+      const add = () => { if (!hasStruct) return; const v = $('#ctNewSec', m.el).value.trim(); if (!v) return; sections.push(v); mark(); draw(); $('#ctNewSec', m.el).focus(); };
+      if (hasStruct) { $('#ctAddSec', m.el).onclick = add; $('#ctNewSec', m.el).onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }; }
       $('#ctClose', m.el).onclick = async () => { if (dirty && !(await confirmDlg({ title: t('ed_discard'), message: t('ed_unsaved'), ok: t('ed_discard'), danger: true }))) return; m.close(); opts.onChanged && opts.onChanged(); };
       const save = async () => {
         const secs = sections.map((x) => x.trim()).filter(Boolean);
-        const bodyReq = { name: name.trim(), sections: secs, ...(brand ? { brand } : {}), ...(layout ? { layout } : {}) };
+        const bodyReq = { name: name.trim(), ...(hasStruct ? { sections: secs } : {}), ...(hasDesign && brand ? { brand } : {}), ...(hasDesign && layout ? { layout } : {}) };
         const r = await busy($('#ctSave', m.el), () => api('PUT', `/api/templates/${id}`, bodyReq));
         if (!r) return false;
         brand = r.template.brand ? clone(r.template.brand) : null; layout = r.template.layout ? clone(r.template.layout) : null; sections = r.template.sections.slice(); name = r.template.name; dirty = false;

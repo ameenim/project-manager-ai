@@ -281,6 +281,7 @@
     };
 
     // ---------- create a document (pop up, then a progress screen) ----------
+    const tplHint = (x) => (x ? t('ct_tpl_hint_' + (x.mode || 'structure')) : '');
     function createDialog() {
       const body = () => {
         const isProg = type.startsWith('progress');
@@ -294,7 +295,7 @@
             <div class="seg" role="radiogroup" aria-labelledby="rpOutL">${Object.keys(FMT).map((k) => `<button type="button" role="radio" aria-checked="${cur === k}" class="${cur === k ? 'on' : ''}" data-fmt="${k}" ${one && k !== 'pptx' ? 'disabled' : ''} data-tip="${esc(t(FMT[k].name))}">${icon(FMT[k].icon)}${FMT[k].label}</button>`).join('')}</div>
             <div class="small muted">${t(one ? 'out_hint_onepager' : FMT[cur].hint)}</div></div>
           <label class="f full">${t('doc_type')}<select id="rpType"><optgroup label="${t('grp_progress')}">${opt(types.filter((x) => x.progress))}</optgroup><optgroup label="${t('grp_project')}">${opt(types.filter((x) => !x.progress))}</optgroup></select></label>
-          <label class="f full">${t('template')}<select id="rpTpl"><option value="">${t('tpl_default')}</option>${tpls.map((x) => `<option value="${x.id}">${esc(x.name)}${x.brand ? ' · ' + esc(t('ct_chip')) : ''}</option>`).join('')}</select><span class="small muted" id="rpTplHint" ${(tpls.find((x) => String(x.id) === String(form.tpl)) || {}).brand ? '' : 'hidden'}>${t('ct_tpl_hint')}</span></label>
+          <label class="f full">${t('template')}<select id="rpTpl"><option value="">${t('tpl_default')}</option>${tpls.map((x) => `<option value="${x.id}">${esc(x.name)} · ${esc(t('ct_chip_' + (x.mode || 'structure')))}</option>`).join('')}</select><span class="small muted" id="rpTplHint" ${tpls.some((x) => String(x.id) === String(form.tpl)) ? '' : 'hidden'}>${tplHint(tpls.find((x) => String(x.id) === String(form.tpl)))}</span></label>
           <label class="f">${t('doc_name')}<input type="text" id="rpName" maxlength="120" value="${esc(form.touched ? form.name : defName())}"><span class="small muted">${t('doc_name_hint')}</span></label>
           <label class="f">${t('save_in_folder')}<select id="rpFolder"><option value="">${t('unfiled')}</option>${folders.map((f) => `<option value="${f.id}">${esc(f.name)}</option>`).join('')}</select></label>
           ${isProg ? `<label class="f">${t('as_of')}<input type="date" id="rpAsOf" value="${esc(form.asOf)}"></label><label class="f">${t('period')}<select id="rpPeriod"><option value="7">${t('days_n', { n: 7 })}</option><option value="14">${t('days_n', { n: 14 })}</option><option value="30">${t('days_n', { n: 30 })}</option></select></label>` : ''}
@@ -311,7 +312,7 @@
         $$('[data-fmt]', el).forEach((b) => (b.onclick = () => { out = b.dataset.fmt; sessionStorage.setItem('rp_out', out); draw(); }));
         $('[data-kind="custom"]', el).onclick = () => { m.close(); customDialog(); };
         $('#rpType', el).onchange = (e) => { type = e.target.value; sessionStorage.setItem('rp_type', type); form.tpl = ''; form.period = null; draw(); };
-        $('#rpTpl', el).onchange = (e) => { form.tpl = e.target.value; const tp = templates.find((x) => String(x.id) === String(form.tpl)); $('#rpTplHint', el).hidden = !(tp && tp.brand); };
+        $('#rpTpl', el).onchange = (e) => { form.tpl = e.target.value; const tp = templates.find((x) => String(x.id) === String(form.tpl)); $('#rpTplHint', el).hidden = !tp; $('#rpTplHint', el).textContent = tplHint(tp); };
         $('#rpName', el).oninput = (e) => { form.name = e.target.value; form.touched = true; };
         $('#rpFolder', el).onchange = (e) => { form.folder = e.target.value; };
         if (isProg) { $('#rpAsOf', el).onchange = (e) => { form.asOf = e.target.value; }; $('#rpPeriod', el).onchange = (e) => { form.period = Number(e.target.value); }; }
@@ -576,14 +577,14 @@
     }
 
     // ---------- templates ----------
-    function useTemplate(id) { form.tpl = String(id); createDialog(); }
+    function useTemplate(id) { const tp = templates.find((x) => x.id === Number(id)); if (tp && tp.doc_type !== '*') { type = tp.doc_type; sessionStorage.setItem('rp_type', type); } form.tpl = String(id); createDialog(); }
     function drawTpls() {
       if (stale(token)) return;
       const el = $('#rpTpls', root);
       const swatches = (x) => (x.brand ? `<span class="ct-sw" aria-hidden="true">${['primary', 'secondary', 'accent', 'text', 'muted'].map((k) => `<i style="background:#${x.brand.colors[k]}"></i>`).join('')}</span>` : '');
-      el.innerHTML = `<div class="card-head"><h3>${t('custom_templates')}</h3><div class="row" style="gap:6px"><button class="btn sm primary" id="tplClient">${icon('dl')}${t('ct_upload_btn')}</button><button class="btn sm" id="tplNew">${icon('plus')}${t('new_template')}</button></div></div><div class="small muted mb">${t('template_help')}</div>${templates.length ? templates.map((x) => `<div class="list-item"><div class="grow"><div style="font-weight:600">${esc(x.name)}${x.brand ? ` <span class="chip blue">${esc(t('ct_chip'))}</span>` : ''}</div><div class="small muted">${esc(titleOf(x.doc_type))}${x.brand ? ` · ${esc(x.brand.fonts.heading)}${x.brand.fonts.body !== x.brand.fonts.heading ? ' / ' + esc(x.brand.fonts.body) : ''}` : ''}</div>${swatches(x)}</div><button class="btn sm" data-topen="${x.id}">${icon(x.brand ? 'eye' : 'edit')}${t(x.brand ? 'ct_open' : 'ct_open_plain')}</button><button class="btn sm ghost icon" data-tdel="${x.id}" aria-label="${esc(t('delete'))}" data-tip="${esc(t('delete'))}">${icon('trash')}</button></div>`).join('') : `<div class="empty small">${t('no_templates')}</div>`}`;
-      $('#tplClient', el).onclick = () => PM.clientTpl.upload({ onChanged: reloadAll, onCreated: () => reloadAll(), onUse: useTemplate });
-      $$('[data-topen]', el).forEach((b) => (b.onclick = () => PM.clientTpl.open(Number(b.dataset.topen), { onChanged: reloadAll, onUse: useTemplate })));
+      el.innerHTML = `<div class="card-head"><h3>${t('custom_templates')}</h3><div class="row" style="gap:6px"><button class="btn sm primary" id="tplClient">${icon('dl')}${t('ct_upload_btn')}</button><button class="btn sm" id="tplNew">${icon('plus')}${t('new_template')}</button></div></div><div class="small muted mb">${t('template_help')}</div>${templates.length ? templates.map((x) => `<div class="list-item"><div class="grow"><div style="font-weight:600">${esc(x.name)} <span class="chip blue">${esc(t('ct_chip_' + (x.mode || 'structure')))}</span></div><div class="small muted">${esc(titleOf(x.doc_type))}${x.brand ? ` · ${esc(x.brand.fonts.heading)}${x.brand.fonts.body !== x.brand.fonts.heading ? ' / ' + esc(x.brand.fonts.body) : ''}` : ''}</div>${swatches(x)}</div><button class="btn sm" data-topen="${x.id}">${icon(x.mode === 'structure' ? 'edit' : 'eye')}${t(x.mode === 'structure' ? 'ct_open_plain' : 'ct_open')}</button><button class="btn sm ghost icon" data-tdel="${x.id}" aria-label="${esc(t('delete'))}" data-tip="${esc(t('delete'))}">${icon('trash')}</button></div>`).join('') : `<div class="empty small">${t('no_templates')}</div>`}`;
+      $('#tplClient', el).onclick = () => PM.clientTpl.upload({ types, onChanged: reloadAll, onCreated: () => reloadAll(), onUse: useTemplate });
+      $$('[data-topen]', el).forEach((b) => (b.onclick = () => PM.clientTpl.open(Number(b.dataset.topen), { types, onChanged: reloadAll, onUse: useTemplate })));
       $$('[data-tdel]', el).forEach((b) => (b.onclick = async () => { if (await confirmDlg({ title: t('delete'), message: t('confirm_delete_tpl'), ok: t('delete'), danger: true })) { await api('DELETE', `/api/templates/${b.dataset.tdel}`); reloadAll(); } }));
       $('#tplNew', el).onclick = () => templateDialog(types, type, reloadAll);
     }
