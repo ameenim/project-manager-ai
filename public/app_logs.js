@@ -31,7 +31,7 @@
     lg_c_review: 'Review status', lg_rv_confirmed: 'Approved', lg_rv_proposed: 'Needs review', lg_rv_ignored: 'Ignored', lg_c_linked: 'Linked deliverable', lg_c_doc: 'Source document', lg_c_quote: 'Source quote', lg_c_created: 'Created', lg_c_conf: 'AI confidence',
     lg_for_risk: 'Risks', lg_for_milestone: 'Payments',
     lg_views: 'Saved views', lg_view_all: 'All items', lg_view_save: 'Save as view', lg_view_update: 'Update view', lg_view_rename: 'Rename view', lg_view_delete: 'Delete view', lg_view_changed: 'Changed since saved',
-    lg_view_name: 'View name', lg_view_name_ph: 'For example Risk log', lg_view_save_title: 'Save this view', lg_view_save_hint: 'Saves the columns, filters, search and sort you have now. Open it again with one click from the tabs above the table.', lg_view_name_req: 'Give the view a name.', lg_view_exists: 'A view with this name already exists. Saving will replace it.', lg_view_saved: 'View saved', lg_view_updated: 'View updated', lg_view_deleted: 'View deleted', lg_view_delete_q: 'Delete the view "{n}"? Your items are not affected.', lg_view_fail: 'The view could not be saved. Try again.',
+    lg_view_name: 'View name', lg_view_name_ph: 'For example Risk log', lg_view_save_title: 'Save this view', lg_view_save_hint: 'Saves the columns, filters, search and sort you have now. Open it again with one click from the tabs above the table.', lg_view_name_req: 'Give the view a name.', lg_view_exists: 'A view with this name already exists. Saving will replace it.', lg_view_saved: 'View saved', lg_view_updated: 'View updated', lg_view_deleted: 'View deleted', lg_view_delete_q: 'Delete the view "{n}"? Your items are not affected.', lg_view_fail: 'The view could not be saved. Try again.', lg_view_restart: 'Saved views are not available on the server yet. Restart the app so the latest update loads, then try again.',
   });
   Object.assign(PM.I18N.ar, {
     tab_logs: 'السجلات', state_progress: 'قيد التنفيذ', state_transferred: 'تم النقل',
@@ -53,7 +53,7 @@
     lg_c_review: 'حالة المراجعة', lg_rv_confirmed: 'معتمد', lg_rv_proposed: 'يحتاج مراجعة', lg_rv_ignored: 'متجاهل', lg_c_linked: 'المخرج المرتبط', lg_c_doc: 'المستند المصدر', lg_c_quote: 'مقتطف المصدر', lg_c_created: 'تاريخ الإنشاء', lg_c_conf: 'ثقة الذكاء الاصطناعي',
     lg_for_risk: 'المخاطر', lg_for_milestone: 'الدفعات',
     lg_views: 'العروض المحفوظة', lg_view_all: 'كل العناصر', lg_view_save: 'حفظ كعرض', lg_view_update: 'تحديث العرض', lg_view_rename: 'إعادة تسمية العرض', lg_view_delete: 'حذف العرض', lg_view_changed: 'تغير منذ الحفظ',
-    lg_view_name: 'اسم العرض', lg_view_name_ph: 'مثال سجل المخاطر', lg_view_save_title: 'حفظ هذا العرض', lg_view_save_hint: 'يحفظ الأعمدة والتصفية والبحث والترتيب الحالية. افتحه من جديد بنقرة واحدة من التبويبات فوق الجدول.', lg_view_name_req: 'أدخل اسما للعرض.', lg_view_exists: 'يوجد عرض بهذا الاسم. الحفظ سيستبدله.', lg_view_saved: 'تم حفظ العرض', lg_view_updated: 'تم تحديث العرض', lg_view_deleted: 'تم حذف العرض', lg_view_delete_q: 'حذف العرض "{n}"؟ عناصرك لن تتأثر.', lg_view_fail: 'تعذر حفظ العرض. حاول مرة أخرى.',
+    lg_view_name: 'اسم العرض', lg_view_name_ph: 'مثال سجل المخاطر', lg_view_save_title: 'حفظ هذا العرض', lg_view_save_hint: 'يحفظ الأعمدة والتصفية والبحث والترتيب الحالية. افتحه من جديد بنقرة واحدة من التبويبات فوق الجدول.', lg_view_name_req: 'أدخل اسما للعرض.', lg_view_exists: 'يوجد عرض بهذا الاسم. الحفظ سيستبدله.', lg_view_saved: 'تم حفظ العرض', lg_view_updated: 'تم تحديث العرض', lg_view_deleted: 'تم حذف العرض', lg_view_delete_q: 'حذف العرض "{n}"؟ عناصرك لن تتأثر.', lg_view_fail: 'تعذر حفظ العرض. حاول مرة أخرى.', lg_view_restart: 'العروض المحفوظة غير متاحة على الخادم بعد. أعد تشغيل التطبيق ليتم تحميل آخر تحديث ثم حاول مرة أخرى.',
   });
 
   const label = (kind, s) => t(`lg_s_${kind}_${s}`);
@@ -260,7 +260,7 @@
       if (PM.bindTips) PM.bindTips($('#lgViews', root));
     }
     async function persistViews(next) {
-      try { const r = await api('PUT', '/api/me/log-views', { views: next }); views = r.views; return true; } catch (e) { toast(e.message || t('lg_view_fail'), 'err'); return false; }
+      try { const r = await api('PUT', '/api/me/log-views', { views: next }); views = r.views; return true; } catch (e) { toast(e.message === 'Not found' ? t('lg_view_restart') : e.message || t('lg_view_fail'), 'err'); return false; }
     }
     function syncControls() {
       $('#lgQ', root).value = F.q; $('#lgProbF', root).value = F.prob; $('#lgImpF', root).value = F.imp; $('#lgDueF', root).value = F.due; $('#lgRs', root).value = F.rs;
