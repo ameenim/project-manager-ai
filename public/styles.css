@@ -1594,3 +1594,13 @@ body.cht-dragging .cht-resize::after, body.cht-dragging .cht-grip::after { backg
 .cht-h-t { font-size: var(--fs-body); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cht-h-wait { display: grid; place-items: center; padding: 40px 0; }
 @media (max-width: 600px) { .cht-resize, .cht-wide-btn { display: none; } }
+
+/* Logs: column picker and saved views */
+.lg-due .chip { display: block; width: fit-content; margin-top: 2px; }
+.lg-wide { min-width: 200px; max-width: 320px; } .lg-cell-txt { white-space: normal; overflow-wrap: anywhere; }
+.lg-colwrap { position: relative; } .lg-pop { position: absolute; inset-inline-end: 0; top: calc(100% + 6px); z-index: 20; width: min(340px, 90vw); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 10px; box-shadow: var(--shadow-lg, 0 12px 32px rgba(0, 0, 0, .18)); padding: 12px; }
+.lg-pop[hidden] { display: none; } .lg-pop-h { margin-bottom: 8px; } .lg-pop-list { display: grid; gap: 2px; max-height: 320px; overflow: auto; } .lg-pop-i { display: flex; align-items: center; gap: 8px; padding: 6px 4px; border-radius: 6px; cursor: pointer; } .lg-pop-i:hover { background: var(--surface-2); }
+.lg-pop-f { display: flex; justify-content: flex-end; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+.lg-views { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; } .lg-vlab { margin-inline-end: 2px; } .lg-vt { padding: 6px 14px; }
+.lg-vact { display: flex; align-items: center; gap: 6px; margin-inline-start: auto; flex-wrap: wrap; }
+@media (max-width: 700px) { .lg-vact { margin-inline-start: 0; } }

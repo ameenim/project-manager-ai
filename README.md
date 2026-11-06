@@ -203,3 +203,7 @@ In Replit Secrets: `GITHUB_DISPATCH_TOKEN` (a fine grained token with contents w
 In GitHub repository secrets: `ANTHROPIC_API_KEY` and the same `TICKET_WEBHOOK_SECRET`. Allow GitHub Actions to create pull requests in the repository settings.
 
 Migration 8 adds the `tickets` and `ticket_events` tables. Replit Publish applies it. Limits (attempts per ticket, fixes per day, automatic error tickets, AI triage) are in Configuration.
+
+## Logs table columns and saved views
+
+The Logs tab shows Type, Item, Status, Owner, Due date and Invoice amount by default. The Columns button adds any other field of an item (description, review status, share of contract, probability, impact, mitigation, linked deliverable, AI confidence, source document and quote, created date). A saved view remembers the columns, filters, search and sort under a name (for example Risk log or Payments) and shows as a one click tab above the table. Views belong to the person and follow them across projects. They live in `users.prefs.log_views` (no migration) and are read and written with `GET` and `PUT /api/me/log-views`. CSV export follows the visible columns.

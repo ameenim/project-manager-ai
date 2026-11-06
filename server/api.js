@@ -974,6 +974,36 @@ module.exports = function createApi(store, auth, connectors, ops) {
     await saveUser();
     return { user: DB.user };
   });
+  // Saved views of the Logs table (columns, filters, search, sort). They belong to the person, so they follow them across projects.
+  const LV = { kinds: ['deliverable', 'requirement', 'milestone', 'risk'], cols: ['type', 'item', 'description', 'status', 'review', 'owner', 'due', 'amount', 'percent', 'prob', 'imp', 'mitigation', 'linked', 'conf', 'doc', 'quote', 'created'], levels: ['', 'Low', 'Medium', 'High'], dues: ['', 'over', '7', '30', 'none'], rs: ['live', 'confirmed', 'proposed', 'ignored', 'all'], sizes: [20, 50, 100] };
+  function cleanLogViews(list) {
+    if (!Array.isArray(list)) throw err(400, 'Send the saved views as a list');
+    if (list.length > 30) throw err(400, 'You can keep up to 30 saved views');
+    const seen = new Set(), out = [];
+    for (const v of list) {
+      const name = String((v && v.name) || '').trim().slice(0, 60), id = String((v && v.id) || '');
+      if (!name) throw err(400, 'Give the view a name');
+      if (!/^[\w-]{1,40}$/.test(id)) throw err(400, 'This view has an invalid id');
+      if (seen.has(name.toLowerCase())) throw err(400, `There is already a view called "${name}"`);
+      seen.add(name.toLowerCase());
+      const c = v.cfg || {}, cols = LV.cols.filter((k) => k === 'item' || (Array.isArray(c.cols) && c.cols.includes(k)));
+      out.push({ id, name, cfg: {
+        cols: cols.length > 1 ? cols : ['type', 'item', 'status', 'owner', 'due', 'amount'],
+        kinds: Array.isArray(c.kinds) ? LV.kinds.filter((k) => c.kinds.includes(k)) : [],
+        st: /^(deliverable|requirement|milestone|risk)\|[a-z]{3,12}$/.test(c.st || '') ? c.st : '',
+        prob: LV.levels.includes(c.prob) ? c.prob : '', imp: LV.levels.includes(c.imp) ? c.imp : '', due: LV.dues.includes(c.due) ? c.due : '',
+        rs: LV.rs.includes(c.rs) ? c.rs : 'live', q: String(c.q || '').slice(0, 200), sort: LV.cols.includes(c.sort) ? c.sort : 'type', dir: c.dir === -1 ? -1 : 1, size: LV.sizes.includes(c.size) ? c.size : 20,
+      } });
+    }
+    return out;
+  }
+  on('GET', '/api/me/log-views', async () => ({ views: Array.isArray((ctx().user.prefs || {}).log_views) ? ctx().user.prefs.log_views : [] }));
+  on('PUT', '/api/me/log-views', async (m, q, b) => {
+    const views = cleanLogViews(b && b.views);
+    const c = ctx(); c.user.prefs = { ...(c.user.prefs || {}), log_views: views };
+    await store.db.query('UPDATE users SET prefs = $2::jsonb WHERE id = $1', [c.user.id, JSON.stringify(c.user.prefs)]);
+    return { views };
+  });
   on('POST', '/api/me/avatar', async (m, q, b) => { const f = b.get('file'); if (!f) throw err(400, 'No image received'); DB.user.avatar = await fileToDataUrl(f, 600 * 1024); await saveUser(); return { user: DB.user }; });
   on('POST', '/api/me/password', async (m, q, b) => { const token = await ctx().auth.changePassword(ctx().user.id, b.current, b.next); return { ok: true, token }; });
   on('POST', '/api/me/ingest-key', async () => { DB.user.ingest_key = require('crypto').randomBytes(16).toString('hex'); await saveUser(); return { ingest_key: DB.user.ingest_key }; });
