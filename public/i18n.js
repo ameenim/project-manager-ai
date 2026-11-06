@@ -590,7 +590,13 @@ wd_activity: 'The latest changes across your projects', wd_radar: 'Risks, late t
 wd_deliverables: 'Open and closed deliverables', wd_payments: 'Payment milestones paid, invoiced and pending', wd_payments_list: 'The next payments due', wd_workload: 'Open tasks by owner', wd_pkpi: 'Key figures for this project',
 wd_pstatus: 'Health, progress and dates at a glance', wd_pdecide: 'What needs your decision now', wd_pactivity: 'Latest changes on this project', wd_pradar: 'Risks and exposure of this project', wd_pphases: 'Progress of each phase',
 wd_pscurve: 'Planned against actual progress over time', wd_pcritical: 'Tasks on the critical path', wd_pdeliv: 'Deliverables and their state', wd_ppay: 'Payment milestones of this project', wd_pcash: 'Money in and out by month',
-wd_pcum: 'Cumulative payments over time', wd_powners: 'Open tasks by owner', wd_trends: 'How this figure changed over the last 30 days'
+wd_pcum: 'Cumulative payments over time', wd_powners: 'Open tasks by owner', wd_trends: 'How this figure changed over the last 30 days',
+wb_viz_line: 'Line', wb_viz_area: 'Area', wb_viz_combo: 'Combo', wb_viz_radar: 'Radar',
+wb_viz_funnel: 'Funnel', wb_viz_hint_line: 'Trend across groups', wb_viz_hint_area: 'Trend with a filled area', wb_viz_hint_combo: 'Bars with a line on top',
+wb_viz_hint_radar: 'Compare groups on a web', wb_viz_hint_funnel: 'Steps that narrow', wb_line_shows: 'Line shows', wb_line_cumulative: 'Running total',
+wb_line_second: 'A second measure', wb_agg2: 'Line calculation', wb_measure2: 'Line field', wb_combo_hint: 'Bars and line share one scale. Use a running total or a measure in the same unit.',
+wk_running: 'Running total', wk_need_points: 'This chart needs at least {n} groups. Show more groups or change the filters.', wk_funnel_first: '{p} of first', wk_funnel_prev: '{p} of the previous step',
+wk_e_funnel_agg: 'A funnel shows steps that narrow, so use number of rows or total', wk_e_combo_cumulative: 'A running total needs number of rows or total', wk_e_agg2: 'Choose how to calculate the line', wk_e_measure2: 'Choose a number field for the line'
 },
 ar: {
 b_view_gantt: 'مخطط جانت', b_view_board: 'اللوحة', b_view_label: 'عرض الجدول', b_todo: 'قيد الانتظار', b_prog: 'قيد التنفيذ', b_done: 'مكتملة',
@@ -1181,6 +1187,12 @@ wd_activity: 'آخر التغييرات في مشاريعك', wd_radar: 'الم�
 wd_deliverables: 'المخرجات المفتوحة والمغلقة', wd_payments: 'دفعات مدفوعة وصادرة بفاتورة ومعلقة', wd_payments_list: 'الدفعات القادمة', wd_workload: 'المهام المفتوحة حسب المسؤول', wd_pkpi: 'الأرقام الرئيسية لهذا المشروع',
 wd_pstatus: 'الحالة والتقدم والتواريخ في نظرة واحدة', wd_pdecide: 'ما يحتاج إلى قرارك الآن', wd_pactivity: 'آخر التغييرات في هذا المشروع', wd_pradar: 'مخاطر هذا المشروع وانكشافه', wd_pphases: 'تقدم كل مرحلة',
 wd_pscurve: 'التقدم المخطط مقابل الفعلي عبر الزمن', wd_pcritical: 'المهام على المسار الحرج', wd_pdeliv: 'المخرجات وحالتها', wd_ppay: 'دفعات هذا المشروع', wd_pcash: 'الداخل والخارج من المال حسب الشهر',
-wd_pcum: 'الدفعات التراكمية عبر الزمن', wd_powners: 'المهام المفتوحة حسب المسؤول', wd_trends: 'كيف تغير هذا الرقم خلال آخر 30 يوما'
+wd_pcum: 'الدفعات التراكمية عبر الزمن', wd_powners: 'المهام المفتوحة حسب المسؤول', wd_trends: 'كيف تغير هذا الرقم خلال آخر 30 يوما',
+wb_viz_line: 'خطي', wb_viz_area: 'مساحي', wb_viz_combo: 'مركّب', wb_viz_radar: 'رادار',
+wb_viz_funnel: 'قمع', wb_viz_hint_line: 'الاتجاه عبر المجموعات', wb_viz_hint_area: 'الاتجاه بمساحة مظللة', wb_viz_hint_combo: 'أعمدة مع خط فوقها',
+wb_viz_hint_radar: 'مقارنة المجموعات على شبكة', wb_viz_hint_funnel: 'مراحل تتضاءل', wb_line_shows: 'يعرض الخط', wb_line_cumulative: 'الإجمالي التراكمي',
+wb_line_second: 'مقياس ثان', wb_agg2: 'حساب الخط', wb_measure2: 'حقل الخط', wb_combo_hint: 'الأعمدة والخط يشتركان في مقياس واحد. استخدم الإجمالي التراكمي أو مقياسا بالوحدة نفسها.',
+wk_running: 'الإجمالي التراكمي', wk_need_points: 'يحتاج هذا المخطط إلى {n} مجموعات على الأقل. اعرض مجموعات أكثر أو غيّر المرشحات.', wk_funnel_first: '{p} من الأول', wk_funnel_prev: '{p} من المرحلة السابقة',
+wk_e_funnel_agg: 'القمع يعرض مراحل تتضاءل، لذلك استخدم عدد الصفوف أو الإجمالي', wk_e_combo_cumulative: 'الإجمالي التراكمي يحتاج إلى عدد الصفوف أو الإجمالي', wk_e_agg2: 'اختر طريقة حساب الخط', wk_e_measure2: 'اختر حقلا رقميا للخط'
 }
 };

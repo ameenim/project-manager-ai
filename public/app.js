@@ -15,6 +15,8 @@
   const ICONS = {
     life: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/><path d="M5.6 5.6l3.9 3.9M14.5 14.5l3.9 3.9M18.4 5.6l-3.9 3.9M9.5 14.5l-3.9 3.9"/>',
     expand: '<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>', shrink: '<path d="M14 10h6V4M10 14H4v6M20 4l-7 7M4 20l7-7"/>',
+    vline: '<polyline points="3 17 9 11 13 14 21 5"/><path d="M3 21h18"/>', varea: '<path d="M3 20v-6l6-5 4 3 8-6v14z"/>', vcombo: '<rect x="4" y="13" width="4" height="7"/><rect x="10" y="9" width="4" height="11"/><rect x="16" y="15" width="4" height="5"/><polyline points="3 8 9 4 14 6 21 3"/>',
+    vradar: '<polygon points="12 3 20.5 9 17.5 19.5 6.5 19.5 3.5 9"/><polygon points="12 8 16 10.8 14.6 15.5 9.4 15.5 8 10.8"/>', vfunnel: '<path d="M3 4h18l-7 8.5V19l-4 2v-8.5z"/>',
     star: '<polygon points="12 2.5 14.9 8.7 21.7 9.5 16.6 14.1 18 20.8 12 17.4 6 20.8 7.4 14.1 2.3 9.5 9.1 8.7 12 2.5"/>',
     globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
     grip: '<circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/>', more: '<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>', eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>', eyeoff: '<path d="M3 3l18 18M10.6 5.1A9.6 9.6 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4M6.5 6.6A17 17 0 0 0 2 12s3.5 7 10 7a9.7 9.7 0 0 0 4-.9"/>', img: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m21 16-5-5-9 9"/>',

@@ -20,7 +20,7 @@
   const specMsg = (e) => (e && e.code ? tx('wk_e_' + e.code, e.vars, e.message) : (e && e.message) || '');
   const TONE_CHIP = { ok: 'green', warn: 'amber', bad: 'red', c1: 'blue', idle: '' };
   const PALETTE = ['c1', 'c2', 'c3', 'c4'];
-  const SIZE_OF = { kpi: 's', donut: 's', bar: 'm', column: 'm', table: 'm' };
+  const SIZE_OF = { kpi: 's', donut: 's', bar: 'm', column: 'm', line: 'm', area: 'm', combo: 'm', radar: 'm', funnel: 'm', table: 'm' };
   const blank = () => {};
 
   // ---------------- drawing a custom widget ----------------
@@ -95,6 +95,79 @@
       const cl = PMCL.get('htmlcol'), tot = groups.reduce((a, g) => a + Math.max(g.value, 0), 0);
       const lab = (g) => esc(PMCL.str(cl, { text: val(g), pct: PMCL.pctOf(g.value, tot) }));
       body.innerHTML = `<div class="wk-cols" role="img" aria-label="${esc(aria)}">${groups.map((g) => `<div class="wk-col" data-tip="${esc(`${groupName(g, res)}: ${val(g)} (${t('wk_rows_n', { n: fmtNum(g.count) })})`)}"><span class="wk-cv cl-t">${cl.on && cl.pos === 'above' ? lab(g) : ''}</span><span class="wk-bar-wrap"><i class="wk-bar ${g.tone || 'c1'}" style="height:${Math.max(0, (g.value / max) * 100).toFixed(1)}%">${cl.on && cl.pos === 'center' ? `<span class="cl-t cl-mid">${lab(g)}</span>` : ''}</i></span><span class="wk-cl">${cl.on && cl.pos === 'below' ? `<b class="cl-t">${lab(g)}</b><br>` : ''}${esc(groupName(g, res))}</span></div>`).join('')}</div>${note}`;
+      return { csv };
+    }
+    const short = (v) => { const u = mfd && mfd.unit === 'percent' ? '%' : ''; return new Intl.NumberFormat(lang(), { notation: 'compact', maximumFractionDigits: 1 }).format(v) + u; };
+    const clip = (txt, n) => (String(txt).length > n ? String(txt).slice(0, n - 1) + '…' : String(txt));
+    const niceMax = (v) => { const p = Math.pow(10, Math.floor(Math.log10(Math.max(v, 1)))), m = v / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p; };
+    const tipOf = (g, extra) => `${groupName(g, res)}: ${val(g)}${extra || ''} (${t('wk_rows_n', { n: fmtNum(g.count) })})`;
+
+    // line, area and combo: points on an evenly spaced axis, drawn at the real width so the text keeps its size
+    if (spec.viz === 'line' || spec.viz === 'area' || spec.viz === 'combo') {
+      if (groups.length < 2) { body.innerHTML = h.empty(t('wk_need_points', { n: 2 })) + note; return { csv: () => [] }; }
+      const combo = spec.viz === 'combo', n = groups.length;
+      const mfd2 = combo && res.line === 'second' && spec.measure2 ? WS.fieldOf(spec.dataset, spec.measure2) : mfd;
+      const lineLabel = combo ? (res.line === 'second' ? aggLabel({ ...spec, agg: spec.agg2, measure: spec.measure2 }) : t('wk_running')) : '';
+      const Wd = Math.max(240, Math.round(h.width())), Ht = 220, L = 46, R = 14, T = 18, B = 34, pw = Wd - L - R, ph = Ht - T - B, band = pw / n;
+      const all = groups.map((g) => g.value).concat(combo ? groups.map((g) => g.value2) : []);
+      const hi = niceMax(Math.max(1, ...all)), lo = Math.min(0, ...all);
+      const x = (i) => L + band * (i + 0.5), y = (v) => T + ph - ((v - lo) / (hi - lo || 1)) * ph;
+      let g = [lo, (lo + hi) / 2, hi].map((v) => `<line class="tl-grid" x1="${L}" x2="${L + pw}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text x="${L - 6}" y="${(y(v) + 4).toFixed(1)}" text-anchor="end" direction="ltr">${esc(short(v))}</text>`).join('');
+      const step = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(pw / 58))));
+      groups.forEach((gr, i) => { if (i % step === 0 || i === n - 1 && step === 1) g += `<text x="${x(i).toFixed(1)}" y="${Ht - 12}" text-anchor="middle" direction="ltr">${esc(clip(groupName(gr, res), 9))}</text>`; });
+      const cl = PMCL.get(combo ? 'column' : 'line', { percent: false });
+      const labelOn = cl.on && n <= 14;
+      if (combo) {
+        const bw = Math.min(44, band * 0.6);
+        groups.forEach((gr, i) => {
+          const yy = y(Math.max(gr.value, 0)), hh = Math.max(2, y(0) - yy);
+          g += `<rect class="wk-sbar" x="${(x(i) - bw / 2).toFixed(1)}" y="${(y(0) - hh).toFixed(1)}" width="${bw.toFixed(1)}" height="${hh.toFixed(1)}" rx="4" data-tip="${esc(tipOf(gr))}"/>`;
+          if (labelOn) g += PMCL.text(x(i), y(0) - hh, short(gr.value), cl.pos === 'below' ? 'above' : cl.pos);
+        });
+      }
+      const pts = groups.map((gr, i) => [x(i), y(combo ? gr.value2 : gr.value), gr]);
+      const path = pts.map(([px, py], i) => `${i ? 'L' : 'M'}${px.toFixed(1)} ${py.toFixed(1)}`).join('');
+      if (spec.viz === 'area') g += `<path class="wk-area" d="${path}L${pts[n - 1][0].toFixed(1)} ${y(Math.max(lo, 0)).toFixed(1)}L${pts[0][0].toFixed(1)} ${y(Math.max(lo, 0)).toFixed(1)}Z"/>`;
+      g += `<path class="tr-line ${combo ? 'c2' : 'c1'}" d="${path}"/>`;
+      pts.forEach(([px, py, gr], i) => {
+        const tip = combo ? `${groupName(gr, res)}: ${lineLabel} ${fmtValue(gr.value2, mfd2, cur)}` : tipOf(gr);
+        g += `<circle class="tr-dot ${combo ? 'c2' : 'c1'}" cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="4" data-tip="${esc(tip)}"/>`;
+        if (!combo && labelOn) g += PMCL.text(px, py, short(gr.value), cl.pos);
+        else if (combo && i === n - 1) g += PMCL.text(px, py, short(gr.value2), 'above');
+      });
+      const legend = combo ? h.legend([['c1', aggLabel(spec)], ['c2 line', lineLabel]]) : '';
+      body.innerHTML = `<svg class="viz wk-line" viewBox="0 0 ${Wd} ${Ht}" width="${Wd}" height="${Ht}" role="img" aria-label="${esc(aria)}">${g}</svg>${legend}${note}`;
+      return { csv: combo ? () => [[fieldLabel(res.grouped), aggLabel(spec), lineLabel], ...groups.map((gr) => [groupName(gr, res), gr.value, gr.value2])] : csv, chart: true };
+    }
+
+    // radar: one axis per group, drawn at the real width
+    if (spec.viz === 'radar') {
+      if (groups.length < 3) { body.innerHTML = h.empty(t('wk_need_points', { n: 3 })) + note; return { csv: () => [] }; }
+      const n = groups.length, S = Math.max(260, Math.min(440, Math.round(h.width()))), cx = S / 2, cy = S / 2 + 4, r = S / 2 - 62, max = niceMax(Math.max(1, ...groups.map((q) => q.value)));
+      const ang = (i) => -Math.PI / 2 + (2 * Math.PI * i) / n, pt = (i, f) => [cx + Math.cos(ang(i)) * r * f, cy + Math.sin(ang(i)) * r * f];
+      let g = [0.25, 0.5, 0.75, 1].map((f) => `<polygon class="tl-grid wk-ring" points="${groups.map((_, i) => pt(i, f).map((v) => v.toFixed(1)).join(',')).join(' ')}"/>`).join('');
+      g += groups.map((_, i) => `<line class="tl-grid" x1="${cx.toFixed(1)}" y1="${cy.toFixed(1)}" x2="${pt(i, 1)[0].toFixed(1)}" y2="${pt(i, 1)[1].toFixed(1)}"/>`).join('');
+      g += `<polygon class="wk-radar" points="${groups.map((q, i) => pt(i, Math.max(q.value, 0) / max).map((v) => v.toFixed(1)).join(',')).join(' ')}"/>`;
+      const cl = PMCL.get('radar', { percent: false });
+      groups.forEach((q, i) => {
+        const [px, py] = pt(i, Math.max(q.value, 0) / max), [lx, ly] = pt(i, 1.16), c = Math.cos(ang(i));
+        g += `<circle class="tr-dot c1" cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="4" data-tip="${esc(tipOf(q))}"/>`;
+        g += `<text x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}" text-anchor="${c > 0.25 ? 'start' : c < -0.25 ? 'end' : 'middle'}" direction="ltr">${esc(clip(groupName(q, res), 14))}</text>`;
+        if (cl.on) g += PMCL.text(px, py, short(q.value), cl.pos);
+      });
+      body.innerHTML = `<svg class="viz wk-radar-svg" viewBox="0 0 ${S} ${S + 8}" width="${S}" height="${S + 8}" role="img" aria-label="${esc(aria)}">${g}</svg>${note}`;
+      return { csv, chart: true };
+    }
+
+    // funnel: steps that narrow, each shows its share of the first step
+    if (spec.viz === 'funnel') {
+      if (groups.length < 2) { body.innerHTML = h.empty(t('wk_need_points', { n: 2 })) + note; return { csv: () => [] }; }
+      const first = Math.max(groups[0].value, 0) || 1;
+      body.innerHTML = `<div class="wk-fun" role="img" aria-label="${esc(aria)}">${groups.map((q, i) => {
+        const w = Math.max(3, Math.min(100, (Math.max(q.value, 0) / first) * 100)), prev = i ? Math.max(groups[i - 1].value, 0) : 0;
+        const ofFirst = PMCL.pctOf(Math.max(q.value, 0), first), ofPrev = i && prev > 0 ? PMCL.pctOf(Math.max(q.value, 0), prev) : '';
+        return `<div class="wk-fstep" data-tip="${esc(tipOf(q) + (ofPrev ? ' · ' + t('wk_funnel_prev', { p: ofPrev }) : ''))}"><div class="wk-frow"><span class="wk-fname">${esc(groupName(q, res))}</span><span class="wk-fval"><b>${esc(val(q))}</b>${i ? ` <span class="small muted">${esc(t('wk_funnel_first', { p: ofFirst }))}</span>` : ''}</span></div><div class="wk-ftrack"><i class="wk-fbar" style="width:${w.toFixed(1)}%;opacity:${(1 - Math.min(i, 6) * 0.1).toFixed(2)}"></i></div></div>`;
+      }).join('')}</div>${note}`;
       return { csv };
     }
     // donut

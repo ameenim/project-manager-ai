@@ -1611,3 +1611,13 @@ body.cht-dragging .cht-resize::after, body.cht-dragging .cht-grip::after { backg
 .dw-body:has(> .donut-wrap) { display: flex; flex-direction: column; justify-content: center; }
 @container (min-width: 480px) { .donut-wrap { grid-auto-flow: column; justify-content: center; align-items: center; gap: 28px; } .donut-wrap .viz-legend { flex-direction: column; margin-top: 0; gap: 8px; } }
 .dw-note { margin-top: 10px; }
+
+/* Line, area, combo, radar and funnel widgets */
+.wk-line, .wk-radar-svg { display: block; max-width: 100%; margin-inline: auto; } .wk-line text, .wk-radar-svg text { font-size: var(--fs-micro); fill: var(--muted); }
+.wk-area { fill: var(--c1); opacity: .16; stroke: none; } .wk-sbar { fill: var(--c1); opacity: .85; } .wk-sbar:hover { opacity: 1; }
+.wk-radar { fill: var(--c1); fill-opacity: .2; stroke: var(--c1); stroke-width: 2; stroke-linejoin: round; } .wk-ring { fill: none; }
+.wk-fun { display: grid; gap: 10px; } .wk-fstep { display: grid; gap: 4px; min-width: 0; }
+.wk-frow { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: var(--fs-body); } .wk-fname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); } .wk-fval { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.wk-ftrack { display: flex; justify-content: center; background: var(--track); border-radius: 6px; height: 14px; overflow: hidden; } .wk-fbar { display: block; height: 100%; background: var(--c1); border-radius: 6px; transform-origin: center; animation: wk-fgrow .7s var(--ease) both; }
+@keyframes wk-fgrow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@media (prefers-reduced-motion: reduce) { .wk-fbar { animation: none; } }

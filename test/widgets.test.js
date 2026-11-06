@@ -244,3 +244,28 @@ test('every widget route needs a signed in person', async () => {
     assert.equal((await s.call(m, p, m === 'POST' ? {} : null)).status, 401, m + ' ' + p);
   }
 });
+
+// ---------- line, area, combo, radar and funnel ----------
+test('line, area, combo, radar and funnel follow their own rules and compute the extra series', () => {
+  const rows = [
+    { title: 'a', amount: 10, due: '2026-08-05', state: 'paid', project: 'A' }, { title: 'b', amount: 20, due: '2026-09-10', state: 'paid', project: 'B' },
+    { title: 'c', amount: 30, due: '2026-10-02', state: 'pending', project: 'C' }, { title: 'd', amount: 40, due: '2026-11-03', state: 'pending', project: 'D' },
+  ];
+  const today = '2026-11-05';
+  for (const v of ['line', 'area']) {
+    const r = W.run(W.normalize({ dataset: 'payments', viz: v, agg: 'sum', measure: 'amount', groupBy: 'due', limit: 3 }), rows, { today });
+    assert.deepEqual(r.groups.map((g) => g.key), ['2026-09', '2026-10', '2026-11'], v + ' keeps the latest months in order');
+  }
+  const run = W.run(W.normalize({ dataset: 'payments', viz: 'combo', agg: 'sum', measure: 'amount', groupBy: 'due', line: 'cumulative' }), rows, { today });
+  assert.deepEqual(run.groups.map((g) => g.value2), [10, 30, 60, 100]);
+  const two = W.run(W.normalize({ dataset: 'payments', viz: 'combo', agg: 'sum', measure: 'amount', groupBy: 'due', line: 'second', agg2: 'count' }), rows, { today });
+  assert.deepEqual(two.groups.map((g) => g.value2), [1, 1, 1, 1]);
+  assert.equal(W.normalize({ dataset: 'payments', viz: 'combo', agg: 'count', groupBy: 'state' }).line, 'cumulative');
+  assert.throws(() => W.normalize({ dataset: 'payments', viz: 'funnel', agg: 'avg', measure: 'amount', groupBy: 'state' }), (e) => e.code === 'funnel_agg');
+  assert.throws(() => W.normalize({ dataset: 'payments', viz: 'combo', agg: 'avg', measure: 'amount', groupBy: 'state', line: 'cumulative' }), (e) => e.code === 'combo_cumulative');
+  assert.throws(() => W.normalize({ dataset: 'payments', viz: 'combo', agg: 'sum', measure: 'amount', groupBy: 'state', line: 'second', agg2: 'sum' }), (e) => e.code === 'measure2');
+  assert.throws(() => W.normalize({ dataset: 'payments', viz: 'radar', agg: 'count', groupBy: 'state', limit: 9 }), (e) => e.code === 'groups_range');
+  assert.equal(W.normalize({ dataset: 'payments', viz: 'radar', agg: 'count', groupBy: 'state' }).limit, 6);
+  const fun = W.run(W.normalize({ dataset: 'payments', viz: 'funnel', agg: 'count', groupBy: 'state' }), rows, { today });
+  assert.deepEqual(fun.groups.map((g) => g.value), [2, 2]);
+});

@@ -7,7 +7,11 @@
 
   const GROUPS = ['overview', 'schedule', 'financials', 'risk', 'delivery', 'team', 'trends', 'other'];
   const SCOPES = ['portfolio', 'project'];
-  const VIZ = ['kpi', 'bar', 'column', 'donut', 'table'];
+  const VIZ = ['kpi', 'bar', 'column', 'line', 'area', 'combo', 'donut', 'radar', 'funnel', 'table'];
+  const GROUPED = ['bar', 'column', 'line', 'area', 'combo', 'donut', 'radar', 'funnel'];
+  const LINE_MODES = ['cumulative', 'second'];
+  // groups drawn by default and the most each display allows
+  const DEFAULT_LIMIT = { donut: 4, radar: 6, funnel: 5, line: 12, area: 12, combo: 12 }, MAX_LIMIT = { donut: 4, radar: 8, funnel: 8 };
   const AGGS = ['count', 'sum', 'avg', 'min', 'max'];
   const SORTS = ['value_desc', 'value_asc', 'label'];
   const FORMATS = ['number', 'percent', 'money'];
@@ -115,6 +119,7 @@
     if (!AGGS.includes(agg)) bad('Choose how to calculate the value', 'agg');
     out.agg = agg;
     if (viz === 'donut' && agg !== 'count' && agg !== 'sum') bad('A donut shows shares of a whole, so use count or sum', 'donut_agg');
+    if (viz === 'funnel' && agg !== 'count' && agg !== 'sum') bad('A funnel shows steps that narrow, so use count or sum', 'funnel_agg');
     if (agg !== 'count') {
       const fd = fieldOf(ds, raw.measure);
       if (!fd || fd.type !== T.number) bad('Choose a number field to calculate', 'measure');
@@ -134,10 +139,26 @@
     const gb = fieldOf(ds, raw.groupBy);
     if (!gb) bad('Choose what to group by', 'group_by');
     out.groupBy = gb.name;
-    out.sort = SORTS.includes(raw.sort) ? raw.sort : (gb.type === T.date ? 'label' : 'value_desc');
-    const limit = raw.limit == null ? (viz === 'donut' ? 4 : 8) : Number(raw.limit);
-    if (!isInt(limit) || limit < LIMIT.min || limit > LIMIT.max) bad('The number of groups must be from ' + LIMIT.min + ' to ' + LIMIT.max, 'groups_range', { min: LIMIT.min, max: LIMIT.max });
-    out.limit = viz === 'donut' ? Math.min(limit, 4) : limit;
+    out.sort = SORTS.includes(raw.sort) ? raw.sort : (gb.type === T.date || viz === 'line' || viz === 'area' || viz === 'combo' ? 'label' : 'value_desc');
+    const limit = raw.limit == null || raw.limit === '' ? (DEFAULT_LIMIT[viz] || 8) : Number(raw.limit);
+    const cap = MAX_LIMIT[viz] || LIMIT.max;
+    if (!isInt(limit) || limit < LIMIT.min || limit > cap) bad('The number of groups must be from ' + LIMIT.min + ' to ' + cap, 'groups_range', { min: LIMIT.min, max: cap });
+    out.limit = limit;
+    if (viz === 'combo') {
+      out.line = raw.line === 'second' ? 'second' : 'cumulative';
+      if (out.line === 'cumulative') {
+        if (agg !== 'count' && agg !== 'sum') bad('A running total needs count or sum', 'combo_cumulative');
+      } else {
+        const a2 = raw.agg2 == null || raw.agg2 === '' ? 'count' : raw.agg2;
+        if (!AGGS.includes(a2)) bad('Choose how to calculate the line', 'agg2');
+        out.agg2 = a2;
+        if (a2 !== 'count') {
+          const f2 = fieldOf(ds, raw.measure2);
+          if (!f2 || f2.type !== T.number) bad('Choose a number field for the line', 'measure2');
+          out.measure2 = f2.name;
+        }
+      }
+    }
     return out;
   }
 
@@ -220,7 +241,8 @@
     }
     const gb = fieldOf(spec.dataset, spec.groupBy), buckets = new Map();
     for (const r of set) { const k = keyOf(gb, r); if (!buckets.has(k)) buckets.set(k, []); buckets.get(k).push(r); }
-    let groups = [...buckets].map(([key, list]) => { const m = measureOf(spec, list, opts); return { key, value: m.value == null ? 0 : m.value, count: m.n, tone: gb.type === T.enum ? gb.values[key] || null : null }; });
+    const second = spec.viz === 'combo' && spec.line === 'second' ? { ...spec, agg: spec.agg2, measure: spec.measure2 } : null;
+    let groups = [...buckets].map(([key, list]) => { const m = measureOf(spec, list, opts); const g = { key, value: m.value == null ? 0 : m.value, count: m.n, tone: gb.type === T.enum ? gb.values[key] || null : null }; if (second) { const m2 = measureOf(second, list, opts); g.value2 = m2.value == null ? 0 : m2.value; } return g; });
     if (spec.sort === 'label' || gb.type === T.date) groups.sort((a, b) => (a.key === '' ? 1 : b.key === '' ? -1 : String(a.key).localeCompare(String(b.key))));
     else groups.sort((a, b) => (spec.sort === 'value_asc' ? a.value - b.value : b.value - a.value));
     let other = null;
@@ -232,12 +254,14 @@
         const restRows = rest.reduce((a, g) => a + g.count, 0);
         other = { key: '__other', value: spec.agg === 'sum' || spec.agg === 'count' ? rest.reduce((a, g) => a + g.value, 0) : 0, count: restRows, tone: null };
         if (spec.agg === 'sum' || spec.agg === 'count') groups.push(other);
-      } else groups = groups.slice(0, keep);
+      } else if (gb.type === T.date && (spec.viz === 'line' || spec.viz === 'area' || spec.viz === 'combo')) groups = groups.slice(-keep); // a trend keeps the latest months
+      else groups = groups.slice(0, keep);
     }
-    return { kind: 'groups', groups, total: set.length, grouped: gb.name, dateBuckets: gb.type === T.date };
+    if (spec.viz === 'combo' && spec.line === 'cumulative') { let run = 0; for (const g of groups) { run += g.value; g.value2 = Math.round(run * 100) / 100; } }
+    return { kind: 'groups', groups, total: set.length, grouped: gb.name, dateBuckets: gb.type === T.date, line: spec.viz === 'combo' ? spec.line : null };
   }
 
-  const api = { GROUPS, SCOPES, VIZ, AGGS, SORTS, FORMATS, DATASETS, OPS, LIMIT, ROWS, MAX_FILTERS, MAX_COLUMNS, TITLE_MAX, DESC_MAX, SpecError, fieldOf, numericFields, normalize, meta, run };
+  const api = { GROUPS, SCOPES, VIZ, GROUPED, LINE_MODES, DEFAULT_LIMIT, MAX_LIMIT, AGGS, SORTS, FORMATS, DATASETS, OPS, LIMIT, ROWS, MAX_FILTERS, MAX_COLUMNS, TITLE_MAX, DESC_MAX, SpecError, fieldOf, numericFields, normalize, meta, run };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else window.__WidgetSpec = api;
 })();

@@ -6,8 +6,9 @@
   const WS = window.__WidgetSpec;
   const W = () => PM.widgets;
 
-  const VIZ_ICON = { kpi: 'spark', bar: 'list', column: 'cols', donut: 'grid', table: 'list' };
-  const emptyState = () => ({ id: null, title: '', description: '', group: 'overview', dataset: 'tasks', filters: [], viz: 'kpi', agg: 'count', measure: '', format: 'number', dir: 'above', warn: '', bad: '', groupBy: '', sort: 'value_desc', limit: '', columns: [], sortBy: '', sortDir: 'asc', rows: '10' });
+  const VIZ_ICON = { kpi: 'spark', bar: 'list', column: 'cols', line: 'vline', area: 'varea', combo: 'vcombo', donut: 'grid', radar: 'vradar', funnel: 'vfunnel', table: 'list' };
+  const SHARE_ONLY = ['donut', 'funnel'];
+  const emptyState = () => ({ id: null, title: '', description: '', group: 'overview', dataset: 'tasks', filters: [], viz: 'kpi', agg: 'count', measure: '', line: 'cumulative', agg2: 'count', measure2: '', format: 'number', dir: 'above', warn: '', bad: '', groupBy: '', sort: 'value_desc', limit: '', columns: [], sortBy: '', sortDir: 'asc', rows: '10' });
   const fields = (ds) => WS.DATASETS[ds] || [];
   const fld = (ds, n) => WS.fieldOf(ds, n);
   const defaultGroupBy = (ds) => { const fs = fields(ds); return (fs.find((x) => x.type === 'enum') || fs.find((x) => x.type === 'text') || fs[0]).name; };
@@ -19,7 +20,7 @@
     st.filters = (s.filters || []).map((x) => ({ field: x.field, op: x.op, value: x.value == null ? '' : String(x.value) }));
     if (s.viz === 'table') { st.columns = s.columns.slice(); st.sortBy = s.sortBy; st.sortDir = s.sortDir; st.rows = String(s.rows); } else {
       st.agg = s.agg; st.measure = s.measure || '';
-      if (s.viz === 'kpi') { st.format = s.format || 'number'; if (s.tone) { st.dir = s.tone.dir; st.warn = s.tone.warn == null ? '' : String(s.tone.warn); st.bad = s.tone.bad == null ? '' : String(s.tone.bad); } } else { st.groupBy = s.groupBy; st.sort = s.sort; st.limit = String(s.limit); }
+      if (s.viz === 'kpi') { st.format = s.format || 'number'; if (s.tone) { st.dir = s.tone.dir; st.warn = s.tone.warn == null ? '' : String(s.tone.warn); st.bad = s.tone.bad == null ? '' : String(s.tone.bad); } } else { st.groupBy = s.groupBy; st.sort = s.sort; st.limit = String(s.limit); if (s.viz === 'combo') { st.line = s.line; st.agg2 = s.agg2 || 'count'; st.measure2 = s.measure2 || ''; } }
     }
     return st;
   }
@@ -29,6 +30,7 @@
     raw.agg = st.agg; if (st.agg !== 'count') raw.measure = st.measure;
     if (st.viz === 'kpi') { raw.format = st.format; if (st.warn !== '' || st.bad !== '') raw.tone = { dir: st.dir, warn: st.warn, bad: st.bad }; return raw; }
     raw.groupBy = st.groupBy; raw.sort = st.sort; raw.limit = st.limit === '' ? undefined : Number(st.limit);
+    if (st.viz === 'combo') { raw.line = st.line; if (st.line === 'second') { raw.agg2 = st.agg2; if (st.agg2 !== 'count') raw.measure2 = st.measure2; } }
     return raw;
   }
 
@@ -65,7 +67,7 @@
 
     function formHtml() {
       const ds = st.dataset, nums = WS.numericFields(ds);
-      const aggs = st.viz === 'donut' ? ['count', 'sum'] : WS.AGGS;
+      const aggs = SHARE_ONLY.includes(st.viz) || (st.viz === 'combo' && st.line === 'cumulative') ? ['count', 'sum'] : WS.AGGS;
       const measureSel = st.agg === 'count' ? '' : `<div class="wb-field"><label for="wbMeasure">${esc(t('wb_measure'))}</label>${sel('wbMeasure', st.measure, nums.map((x) => [x.name, label.field(x.name)]))}</div>`;
       let shape = '';
       if (st.viz === 'table') {
@@ -77,7 +79,10 @@
           shape += `<div class="wb-row"><div class="wb-field"><label for="wbFormat">${esc(t('wb_format'))}</label>${sel('wbFormat', st.format, WS.FORMATS.map((f) => [f, t('wb_fmt_' + f)]))}</div></div>
             <div class="wb-field"><span class="wb-lab">${esc(t('wb_alerts'))}</span><div class="wb-row"><div class="wb-field"><label for="wbDir">${esc(t('wb_alert_when'))}</label>${sel('wbDir', st.dir, [['above', t('wb_above')], ['below', t('wb_below')]])}</div><div class="wb-field"><label for="wbWarn">${esc(t('wb_warn'))}</label><input id="wbWarn" type="number" step="any" value="${esc(st.warn)}"></div><div class="wb-field"><label for="wbBad">${esc(t('wb_bad'))}</label><input id="wbBad" type="number" step="any" value="${esc(st.bad)}"></div></div><div class="small muted">${esc(t('wb_alerts_hint'))}</div></div>`;
         } else {
-          shape += `<div class="wb-row"><div class="wb-field"><label for="wbGroup">${esc(t('wb_group_by'))}</label>${sel('wbGroup', st.groupBy, fieldOpts(ds))}</div><div class="wb-field"><label for="wbSort">${esc(t('wb_sort'))}</label>${sel('wbSort', st.sort, WS.SORTS.map((s) => [s, t('wb_sort_' + s)]))}</div><div class="wb-field"><label for="wbLimit">${esc(t('wb_limit'))}</label><input id="wbLimit" type="number" min="${WS.LIMIT.min}" max="${st.viz === 'donut' ? 4 : WS.LIMIT.max}" value="${esc(st.limit)}" placeholder="${st.viz === 'donut' ? 4 : 8}"></div></div>`;
+          shape += `<div class="wb-row"><div class="wb-field"><label for="wbGroup">${esc(t('wb_group_by'))}</label>${sel('wbGroup', st.groupBy, fieldOpts(ds))}</div><div class="wb-field"><label for="wbSort">${esc(t('wb_sort'))}</label>${sel('wbSort', st.sort, WS.SORTS.map((s) => [s, t('wb_sort_' + s)]))}</div><div class="wb-field"><label for="wbLimit">${esc(t('wb_limit'))}</label><input id="wbLimit" type="number" min="${WS.LIMIT.min}" max="${WS.MAX_LIMIT[st.viz] || WS.LIMIT.max}" value="${esc(st.limit)}" placeholder="${WS.DEFAULT_LIMIT[st.viz] || 8}"></div></div>`;
+          if (st.viz === 'combo') {
+            shape += `<div class="wb-row"><div class="wb-field"><label for="wbLine">${esc(t('wb_line_shows'))}</label>${sel('wbLine', st.line, [['cumulative', t('wb_line_cumulative')], ['second', t('wb_line_second')]])}</div>${st.line === 'second' ? `<div class="wb-field"><label for="wbAgg2">${esc(t('wb_agg2'))}</label>${sel('wbAgg2', st.agg2, WS.AGGS.map((a) => [a, t('wb_agg_' + a)]))}</div>${st.agg2 === 'count' ? '' : `<div class="wb-field"><label for="wbMeasure2">${esc(t('wb_measure2'))}</label>${sel('wbMeasure2', st.measure2, nums.map((x) => [x.name, label.field(x.name)]))}</div>`}` : ''}</div><div class="small muted">${esc(t('wb_combo_hint'))}</div>`;
+          }
         }
       }
       return `<section class="card wb-card"><h2 class="wb-h">${esc(t('wb_s_about'))}</h2>
@@ -117,16 +122,20 @@
     const later = () => { dirty.v = true; clearTimeout(pt); pt = setTimeout(paintPreview, 160); };
 
     function onDataset(ds) {
-      st.dataset = ds; st.filters = []; st.measure = ''; st.groupBy = defaultGroupBy(ds); st.columns = defaultColumns(ds); st.sortBy = st.columns[0];
+      st.dataset = ds; st.filters = []; st.measure = ''; st.measure2 = ''; st.groupBy = defaultGroupBy(ds); st.columns = defaultColumns(ds); st.sortBy = st.columns[0];
       const nums = WS.numericFields(ds); if (st.agg !== 'count') st.measure = nums[0] ? nums[0].name : '';
     }
     function onViz(v) {
       st.viz = v;
-      if (v === 'donut' && !['count', 'sum'].includes(st.agg)) st.agg = 'count';
+      if (SHARE_ONLY.includes(v) && !['count', 'sum'].includes(st.agg)) st.agg = 'count';
+      if (v === 'combo' && st.line === 'cumulative' && !['count', 'sum'].includes(st.agg)) st.agg = 'count';
       if (st.agg !== 'count' && !st.measure) { const n = WS.numericFields(st.dataset)[0]; st.measure = n ? n.name : ''; }
       if (!st.groupBy) st.groupBy = defaultGroupBy(st.dataset);
       if (!st.columns.length) { st.columns = defaultColumns(st.dataset); st.sortBy = st.columns[0]; }
-      if (v === 'donut' && Number(st.limit) > 4) st.limit = '4';
+      const cap = WS.MAX_LIMIT[v] || WS.LIMIT.max;
+      if (st.limit !== '' && Number(st.limit) > cap) st.limit = String(cap);
+      const gb = fld(st.dataset, st.groupBy);
+      if (v === 'line' || v === 'area' || v === 'combo') st.sort = 'label'; else if (st.sort === 'label' && !(gb && gb.type === 'date')) st.sort = 'value_desc';
     }
 
     const root = $('#content .page');
@@ -156,8 +165,11 @@
       if (el.id === 'wbMeasure') { st.measure = el.value; if (st.format === 'money' && !(fld(st.dataset, st.measure) || {}).money) st.format = 'number'; return later(); }
       if (el.id === 'wbFormat') { st.format = el.value; return later(); }
       if (el.id === 'wbDir') { st.dir = el.value; return later(); }
-      if (el.id === 'wbGroup') { st.groupBy = el.value; const gb = fld(st.dataset, st.groupBy); st.sort = gb && gb.type === 'date' ? 'label' : 'value_desc'; return redraw(); }
+      if (el.id === 'wbGroup') { st.groupBy = el.value; const gb = fld(st.dataset, st.groupBy); st.sort = (gb && gb.type === 'date') || ['line', 'area', 'combo'].includes(st.viz) ? 'label' : 'value_desc'; return redraw(); }
       if (el.id === 'wbSort') { st.sort = el.value; return later(); }
+      if (el.id === 'wbLine') { st.line = el.value; if (st.line === 'cumulative' && !['count', 'sum'].includes(st.agg)) st.agg = 'count'; if (st.line === 'second' && st.agg2 !== 'count' && !st.measure2) { const n = WS.numericFields(st.dataset)[0]; st.measure2 = n ? n.name : ''; } return redraw(); }
+      if (el.id === 'wbAgg2') { st.agg2 = el.value; if (st.agg2 !== 'count' && !st.measure2) { const n = WS.numericFields(st.dataset)[0]; st.measure2 = n ? n.name : ''; } return redraw(); }
+      if (el.id === 'wbMeasure2') { st.measure2 = el.value; return later(); }
       if (el.id === 'wbSortBy') { st.sortBy = el.value; return later(); }
       if (el.id === 'wbSortDir') { st.sortDir = el.value; return later(); }
       if (el.dataset.col) { const n = el.dataset.col; st.columns = el.checked ? st.columns.concat(n) : st.columns.filter((x) => x !== n); if (!st.columns.includes(st.sortBy)) st.sortBy = st.columns[0] || ''; return redraw(); }
