@@ -46,9 +46,9 @@
     await loadSync();
     const fdt = (iso) => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString(S.lang === 'ar' ? 'ar-AE' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' }); };
     const schedLabel = (s) => (s.mode === 'off' ? t('sh_f_off') : t('sh_s_' + s.mode, { time: s.time }));
-    const SRC ={ teams: 'chat', email: 'mail', jira: 'jira', upload: 'file', manual: 'edit' };
+    const SRC ={ teams: 'chat', email: 'mail', jira: 'jira', upload: 'file', manual: 'edit', meeting: 'mic' };
     const FIL = { pending: ['pending'], applied: ['applied', 'auto_applied'], other: ['dismissed', 'undone', 'no_action'] };
-    const ACT = { update_task: 'cal', close_deliverable: 'check', milestone_invoiced: 'coin', milestone_paid: 'coin', flag_issue: 'alert' };
+    const ACT = { update_task: 'cal', close_deliverable: 'check', milestone_invoiced: 'coin', milestone_paid: 'coin', flag_issue: 'alert', create_item: 'list', create_task: 'plus' };
     let guide = true; try { guide = localStorage.getItem('pm_upd_guide') !== 'off'; } catch (e) { /* storage blocked */ }
     const reload = async () => { rows = (await api('GET', `/api/projects/${p.id}/inbox`)).inbox; await loadSync(); S.project = (await api('GET', `/api/projects/${p.id}`)).project; draw(); };
     const level = (c) => (c == null ? null : c >= 0.8 ? 'hi' : c >= 0.65 ? 'mid' : 'lo');

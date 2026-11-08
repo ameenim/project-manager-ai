@@ -14,6 +14,9 @@ const exporter = require('./exporter');
 const brandLib = require('./brand');
 const importer = require('./importer');
 const { Snapshots, build: buildTrends, periodOf } = require('./snapshots');
+const { Meetings, SECTIONS: MEETING_SECTIONS, mmss: meetingTime } = require('./meetings');
+const stt = require('./stt');
+const meetingExport = require('./meetings_export');
 
 const PUB = path.join(__dirname, '..', 'public');
 const TZ = process.env.APP_TZ || 'Asia/Dubai';
@@ -184,7 +187,7 @@ module.exports = function createApi(store, auth, connectors, ops) {
     id: t.id, parent_id: t.parent_id, position: t.position, name: t.name, start: t.start, finish: t.finish, duration: t.duration,
     progress: t.progress || 0, assignee: t.assignee, deps: t.deps, deliverable_id: t.deliverable_id, b_start: t.b_start, b_end: t.b_end,
     notes: t.notes, is_milestone: t.is_milestone, jira_key: t.jira_key, color: t.color, summary: t.summary, critical: t.critical,
-    mode: t.mode === 'manual' ? 'manual' : 'auto', flag: t.flag ? 1 : 0, conflict: t.conflict ? 1 : 0, links: Array.isArray(t.links) ? t.links : [],
+    mode: t.mode === 'manual' ? 'manual' : 'auto', source: t.source || null, meeting_id: t.meeting_id || null, flag: t.flag ? 1 : 0, conflict: t.conflict ? 1 : 0, links: Array.isArray(t.links) ? t.links : [],
   });
   function scheduleResponse(P) {
     const computed = S.schedule(P.tasks, rawProject(P));
@@ -335,6 +338,8 @@ module.exports = function createApi(store, auth, connectors, ops) {
     if (a.type === 'close_deliverable') { const i = P.items.find((x) => x.id === a.deliverable_id); return `Close deliverable "${i ? i.title : '?'}"${a.evidence ? ` with evidence ${a.evidence}` : ''}`; }
     if (a.type === 'milestone_invoiced' || a.type === 'milestone_paid') { const i = P.items.find((x) => x.id === a.milestone_id); return `Mark payment milestone "${i ? i.title : '?'}" as ${a.type === 'milestone_paid' ? 'paid' : 'invoiced'}`; }
     if (a.type === 'flag_issue') return `Log an issue${a.task_id ? ' on a task' : ''}: ${(a.note || '').slice(0, 100)}`;
+    if (a.type === 'create_item') return `Log ${a.kind || 'item'}: ${String(a.title || '').slice(0, 100)}`;
+    if (a.type === 'create_task') return `Add task "${String(a.title || '').slice(0, 100)}"${a.assignee ? ' for ' + a.assignee : ''}`;
     return a.note || a.type;
   }
   function applyAction(P, action, actor, docId) {
@@ -370,6 +375,34 @@ module.exports = function createApi(store, auth, connectors, ops) {
       P.items.push({ id, project_id: P.id, kind: 'risk', title, description: action.note || '', data: { probability: 'High', impact: 'Medium', mitigation: '', issue: true, task_id: action.task_id || null }, status: 'confirmed', state: 'open', confidence: action.confidence ?? null, doc_id: null, quote: '', evidence_doc_id: null, created_at: nowTs() });
       prev.created_item = id;
       summary = `Issue logged: ${title}`;
+    } else if (action.type === 'create_item') {
+      const kind = ['action', 'decision', 'risk', 'requirement', 'deliverable'].includes(action.kind) ? action.kind : 'action';
+      const title = String(action.title || '').trim().slice(0, 200);
+      if (!title) throw err(400, 'The item needs a title');
+      const id = nid();
+      P.items.push({ id, project_id: P.id, kind, title, description: action.description || '', data: { ...(action.data || {}) }, status: 'confirmed', state: kind === 'decision' ? 'active' : 'open', confidence: action.confidence ?? null, doc_id: null, quote: String(action.quote || '').slice(0, 300), evidence_doc_id: null, created_at: nowTs(), doc_name: null, evidence_name: null, meeting_id: action.meeting_id || null });
+      prev.created_item = id;
+      summary = `Logged ${kind}: ${title}`;
+    } else if (action.type === 'create_task') {
+      const name = String(action.title || '').trim().slice(0, 200);
+      if (!name) throw err(400, 'The task needs a name');
+      const c = S.calendar(rawProject(P));
+      const today = TODAY();
+      const due = /^\d{4}-\d{2}-\d{2}$/.test(action.due_date || '') ? action.due_date : null;
+      const start = S.nextWork(due && due < today ? due : today, c);
+      const dur = due && due > start ? Math.max(1, S.countWork(start, due, c)) : 1;
+      const top = () => P.tasks.reduce((m, x) => Math.max(m, x.position ?? 0), 0) + 1;
+      let group = P.tasks.find((x) => !x.parent_id && x.name === 'Meeting actions');
+      if (!group) {
+        group = { id: nid(), parent_id: null, position: top(), name: 'Meeting actions', start, duration: 1, progress: 0, assignee: null, deps: [], deliverable_id: null, b_start: null, b_end: null, notes: 'Tasks created from meeting minutes.', is_milestone: 0, jira_key: null, color: null };
+        P.tasks.push(group); prev.created_group = group.id;
+      }
+      const id = nid();
+      P.tasks.push({ id, parent_id: group.id, position: top(), name, start, duration: dur, progress: 0, assignee: action.assignee || null, deps: [], deliverable_id: null, b_start: null, b_end: null, notes: ['From a meeting.', due ? null : 'No due date was given.', action.note || null].filter(Boolean).join(' '), is_milestone: 0, jira_key: null, color: null, source: 'meeting', meeting_id: action.meeting_id || null, links: [] });
+      P.tasks.sort((a, z) => (a.position ?? 0) - (z.position ?? 0) || a.id - z.id);
+      prev.created_task = id;
+      recalc(P); recordVersion(P, 'edit');
+      summary = `Task "${name}" added to the schedule${due ? ` (due ${due})` : ''}`;
     } else throw err(400, 'Unknown action type');
     audit(P, actor, 'task_update', { summary, action: action.type });
     return { prev, summary };
@@ -379,7 +412,12 @@ module.exports = function createApi(store, auth, connectors, ops) {
     if (p.task) { const t = P.tasks.find((x) => x.id === p.task.id); if (t) { t.progress = p.task.progress; t.start = p.task.start; t.assignee = p.task.assignee; } recalc(P); }
     if (p.item) { const it = P.items.find((x) => x.id === p.item.id); if (it) { it.state = p.item.state; it.evidence_doc_id = p.item.evidence_doc_id; } }
     if (p.tasks && p.tasks.length) { for (const x of p.tasks) { const t = P.tasks.find((y) => y.id === x.id); if (t) t.progress = x.progress; } recalc(P); }
-    if (p.created_item) P.items = P.items.filter((i) => i.id !== p.created_item);
+    if (p.created_item) { P.items = P.items.filter((i) => i.id !== p.created_item); for (const t of P.tasks) if (Array.isArray(t.links)) t.links = t.links.filter((x) => x !== p.created_item); }
+    if (p.created_task) {
+      P.tasks = P.tasks.filter((t) => t.id !== p.created_task);
+      if (p.created_group && !P.tasks.some((t) => t.parent_id === p.created_group)) P.tasks = P.tasks.filter((t) => t.id !== p.created_group);
+      recalc(P); recordVersion(P, 'edit');
+    }
     audit(P, 'PM', 'undo', { summary: `Undid: ${action.summary || action.type}` });
   }
   function resolveResource(P, sender, hint) {
@@ -1147,9 +1185,9 @@ module.exports = function createApi(store, auth, connectors, ops) {
   });
   on('POST', '/api/projects/(\\d+)/items', async (m, q, b) => {
     const P = P_(m[1]);
-    if (!['deliverable', 'requirement', 'risk', 'milestone'].includes(b.kind)) throw err(400, 'Unsupported item type');
+    if (!['deliverable', 'requirement', 'risk', 'milestone', 'action', 'decision'].includes(b.kind)) throw err(400, 'Unsupported item type');
     if (!String(b.title || '').trim()) throw err(400, 'A title is required');
-    const it = { id: nid(), project_id: P.id, kind: b.kind, title: b.title.trim(), description: b.description || '', data: b.data || {}, status: 'confirmed', state: b.state || (b.kind === 'milestone' ? 'pending' : 'open'), confidence: null, doc_id: null, quote: '', evidence_doc_id: null, created_at: nowTs() };
+    const it = { id: nid(), project_id: P.id, kind: b.kind, title: b.title.trim(), description: b.description || '', data: b.data || {}, status: 'confirmed', state: b.state || (b.kind === 'milestone' ? 'pending' : b.kind === 'decision' ? 'active' : 'open'), confidence: null, doc_id: null, quote: '', evidence_doc_id: null, created_at: nowTs() };
     P.items.push(it); audit(P, ACTOR(), 'item_added', { summary: `Added ${b.kind} "${it.title}"` });
     return { item: itemView(P, it) };
   });
@@ -1505,6 +1543,7 @@ Rules:
     const action = { ...(r.action || {}), ...((b && b.override) || {}) };
     const out = applyAction(P, action, ACTOR(), r.doc_id);
     r.status = 'applied'; r.applied_at = nowTs(); r.action = { ...action, prev: out.prev, summary: out.summary };
+    await meetingInboxSync(r, 'apply');
     return { ok: true, summary: out.summary };
   });
   on('POST', '/api/inbox/(\\d+)/dismiss', async (m) => { const [, r] = findRow(m[1]); r.status = 'dismissed'; return { ok: true }; });
@@ -1512,7 +1551,7 @@ Rules:
   on('POST', '/api/inbox/(\\d+)/undo', async (m) => {
     const [P, r] = findRow(m[1]);
     if (!['applied', 'auto_applied'].includes(r.status)) throw err(400, 'Nothing to undo');
-    undoAction(P, r.action || {}); r.status = 'undone'; return { ok: true };
+    undoAction(P, r.action || {}); r.status = 'undone'; await meetingInboxSync(r, 'undo'); return { ok: true };
   });
   // one message in, suggestions out (used by pasted messages, webhooks and the sync button)
   async function ingestMessage(P, b) {
@@ -1969,6 +2008,152 @@ Rules:
     if (f) return new FileResult(f.buffer, f.mime || 'application/octet-stream', d.filename);
     // files added before originals were kept still have their text
     return new FileResult(Buffer.from(P.texts[d.id] || '', 'utf8'), 'text/plain; charset=utf-8', `${d.filename}.txt`);
+  });
+
+  // ---------- meetings ----------
+  // A meeting belongs to one project and follows that project's roles: editors and managers capture and change,
+  // viewers only read. The work itself (transcription, minutes) is in server/meetings.js.
+  const meetings = new Meetings(store.db, store, ops);
+  const txt = (v, n) => String(v == null ? '' : v).trim().slice(0, n);
+  const meetingCtx = (P) => ({
+    today: TODAY(),
+    project: { name: P.p.name, client: P.p.client || '' },
+    people: P.resources.map((r) => r.name).slice(0, 60),
+    tasks: P.tasks.filter((t) => (t.progress || 0) < 100 && !P.tasks.some((c) => c.parent_id === t.id)).slice(0, 120).map((t) => ({ id: t.id, name: t.name, assignee: t.assignee || null, progress: t.progress || 0 })),
+  });
+  const MT = async (id, level) => { const r = await meetings.row(id); if (!r) throw err(404, 'Meeting not found'); const P = P_(r.project_id, level); return [P, r]; };
+  const meetingBusy = (r) => meetings.running.has(r.id) || ['transcribing', 'summarizing'].includes(r.status);
+  const meetingStatus = () => ({ ...stt.status(), claude: !!process.env.ANTHROPIC_API_KEY });
+  // keeps the "sent to the project" marks of a meeting in step when its rows are applied or undone in the Updates inbox
+  async function meetingInboxSync(r, how) {
+    const m = /^meeting:(\d+):([a-z]\d+):(log|task|update)$/.exec(r.ext_id || '');
+    if (!m) return;
+    try {
+      if (how === 'undo') await meetings.clearApplied(Number(m[1]), m[2], m[3]);
+      else await meetings.markApplied(Number(m[1]), m[2], { [m[3]]: { inbox_id: r.id, pending: false } });
+    } catch (e) { console.error('meeting sync', e.message); }
+  }
+  on('GET', '/api/projects/(\\d+)/meetings', async (m) => { const P = P_(m[1]); return { meetings: await meetings.list(P.id), stt: meetingStatus(), attendees: P.resources.map((r) => ({ name: r.name, email: r.email || null, role: r.role || null })) }; });
+  on('POST', '/api/projects/(\\d+)/meetings', async (m, q, b) => {
+    const P = P_(m[1]);
+    const source = ['recording', 'upload', 'text'].includes(b.source) ? b.source : 'upload';
+    const raw = source === 'text' ? meetings.parseText(b.transcript_text) : null;
+    const id = await meetings.create({ projectId: P.id, ownerId: ctx().user.id, title: b.title, meeting_at: b.meeting_at, attendees: b.attendees, language: b.language, minutes_lang: b.minutes_lang, source, notes: b.notes });
+    if (raw) {
+      const stop = await ops.allowance(ctx().user); if (stop) throw err(402, stop);
+      await meetings.setTranscript(id, raw, true);
+      await meetings.setStatus(id, 'summarizing', 'Writing the minutes');
+      meetings.start(id, { userId: ctx().user.id, user: ctx().user, ctx: meetingCtx(P), from: 'transcript' });
+    }
+    audit(P, ACTOR(), 'meeting_added', { summary: `Added meeting "${txt(b.title, 140)}"` });
+    return { meeting: await meetings.get(id) };
+  });
+  on('GET', '/api/meetings/(\\d+)', async (m) => {
+    const [P, r] = await MT(m[1]);
+    return { meeting: meetings.view(r, true), project: { id: P.id, name: P.p.name }, has_audio: await meetings.hasAudio(r.id), stt: meetingStatus(), attendees: P.resources.map((x) => ({ name: x.name, email: x.email || null, role: x.role || null })) };
+  });
+  on('PUT', '/api/meetings/(\\d+)', async (m, q, b) => { const [, r] = await MT(m[1]); await meetings.update(r.id, b); return { meeting: await meetings.get(r.id) }; });
+  on('DELETE', '/api/meetings/(\\d+)', async (m) => { const [P, r] = await MT(m[1]); if (meetingBusy(r)) throw err(409, 'Wait until this meeting has finished processing'); await meetings.remove(r.id); audit(P, ACTOR(), 'meeting_deleted', { summary: `Deleted meeting "${r.title}"` }); return { ok: true }; });
+  on('POST', '/api/meetings/(\\d+)/audio', async (m, q, b) => {
+    const [P, r] = await MT(m[1]);
+    if (!stt.configured()) throw err(503, 'GEMINI_API_KEY is not set on the server. Add it to the server settings, then try again.');
+    const f = b && typeof b.get === 'function' ? b.get('file') : null;
+    if (!f || !f.buffer || !f.buffer.length) throw err(400, 'Choose a recording');
+    if (!stt.cleanMime(f.type, f.name)) throw err(400, 'This file type cannot be transcribed. Use MP3, WAV, M4A, AAC, OGG, FLAC or WebM audio.');
+    if (meetingBusy(r)) throw err(409, 'This meeting is already being processed');
+    const stop = await ops.allowance(ctx().user); if (stop) throw err(402, stop);
+    const dur = b.get('duration_sec'); if (dur) await meetings.update(r.id, { duration_sec: dur });
+    await meetings.saveAudio(r.id, f);
+    await meetings.setStatus(r.id, 'uploaded', 'Recording received');
+    meetings.start(r.id, { userId: ctx().user.id, user: ctx().user, ctx: meetingCtx(P), from: 'audio' });
+    return { meeting: await meetings.get(r.id) };
+  });
+  on('POST', '/api/meetings/(\\d+)/retry', async (m) => {
+    const [P, r] = await MT(m[1]);
+    if (meetingBusy(r)) throw err(409, 'This meeting is already being processed');
+    const from = (await meetings.hasAudio(r.id)) ? 'audio' : (r.transcript || []).length ? 'transcript' : null;
+    if (!from) throw err(400, 'There is nothing to retry. Upload the recording again.');
+    if (from === 'audio' && !stt.configured()) throw err(503, 'GEMINI_API_KEY is not set on the server. Add it to the server settings, then try again.');
+    const stop = await ops.allowance(ctx().user); if (stop) throw err(402, stop);
+    await meetings.setStatus(r.id, from === 'audio' ? 'uploaded' : 'summarizing', from === 'audio' ? 'Recording received' : 'Writing the minutes');
+    meetings.start(r.id, { userId: ctx().user.id, user: ctx().user, ctx: meetingCtx(P), from });
+    return { meeting: await meetings.get(r.id) };
+  });
+  on('POST', '/api/meetings/(\\d+)/speakers', async (m, q, b) => { const [, r] = await MT(m[1]); await meetings.editSpeakers(r.id, b || {}); return { meeting: await meetings.get(r.id) }; });
+  on('PUT', '/api/meetings/(\\d+)/segments/(\\d+)', async (m, q, b) => { const [, r] = await MT(m[1]); await meetings.editSegment(r.id, m[2], b || {}); return { meeting: await meetings.get(r.id) }; });
+  on('DELETE', '/api/meetings/(\\d+)/segments/(\\d+)', async (m) => { const [, r] = await MT(m[1]); await meetings.deleteSegment(r.id, m[2]); return { meeting: await meetings.get(r.id) }; });
+  on('PUT', '/api/meetings/(\\d+)/minutes', async (m, q, b) => { const [P, r] = await MT(m[1]); await meetings.saveMinutes(r.id, b && b.minutes, meetingCtx(P)); return { meeting: await meetings.get(r.id) }; });
+  on('POST', '/api/meetings/(\\d+)/regenerate', async (m, q, b) => {
+    const [P, r] = await MT(m[1]);
+    if (meetingBusy(r)) throw err(409, 'This meeting is already being processed');
+    if (!(r.transcript || []).length) throw err(400, 'There is no transcript to write minutes from');
+    const stop = await ops.allowance(ctx().user); if (stop) throw err(402, stop);
+    const section = b && b.section;
+    if (section && MEETING_SECTIONS.includes(section)) {
+      if (!r.minutes) throw err(400, 'Write the full minutes first');
+      await meetings.writeMinutes(r.id, { userId: ctx().user.id, ctx: meetingCtx(P), section, instructions: b.instructions });
+      return { meeting: await meetings.get(r.id) };
+    }
+    await meetings.setStatus(r.id, 'summarizing', 'Writing the minutes');
+    meetings.start(r.id, { userId: ctx().user.id, user: ctx().user, ctx: meetingCtx(P), from: 'transcript', instructions: b && b.instructions });
+    return { meeting: await meetings.get(r.id) };
+  });
+  // Sends reviewed items from the minutes to the project. Each part becomes a row in the Updates inbox with the source
+  // "meeting". mode "now" applies it straight away (with Undo in the inbox), mode "inbox" leaves it waiting for review.
+  on('POST', '/api/meetings/(\\d+)/apply', async (m, q, b) => {
+    const [P, r] = await MT(m[1]);
+    const mins = r.minutes; if (!mins) throw err(400, 'There are no minutes yet');
+    const list = Array.isArray(b.items) ? b.items.slice(0, 60) : [];
+    if (!list.length) throw err(400, 'Choose at least one item');
+    const results = [];
+    for (const sel of list) {
+      const key = txt(sel.id, 12);
+      const found = ['actions', 'decisions', 'risks', 'updates'].map((sec) => [sec, (mins[sec] || []).find((x) => x.id === key)]).find((x) => x[1]);
+      if (!found) { results.push({ id: key, error: 'This item is no longer in the minutes' }); continue; }
+      const [section, it] = found;
+      const parts = (Array.isArray(sel.to) && sel.to.length ? sel.to : section === 'updates' ? ['update'] : section === 'actions' ? ['log', 'task'] : ['log']).filter((x) => (section === 'updates' ? x === 'update' : section === 'actions' ? ['log', 'task'].includes(x) : x === 'log'));
+      const mode = sel.mode === 'inbox' ? 'inbox' : 'now';
+      const owner = txt(sel.owner != null ? sel.owner : it.owner, 80) || null;
+      const title = txt(sel.title != null ? sel.title : it.title || it.text, 200);
+      const due = /^\d{4}-\d{2}-\d{2}$/.test(sel.due_date || it.due_date || '') ? (sel.due_date || it.due_date) : null;
+      const done = {};
+      for (const part of parts) {
+        if (((r.applied || {})[key] || {})[part]) { results.push({ id: key, part, skipped: 'Already sent to the project' }); continue; }
+        let action;
+        if (part === 'log' && section === 'actions') action = { type: 'create_item', kind: 'action', title, quote: it.quote, meeting_id: r.id, data: { owner, due_date: due, meeting_id: r.id, meeting_time: it.time || null } };
+        else if (part === 'log' && section === 'decisions') action = { type: 'create_item', kind: 'decision', title: title.slice(0, 200), description: it.text, quote: '', meeting_id: r.id, data: { owner, meeting_id: r.id, meeting_time: it.time || null } };
+        else if (part === 'log' && section === 'risks') action = { type: 'create_item', kind: 'risk', title, quote: '', meeting_id: r.id, data: { probability: it.probability, impact: it.impact, mitigation: it.mitigation || '', owner, meeting_id: r.id, meeting_time: it.time || null } };
+        else if (part === 'task') action = { type: 'create_task', title, assignee: owner ? resolveResource(P, '', owner) : null, due_date: due, note: it.quote ? `Said in the meeting: "${it.quote}"` : '', meeting_id: r.id };
+        else if (part === 'update') action = { type: 'update_task', task_id: it.task_id, progress: it.progress, delay_days: it.delay_days, note: it.note };
+        else continue;
+        try {
+          const row = addInbox(P, { source: 'meeting', ext_id: `meeting:${r.id}:${key}:${part}`, sender: r.title, subject: r.title, body: it.quote || it.text || it.title || it.note || title, resource: owner, action, summary: describeAction(P, action), confidence: null });
+          if (mode === 'now') {
+            const out = applyAction(P, row.action, ACTOR(), null);
+            row.status = 'applied'; row.applied_at = nowTs(); row.action = { ...row.action, prev: out.prev, summary: out.summary };
+          }
+          done[part] = { inbox_id: row.id, pending: mode === 'inbox', summary: row.action.summary || row.summary, item_id: (row.action.prev || {}).created_item || null, task_id: (row.action.prev || {}).created_task || null };
+          results.push({ id: key, part, ok: true, mode });
+        } catch (e) { results.push({ id: key, part, error: e.expose || e.status < 500 ? e.message : 'This item could not be sent to the project' }); }
+      }
+      // an action sent as both a log entry and a task keeps the two linked
+      if (done.log && done.task && done.log.item_id && done.task.task_id) {
+        const t = P.tasks.find((x) => x.id === done.task.task_id), it2 = P.items.find((x) => x.id === done.log.item_id);
+        if (t) t.links = [...(Array.isArray(t.links) ? t.links : []), done.log.item_id];
+        if (it2) it2.data = { ...(it2.data || {}), task_id: done.task.task_id };
+      }
+      if (Object.keys(done).length) await meetings.markApplied(r.id, key, done);
+    }
+    return { results, meeting: await meetings.get(r.id) };
+  });
+  on('GET', '/api/meetings/(\\d+)/export', async (m, q) => {
+    const [P, r] = await MT(m[1]);
+    const full = meetings.view(r, true);
+    if (!full.minutes) throw err(400, 'There are no minutes to export yet');
+    const withTranscript = q.transcript === '1';
+    const base = safeName(`${r.title} minutes`);
+    if (q.format === 'md') return new FileResult(meetingExport.markdown(full, P.p.name, withTranscript), 'text/markdown; charset=utf-8', `${base}.md`);
+    return new FileResult(await meetingExport.docx(full, P.p.name, withTranscript), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', `${base}.docx`);
   });
 
   // ---------- analysis progress, polled by the browser ----------

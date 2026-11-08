@@ -15,7 +15,7 @@ const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
 // What a project manager can open. Screens never opened by anyone are reported as unused.
 const SCREENS = {
   dashboard: 'Dashboard', projects: 'Projects list', calendar: 'Calendar', widgets: 'Widgets', billing: 'Billing', account: 'Account settings', brand: 'Brand',
-  'project:overview': 'Project overview', 'project:review': 'Project review', 'project:schedule': 'Schedule', 'project:logs': 'Logs',
+  'project:overview': 'Project overview', 'project:review': 'Project review', 'project:schedule': 'Schedule', 'project:logs': 'Logs', 'project:meetings': 'Meetings',
   'project:inbox': 'Inbox', 'project:documents': 'Documents', 'project:reports': 'Reports', 'project:settings': 'Project settings',
 };
 const label = (s) => SCREENS[s] || String(s).replace(/[:_]/g, ' ');

@@ -6,11 +6,11 @@
 const help = require('./help');
 const { scrub } = require('./guard');
 
-const KINDS = ['deliverable', 'requirement', 'risk', 'milestone'];
-const KIND_LABEL = { deliverable: 'deliverable', requirement: 'requirement', risk: 'risk', milestone: 'payment' };
-const STATES = { deliverable: ['open', 'progress', 'closed'], requirement: ['open', 'progress', 'closed'], milestone: ['pending', 'invoiced', 'paid'], risk: ['open', 'mitigated', 'transferred', 'closed'] };
+const KINDS = ['deliverable', 'requirement', 'risk', 'milestone', 'action', 'decision'];
+const KIND_LABEL = { deliverable: 'deliverable', requirement: 'requirement', risk: 'risk', milestone: 'payment', action: 'action', decision: 'decision' };
+const STATES = { deliverable: ['open', 'progress', 'closed'], requirement: ['open', 'progress', 'closed'], milestone: ['pending', 'invoiced', 'paid'], risk: ['open', 'mitigated', 'transferred', 'closed'], action: ['open', 'progress', 'closed'], decision: ['active', 'superseded'] };
 const LEVELS = ['Low', 'Medium', 'High'];
-const SCREENS = ['overview', 'review', 'schedule', 'logs', 'inbox', 'documents', 'reports', 'settings', 'calendar', 'account'];
+const SCREENS = ['overview', 'review', 'schedule', 'logs', 'meetings', 'inbox', 'documents', 'reports', 'settings', 'calendar', 'account'];
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const bad = (message, extra) => Object.assign(new Error(message), { chat: true, ...(extra || {}) });
 
@@ -205,7 +205,7 @@ const cleanLevel = (v, what) => { if (v == null || v === '') return null; const 
 const WRITE = {
   create_item(h, input, scope) {
     const pid = pickProject(h, scope, input); const P = h.P(pid, 'editor');
-    const kind = input.kind; if (!KINDS.includes(kind)) throw bad('The type must be deliverable, requirement, risk or payment.');
+    const kind = input.kind; if (!KINDS.slice(0, 4).includes(kind)) throw bad('The type must be deliverable, requirement, risk or payment.');
     const title = cleanText(input.title, 200); if (!title) throw bad('A title is required.');
     const data = {};
     if (input.owner) data.owner = cleanText(input.owner, 120);

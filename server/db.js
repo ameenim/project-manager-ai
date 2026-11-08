@@ -328,6 +328,42 @@ const MIGRATIONS = [
   );
   CREATE INDEX IF NOT EXISTS ticket_events_ticket_idx ON ticket_events(ticket_id, id);
   `,
+  // 9: meeting capture. A meeting belongs to one project. The transcript, speakers, minutes and the record of what was
+  // sent to the project live in JSON columns because they are edited as a whole. The recording is kept in meeting_audio
+  // only until it has been transcribed (unless the server is told to keep it), then it is deleted.
+  `
+  CREATE TABLE IF NOT EXISTS meetings (
+    id BIGINT PRIMARY KEY,
+    project_id BIGINT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    owner_id BIGINT NOT NULL REFERENCES users(id),
+    title TEXT NOT NULL,
+    meeting_at TIMESTAMPTZ,
+    duration_sec INT NOT NULL DEFAULT 0,
+    language TEXT NOT NULL DEFAULT 'auto',
+    minutes_lang TEXT NOT NULL DEFAULT 'auto',
+    source TEXT NOT NULL DEFAULT 'upload',
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','uploaded','transcribing','summarizing','ready','failed')),
+    stage TEXT,
+    error TEXT,
+    notes TEXT,
+    attendees JSONB NOT NULL DEFAULT '[]'::jsonb,
+    speakers JSONB NOT NULL DEFAULT '{}'::jsonb,
+    transcript JSONB NOT NULL DEFAULT '[]'::jsonb,
+    minutes JSONB,
+    applied JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS meetings_project_idx ON meetings(project_id, meeting_at DESC);
+  CREATE TABLE IF NOT EXISTS meeting_audio (
+    meeting_id BIGINT PRIMARY KEY REFERENCES meetings(id) ON DELETE CASCADE,
+    filename TEXT,
+    mime TEXT,
+    size INT NOT NULL,
+    data BYTEA NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  `,
 ];
 
 async function openPg(url) {
@@ -370,7 +406,7 @@ async function prepareSchema(db, { managedProduction = false } = {}) {
   if (managedProduction) {
     // Replit Publish owns production DDL. Its schema copy need not include the
     // development migration-history rows, so do not replay migrations here.
-    const required = ['users', 'sessions', 'projects', 'project_members', 'project_files', 'app_secrets', 'oauth_states', 'chat_threads', 'chat_messages', 'chat_log', 'project_snapshots', 'widgets', 'widget_ratings', 'widget_installs', 'dash_layouts', 'user_flags', 'app_config', 'subscriptions', 'payments', 'ai_usage', 'error_log', 'health_beats', 'admin_audit', 'tickets', 'ticket_events', 'schema_migrations', 'id_blocks'];
+    const required = ['users', 'sessions', 'projects', 'project_members', 'project_files', 'app_secrets', 'oauth_states', 'chat_threads', 'chat_messages', 'chat_log', 'project_snapshots', 'widgets', 'widget_ratings', 'widget_installs', 'dash_layouts', 'user_flags', 'app_config', 'subscriptions', 'payments', 'ai_usage', 'error_log', 'health_beats', 'admin_audit', 'tickets', 'ticket_events', 'meetings', 'meeting_audio', 'schema_migrations', 'id_blocks'];
     const result = await db.query(
       "SELECT name FROM unnest($1::text[]) AS required(name) WHERE to_regclass('public.' || name) IS NULL",
       [required],

@@ -3,16 +3,18 @@
   const PM = window.PM;
   const { esc, t, icon, money, $, $$, api, toast, modal, confirmDlg, busy } = PM;
 
-  const KINDS = ['deliverable', 'requirement', 'milestone', 'risk'];
-  const STATES = { deliverable: ['open', 'progress', 'closed'], requirement: ['open', 'progress', 'closed'], milestone: ['pending', 'invoiced', 'paid'], risk: ['open', 'mitigated', 'transferred', 'closed'] };
-  const DONE = { deliverable: ['closed'], requirement: ['closed'], milestone: ['paid'], risk: ['closed', 'mitigated', 'transferred'] };
+  const KINDS = ['deliverable', 'requirement', 'milestone', 'risk', 'action', 'decision'];
+  const STATES = { deliverable: ['open', 'progress', 'closed'], requirement: ['open', 'progress', 'closed'], milestone: ['pending', 'invoiced', 'paid'], risk: ['open', 'mitigated', 'transferred', 'closed'], action: ['open', 'progress', 'closed'], decision: ['active', 'superseded'] };
+  const DONE = { deliverable: ['closed'], requirement: ['closed'], milestone: ['paid'], risk: ['closed', 'mitigated', 'transferred'], action: ['closed'], decision: ['active', 'superseded'] };
   const LEVELS = ['Low', 'Medium', 'High'];
   const SIZES = [20, 50, 100];
   const first = (kind) => STATES[kind][0];
   const stOf = (it) => it.state || first(it.kind);
 
   Object.assign(PM.I18N.en, {
-    tab_logs: 'Logs', state_progress: 'In progress', state_transferred: 'Transferred',
+    tab_logs: 'Logs', state_progress: 'In progress', state_transferred: 'Transferred', state_active: 'Active', state_superseded: 'Superseded',
+    lg_kind_action: 'Action', lg_kind_decision: 'Decision', lg_details_action: 'Action details', lg_details_decision: 'Decision details', lg_s_action_open: 'Not started', lg_s_action_progress: 'In progress', lg_s_action_closed: 'Done', lg_s_decision_active: 'Active', lg_s_decision_superseded: 'Superseded', lg_a_supersede: 'Supersede',
+    lg_c_source: 'Source', lg_src_manual: 'Manual', lg_src_document: 'Document', lg_src_meeting: 'Meeting',
     lg_title: 'Logs', lg_lead: 'Every deliverable, requirement, payment milestone and risk in one place. Update status, owner and dates right here.',
     lg_add: 'Add', lg_export: 'Export CSV', lg_search: 'Search by title or description', lg_type: 'Type', lg_status: 'Status', lg_any_status: 'Any status', lg_prob: 'Probability', lg_imp: 'Impact', lg_any: 'Any',
     lg_due: 'Due date', lg_due_any: 'Any date', lg_due_over: 'Overdue', lg_due_7: 'Next 7 days', lg_due_30: 'Next 30 days', lg_due_none: 'No date', lg_review: 'Review', lg_rs_live: 'Approved and needs review', lg_rs_confirmed: 'Approved only', lg_rs_proposed: 'Needs review only', lg_rs_ignored: 'Ignored only', lg_rs_all: 'Everything',
@@ -34,7 +36,9 @@
     lg_view_name: 'View name', lg_view_name_ph: 'For example Risk log', lg_view_save_title: 'Save this view', lg_view_save_hint: 'Saves the columns, filters, search and sort you have now. Open it again with one click from the tabs above the table.', lg_view_name_req: 'Give the view a name.', lg_view_exists: 'A view with this name already exists. Saving will replace it.', lg_view_saved: 'View saved', lg_view_updated: 'View updated', lg_view_deleted: 'View deleted', lg_view_delete_q: 'Delete the view "{n}"? Your items are not affected.', lg_view_fail: 'The view could not be saved. Try again.', lg_view_restart: 'Saved views are not available on the server yet. Restart the app so the latest update loads, then try again.',
   });
   Object.assign(PM.I18N.ar, {
-    tab_logs: 'السجلات', state_progress: 'قيد التنفيذ', state_transferred: 'تم النقل',
+    tab_logs: 'السجلات', state_progress: 'قيد التنفيذ', state_transferred: 'تم النقل', state_active: 'ساري', state_superseded: 'تم استبداله',
+    lg_kind_action: 'إجراء', lg_kind_decision: 'قرار', lg_details_action: 'تفاصيل الإجراء', lg_details_decision: 'تفاصيل القرار', lg_s_action_open: 'لم يبدأ', lg_s_action_progress: 'قيد التنفيذ', lg_s_action_closed: 'تم', lg_s_decision_active: 'ساري', lg_s_decision_superseded: 'تم استبداله', lg_a_supersede: 'استبدل',
+    lg_c_source: 'المصدر', lg_src_manual: 'يدوي', lg_src_document: 'مستند', lg_src_meeting: 'اجتماع',
     lg_title: 'السجلات', lg_lead: 'كل المخرجات والمتطلبات ودفعات الدفع والمخاطر في مكان واحد. حدث الحالة والمسؤول والتواريخ من هنا مباشرة.',
     lg_add: 'إضافة', lg_export: 'تصدير CSV', lg_search: 'ابحث بالعنوان أو الوصف', lg_type: 'النوع', lg_status: 'الحالة', lg_any_status: 'أي حالة', lg_prob: 'الاحتمال', lg_imp: 'الأثر', lg_any: 'الكل',
     lg_due: 'تاريخ الاستحقاق', lg_due_any: 'أي تاريخ', lg_due_over: 'متأخر', lg_due_7: 'خلال 7 أيام', lg_due_30: 'خلال 30 يوما', lg_due_none: 'بدون تاريخ', lg_review: 'المراجعة', lg_rs_live: 'المعتمد وما يحتاج مراجعة', lg_rs_confirmed: 'المعتمد فقط', lg_rs_proposed: 'ما يحتاج مراجعة فقط', lg_rs_ignored: 'المتجاهل فقط', lg_rs_all: 'كل شيء',
@@ -71,9 +75,10 @@
     const s = stOf(it), A = (act, to, cls = '') => ({ act, to, cls });
     if (it.kind === 'risk') return s === 'open' ? [A('mitigate', 'mitigated', 'good'), A('transfer', 'transferred'), A('close', 'closed')] : [A('reopen', 'open')];
     if (it.kind === 'milestone') return s === 'pending' ? [A('invoice', 'invoiced'), A('paid', 'paid', 'good')] : s === 'invoiced' ? [A('paid', 'paid', 'good')] : [A('reopen', 'pending')];
+    if (it.kind === 'decision') return s === 'active' ? [A('supersede', 'superseded')] : [A('reopen', 'active')];
     return s === 'open' ? [A('start', 'progress'), A('complete', 'closed', 'good')] : s === 'progress' ? [A('complete', 'closed', 'good')] : [A('reopen', 'open')];
   }
-  const ACT_ICON = { start: 'play', complete: 'check', mitigate: 'check', transfer: 'link', close: 'x', invoice: 'dl', paid: 'check', reopen: 'undo' };
+  const ACT_ICON = { start: 'play', complete: 'check', mitigate: 'check', transfer: 'link', close: 'x', supersede: 'x', invoice: 'dl', paid: 'check', reopen: 'undo' };
 
   // ---------------- add and edit dialog ----------------
   function itemDialog(it, p, done) {
@@ -123,8 +128,8 @@
 
   // ---------------- the tab ----------------
   const KEY = (id) => 'pm_logs_' + id;
-  const DEFAULT_COLS = ['type', 'item', 'status', 'owner', 'due', 'amount'];
-  const ALL_COL_IDS = ['type', 'item', 'description', 'status', 'review', 'owner', 'due', 'amount', 'percent', 'prob', 'imp', 'mitigation', 'linked', 'conf', 'doc', 'quote', 'created'];
+  const DEFAULT_COLS = ['type', 'item', 'status', 'owner', 'due', 'amount', 'source'];
+  const ALL_COL_IDS = ['type', 'item', 'description', 'status', 'review', 'owner', 'due', 'amount', 'percent', 'prob', 'imp', 'mitigation', 'linked', 'conf', 'doc', 'quote', 'source', 'created'];
   const defaults = () => ({ q: '', kinds: [], st: '', prob: '', imp: '', due: '', rs: 'live', sort: 'type', dir: 1, page: 1, size: 20, cols: DEFAULT_COLS.slice(), view: '' });
   const cleanCols = (c) => { const k = Array.isArray(c) ? ALL_COL_IDS.filter((id) => id === 'item' || c.includes(id)) : []; return k.length > 1 ? k : DEFAULT_COLS.slice(); };
   const loadF = (id) => { try { const F = { ...defaults(), ...(JSON.parse(sessionStorage.getItem(KEY(id))) || {}) }; F.cols = cleanCols(F.cols); return F; } catch { return defaults(); } };
@@ -179,8 +184,11 @@
       { id: 'conf', lab: 'lg_c_conf', cls: 'right', sort: (i) => (i.confidence == null ? -1 : i.confidence), cell: (i) => `<td class="nowrap right">${i.confidence != null ? Math.round(i.confidence * 100) + '%' : dash}</td>`, csv: (i) => (i.confidence != null ? Math.round(i.confidence * 100) + '%' : '') },
       { id: 'doc', lab: 'lg_c_doc', sort: (i) => lower(i.doc_name), cell: (i) => `<td class="lg-wide">${txt(i.doc_name, 80)}</td>`, csv: (i) => i.doc_name },
       { id: 'quote', lab: 'lg_c_quote', sort: (i) => lower(i.quote), cell: (i) => `<td class="lg-wide">${txt(i.quote, 200)}</td>`, csv: (i) => i.quote },
+      { id: 'source', lab: 'lg_c_source', sort: (i) => srcOf(i), cell: (i) => `<td class="nowrap">${srcCell(i)}</td>`, csv: (i) => t('lg_src_' + srcOf(i)) },
       { id: 'created', lab: 'lg_c_created', sort: (i) => i.created_at || '', cell: (i) => `<td class="nowrap">${i.created_at ? esc(String(i.created_at).slice(0, 10)) : dash}</td>`, csv: (i) => String(i.created_at || '').slice(0, 10) },
     ];
+    const srcOf = (i) => ((i.data || {}).meeting_id ? 'meeting' : i.doc_name || i.doc_id ? 'document' : 'manual');
+    const srcCell = (i) => { const k = srcOf(i); return k === 'meeting' ? `<a class="chip blue" href="#/p/${p.id}/meetings?m=${i.data.meeting_id}" data-tip="${esc(t('mt_from_meeting'))}">${icon('mic')} ${t('lg_src_meeting')}</a>` : `<span class="chip">${t('lg_src_' + k)}</span>`; };
     const shown = () => COLS.filter((c) => F.cols.includes(c.id));
 
     root.innerHTML = `<div class="page wide lg-page">
