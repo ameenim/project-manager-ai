@@ -2036,9 +2036,30 @@ Rules:
     } catch (e) { console.error('meeting sync', e.message); }
   }
   on('GET', '/api/projects/(\\d+)/meetings', async (m) => { const P = P_(m[1]); return { meetings: await meetings.list(P.id), stt: meetingStatus(), attendees: P.resources.map((r) => ({ name: r.name, email: r.email || null, role: r.role || null })) }; });
+  // A transcript or minutes file (Word, PDF, text, or Teams and Zoom caption files) becomes a meeting with minutes.
+  on('POST', '/api/projects/(\\d+)/meetings/document', async (m, q, b) => {
+    const P = P_(m[1]);
+    const f = b && typeof b.get === 'function' ? b.get('file') : null;
+    if (!f || !f.buffer || !f.buffer.length) throw err(400, 'Choose a transcript or minutes file');
+    const name = f.name || 'meeting.txt';
+    const ext = (name.match(/\.[^.]+$/) || [''])[0].toLowerCase();
+    let text;
+    if (['.vtt', '.srt'].includes(ext)) text = f.buffer.toString('utf8');
+    else text = (await extractText(f.buffer, name)).text;
+    const raw = meetings.parseDocument(text, { name, as: b.get('kind') });
+    let attendees = []; try { attendees = JSON.parse(b.get('attendees') || '[]'); } catch { attendees = [b.get('attendees')]; }
+    const title = txt(b.get('title'), 140) || name.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ');
+    const stop = await ops.allowance(ctx().user); if (stop) throw err(402, stop);
+    const id = await meetings.create({ projectId: P.id, ownerId: ctx().user.id, title, meeting_at: b.get('meeting_at') || undefined, attendees, language: b.get('language'), minutes_lang: b.get('minutes_lang'), source: 'document', notes: b.get('notes') });
+    await meetings.setTranscript(id, raw, true);
+    await meetings.setStatus(id, 'summarizing', 'Writing the minutes');
+    meetings.start(id, { userId: ctx().user.id, user: ctx().user, ctx: meetingCtx(P), from: 'transcript' });
+    audit(P, ACTOR(), 'meeting_added', { summary: `Added meeting "${title}" from ${name}` });
+    return { meeting: await meetings.get(id) };
+  });
   on('POST', '/api/projects/(\\d+)/meetings', async (m, q, b) => {
     const P = P_(m[1]);
-    const source = ['recording', 'upload', 'text'].includes(b.source) ? b.source : 'upload';
+    const source = ['recording', 'upload', 'text', 'document'].includes(b.source) ? b.source : 'upload';
     const raw = source === 'text' ? meetings.parseText(b.transcript_text) : null;
     const id = await meetings.create({ projectId: P.id, ownerId: ctx().user.id, title: b.title, meeting_at: b.meeting_at, attendees: b.attendees, language: b.language, minutes_lang: b.minutes_lang, source, notes: b.notes });
     if (raw) {

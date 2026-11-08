@@ -15,7 +15,7 @@
     mt_rec_keep: 'Keep this tab open while recording. The recording is sent when you stop.', mt_rec_nomic: 'The microphone is blocked. Allow microphone access in the browser and try again.', mt_rec_unsupported: 'This browser cannot record. Use Chrome or Edge, or upload a recording.',
     mt_rec_share: 'Share meeting audio', mt_rec_share_hint: 'Choose a browser tab or the whole screen and tick Share audio.', mt_rec_noaudio: 'No meeting audio was shared, so only your voice is recorded.', mt_rec_discard_q: 'Discard this recording? It cannot be recovered.',
     mt_uploading: 'Sending the recording', mt_back: 'All meetings', mt_status_draft: 'Draft', mt_status_uploaded: 'Received', mt_status_transcribing: 'Transcribing', mt_status_summarizing: 'Writing minutes', mt_status_ready: 'Ready', mt_status_failed: 'Failed',
-    mt_working: 'Working on it. This page updates by itself.', mt_failed: 'This meeting could not be processed', mt_retry: 'Try again', mt_src_recording: 'Recorded', mt_src_upload: 'Uploaded', mt_src_text: 'Pasted',
+    mt_working: 'Working on it. This page updates by itself.', mt_failed: 'This meeting could not be processed', mt_retry: 'Try again', mt_src_recording: 'Recorded', mt_src_upload: 'Uploaded', mt_src_text: 'Pasted', mt_src_document: 'Document', mt_doc: 'Upload a document', mt_doc_hint: 'A transcript or existing minutes. Word, PDF, text, or Teams and Zoom caption files (.vtt, .srt).', mt_kind: 'This file is', mt_kind_auto: 'Detect automatically', mt_kind_transcript: 'A transcript with speakers', mt_kind_minutes: 'Existing minutes or notes', mt_need_doc: 'Choose a document',
     mt_minutes: 'Minutes', mt_transcript: 'Transcript', mt_summary: 'Summary', mt_topics: 'Topics discussed', mt_decisions: 'Decisions', mt_actions: 'Actions', mt_risks: 'Risks raised', mt_updates: 'Schedule updates', mt_questions: 'Open questions',
     mt_none: 'Nothing recorded here', mt_edit: 'Edit minutes', mt_save: 'Save', mt_saved: 'Minutes saved', mt_cancel: 'Cancel', mt_regen: 'Regenerate', mt_regen_all: 'Regenerate all minutes', mt_regen_sec: 'Regenerate {name}',
     mt_regen_ask: 'Anything the AI should do differently? For example, shorter, or focus on the budget.', mt_regen_go: 'Regenerate', mt_regen_done: 'Section updated', mt_regen_started: 'Writing new minutes',
@@ -46,7 +46,7 @@
     mt_rec_keep: 'أبق هذا التبويب مفتوحا أثناء التسجيل. يرسل التسجيل عند الإنهاء.', mt_rec_nomic: 'الميكروفون محظور. اسمح بالوصول إليه من المتصفح وحاول مرة أخرى.', mt_rec_unsupported: 'هذا المتصفح لا يدعم التسجيل. استخدم Chrome أو Edge أو ارفع تسجيلا.',
     mt_rec_share: 'شارك صوت الاجتماع', mt_rec_share_hint: 'اختر تبويبا أو الشاشة كاملة وفعل مشاركة الصوت.', mt_rec_noaudio: 'لم تتم مشاركة صوت الاجتماع، لذلك يسجل صوتك فقط.', mt_rec_discard_q: 'تجاهل هذا التسجيل؟ لا يمكن استرجاعه.',
     mt_uploading: 'جار إرسال التسجيل', mt_back: 'كل الاجتماعات', mt_status_draft: 'مسودة', mt_status_uploaded: 'تم الاستلام', mt_status_transcribing: 'جار التفريغ', mt_status_summarizing: 'جار كتابة المحضر', mt_status_ready: 'جاهز', mt_status_failed: 'فشل',
-    mt_working: 'جار العمل عليه. تتحدث الصفحة تلقائيا.', mt_failed: 'تعذرت معالجة هذا الاجتماع', mt_retry: 'حاول مرة أخرى', mt_src_recording: 'مسجل', mt_src_upload: 'مرفوع', mt_src_text: 'ملصوق',
+    mt_working: 'جار العمل عليه. تتحدث الصفحة تلقائيا.', mt_failed: 'تعذرت معالجة هذا الاجتماع', mt_retry: 'حاول مرة أخرى', mt_src_recording: 'مسجل', mt_src_upload: 'مرفوع', mt_src_text: 'ملصوق', mt_src_document: 'مستند', mt_doc: 'ارفع مستندا', mt_doc_hint: 'نص الاجتماع أو محضر موجود. ملفات Word أو PDF أو نص أو ملفات الترجمة من Teams وZoom (.vtt، .srt).', mt_kind: 'هذا الملف', mt_kind_auto: 'اكتشاف تلقائي', mt_kind_transcript: 'نص مع المتحدثين', mt_kind_minutes: 'محضر أو ملاحظات موجودة', mt_need_doc: 'اختر مستندا',
     mt_minutes: 'المحضر', mt_transcript: 'النص', mt_summary: 'الملخص', mt_topics: 'المواضيع المناقشة', mt_decisions: 'القرارات', mt_actions: 'الإجراءات', mt_risks: 'المخاطر المطروحة', mt_updates: 'تحديثات الجدول', mt_questions: 'أسئلة مفتوحة',
     mt_none: 'لا شيء هنا', mt_edit: 'تعديل المحضر', mt_save: 'حفظ', mt_saved: 'تم حفظ المحضر', mt_cancel: 'إلغاء', mt_regen: 'إعادة الإنشاء', mt_regen_all: 'إعادة إنشاء المحضر كاملا', mt_regen_sec: 'إعادة إنشاء {name}',
     mt_regen_ask: 'هل من شيء تريد أن يفعله الذكاء الاصطناعي بشكل مختلف؟ مثلا أقصر أو يركز على الميزانية.', mt_regen_go: 'إعادة الإنشاء', mt_regen_done: 'تم تحديث القسم', mt_regen_started: 'جار كتابة محضر جديد',
@@ -303,7 +303,7 @@
         ${info.stt && info.stt.live && canRecord() ? `<label class="row small" style="gap:8px"><input type="checkbox" id="mtLive" checked> ${t('mt_live_on')}</label>` : ''}
         <label class="f">${t('mt_f_notes')}<textarea id="mtN" rows="2" maxlength="4000" ${bidi}></textarea></label>
         <div><div class="small muted" style="font-weight:600;margin-bottom:6px">${t('mt_how')}</div>
-          <div class="seg" id="mtMode">${canRecord() ? `<button data-m="record">${icon('mic')} ${t('mt_record')}</button>` : ''}<button data-m="upload">${icon('up')} ${t('mt_upload')}</button><button data-m="text">${icon('file')} ${t('mt_paste')}</button></div>
+          <div class="seg" id="mtMode">${canRecord() ? `<button data-m="record">${icon('mic')} ${t('mt_record')}</button>` : ''}<button data-m="upload">${icon('up')} ${t('mt_upload')}</button><button data-m="doc">${icon('file')} ${t('mt_doc')}</button><button data-m="text">${icon('file')} ${t('mt_paste')}</button></div>
           <div id="mtModeBody" class="mt"></div></div></div>`,
       footer: `<button class="btn" data-close>${t('cancel')}</button><button class="btn primary" id="mtGo"></button>`,
     });
@@ -336,7 +336,7 @@
     const drawMode = () => {
       $$('#mtMode button', m.el).forEach((b) => b.classList.toggle('on', b.dataset.m === mode));
       const body = $('#mtModeBody', m.el);
-      body.innerHTML = mode === 'record' ? `<p class="small muted">${t('mt_record_hint')}</p>` : mode === 'upload' ? `<input type="file" id="mtF" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.webm"><p class="small muted">${t('mt_upload_hint')} ${t('mt_audio_deleted')}</p>`
+      body.innerHTML = mode === 'doc' ? `<input type="file" id="mtD" accept=".txt,.md,.vtt,.srt,.docx,.pdf,text/plain"><p class="small muted">${t('mt_doc_hint')}</p><label class="f">${t('mt_kind')}<select id="mtKind"><option value="auto">${t('mt_kind_auto')}</option><option value="transcript">${t('mt_kind_transcript')}</option><option value="minutes">${t('mt_kind_minutes')}</option></select></label>` : mode === 'record' ? `<p class="small muted">${t('mt_record_hint')}</p>` : mode === 'upload' ? `<input type="file" id="mtF" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.webm"><p class="small muted">${t('mt_upload_hint')} ${t('mt_audio_deleted')}</p>`
         : `<textarea id="mtTx" rows="6" style="width:100%" placeholder="${esc(t('mt_paste_hint'))}" ${bidi}></textarea>`;
       $('#mtGo', m.el).innerHTML = mode === 'record' ? `${icon('mic')} ${t('mt_start')}` : t('mt_create');
     };
@@ -344,12 +344,21 @@
     $('#mtMode', m.el).onclick = (e) => { const b = e.target.closest('button'); if (b) { mode = b.dataset.m; drawMode(); } };
     $('#mtGo', m.el).onclick = (e) => busy(e.currentTarget, async () => {
       const title = $('#mtT', m.el).value.trim();
-      if (!title) { toast(t('mt_need_title'), 'err'); $('#mtT', m.el).focus(); return; }
+      const docFile = mode === 'doc' ? $('#mtD', m.el).files[0] : null;
+      if (!title && mode !== 'doc') { toast(t('mt_need_title'), 'err'); $('#mtT', m.el).focus(); return; }
+      if (mode === 'doc' && !docFile) { toast(t('mt_need_doc'), 'err'); return; }
       const file = mode === 'upload' ? $('#mtF', m.el).files[0] : null, text = mode === 'text' ? $('#mtTx', m.el).value.trim() : '';
       if (mode === 'upload' && !file) { toast(t('mt_need_file'), 'err'); return; }
       if (mode === 'text' && !text) { toast(t('mt_need_text'), 'err'); return; }
       const when = $('#mtW', m.el).value;
       const body = { title, meeting_at: when ? new Date(when).toISOString() : undefined, attendees: att, language: $('#mtL', m.el).value, minutes_lang: $('#mtM', m.el).value, notes: $('#mtN', m.el).value, source: mode === 'record' ? 'recording' : mode, transcript_text: text };
+      if (mode === 'doc') {
+        const fd = new FormData();
+        fd.append('file', docFile, docFile.name); fd.append('title', title); if (body.meeting_at) fd.append('meeting_at', body.meeting_at);
+        fd.append('attendees', JSON.stringify(att)); fd.append('language', body.language); fd.append('minutes_lang', body.minutes_lang); fd.append('notes', body.notes || ''); fd.append('kind', $('#mtKind', m.el).value);
+        const r = await api('POST', `/api/projects/${p.id}/meetings/document`, fd);
+        m.close(); after(r.meeting.id); return;
+      }
       if (mode === 'record') {
         if (!(await startRecorderFor(p, body, after, !!($('#mtLive', m.el) && $('#mtLive', m.el).checked)))) return;
         m.close(); return;

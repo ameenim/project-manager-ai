@@ -277,3 +277,39 @@ test('a pasted Outlook style attendee list becomes separate attendees with email
   const dup = await s.call('POST', `/api/projects/${p.id}/meetings`, { title: 'Dups', source: 'recording', attendees: ['A <a@x.com>; B <b@x.com>; Another <a@x.com>'] }, u.token);
   assert.equal(dup.data.meeting.attendees.length, 2, 'the same email is added once');
 });
+
+test('a transcript or minutes document becomes a meeting with minutes', async () => {
+  const up = (name, text, extra = {}, tok = u.token, type = 'text/plain') => {
+    const fd = new FormData(); fd.append('file', new Blob([text], { type }), name);
+    for (const [k, v] of Object.entries({ attendees: JSON.stringify(['Sara']), ...extra })) fd.append(k, v);
+    return s.call('POST', `/api/projects/${p.id}/meetings/document`, fd, tok);
+  };
+  const vtt = 'WEBVTT\n\n00:00:03.000 --> 00:00:07.000\n<v Sara>Good morning everyone.</v>\n\n00:00:08.000 --> 00:00:12.000\n<v Omar>Build API is sixty percent done.</v>\n\n00:00:14.000 --> 00:00:18.000\n<v Omar>We expect two days of delay.</v>\n\n00:01:30.000 --> 00:01:34.000\n<v Sara>Please send the plan by Friday.</v>\n';
+  const a = await up('weekly.vtt', vtt, { title: 'From captions' });
+  assert.equal(a.status, 200, JSON.stringify(a.data));
+  const d = await ready(a.data.meeting.id);
+  assert.equal(d.meeting.source, 'document');
+  assert.deepEqual(Object.values(d.meeting.speakers).map((x) => x.name), ['Sara', 'Omar']);
+  assert.equal(d.meeting.transcript.length, 3, 'a speaker who keeps talking is merged into one line');
+  assert.equal(d.meeting.transcript[1].start, 8);
+  assert.ok(d.meeting.minutes && d.meeting.minutes.actions.length >= 1);
+
+  const teams = 'Sara   0:03\nGood morning everyone.\n\nOmar   0:20\nBuild API is sixty percent done.\n\nSara   1:05\nSend the plan by Friday.\n';
+  const b = await up('teams.txt', teams);
+  const db = await ready(b.data.meeting.id);
+  assert.equal(db.meeting.title, 'teams', 'the file name becomes the title when none is given');
+  assert.deepEqual(Object.values(db.meeting.speakers).map((x) => x.name), ['Sara', 'Omar']);
+
+  const mom = 'Minutes of the weekly meeting\n\nAttendees: Sara, Omar\n\nThe team agreed to use the phased rollout.\n\nAction: Sara to send the revised plan by Friday.\n';
+  const antBefore = antCalls.length;
+  const c = await up('minutes.txt', mom, { kind: 'minutes' });
+  const dc = await ready(c.data.meeting.id);
+  assert.equal(Object.values(dc.meeting.speakers)[0].document, true);
+  assert.match(String(antCalls[antCalls.length - 1].system || JSON.stringify(antCalls[antCalls.length - 1])), /written meeting document/);
+  assert.ok(antCalls.length > antBefore);
+
+  assert.equal((await up('minutes.txt', mom, { kind: 'transcript' })).status, 400, 'no speaker lines means it is not a transcript');
+  assert.equal((await up('empty.txt', '   ')).status, 400);
+  assert.equal((await up('x.xyz', 'hello')).status, 415, 'unsupported formats are refused');
+  assert.equal((await up('weekly.vtt', vtt, {}, other.token)).status, 404, 'only project members can add a meeting');
+});
