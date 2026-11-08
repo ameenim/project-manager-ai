@@ -16,6 +16,7 @@ const importer = require('./importer');
 const { Snapshots, build: buildTrends, periodOf } = require('./snapshots');
 const { Meetings, SECTIONS: MEETING_SECTIONS, mmss: meetingTime } = require('./meetings');
 const stt = require('./stt');
+const { LiveHub } = require('./live');
 const meetingExport = require('./meetings_export');
 
 const PUB = path.join(__dirname, '..', 'public');
@@ -2014,6 +2015,7 @@ Rules:
   // A meeting belongs to one project and follows that project's roles: editors and managers capture and change,
   // viewers only read. The work itself (transcription, minutes) is in server/meetings.js.
   const meetings = new Meetings(store.db, store, ops);
+  const live = new LiveHub(meetings, ops);
   const txt = (v, n) => String(v == null ? '' : v).trim().slice(0, n);
   const meetingCtx = (P) => ({
     today: TODAY(),
@@ -2023,7 +2025,7 @@ Rules:
   });
   const MT = async (id, level) => { const r = await meetings.row(id); if (!r) throw err(404, 'Meeting not found'); const P = P_(r.project_id, level); return [P, r]; };
   const meetingBusy = (r) => meetings.running.has(r.id) || ['transcribing', 'summarizing'].includes(r.status);
-  const meetingStatus = () => ({ ...stt.status(), claude: !!process.env.ANTHROPIC_API_KEY });
+  const meetingStatus = () => ({ ...stt.status(), claude: !!process.env.ANTHROPIC_API_KEY, live: live.available() });
   // keeps the "sent to the project" marks of a meeting in step when its rows are applied or undone in the Updates inbox
   async function meetingInboxSync(r, how) {
     const m = /^meeting:(\d+):([a-z]\d+):(log|task|update)$/.exec(r.ext_id || '');
@@ -2053,7 +2055,7 @@ Rules:
     return { meeting: meetings.view(r, true), project: { id: P.id, name: P.p.name }, has_audio: await meetings.hasAudio(r.id), stt: meetingStatus(), attendees: P.resources.map((x) => ({ name: x.name, email: x.email || null, role: x.role || null })) };
   });
   on('PUT', '/api/meetings/(\\d+)', async (m, q, b) => { const [, r] = await MT(m[1]); await meetings.update(r.id, b); return { meeting: await meetings.get(r.id) }; });
-  on('DELETE', '/api/meetings/(\\d+)', async (m) => { const [P, r] = await MT(m[1]); if (meetingBusy(r)) throw err(409, 'Wait until this meeting has finished processing'); await meetings.remove(r.id); audit(P, ACTOR(), 'meeting_deleted', { summary: `Deleted meeting "${r.title}"` }); return { ok: true }; });
+  on('DELETE', '/api/meetings/(\\d+)', async (m) => { const [P, r] = await MT(m[1]); live.stopNow(r.id); if (meetingBusy(r)) throw err(409, 'Wait until this meeting has finished processing'); await meetings.remove(r.id); audit(P, ACTOR(), 'meeting_deleted', { summary: `Deleted meeting "${r.title}"` }); return { ok: true }; });
   on('POST', '/api/meetings/(\\d+)/audio', async (m, q, b) => {
     const [P, r] = await MT(m[1]);
     if (!stt.configured()) throw err(503, 'GEMINI_API_KEY is not set on the server. Add it to the server settings, then try again.');
@@ -2068,6 +2070,25 @@ Rules:
     meetings.start(r.id, { userId: ctx().user.id, user: ctx().user, ctx: meetingCtx(P), from: 'audio' });
     return { meeting: await meetings.get(r.id) };
   });
+  // Live transcription: the browser streams 16 kHz mono PCM here and polls for new lines.
+  on('POST', '/api/meetings/(\\d+)/live', async (m, q, b) => {
+    const [P, r] = await MT(m[1]);
+    if (meetingBusy(r)) throw err(409, 'This meeting is already being processed');
+    if (!live.available()) throw err(503, 'Live transcription is not available on this server. The recording can still be transcribed after the meeting.');
+    const stop = await ops.allowance(ctx().user); if (stop) throw err(402, stop);
+    const c = meetingCtx(P);
+    return { live: live.start(r.id, { userId: ctx().user.id, projectId: P.id, language: r.language, vocabulary: [c.project.name, c.project.client, ...(r.attendees || []).map((x) => x.name), ...c.people] }) };
+  });
+  on('POST', '/api/meetings/(\\d+)/live/audio', async (m, q, b) => {
+    const [, r] = await MT(m[1]);
+    const raw = typeof (b && b.pcm) === 'string' ? Buffer.from(b.pcm, 'base64') : null;
+    if (!raw || !raw.length || raw.length > 400000) throw err(400, 'Send a short chunk of audio');
+    const v = live.push(r.id, raw);
+    if (!v) throw err(409, 'Live transcription is not running for this meeting');
+    return { live: v };
+  });
+  on('GET', '/api/meetings/(\\d+)/live', async (m, q) => { const [, r] = await MT(m[1]); return { live: live.poll(r.id, q.after) }; });
+  on('POST', '/api/meetings/(\\d+)/live/stop', async (m) => { const [, r] = await MT(m[1]); return { live: await live.stop(r.id) }; });
   on('POST', '/api/meetings/(\\d+)/retry', async (m) => {
     const [P, r] = await MT(m[1]);
     if (meetingBusy(r)) throw err(409, 'This meeting is already being processed');

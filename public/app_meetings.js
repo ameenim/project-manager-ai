@@ -28,6 +28,9 @@
     mt_attendees: 'Attendees', mt_duration: 'Duration', mt_when: 'When', mt_lines: '{n} lines', mt_n_actions: '{n} actions', mt_n_actions_1: '1 action', mt_show_more: 'Show more', mt_show_less: 'Show less', mt_add_item: 'Add an item', mt_remove: 'Remove', mt_no_att: 'No attendees listed',
     mt_title_ph: 'Weekly progress meeting', mt_source: 'Source', mt_from_meeting: 'From meeting', mt_audio_deleted: 'The audio is deleted after transcription.', mt_t_heading: 'Heading', mt_t_points: 'Points, one per line', mt_text: 'Text',
     mt_busy_err: 'Wait until this meeting has finished processing', mt_edit_info: 'Edit details', mt_info_saved: 'Details saved',
+    mt_live: 'Live transcript', mt_live_on: 'Show a live transcript while recording', mt_live_hint: 'Text appears as people speak. Speakers are labeled after you stop, from the full recording.', mt_live_wait: 'Listening. Text appears after a few seconds of speech.',
+    mt_live_connecting: 'Connecting', mt_live_live: 'Live', mt_live_reconnecting: 'Reconnecting', mt_live_failed: 'Live text stopped. Recording continues.', mt_live_off: 'Live transcript is not available. Recording continues and the transcript is written after the meeting.',
+    mt_live_final: 'Finishing the live transcript', mt_live_notice: 'This transcript came from live text and has no speaker labels.',
     src_meeting: 'Meeting', upd_type_create_item: 'Add to log', upd_type_create_task: 'Create task',
   });
   Object.assign(PM.I18N.ar, {
@@ -54,6 +57,9 @@
     mt_attendees: 'الحضور', mt_duration: 'المدة', mt_when: 'الموعد', mt_lines: '{n} سطر', mt_n_actions: '{n} إجراءات', mt_n_actions_1: 'إجراء واحد', mt_show_more: 'عرض المزيد', mt_show_less: 'عرض أقل', mt_add_item: 'إضافة عنصر', mt_remove: 'إزالة', mt_no_att: 'لم يتم إدراج حضور',
     mt_title_ph: 'اجتماع متابعة أسبوعي', mt_source: 'المصدر', mt_from_meeting: 'من اجتماع', mt_audio_deleted: 'يحذف الصوت بعد التفريغ.', mt_t_heading: 'العنوان', mt_t_points: 'النقاط، نقطة في كل سطر', mt_text: 'النص',
     mt_busy_err: 'انتظر حتى تنتهي معالجة هذا الاجتماع', mt_edit_info: 'تعديل التفاصيل', mt_info_saved: 'تم حفظ التفاصيل',
+    mt_live: 'النص المباشر', mt_live_on: 'عرض نص مباشر أثناء التسجيل', mt_live_hint: 'يظهر النص أثناء الحديث. تحدد هوية المتحدثين بعد الإنهاء من التسجيل الكامل.', mt_live_wait: 'جار الاستماع. يظهر النص بعد ثوان من الحديث.',
+    mt_live_connecting: 'جار الاتصال', mt_live_live: 'مباشر', mt_live_reconnecting: 'جار إعادة الاتصال', mt_live_failed: 'توقف النص المباشر. يستمر التسجيل.', mt_live_off: 'النص المباشر غير متاح. يستمر التسجيل ويكتب النص بعد الاجتماع.',
+    mt_live_final: 'جار إنهاء النص المباشر', mt_live_notice: 'جاء هذا النص من النص المباشر وليس فيه تسمية للمتحدثين.',
     src_meeting: 'اجتماع', upd_type_create_item: 'إضافة إلى السجل', upd_type_create_task: 'إنشاء مهمة',
   });
 
@@ -69,12 +75,13 @@
 
   // ---------------- recorder ----------------
   const canRecord = () => !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
-  async function startRecorder(meeting, onDone) {
+  async function startRecorder(meeting, onDone, liveOpt) {
     let mic;
     try { mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: false }); } catch { toast(t('mt_rec_nomic'), 'err'); return false; }
     const AC = window.AudioContext || window.webkitAudioContext;
     const ctx = new AC(), dest = ctx.createMediaStreamDestination();
-    const meter = (stream) => { const src = ctx.createMediaStreamSource(stream), an = ctx.createAnalyser(); an.fftSize = 256; src.connect(an); src.connect(dest); return an; };
+    const mix = ctx.createGain();
+    const meter = (stream) => { const src = ctx.createMediaStreamSource(stream), an = ctx.createAnalyser(); an.fftSize = 256; src.connect(an); src.connect(dest); src.connect(mix); return an; };
     const micAn = meter(mic);
     let sysAn = null, sysStream = null;
     const sharing = { on: false };
@@ -90,6 +97,7 @@
       title: t('mt_rec_title'), noBackdropClose: true, size: '',
       body: `<div class="col" style="gap:14px"><div class="row" style="gap:12px"><span class="chip red" id="rcDot">${icon('mic')} <span id="rcTime">0:00</span></span><span class="small muted grow">${t('mt_rec_keep')}</span></div>
         <div><div class="small muted">${t('mt_rec_mic')}</div><div class="progress"><span id="mtMic" style="width:0%"></span></div></div>
+        ${liveOpt && liveOpt.on ? `<div><div class="row"><b class="small grow">${t('mt_live')}</b><span class="chip" id="lvState">${t('mt_live_connecting')}</span></div><div id="lvBox" class="small" style="height:150px;overflow:auto;margin-top:6px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2)"><span class="muted">${t('mt_live_wait')}</span></div><div class="small faint mt" style="margin-top:6px">${t('mt_live_hint')}</div></div>` : ''}
         <div><div class="row"><div class="small muted grow" id="sysLabel">${t('mt_rec_sys_off')}</div><button class="btn small" id="rcShare">${icon('expand')} ${t('mt_rec_share')}</button></div><div class="progress mt" id="sysBar"><span id="mtSys" style="width:0%"></span></div><div class="small faint">${t('mt_rec_share_hint')}</div></div></div>`,
       footer: `<button class="btn ghost" id="rcCancel">${t('mt_rec_cancel')}</button><button class="btn" id="rcPause">${icon('pause')} ${t('mt_rec_pause')}</button><button class="btn primary" id="rcStop">${icon('stop')} ${t('mt_rec_stop')}</button>`,
       onClose: () => { if (!closed) finish(false); },
@@ -101,6 +109,61 @@
       $('#mtMic', m.el).style.width = level(micAn) + '%';
       $('#mtSys', m.el).style.width = sysAn ? level(sysAn) + '%' : '0%';
     }, 200);
+    // live transcript: 16 kHz mono PCM goes to the server in short batches, new lines come back by polling
+    const live = { on: !!(liveOpt && liveOpt.on), after: 0, queue: [], sending: false, buf: [], timer: null, poll: null, node: null, failed: false, ended: false };
+    const setLive = (k) => { const el = $('#lvState', m.el); if (el) { el.textContent = t('mt_live_' + k); el.className = 'chip ' + (k === 'live' ? 'green' : k === 'failed' ? 'red' : 'amber'); } };
+    const paint = (lines, interim) => {
+      const box = $('#lvBox', m.el); if (!box) return;
+      if (lines && lines.length) { if (box.dataset.empty !== '0') { box.innerHTML = ''; box.dataset.empty = '0'; } for (const l of lines) { const d = document.createElement('div'); d.style.unicodeBidi = 'plaintext'; d.textContent = `${clock(l.start)}  ${l.text}`; box.appendChild(d); } }
+      let tail = box.querySelector('[data-interim]'); if (tail) tail.remove();
+      if (interim) { tail = document.createElement('div'); tail.dataset.interim = '1'; tail.className = 'muted'; tail.style.unicodeBidi = 'plaintext'; tail.textContent = interim; box.appendChild(tail); }
+      box.scrollTop = box.scrollHeight;
+    };
+    const pump = async () => {
+      if (live.sending || live.failed) return; live.sending = true;
+      while (live.queue.length && !live.failed) {
+        const b = live.queue.shift();
+        try { await api('POST', `/api/meetings/${liveOpt.id}/live/audio`, { pcm: b }); } catch { live.failed = true; setLive('failed'); }
+      }
+      live.sending = false;
+    };
+    const toB64 = (i16) => { const u = new Uint8Array(i16.buffer); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
+    const flushPcm = () => {
+      if (!live.buf.length) return;
+      let n = 0; for (const a of live.buf) n += a.length;
+      const out = new Int16Array(n); let o = 0; for (const a of live.buf) { out.set(a, o); o += a.length; }
+      live.buf = []; live.queue.push(toB64(out)); if (live.queue.length > 40) live.queue.shift(); pump();
+    };
+    async function startLive() {
+      try { await api('POST', `/api/meetings/${liveOpt.id}/live`); } catch (e) { live.failed = true; live.on = false; const box = $('#lvBox', m.el); if (box) box.innerHTML = `<span class="muted">${esc(t('mt_live_off'))}</span>`; setLive('failed'); return; }
+      const ratio = ctx.sampleRate / 16000; let acc = 0, cnt = 0, phase = 0;
+      const node = ctx.createScriptProcessor(4096, 1, 1); live.node = node;
+      const mute = ctx.createGain(); mute.gain.value = 0; mix.connect(node); node.connect(mute); mute.connect(ctx.destination);
+      node.onaudioprocess = (e) => {
+        if (rec.state !== 'recording') return;
+        const inp = e.inputBuffer.getChannelData(0), out = new Int16Array(Math.ceil(inp.length / ratio) + 1); let k = 0;
+        for (let i = 0; i < inp.length; i++) { acc += inp[i]; cnt++; phase += 1; if (phase >= ratio) { const v = Math.max(-1, Math.min(1, acc / cnt)); out[k++] = v < 0 ? v * 0x8000 : v * 0x7fff; acc = 0; cnt = 0; phase -= ratio; } }
+        live.buf.push(out.subarray(0, k));
+      };
+      live.timer = setInterval(flushPcm, 400);
+      live.poll = setInterval(async () => {
+        if (live.failed && !live.ended) return;
+        try {
+          const r = (await api('GET', `/api/meetings/${liveOpt.id}/live?after=${live.after}`)).live;
+          if (r.lines && r.lines.length) { live.after = r.lines[r.lines.length - 1].n; }
+          paint(r.lines, r.interim);
+          if (r.state === 'live') setLive('live'); else if (r.state === 'reconnecting') setLive('reconnecting'); else if (r.state === 'failed') { setLive('failed'); }
+        } catch { /* try again on the next tick */ }
+      }, 900);
+    }
+    async function stopLive() {
+      if (!live.on && !live.timer) return;
+      live.ended = true; clearInterval(live.timer); clearInterval(live.poll);
+      try { if (live.node) { live.node.onaudioprocess = null; live.node.disconnect(); } } catch { /* ignore */ }
+      flushPcm(); const until = Date.now() + 4000; while ((live.sending || live.queue.length) && Date.now() < until) await new Promise((r) => setTimeout(r, 100));
+      try { await api('POST', `/api/meetings/${liveOpt.id}/live/stop`); } catch { /* the recording is what matters */ }
+    }
+    if (live.on) startLive();
     function finish(upload) {
       if (closed) return; closed = true;
       clearInterval(tick);
@@ -109,7 +172,7 @@
       if (rec.state !== 'inactive') rec.stop(); else rec.onstop && rec.onstop();
       [mic, sysStream].forEach((s) => s && s.getTracks().forEach((x) => x.stop()));
       try { wake && wake.release(); } catch { /* ignore */ }
-      stopped.then(() => { try { ctx.close(); } catch { /* ignore */ } if (upload) onDone(new Blob(chunks, { type: (rec.mimeType || mime || 'audio/webm').split(';')[0] }), dur); });
+      Promise.all([stopped, stopLive()]).then(() => { try { ctx.close(); } catch { /* ignore */ } if (upload) onDone(new Blob(chunks, { type: (rec.mimeType || mime || 'audio/webm').split(';')[0] }), dur); });
       m.close();
     }
     $('#rcShare', m.el).onclick = async () => {
@@ -147,6 +210,7 @@
           <label class="f">${t('mt_f_lang')}<select id="mtL"><option value="auto">${t('mt_auto')}</option><option value="en">${t('mt_en')}</option><option value="ar">${t('mt_ar')}</option></select></label></div>
         <label class="f">${t('mt_f_mlang')}<select id="mtM"><option value="auto">${t('mt_auto')}</option><option value="en">${t('mt_en')}</option><option value="ar">${t('mt_ar')}</option></select></label>
         <div><div class="small muted" style="font-weight:600;margin-bottom:6px">${t('mt_f_att')}</div><div class="row wrap" id="mtA" style="gap:6px"></div><input type="text" id="mtAN" class="mt" placeholder="${esc(t('mt_f_att_add'))}" maxlength="80" ${bidi}></div>
+        ${info.stt && info.stt.live && canRecord() ? `<label class="row small" style="gap:8px"><input type="checkbox" id="mtLive" checked> ${t('mt_live_on')}</label>` : ''}
         <label class="f">${t('mt_f_notes')}<textarea id="mtN" rows="2" maxlength="4000" ${bidi}></textarea></label>
         <div><div class="small muted" style="font-weight:600;margin-bottom:6px">${t('mt_how')}</div>
           <div class="seg" id="mtMode">${canRecord() ? `<button data-m="record">${icon('mic')} ${t('mt_record')}</button>` : ''}<button data-m="upload">${icon('up')} ${t('mt_upload')}</button><button data-m="text">${icon('file')} ${t('mt_paste')}</button></div>
@@ -183,7 +247,7 @@
       const when = $('#mtW', m.el).value;
       const body = { title, meeting_at: when ? new Date(when).toISOString() : undefined, attendees: att, language: $('#mtL', m.el).value, minutes_lang: $('#mtM', m.el).value, notes: $('#mtN', m.el).value, source: mode === 'record' ? 'recording' : mode, transcript_text: text };
       if (mode === 'record') {
-        if (!(await startRecorderFor(p, body, after))) return;
+        if (!(await startRecorderFor(p, body, after, !!($('#mtLive', m.el) && $('#mtLive', m.el).checked)))) return;
         m.close(); return;
       }
       const r = await api('POST', `/api/projects/${p.id}/meetings`, body);
@@ -196,7 +260,7 @@
     fd.append('file', blob, blob.name || 'meeting.webm'); fd.append('duration_sec', String(dur || 0));
     await api('POST', `/api/meetings/${id}/audio`, fd);
   }
-  async function startRecorderFor(p, body, after) {
+  async function startRecorderFor(p, body, after, liveOn) {
     const r = await api('POST', `/api/projects/${p.id}/meetings`, body);
     const id = r.meeting.id;
     const ok = await startRecorder(r.meeting, async (blob, dur) => {
@@ -204,7 +268,7 @@
       toast(t('mt_uploading'));
       try { await sendAudio(id, blob, dur); } catch (e) { toast(e.message, 'err'); }
       after(id);
-    });
+    }, { id, on: liveOn });
     if (!ok) { try { await api('DELETE', `/api/meetings/${id}`); } catch { /* ignore */ } }
     return ok;
   }
@@ -293,7 +357,8 @@
       const m = M(), tr = m.transcript;
       if (!tr.length) return `<div class="card"><p class="muted">${t('mt_no_transcript')}</p></div>`;
       const keys = Object.keys(m.speakers);
-      return `<div class="mt-grid" id="mtTrGrid"><div class="card">${tr.map((s) => `<div class="list-item" data-seg="${s.id}"><span class="small faint" style="min-width:44px">${clock(s.start)}</span><div class="grow">
+      const liveNote = keys.length === 1 && (m.speakers[keys[0]] || {}).live ? `<div class="banner mb">${icon('mic')}<div class="grow">${t('mt_live_notice')}</div></div>` : '';
+      return liveNote + `<div class="mt-grid" id="mtTrGrid"><div class="card">${tr.map((s) => `<div class="list-item" data-seg="${s.id}"><span class="small faint" style="min-width:44px">${clock(s.start)}</span><div class="grow">
         <select data-spk="${s.id}" aria-label="${esc(t('mt_change_speaker'))}" style="width:auto;font-weight:600;border:0;background:transparent;padding:0;color:var(--primary)">${keys.map((k) => `<option value="${k}" ${k === s.speaker ? 'selected' : ''}>${esc(spName(k))}</option>`).join('')}</select>
         <div data-txt="${s.id}" tabindex="0" style="cursor:text;white-space:pre-wrap" ${bidi}>${esc(s.text)}</div></div>
         <button class="btn ghost icon" data-edit="${s.id}" aria-label="${esc(t('mt_edit_text'))}" data-tip="${esc(t('mt_edit_text'))}">${icon('edit')}</button><button class="btn ghost icon" data-delseg="${s.id}" aria-label="${esc(t('mt_del_seg'))}" data-tip="${esc(t('mt_del_seg'))}">${icon('trash')}</button></div>`).join('')}</div>

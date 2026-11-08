@@ -131,6 +131,11 @@ class Meetings {
     if (!raw.length) throw err(400, 'Paste the transcript as lines such as "Name: what was said"');
     return raw;
   }
+  // Lines from live transcription. They have no speakers, so they are one speaker marked live until the recording is transcribed.
+  async setLive(id, lines) {
+    const transcript = lines.map((l, i) => ({ id: i + 1, start: l.start, speaker: 'S1', text: l.text }));
+    await this.q('UPDATE meetings SET speakers = $2::jsonb, transcript = $3::jsonb, updated_at = now() WHERE id = $1', [Number(id), J({ S1: { name: 'Speaker 1', live: true } }), J(transcript)]);
+  }
   async setTranscript(id, raw, minutesReset) {
     const { speakers, transcript } = this.fromSegments(raw);
     await this.q(`UPDATE meetings SET speakers = $2::jsonb, transcript = $3::jsonb${minutesReset ? ', minutes = NULL, applied = \'{}\'::jsonb' : ''}, updated_at = now() WHERE id = $1`, [Number(id), J(speakers), J(transcript)]);
@@ -320,12 +325,20 @@ class Meetings {
         if (!a) throw err(400, 'The recording is no longer on the server. Upload it again.');
         await this.setStatus(id, 'transcribing', 'Transcribing the recording');
         const vocabulary = [...new Set([(ctx && ctx.project && ctx.project.name) || '', (ctx && ctx.project && ctx.project.client) || '', ...(r.attendees || []).map((x) => x.name), ...((ctx && ctx.people) || [])].filter(Boolean))];
-        const out = await stt.transcribe({ buffer: Buffer.from(a.data), mime: a.mime, name: a.filename, language: r.language === 'auto' ? null : r.language, vocabulary, speakerHint: (r.attendees || []).length || null });
-        await this.ops.recordUsage({ userId, projectId: r.project_id, source: 'meeting transcription', model: out.model, input: out.usage.input, output: out.usage.output });
-        await this.setTranscript(id, out.segments, true);
-        const last = out.segments[out.segments.length - 1];
-        if (!r.duration_sec && last) await this.q('UPDATE meetings SET duration_sec = $2 WHERE id = $1', [Number(id), last.start]);
-        if (process.env.MEETING_KEEP_AUDIO !== '1') await this.q('DELETE FROM meeting_audio WHERE meeting_id = $1', [Number(id)]);
+        let ok = false;
+        try {
+          const out = await stt.transcribe({ buffer: Buffer.from(a.data), mime: a.mime, name: a.filename, language: r.language === 'auto' ? null : r.language, vocabulary, speakerHint: (r.attendees || []).length || null });
+          await this.ops.recordUsage({ userId, projectId: r.project_id, source: 'meeting transcription', model: out.model, input: out.usage.input, output: out.usage.output });
+          await this.setTranscript(id, out.segments, true);
+          const last = out.segments[out.segments.length - 1];
+          if (!r.duration_sec && last) await this.q('UPDATE meetings SET duration_sec = $2 WHERE id = $1', [Number(id), last.start]);
+          ok = true;
+        } catch (e) {
+          // a transcript made live is better than nothing when the full pass fails
+          if (!((r.transcript || []).length)) throw e;
+          this.log && this.log('full transcription failed, using the live transcript', e.message);
+        }
+        if (ok && process.env.MEETING_KEEP_AUDIO !== '1') await this.q('DELETE FROM meeting_audio WHERE meeting_id = $1', [Number(id)]);
       }
       await this.setStatus(id, 'summarizing', 'Writing the minutes');
       await this.writeMinutes(id, { userId, ctx, instructions });
