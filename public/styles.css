@@ -1694,3 +1694,9 @@ body.chat-open .rec-dock { inset-inline-end: calc(min(var(--chat-w, 420px), 100v
 .lv-t { flex: none; min-width: 34px; color: var(--muted); font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; }
 .lv-x { flex: 1 1 auto; min-width: 0; unicode-bidi: plaintext; text-align: start; overflow-wrap: anywhere; }
 #rcSysDev { flex: 1 1 auto; min-width: 0; } #rcSysDev.attn { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* Add people from the schedule owners */
+.tx-list { display: grid; gap: 2px; max-height: 52vh; overflow: auto; margin-top: 10px; border: 1px solid var(--border); border-radius: 10px; padding: 4px; }
+.tx-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; transition: background .12s var(--ease); } .tx-row:hover { background: var(--surface-2); }
+.tx-row.in { cursor: default; } .tx-row.in .tx-name { color: var(--muted); } .tx-row.in:hover { background: none; }
+.tx-name { flex: 1; min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; } .tx-name b { font-weight: 600; } .tx-n { white-space: nowrap; }

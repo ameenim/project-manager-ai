@@ -2173,7 +2173,7 @@ const G = {
     'Changes to scope, schedule or cost follow the change control process.',
     'Dependencies on third parties are tracked in the schedule and the risk register.',
   ]),
-  team: (c) => md.table(['Name', 'Role', 'Email'], c.resources.map((r) => [r.name, r.role || '', r.email || ''])) + (c.resources.length ? '' : '\n\nTeam members are added under project settings.'),
+  team: (c) => (c.resources.some((r) => r.organization) ? md.table(['Name', 'Role', 'Organization', 'Email'], c.resources.map((r) => [r.name, r.role || '', r.organization || '', r.email || ''])) : md.table(['Name', 'Role', 'Email'], c.resources.map((r) => [r.name, r.role || '', r.email || '']))) + (c.resources.length ? '' : '\n\nTeam members are added under project settings.'),
   governance: (c) => md.bullets([
     'Weekly progress report issued to the client project sponsor.',
     'Bi-weekly steering review covering progress against baseline, risks and change requests.',

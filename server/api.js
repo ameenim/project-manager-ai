@@ -18,6 +18,7 @@ const { Meetings, SECTIONS: MEETING_SECTIONS, mmss: meetingTime } = require('./m
 const stt = require('./stt');
 const { LiveHub } = require('./live');
 const meetingExport = require('./meetings_export');
+const teamExtract = require('./team_extract');
 
 const PUB = path.join(__dirname, '..', 'public');
 const TZ = process.env.APP_TZ || 'Asia/Dubai';
@@ -1237,8 +1238,30 @@ module.exports = function createApi(store, auth, connectors, ops) {
   on('GET', '/api/projects/(\\d+)/resources', async (m) => ({ resources: P_(m[1]).resources.slice().sort((a, b) => a.name.localeCompare(b.name)).map(clone) }));
   on('POST', '/api/projects/(\\d+)/resources', async (m, q, b) => {
     const P = P_(m[1]); if (!String(b.name || '').trim()) throw err(400, 'Name is required');
-    const r = { id: nid(), project_id: P.id, name: b.name.trim(), email: b.email || null, role: b.role || null, jira_account: b.jira_account || null, teams_name: b.teams_name || null };
+    const r = { id: nid(), project_id: P.id, name: b.name.trim(), email: b.email || null, role: b.role || null, organization: String(b.organization || '').trim().slice(0, 80) || null, jira_account: b.jira_account || null, teams_name: b.teams_name || null };
     P.resources.push(r); return { resource: r };
+  });
+  // The people named in the schedule's Owner column, as suggestions for the team.
+  on('GET', '/api/projects/(\\d+)/team/from-schedule', async (m) => {
+    const P = P_(m[1]);
+    return { people: teamExtract.fromSchedule(P.tasks, P.resources), owned_tasks: P.tasks.filter((t) => String(t.assignee || '').trim()).length };
+  });
+  on('POST', '/api/projects/(\\d+)/team/from-schedule', async (m, q, b) => {
+    const P = P_(m[1]);
+    const list = Array.isArray(b.people) ? b.people.slice(0, 300) : [];
+    if (!list.length) throw err(400, 'Choose at least one person');
+    const have = new Set(P.resources.map((r) => teamExtract.keyOf(r.name)));
+    const added = [];
+    for (const x of list) {
+      const name = String((x && x.name) || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+      const k = teamExtract.keyOf(name);
+      if (!name || !k || have.has(k)) continue;
+      have.add(k);
+      const r = { id: nid(), project_id: P.id, name, email: null, role: null, organization: String((x && x.organization) || '').trim().slice(0, 80) || null, jira_account: null, teams_name: null };
+      P.resources.push(r); added.push(r);
+    }
+    audit(P, ACTOR(), 'team_extracted', { summary: `Added ${added.length} ${added.length === 1 ? 'person' : 'people'} to the team from the schedule owners` });
+    return { added, skipped: list.length - added.length };
   });
   on('DELETE', '/api/projects/(\\d+)/resources/(\\d+)', async (m) => { const P = P_(m[1]); P.resources = P.resources.filter((r) => r.id !== Number(m[2])); return { ok: true }; });
 
