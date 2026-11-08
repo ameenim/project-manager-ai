@@ -74,16 +74,36 @@
     let data = initial;
     const F = { cell: null, type: 'all', sev: 'all', project: 'all', dim: 'all' };
 
+    // Background refresh. Answers can arrive out of order and several actions in a row would each refetch the whole
+    // dashboard, so only one fetch runs at a time, one more follows if something changed meanwhile, and nothing is
+    // applied while a save is still in flight (it would put the old row back for a moment).
+    let loading = false, again = false, saving = 0;
     async function refresh() {
-      try { data = opts.fetch ? await opts.fetch() : (await api('GET', '/api/dashboard')).radar; } catch (e) { toast(e.message, 'err'); }
-      draw();
+      if (loading) { again = true; return; }
+      loading = true;
+      try {
+        do {
+          again = false;
+          let fresh = null;
+          try { fresh = opts.fetch ? await opts.fetch() : (await api('GET', '/api/dashboard')).radar; } catch (e) { toast(e.message, 'err'); }
+          if (fresh && !saving && !again) { data = fresh; draw(); }
+        } while (again && !saving);
+      } finally { loading = false; }
     }
-    async function undoable(msg, doFn, undoFn) {
-      try { await doFn(); } catch (e) { return toast(e.message, 'err'); }
+    // The screen answers at once: opt() changes the local data, the save runs behind it, and a failure puts it back.
+    async function undoable(msg, doFn, undoFn, opt) {
+      const before = { items: data.items, counts: { ...data.counts } };
+      if (opt) { opt(); draw(); }
+      saving++;
+      try { await doFn(); } catch (e) { saving--; data = { ...data, items: before.items, counts: before.counts }; draw(); return toast(e.message, 'err'); }
+      saving--;
       toast(msg, 'ok', { label: t('g_undo'), fn: async () => { try { await undoFn(); } catch (e) { toast(e.message, 'err'); } refresh(); } });
       refresh();
     }
-    const setState = (x, state, prev) => undoable(t('radar_updated'), () => api('PUT', `/api/items/${x.item_id}`, { state }), () => api('PUT', `/api/items/${x.item_id}`, { state: prev }));
+    // local effects of an action, so the row and the counts change before the server answers
+    const drop = (x) => () => { data = { ...data, items: data.items.filter((i) => i.key !== x.key), counts: { ...data.counts, [x.sev]: Math.max(0, (data.counts[x.sev] || 0) - 1) } }; };
+    const patch = (x, fields) => () => { data = { ...data, items: data.items.map((i) => (i.key === x.key ? { ...i, ...fields } : i)) }; };
+    const setState = (x, state, prev, opt) => undoable(t('radar_updated'), () => api('PUT', `/api/items/${x.item_id}`, { state }), () => api('PUT', `/api/items/${x.item_id}`, { state: prev }), opt);
 
     function progressDialog(x) {
       const m = modal({
@@ -95,9 +115,9 @@
       r.oninput = () => (m.$('#rpVal').textContent = r.value + '%');
       const apply = (val) => {
         m.close();
-        undoable(t('radar_updated'),
-          () => api('POST', `/api/projects/${x.project_id}/schedule/apply`, { changes: { [x.task_id]: { progress: val } } }),
-          () => api('POST', `/api/projects/${x.project_id}/schedule/apply`, { changes: { [x.task_id]: { progress: x.progress } } }));
+        const call = (v) => api('POST', `/api/projects/${x.project_id}/schedule/apply`, { changes: { [x.task_id]: { progress: v } }, slim: true });
+        // finished work leaves the late list; partly done work stays with its new percentage
+        undoable(t('radar_updated'), () => call(val), () => call(x.progress), val >= 100 ? drop(x) : patch(x, { progress: val }));
       };
       m.$('#rpSave').onclick = () => apply(Number(r.value));
       m.$('#rpDone').onclick = () => apply(100);
@@ -106,11 +126,11 @@
     function run(act, x) {
       const pid = x.project_id;
       switch (act) {
-        case 'mitigated': return setState(x, 'mitigated', x.state || 'open');
-        case 'closeRisk': return setState(x, 'closed', x.state || 'open');
+        case 'mitigated': return setState(x, 'mitigated', x.state || 'open', drop(x));
+        case 'closeRisk': return setState(x, 'closed', x.state || 'open', drop(x));
         case 'invoiced': return setState(x, 'invoiced', x.state);
         case 'paid': return setState(x, 'paid', x.state);
-        case 'confirm': return undoable(t('radar_updated'), () => api('POST', `/api/items/${x.item_id}/confirm`), () => api('POST', `/api/items/${x.item_id}/reopen`));
+        case 'confirm': return undoable(t('radar_updated'), () => api('POST', `/api/items/${x.item_id}/confirm`), () => api('POST', `/api/items/${x.item_id}/reopen`), patch(x, { unconfirmed: false }));
         case 'progress': return progressDialog(x);
         case 'schedule': return PM.act.peek(pid, 'schedule');
         case 'report': return PM.act.report(pid);
@@ -151,6 +171,7 @@
           <div class="rd-main"><div class="rd-top"><span class="rd-type">${t('rt_' + x.type)}</span><span class="rd-title">${esc(x.title)}</span></div>
             <div class="rd-meta">${opts.single ? esc(x.project) : `<a href="#/p/${x.project_id}/overview" data-peek="${x.project_id}">${esc(x.project)}</a>`} · ${describe(x)}</div>${x.type === 'risk' && x.mitigation ? `<div class="rd-mit small muted">${esc(x.mitigation)}</div>` : ''}</div>
           <div class="rd-acts">${actionsFor(x)}</div></div>`).join('');
+      const keepScroll = (host.querySelector('.rd-list') || {}).scrollTop || 0;
       host.innerHTML = `<div class="rd" id="radarCard">
         <div class="rd-head"><div class="small muted">${all.length ? t('radar_sub', { n: all.length }) : ''}</div>
           <div class="rd-sev">${SEVS.map((s) => `<button class="rd-pill ${s} ${F.sev === s ? 'on' : ''}" data-sev="${s}" aria-pressed="${F.sev === s}"><b>${data.counts[s]}</b> ${t('radar_sev_' + s)}</button>`).join('')}</div></div>
@@ -164,6 +185,7 @@
               ${filtered ? `<button class="btn sm ghost" id="rdClear">${t('radar_clear')}</button>` : ''}</div>
             <div class="rd-list">${rows || `<div class="empty small">${t('radar_none_match')}</div>`}</div></div></div>`
         : `<div class="empty"><div class="big">✅</div><p>${t('radar_empty')}</p></div>`}</div>`;
+      const listEl = host.querySelector('.rd-list'); if (listEl && keepScroll) listEl.scrollTop = keepScroll;
       $$('[data-cell]', host).forEach((b) => (b.onclick = () => { const [p, i] = b.dataset.cell.split('|'); F.cell = F.cell && F.cell[0] === p && F.cell[1] === i ? null : [p, i]; draw(); }));
       $$('[data-sev]', host).forEach((b) => (b.onclick = () => { F.sev = F.sev === b.dataset.sev ? 'all' : b.dataset.sev; draw(); }));
       $$('[data-type]', host).forEach((b) => (b.onclick = () => { F.type = b.dataset.type; draw(); }));

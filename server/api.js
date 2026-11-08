@@ -846,7 +846,8 @@ module.exports = function createApi(store, auth, connectors, ops) {
     for (const P of projects) {
       const st = stats(P); pendingInbox += st.pendingInbox; pendingItems += st.pendingItems;
       cards.push({ ...clone(P.p), stats: st });
-      radarEntries.push({ p: { ...clone(P.p), id: P.id }, stats: st, items: P.items.filter((i) => i.kind === 'risk' || i.kind === 'milestone' || i.kind === 'deliverable').map((i) => ({ ...i, data: i.data || {} })), rows: S.progressMetrics(P.tasks, rawProject(P), TODAY()).rows, sched: S.schedule(P.tasks, rawProject(P)) });
+      const mm = S.progressMetrics(P.tasks, rawProject(P), TODAY()); // once per project, the radar and the late list read the same rows
+      radarEntries.push({ p: { ...clone(P.p), id: P.id }, stats: st, items: P.items.filter((i) => i.kind === 'risk' || i.kind === 'milestone' || i.kind === 'deliverable').map((i) => ({ ...i, data: i.data || {} })), rows: mm.rows, sched: S.schedule(P.tasks, rawProject(P)) });
       for (const m of P.items.filter((i) => i.kind === 'milestone' && i.status !== 'ignored' && i.state !== 'paid')) {
         const d = m.data;
         if (d.due_date) {
@@ -854,7 +855,6 @@ module.exports = function createApi(store, auth, connectors, ops) {
           payments.push({ item_id: m.id, project_id: P.id, project: P.p.name, currency: P.p.currency, title: m.title, due: d.due_date, amount, state: m.state, late: d.due_date < TODAY() && m.state === 'pending' });
         }
       }
-      const mm = S.progressMetrics(P.tasks, rawProject(P), TODAY());
       for (const r of mm.rows) if (r.overdue) overdue.push({ task_id: r.id, project_id: P.id, project: P.p.name, task: r.name, finish: r.finish, progress: r.progress, assignee: r.assignee });
     }
     payments.sort((a, b) => a.due.localeCompare(b.due));
@@ -895,12 +895,17 @@ module.exports = function createApi(store, auth, connectors, ops) {
   const snapshots = new Snapshots(store.db);
   // Records today's row for each project (archived projects are left out, like on the dashboards). One broken
   // project never stops the others.
-  async function capture(list) {
+  // A project that has not been saved since its last capture today would produce the same figures, so opening a
+  // dashboard does not recompute and rewrite it. Pass force to record every project regardless.
+  const lastCapture = new Map();
+  async function capture(list, force) {
     const date = TODAY();
     let saved = 0;
     for (const P of list) {
       if (!P || !P.p || P.p.status === 'archived') continue;
-      try { await snapshots.save(P.id, date, snapshotFigures(P)); saved++; } catch (e) { console.error('snapshot failed for project', P.id, e.message); }
+      const c = store.cache.get(P.id), stamp = c ? `${c.version}|${date}` : null;
+      if (!force && stamp && lastCapture.get(P.id) === stamp) continue;
+      try { await snapshots.save(P.id, date, snapshotFigures(P)); saved++; if (stamp) lastCapture.set(P.id, stamp); } catch (e) { lastCapture.delete(P.id); console.error('snapshot failed for project', P.id, e.message); }
     }
     return saved;
   }
@@ -913,7 +918,7 @@ module.exports = function createApi(store, auth, connectors, ops) {
       const list = [], need = [];
       for (const id of ids.slice(i, i + 20)) { const c = store.cache.get(id); if (c && c.P) list.push(c.P); else need.push(id); }
       if (need.length) for (const row of (await store.db.query('SELECT id, data FROM projects WHERE id = ANY($1::bigint[])', [need])).rows) { if (row.data && row.data.id == null) row.data.id = row.id; list.push(row.data); }
-      saved += await capture(list);
+      saved += await capture(list, true);
       await new Promise((ok) => setImmediate(ok));
     }
     return saved;
@@ -922,7 +927,11 @@ module.exports = function createApi(store, auth, connectors, ops) {
   async function trendsFor(list, days) {
     const today = TODAY();
     await capture(list);
-    const rows = await snapshots.range(list.map((P) => P.id), dstr(dnum(today) - days), today);
+    let rows = await snapshots.range(list.map((P) => P.id), dstr(dnum(today) - days), today);
+    // a skipped capture must never leave today without a row (for example after the rows were removed): record those now
+    const have = new Set(rows.filter((r) => r.date === today).map((r) => r.project_id));
+    const missing = list.filter((P) => P && P.p && P.p.status !== 'archived' && !have.has(Number(P.id)));
+    if (missing.length) { await capture(missing, true); rows = await snapshots.range(list.map((P) => P.id), dstr(dnum(today) - days), today); }
     return buildTrends(rows, { today, days, projects: list.map((P) => ({ id: P.id, name: P.p.name, currency: P.p.currency })) });
   }
 
@@ -1496,6 +1505,8 @@ Rules:
     }
     P.tasks.sort((a, b) => (a.position ?? 0) - (b.position ?? 0) || a.id - b.id);
     recalc(P); recordVersion(P, 'edit');
+    // the overview actions only need to know it worked, so they skip the full task list
+    if (b.slim) return { ok: true, tasks_changed: Object.keys(changes).length };
     return scheduleResponse(P);
   });
   on('POST', '/api/projects/(\\d+)/tasks', async (m, q, b) => {

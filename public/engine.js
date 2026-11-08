@@ -7,7 +7,29 @@ const parse = (s) => {
   return new Date(Date.UTC(y, m - 1, d));
 };
 const fmt = (d) => d.toISOString().slice(0, 10);
-const addDays = (s, n) => fmt(new Date(parse(s).getTime() + n * DAY));
+
+// Hot path. Schedules touch the same few hundred dates millions of times, so dates are handled as whole day numbers
+// (days since 1970-01-01) and the text form is converted once and remembered. Results are identical to going through Date.
+const dayCache = new Map(), strCache = new Map();
+const dayOf = (s) => {
+  let n = dayCache.get(s);
+  if (n === undefined) {
+    const [y, m, d] = s.split('-').map(Number);
+    n = Date.UTC(y, m - 1, d) / DAY;
+    if (dayCache.size > 20000) dayCache.clear();
+    dayCache.set(s, n);
+  }
+  return n;
+};
+const strOf = (n) => {
+  let s = strCache.get(n);
+  if (s === undefined) {
+    s = new Date(n * DAY).toISOString().slice(0, 10); // throws on an invalid date, like fmt did
+    if (Number.isInteger(n)) { if (strCache.size > 20000) strCache.clear(); strCache.set(n, s); }
+  }
+  return s;
+};
+const addDays = (s, n) => strOf(dayOf(s) + n);
 
 function calendar(project) {
   let days, holidays;
@@ -17,13 +39,26 @@ function calendar(project) {
   return { days: new Set(days), holidays: new Set(holidays) };
 }
 
+// day number based working day test; the weekday and holiday lookups are prepared once per calendar object
+const prep = (c) => {
+  if (!c._dow) {
+    c._dow = [0, 1, 2, 3, 4, 5, 6].map((k) => c.days.has(k));
+    const h = new Set();
+    for (const x of c.holidays) if (/^\d{4}-\d{2}-\d{2}$/.test(x)) { const n = dayOf(x); if (n === n) h.add(n); }
+    c._hol = h;
+  }
+  return c;
+};
+// 1970-01-01 was a Thursday (4)
+const workDay = (n, c) => c._dow[(((n + 4) % 7) + 7) % 7] === true && !c._hol.has(n);
 const isWork = (d, c) => c.days.has(d.getUTCDay()) && !c.holidays.has(fmt(d));
 
-function nextWork(s, c) {
-  let d = parse(s);
-  for (let g = 0; g < 800 && !isWork(d, c); g++) d = new Date(d.getTime() + DAY);
-  return fmt(d);
+function nextWorkN(n, c) {
+  prep(c);
+  for (let g = 0; g < 800 && !workDay(n, c); g++) n++;
+  return n;
 }
+function nextWork(s, c) { return strOf(nextWorkN(dayOf(s), c)); }
 
 function nextWorkAfter(s, c) {
   return nextWork(addDays(s, 1), c);
@@ -31,23 +66,20 @@ function nextWorkAfter(s, c) {
 
 // s must be (or will be snapped to) a working day. Adds n working days.
 function addWork(s, n, c) {
-  let d = parse(nextWork(s, c));
+  let d = nextWorkN(dayOf(s), c);
   while (n > 0) {
-    d = new Date(d.getTime() + DAY);
-    if (isWork(d, c)) n--;
+    d++;
+    if (workDay(d, c)) n--;
   }
-  return fmt(d);
+  return strOf(d);
 }
 
 // Inclusive count of working days between two dates.
 function countWork(a, b, c) {
-  let d = parse(a);
-  const end = parse(b);
+  prep(c);
+  const end = dayOf(b);
   let n = 0;
-  while (d <= end) {
-    if (isWork(d, c)) n++;
-    d = new Date(d.getTime() + DAY);
-  }
+  for (let d = dayOf(a); d <= end; d++) if (workDay(d, c)) n++;
   return n;
 }
 
@@ -60,12 +92,12 @@ function finishOf(t, c) {
 // Moves n working days forward (n >= 0) or back (n < 0) from s.
 function shiftWork(s, n, c) {
   if (n >= 0) return addWork(s, n, c);
-  let d = parse(nextWork(s, c));
+  let d = nextWorkN(dayOf(s), c);
   while (n < 0) {
-    d = new Date(d.getTime() - DAY);
-    if (isWork(d, c)) n++;
+    d--;
+    if (workDay(d, c)) n++;
   }
-  return fmt(d);
+  return strOf(d);
 }
 
 const DEP_TYPES = ['FS', 'SS', 'FF', 'SF'];

@@ -27,8 +27,8 @@
       let ops = [];
       if (val >= 100 && (x.progress || 0) < 100) { ops = await completion.flow(x.project_id, chg, null, x.currency); if (ops === null) return; }
       undoable(t('radar_updated'),
-        async () => { await api('POST', `/api/projects/${x.project_id}/schedule/apply`, { changes: chg }); await completion.commit(ops); },
-        async () => { await api('POST', `/api/projects/${x.project_id}/schedule/apply`, { changes: { [x.task_id]: { progress: x.progress || 0 } } }); await completion.revert(ops); }, done);
+        async () => { await api('POST', `/api/projects/${x.project_id}/schedule/apply`, { changes: chg, slim: true }); await completion.commit(ops); },
+        async () => { await api('POST', `/api/projects/${x.project_id}/schedule/apply`, { changes: { [x.task_id]: { progress: x.progress || 0 } }, slim: true }); await completion.revert(ops); }, done);
     };
     m.$('#paSave').onclick = () => apply(Number(r.value));
     m.$('#paDone').onclick = () => apply(100);
