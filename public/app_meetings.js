@@ -28,6 +28,8 @@
     mt_attendees: 'Attendees', mt_duration: 'Duration', mt_when: 'When', mt_lines: '{n} lines', mt_n_actions: '{n} actions', mt_n_actions_1: '1 action', mt_show_more: 'Show more', mt_show_less: 'Show less', mt_add_item: 'Add an item', mt_remove: 'Remove', mt_no_att: 'No attendees listed',
     mt_title_ph: 'Weekly progress meeting', mt_source: 'Source', mt_from_meeting: 'From meeting', mt_audio_deleted: 'The audio is deleted after transcription.', mt_t_heading: 'Heading', mt_t_points: 'Points, one per line', mt_text: 'Text',
     mt_busy_err: 'Wait until this meeting has finished processing', mt_edit_info: 'Edit details', mt_info_saved: 'Details saved',
+    mt_dock_min: 'Minimize', mt_dock_open: 'Open the meeting page', mt_input: 'Microphone', mt_input_default: 'Default microphone', mt_mute: 'Mute my microphone', mt_unmute: 'Unmute my microphone', mt_ns: 'Reduce background noise', mt_note_ph: 'Add a note at this moment', mt_note_add: 'Add note', mt_note_saved: 'Note added to the meeting',
+    mt_rec_only_one: 'A recording is already running. Stop it first.', mt_rec_sent: 'Recording sent. The minutes are being written.', mt_open_meeting: 'Open meeting', mt_live_full: 'Full transcript', mt_rec_here: 'This meeting is being recorded. The recording box stays open at the bottom of the screen while you work in other projects.', mt_rec_sending: 'Sending the recording', mt_rec_paused: 'Paused', mt_rec_running: 'Recording', mt_stale: 'This meeting has no recording. Delete it or create a new one.',
     mt_live: 'Live transcript', mt_live_on: 'Show a live transcript while recording', mt_live_hint: 'Text appears as people speak. Speakers are labeled after you stop, from the full recording.', mt_live_wait: 'Listening. Text appears after a few seconds of speech.',
     mt_live_connecting: 'Connecting', mt_live_live: 'Live', mt_live_reconnecting: 'Reconnecting', mt_live_failed: 'Live text stopped. Recording continues.', mt_live_off: 'Live transcript is not available. Recording continues and the transcript is written after the meeting.',
     mt_live_final: 'Finishing the live transcript', mt_live_notice: 'This transcript came from live text and has no speaker labels.',
@@ -57,6 +59,8 @@
     mt_attendees: 'الحضور', mt_duration: 'المدة', mt_when: 'الموعد', mt_lines: '{n} سطر', mt_n_actions: '{n} إجراءات', mt_n_actions_1: 'إجراء واحد', mt_show_more: 'عرض المزيد', mt_show_less: 'عرض أقل', mt_add_item: 'إضافة عنصر', mt_remove: 'إزالة', mt_no_att: 'لم يتم إدراج حضور',
     mt_title_ph: 'اجتماع متابعة أسبوعي', mt_source: 'المصدر', mt_from_meeting: 'من اجتماع', mt_audio_deleted: 'يحذف الصوت بعد التفريغ.', mt_t_heading: 'العنوان', mt_t_points: 'النقاط، نقطة في كل سطر', mt_text: 'النص',
     mt_busy_err: 'انتظر حتى تنتهي معالجة هذا الاجتماع', mt_edit_info: 'تعديل التفاصيل', mt_info_saved: 'تم حفظ التفاصيل',
+    mt_dock_min: 'تصغير', mt_dock_open: 'فتح صفحة الاجتماع', mt_input: 'الميكروفون', mt_input_default: 'الميكروفون الافتراضي', mt_mute: 'كتم الميكروفون', mt_unmute: 'إلغاء كتم الميكروفون', mt_ns: 'تقليل ضوضاء الخلفية', mt_note_ph: 'أضف ملاحظة في هذه اللحظة', mt_note_add: 'إضافة ملاحظة', mt_note_saved: 'تمت إضافة الملاحظة إلى الاجتماع',
+    mt_rec_only_one: 'يوجد تسجيل قيد التشغيل. أوقفه أولا.', mt_rec_sent: 'تم إرسال التسجيل. جار كتابة المحضر.', mt_open_meeting: 'فتح الاجتماع', mt_live_full: 'النص الكامل', mt_rec_here: 'هذا الاجتماع قيد التسجيل. يبقى صندوق التسجيل مفتوحا أسفل الشاشة أثناء عملك في مشاريع أخرى.', mt_rec_sending: 'جار إرسال التسجيل', mt_rec_paused: 'متوقف مؤقتا', mt_rec_running: 'جار التسجيل', mt_stale: 'لا يوجد تسجيل لهذا الاجتماع. احذفه أو أنشئ اجتماعا جديدا.',
     mt_live: 'النص المباشر', mt_live_on: 'عرض نص مباشر أثناء التسجيل', mt_live_hint: 'يظهر النص أثناء الحديث. تحدد هوية المتحدثين بعد الإنهاء من التسجيل الكامل.', mt_live_wait: 'جار الاستماع. يظهر النص بعد ثوان من الحديث.',
     mt_live_connecting: 'جار الاتصال', mt_live_live: 'مباشر', mt_live_reconnecting: 'جار إعادة الاتصال', mt_live_failed: 'توقف النص المباشر. يستمر التسجيل.', mt_live_off: 'النص المباشر غير متاح. يستمر التسجيل ويكتب النص بعد الاجتماع.',
     mt_live_final: 'جار إنهاء النص المباشر', mt_live_notice: 'جاء هذا النص من النص المباشر وليس فيه تسمية للمتحدثين.',
@@ -73,57 +77,117 @@
   const statusChip = (m) => `<span class="chip ${m.status === 'ready' ? 'green' : m.status === 'failed' ? 'red' : BUSY.includes(m.status) ? 'blue' : ''}">${t('mt_status_' + m.status)}</span>`;
   const bidi = 'style="unicode-bidi:plaintext"';
 
-  // ---------------- recorder ----------------
+  // ---------------- recorder (a floating box that keeps running while the project manager moves around) ----------------
   const canRecord = () => !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+  const REC = { cur: null, subs: new Set() };
+  const emit = () => REC.subs.forEach((fn) => { try { fn(); } catch { /* a view that is gone */ } });
+  PM.rec = { active: () => (REC.cur ? { id: REC.cur.id, pid: REC.cur.pid, title: REC.cur.title } : null), lines: () => (REC.cur ? REC.cur.lines : []), seconds: () => (REC.cur ? REC.cur.elapsed() : 0), state: () => (REC.cur ? REC.cur.state : ''), on: (fn) => { REC.subs.add(fn); return () => REC.subs.delete(fn); } };
+  const loadPrefs = () => { try { return JSON.parse(localStorage.getItem('pm_rec') || '{}') || {}; } catch { return {}; } };
+  const savePrefs = (o) => { try { localStorage.setItem('pm_rec', JSON.stringify(o)); } catch { /* storage blocked */ } };
+
   async function startRecorder(meeting, onDone, liveOpt) {
+    const prefs = loadPrefs();
+    const getMic = (deviceId) => navigator.mediaDevices.getUserMedia({ audio: { ...(deviceId ? { deviceId: { exact: deviceId } } : {}), echoCancellation: prefs.ec !== false, noiseSuppression: prefs.ns !== false, autoGainControl: true }, video: false });
     let mic;
-    try { mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: false }); } catch { toast(t('mt_rec_nomic'), 'err'); return false; }
+    try { mic = await getMic(prefs.deviceId); } catch { if (prefs.deviceId) { prefs.deviceId = ''; try { mic = await getMic(''); } catch { /* handled below */ } } }
+    if (!mic) { toast(t('mt_rec_nomic'), 'err'); return false; }
     const AC = window.AudioContext || window.webkitAudioContext;
-    const ctx = new AC(), dest = ctx.createMediaStreamDestination();
-    const mix = ctx.createGain();
-    const meter = (stream) => { const src = ctx.createMediaStreamSource(stream), an = ctx.createAnalyser(); an.fftSize = 256; src.connect(an); src.connect(dest); src.connect(mix); return an; };
-    const micAn = meter(mic);
-    let sysAn = null, sysStream = null;
-    const sharing = { on: false };
-    const hasType = (m) => window.MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m);
+    const ctx = new AC(), dest = ctx.createMediaStreamDestination(), mix = ctx.createGain();
+    const micGain = ctx.createGain(), micAn = ctx.createAnalyser(); micAn.fftSize = 256;
+    micGain.connect(micAn); micGain.connect(dest); micGain.connect(mix);
+    let micSrc = null;
+    const wireMic = (stream) => { if (micSrc) micSrc.disconnect(); micSrc = ctx.createMediaStreamSource(stream); micSrc.connect(micGain); };
+    wireMic(mic);
+    let sysAn = null, sysStream = null, muted = false;
+    const hasType = (x) => window.MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(x);
     const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find(hasType) || '';
     const rec = new MediaRecorder(dest.stream, { ...(mime ? { mimeType: mime } : {}), audioBitsPerSecond: 48000 });
     const chunks = []; rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
     let startedAt = Date.now(), pausedAt = 0, pausedTotal = 0, wake = null, tick = null, closed = false;
     const elapsed = () => Math.round(((pausedAt || Date.now()) - startedAt - pausedTotal) / 1000);
+    const baseTitle = document.title;
+    const cur = { id: meeting.id, pid: meeting.project_id, title: meeting.title, lines: [], elapsed, state: 'recording' }; REC.cur = cur;
     try { if (navigator.wakeLock) wake = await navigator.wakeLock.request('screen'); } catch { /* optional */ }
     rec.start(5000);
-    const m = modal({
-      title: t('mt_rec_title'), noBackdropClose: true, size: '',
-      body: `<div class="col" style="gap:14px"><div class="row" style="gap:12px"><span class="chip red" id="rcDot">${icon('mic')} <span id="rcTime">0:00</span></span><span class="small muted grow">${t('mt_rec_keep')}</span></div>
-        <div><div class="small muted">${t('mt_rec_mic')}</div><div class="progress"><span id="mtMic" style="width:0%"></span></div></div>
-        ${liveOpt && liveOpt.on ? `<div><div class="row"><b class="small grow">${t('mt_live')}</b><span class="chip" id="lvState">${t('mt_live_connecting')}</span></div><div id="lvBox" class="small" style="height:150px;overflow:auto;margin-top:6px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2)"><span class="muted">${t('mt_live_wait')}</span></div><div class="small faint mt" style="margin-top:6px">${t('mt_live_hint')}</div></div>` : ''}
-        <div><div class="row"><div class="small muted grow" id="sysLabel">${t('mt_rec_sys_off')}</div><button class="btn small" id="rcShare">${icon('expand')} ${t('mt_rec_share')}</button></div><div class="progress mt" id="sysBar"><span id="mtSys" style="width:0%"></span></div><div class="small faint">${t('mt_rec_share_hint')}</div></div></div>`,
-      footer: `<button class="btn ghost" id="rcCancel">${t('mt_rec_cancel')}</button><button class="btn" id="rcPause">${icon('pause')} ${t('mt_rec_pause')}</button><button class="btn primary" id="rcStop">${icon('stop')} ${t('mt_rec_stop')}</button>`,
-      onClose: () => { if (!closed) finish(false); },
-    });
+    const dock = document.createElement('div');
+    dock.className = 'rec-dock' + (prefs.min ? ' min' : '');
+    dock.setAttribute('role', 'region'); dock.setAttribute('aria-label', t('mt_rec_title'));
+    const href = `#/p/${meeting.project_id}/meetings?m=${meeting.id}`;
+    dock.innerHTML = `<div class="rec-head"><span class="rec-dot" id="rcDot"></span><b class="rec-time" id="rcTime">0:00</b><a class="rec-title grow" href="${href}" data-tip="${esc(t('mt_dock_open'))}" ${bidi}>${esc(meeting.title)}</a>
+        <span class="rec-lvl" aria-hidden="true"><i id="mtMic"></i></span>
+        <button class="btn ghost icon" id="rcPause" aria-label="${esc(t('mt_rec_pause'))}" data-tip="${esc(t('mt_rec_pause'))}">${icon('pause')}</button>
+        <button class="btn danger icon" id="rcStop" aria-label="${esc(t('mt_rec_stop'))}" data-tip="${esc(t('mt_rec_stop'))}">${icon('stop')}</button>
+        <button class="btn ghost icon" id="rcMin" aria-label="${esc(t('mt_dock_min'))}" data-tip="${esc(t('mt_dock_min'))}">${icon('down')}</button></div>
+      <div class="rec-body">
+        ${liveOpt && liveOpt.on ? `<div class="row"><b class="small grow">${t('mt_live')}</b><span class="chip" id="lvState">${t('mt_live_connecting')}</span><a class="small" href="${href}">${t('mt_live_full')}</a></div><div id="lvBox" class="rec-live"><span class="muted">${t('mt_live_wait')}</span></div>` : ''}
+        <div class="row" style="gap:8px"><label class="small muted" for="rcDev" style="min-width:64px">${t('mt_input')}</label><select id="rcDev" aria-label="${esc(t('mt_input'))}"><option value="">${t('mt_input_default')}</option></select>
+          <button class="btn icon" id="rcMute" aria-pressed="false" aria-label="${esc(t('mt_mute'))}" data-tip="${esc(t('mt_mute'))}">${icon('mic')}</button></div>
+        <label class="row small" style="gap:8px"><input type="checkbox" id="rcNs" ${prefs.ns !== false ? 'checked' : ''}> ${t('mt_ns')}</label>
+        <div class="row" style="gap:8px"><div class="small muted grow" id="sysLabel">${t('mt_rec_sys_off')}</div><span class="rec-lvl" aria-hidden="true"><i id="mtSys"></i></span><button class="btn small" id="rcShare">${icon('expand')} ${t('mt_rec_share')}</button></div>
+        <div class="row" style="gap:8px"><input type="text" id="rcNote" maxlength="300" placeholder="${esc(t('mt_note_ph'))}" ${bidi}><button class="btn icon" id="rcNoteGo" aria-label="${esc(t('mt_note_add'))}" data-tip="${esc(t('mt_note_add'))}">${icon('plus')}</button></div>
+        <div class="row"><span class="small faint grow">${t('mt_rec_keep')}</span><button class="btn ghost small" id="rcCancel">${icon('trash')} ${t('mt_rec_cancel')}</button></div>
+      </div>`;
+    document.body.appendChild(dock);
+    const $d = (s) => $(s, dock);
+    // devices
+    const fillDevices = async () => {
+      try {
+        const list = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audioinput' && d.deviceId && d.deviceId !== 'default' && d.deviceId !== 'communications');
+        const curId = (mic.getAudioTracks()[0].getSettings() || {}).deviceId || '';
+        $d('#rcDev').innerHTML = `<option value="">${t('mt_input_default')}</option>` + list.map((d, i) => `<option value="${esc(d.deviceId)}" ${d.deviceId === curId && prefs.deviceId ? 'selected' : ''}>${esc(d.label || (t('mt_rec_mic') + ' ' + (i + 1)))}</option>`).join('');
+      } catch { /* the list is optional */ }
+    };
+    fillDevices();
+    const reacquire = async (deviceId) => {
+      try {
+        const next = await getMic(deviceId);
+        mic.getTracks().forEach((x) => x.stop()); mic = next; wireMic(mic); prefs.deviceId = deviceId || ''; savePrefs(prefs);
+      } catch { toast(t('mt_rec_nomic'), 'err'); }
+    };
+    $d('#rcDev').onchange = (e) => reacquire(e.target.value);
+    $d('#rcNs').onchange = (e) => { prefs.ns = e.target.checked; savePrefs(prefs); reacquire(prefs.deviceId); };
+    $d('#rcMute').onclick = (e) => {
+      muted = !muted; micGain.gain.value = muted ? 0 : 1; const b = e.currentTarget;
+      b.setAttribute('aria-pressed', String(muted)); b.classList.toggle('danger', muted); b.setAttribute('data-tip', t(muted ? 'mt_unmute' : 'mt_mute')); b.setAttribute('aria-label', t(muted ? 'mt_unmute' : 'mt_mute'));
+      dock.classList.toggle('muted', muted);
+    };
+    $d('#rcMin').onclick = () => { dock.classList.toggle('min'); prefs.min = dock.classList.contains('min'); savePrefs(prefs); };
+    // quick notes become part of the meeting notes with the time they were taken
+    const addNote = async () => {
+      const inp = $d('#rcNote'), v = inp.value.trim(); if (!v) return;
+      try {
+        const cur0 = (await api('GET', `/api/meetings/${meeting.id}`)).meeting.notes || '';
+        await api('PUT', `/api/meetings/${meeting.id}`, { notes: (cur0 ? cur0 + '\n' : '') + `[${clock(elapsed())}] ${v}` });
+        inp.value = ''; toast(t('mt_note_saved'), 'ok');
+      } catch (e) { toast(e.message, 'err'); }
+    };
+    $d('#rcNoteGo').onclick = addNote; $d('#rcNote').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); addNote(); } };
     const level = (an) => { const a = new Uint8Array(an.fftSize); an.getByteTimeDomainData(a); let mx = 0; for (const v of a) mx = Math.max(mx, Math.abs(v - 128)); return Math.min(100, Math.round(mx / 128 * 160)); };
+    const meterSrc = (stream) => { const src = ctx.createMediaStreamSource(stream), an = ctx.createAnalyser(); an.fftSize = 256; src.connect(an); src.connect(dest); src.connect(mix); return an; };
     tick = setInterval(() => {
-      if (!m.el.isConnected) return;
-      $('#rcTime', m.el).textContent = clock(elapsed());
-      $('#mtMic', m.el).style.width = level(micAn) + '%';
-      $('#mtSys', m.el).style.width = sysAn ? level(sysAn) + '%' : '0%';
-    }, 200);
+      const s = clock(elapsed());
+      $d('#rcTime').textContent = s; document.title = `● ${s} · ${baseTitle}`;
+      $d('#mtMic').style.width = (muted ? 0 : level(micAn)) + '%';
+      $d('#mtSys').style.width = sysAn ? level(sysAn) + '%' : '0%';
+      emit();
+    }, 500);
     // live transcript: 16 kHz mono PCM goes to the server in short batches, new lines come back by polling
     const live = { on: !!(liveOpt && liveOpt.on), after: 0, queue: [], sending: false, buf: [], timer: null, poll: null, node: null, failed: false, ended: false };
-    const setLive = (k) => { const el = $('#lvState', m.el); if (el) { el.textContent = t('mt_live_' + k); el.className = 'chip ' + (k === 'live' ? 'green' : k === 'failed' ? 'red' : 'amber'); } };
+    const setLive = (k) => { const el = $d('#lvState'); if (el) { el.textContent = t('mt_live_' + k); el.className = 'chip ' + (k === 'live' ? 'green' : k === 'failed' ? 'red' : 'amber'); } };
     const paint = (lines, interim) => {
-      const box = $('#lvBox', m.el); if (!box) return;
+      if (lines && lines.length) cur.lines.push(...lines);
+      cur.interim = interim || '';
+      const box = $d('#lvBox'); if (!box) return;
       if (lines && lines.length) { if (box.dataset.empty !== '0') { box.innerHTML = ''; box.dataset.empty = '0'; } for (const l of lines) { const d = document.createElement('div'); d.style.unicodeBidi = 'plaintext'; d.textContent = `${clock(l.start)}  ${l.text}`; box.appendChild(d); } }
       let tail = box.querySelector('[data-interim]'); if (tail) tail.remove();
       if (interim) { tail = document.createElement('div'); tail.dataset.interim = '1'; tail.className = 'muted'; tail.style.unicodeBidi = 'plaintext'; tail.textContent = interim; box.appendChild(tail); }
-      box.scrollTop = box.scrollHeight;
+      box.scrollTop = box.scrollHeight; emit();
     };
     const pump = async () => {
       if (live.sending || live.failed) return; live.sending = true;
       while (live.queue.length && !live.failed) {
         const b = live.queue.shift();
-        try { await api('POST', `/api/meetings/${liveOpt.id}/live/audio`, { pcm: b }); } catch { live.failed = true; setLive('failed'); }
+        try { await api('POST', `/api/meetings/${meeting.id}/live/audio`, { pcm: b }); } catch { live.failed = true; setLive('failed'); }
       }
       live.sending = false;
     };
@@ -135,10 +199,10 @@
       live.buf = []; live.queue.push(toB64(out)); if (live.queue.length > 40) live.queue.shift(); pump();
     };
     async function startLive() {
-      try { await api('POST', `/api/meetings/${liveOpt.id}/live`); } catch (e) { live.failed = true; live.on = false; const box = $('#lvBox', m.el); if (box) box.innerHTML = `<span class="muted">${esc(t('mt_live_off'))}</span>`; setLive('failed'); return; }
+      try { await api('POST', `/api/meetings/${meeting.id}/live`); } catch { live.failed = true; live.on = false; const box = $d('#lvBox'); if (box) box.innerHTML = `<span class="muted">${esc(t('mt_live_off'))}</span>`; setLive('failed'); return; }
       const ratio = ctx.sampleRate / 16000; let acc = 0, cnt = 0, phase = 0;
       const node = ctx.createScriptProcessor(4096, 1, 1); live.node = node;
-      const mute = ctx.createGain(); mute.gain.value = 0; mix.connect(node); node.connect(mute); mute.connect(ctx.destination);
+      const silent = ctx.createGain(); silent.gain.value = 0; mix.connect(node); node.connect(silent); silent.connect(ctx.destination);
       node.onaudioprocess = (e) => {
         if (rec.state !== 'recording') return;
         const inp = e.inputBuffer.getChannelData(0), out = new Int16Array(Math.ceil(inp.length / ratio) + 1); let k = 0;
@@ -149,10 +213,10 @@
       live.poll = setInterval(async () => {
         if (live.failed && !live.ended) return;
         try {
-          const r = (await api('GET', `/api/meetings/${liveOpt.id}/live?after=${live.after}`)).live;
-          if (r.lines && r.lines.length) { live.after = r.lines[r.lines.length - 1].n; }
+          const r = (await api('GET', `/api/meetings/${meeting.id}/live?after=${live.after}`)).live;
+          if (r.lines && r.lines.length) live.after = r.lines[r.lines.length - 1].n;
           paint(r.lines, r.interim);
-          if (r.state === 'live') setLive('live'); else if (r.state === 'reconnecting') setLive('reconnecting'); else if (r.state === 'failed') { setLive('failed'); }
+          if (r.state === 'live') setLive('live'); else if (r.state === 'reconnecting') setLive('reconnecting'); else if (r.state === 'failed') setLive('failed');
         } catch { /* try again on the next tick */ }
       }, 900);
     }
@@ -161,39 +225,45 @@
       live.ended = true; clearInterval(live.timer); clearInterval(live.poll);
       try { if (live.node) { live.node.onaudioprocess = null; live.node.disconnect(); } } catch { /* ignore */ }
       flushPcm(); const until = Date.now() + 4000; while ((live.sending || live.queue.length) && Date.now() < until) await new Promise((r) => setTimeout(r, 100));
-      try { await api('POST', `/api/meetings/${liveOpt.id}/live/stop`); } catch { /* the recording is what matters */ }
+      try { await api('POST', `/api/meetings/${meeting.id}/live/stop`); } catch { /* the recording is what matters */ }
     }
     if (live.on) startLive();
-    function finish(upload) {
-      if (closed) return; closed = true;
+    let unload = null;
+    async function finish(upload) {
+      if (closed) return; closed = true; cur.state = 'sending';
       clearInterval(tick);
       const dur = elapsed();
+      if (upload) { dock.classList.remove('min'); dock.querySelector('.rec-body').innerHTML = `<div class="row" style="gap:12px">${PM.loader ? PM.loader.html({ size: 'sm' }) : ''}<b class="small">${t('mt_uploading')}</b></div>`; $d('#rcPause').remove(); $d('#rcStop').remove(); }
       const stopped = new Promise((r) => { rec.onstop = r; });
       if (rec.state !== 'inactive') rec.stop(); else rec.onstop && rec.onstop();
       [mic, sysStream].forEach((s) => s && s.getTracks().forEach((x) => x.stop()));
       try { wake && wake.release(); } catch { /* ignore */ }
-      Promise.all([stopped, stopLive()]).then(() => { try { ctx.close(); } catch { /* ignore */ } if (upload) onDone(new Blob(chunks, { type: (rec.mimeType || mime || 'audio/webm').split(';')[0] }), dur); });
-      m.close();
+      await Promise.all([stopped, stopLive()]);
+      try { ctx.close(); } catch { /* ignore */ }
+      window.removeEventListener('beforeunload', unload);
+      try { if (upload) await onDone(new Blob(chunks, { type: (rec.mimeType || mime || 'audio/webm').split(';')[0] }), dur); } finally { dock.remove(); document.title = baseTitle; REC.cur = null; emit(); }
     }
-    $('#rcShare', m.el).onclick = async () => {
-      if (sharing.on || !navigator.mediaDevices.getDisplayMedia) return;
+    $d('#rcShare').onclick = async () => {
+      if (sysAn || !navigator.mediaDevices.getDisplayMedia) return;
       try {
         const d = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
         d.getVideoTracks().forEach((v) => v.stop());
         if (!d.getAudioTracks().length) { toast(t('mt_rec_noaudio'), 'warn'); return; }
-        sysStream = new MediaStream(d.getAudioTracks()); sysAn = meter(sysStream); sharing.on = true;
-        $('#sysLabel', m.el).textContent = t('mt_rec_sys'); $('#rcShare', m.el).disabled = true;
-        d.getAudioTracks()[0].addEventListener('ended', () => { sysAn = null; $('#sysLabel', m.el).textContent = t('mt_rec_sys_off'); });
+        sysStream = new MediaStream(d.getAudioTracks()); sysAn = meterSrc(sysStream);
+        $d('#sysLabel').textContent = t('mt_rec_sys'); $d('#rcShare').disabled = true;
+        d.getAudioTracks()[0].addEventListener('ended', () => { sysAn = null; $d('#sysLabel').textContent = t('mt_rec_sys_off'); $d('#rcShare').disabled = false; });
       } catch { toast(t('mt_rec_noaudio'), 'warn'); }
     };
-    $('#rcPause', m.el).onclick = (e) => {
+    $d('#rcPause').onclick = (e) => {
       const b = e.currentTarget;
-      if (rec.state === 'recording') { rec.pause(); pausedAt = Date.now(); b.innerHTML = `${icon('play')} ${t('mt_rec_resume')}`; }
-      else if (rec.state === 'paused') { rec.resume(); pausedTotal += Date.now() - pausedAt; pausedAt = 0; b.innerHTML = `${icon('pause')} ${t('mt_rec_pause')}`; }
+      if (rec.state === 'recording') { rec.pause(); pausedAt = Date.now(); cur.state = 'paused'; dock.classList.add('paused'); b.innerHTML = icon('play'); b.setAttribute('data-tip', t('mt_rec_resume')); b.setAttribute('aria-label', t('mt_rec_resume')); }
+      else if (rec.state === 'paused') { rec.resume(); pausedTotal += Date.now() - pausedAt; pausedAt = 0; cur.state = 'recording'; dock.classList.remove('paused'); b.innerHTML = icon('pause'); b.setAttribute('data-tip', t('mt_rec_pause')); b.setAttribute('aria-label', t('mt_rec_pause')); }
     };
-    $('#rcStop', m.el).onclick = () => finish(true);
-    $('#rcCancel', m.el).onclick = async () => { if (await confirmDlg({ title: t('mt_rec_cancel'), message: esc(t('mt_rec_discard_q')), ok: t('mt_rec_cancel'), danger: true })) { finish(false); onDone(null); } };
-    window.addEventListener('beforeunload', (e) => { if (!closed) { e.preventDefault(); e.returnValue = ''; } });
+    $d('#rcStop').onclick = () => finish(true);
+    $d('#rcCancel').onclick = async () => { if (await confirmDlg({ title: t('mt_rec_cancel'), message: esc(t('mt_rec_discard_q')), ok: t('mt_rec_cancel'), danger: true })) { await finish(false); onDone(null); } };
+    unload = (e) => { if (!closed) { e.preventDefault(); e.returnValue = ''; } };
+    window.addEventListener('beforeunload', unload);
+    emit();
     return true;
   }
 
@@ -261,16 +331,21 @@
     await api('POST', `/api/meetings/${id}/audio`, fd);
   }
   async function startRecorderFor(p, body, after, liveOn) {
+    if (PM.rec.active()) { toast(t('mt_rec_only_one'), 'err'); return false; }
     const r = await api('POST', `/api/projects/${p.id}/meetings`, body);
-    const id = r.meeting.id;
-    const ok = await startRecorder(r.meeting, async (blob, dur) => {
-      if (!blob) { try { await api('DELETE', `/api/meetings/${id}`); } catch { /* ignore */ } after(null); return; }
-      toast(t('mt_uploading'));
-      try { await sendAudio(id, blob, dur); } catch (e) { toast(e.message, 'err'); }
-      after(id);
+    const meeting = r.meeting, id = meeting.id;
+    const here = () => location.hash.split('?')[0].endsWith('/meetings') || location.hash.includes(`m=${id}`);
+    const ok = await startRecorder(meeting, async (blob, dur) => {
+      if (!blob) { try { await api('DELETE', `/api/meetings/${id}`); } catch { /* ignore */ } if (here()) location.hash = `#/p/${p.id}/meetings`; return; }
+      try {
+        await sendAudio(id, blob, dur);
+        toast(t('mt_rec_sent'), 'ok', { label: t('mt_open_meeting'), fn: () => { location.hash = `#/p/${p.id}/meetings?m=${id}`; } });
+      } catch (e) { toast(e.message, 'err'); }
+      if (here()) window.dispatchEvent(new HashChangeEvent('hashchange'));
     }, { id, on: liveOn });
-    if (!ok) { try { await api('DELETE', `/api/meetings/${id}`); } catch { /* ignore */ } }
-    return ok;
+    if (!ok) { try { await api('DELETE', `/api/meetings/${id}`); } catch { /* ignore */ } return false; }
+    after(id);
+    return true;
   }
 
   // ---------------- list ----------------
@@ -316,7 +391,24 @@
     const refresh = async () => { await load(); if (!stale(token)) draw(); };
     const link = (m) => `#/p/${p.id}/meetings?m=${m.id}`;
 
+    const recLines = () => { const ls = PM.rec.lines(); return (ls.length ? ls.map((l) => `<div ${bidi}>${clock(l.start)}  ${esc(l.text)}</div>`).join('') : `<span class="muted">${t('mt_live_wait')}</span>`); };
+    const recCard = () => `<div class="card mb" id="mtRecCard"><div class="row" style="gap:10px"><span class="rec-dot"></span><b>${t('mt_rec_running')}</b><b id="mtRecT">${clock(PM.rec.seconds())}</b><span class="chip" id="mtRecS">${PM.rec.state() === 'paused' ? t('mt_rec_paused') : ''}</span></div><p class="small muted">${t('mt_rec_here')}</p><div id="mtRecLines" class="rec-live tall">${recLines()}</div></div>`;
+    let off = null;
+    const watchRec = () => {
+      if (off) off();
+      off = PM.rec.on(() => {
+        if (stale(token) || !root.isConnected) { off(); return; }
+        const ra = PM.rec.active();
+        if (!ra || ra.id !== id) { off(); refresh().catch(() => {}); return; }
+        const tt = $('#mtRecT', root); if (tt) tt.textContent = clock(PM.rec.seconds());
+        const bx = $('#mtRecLines', root); if (bx) { const nearEnd = bx.scrollHeight - bx.scrollTop - bx.clientHeight < 40; const n = PM.rec.lines().length; if (bx.dataset.n !== String(n)) { bx.innerHTML = recLines(); bx.dataset.n = String(n); if (nearEnd) bx.scrollTop = bx.scrollHeight; } }
+        const ss = $('#mtRecS', root); if (ss) ss.textContent = PM.rec.state() === 'paused' ? t('mt_rec_paused') : '';
+      });
+    };
     function status(m) {
+      const ra = PM.rec.active();
+      if (m.status === 'draft' && ra && ra.id === id) { watchRec(); return recCard(); }
+      if (m.status === 'draft' && !m.transcript.length) return `<div class="banner warn mb">${icon('alert')}<div class="grow">${t('mt_stale')}</div></div>`;
       if (BUSY.includes(m.status)) return `<div class="card mb"><div class="row" style="gap:14px">${PM.loader ? PM.loader.html({ size: 'md' }) : ''}<div class="grow"><b>${t('mt_status_' + m.status)}</b><div class="small muted">${esc(m.stage || t('mt_working'))}</div><div class="small faint">${t('mt_working')}</div></div></div></div>`;
       if (m.status === 'failed') return `<div class="banner err mb">${icon('alert')}<div class="grow"><b>${t('mt_failed')}</b><div class="small">${esc(m.error || '')}</div></div>${m.source !== 'text' || m.transcript.length ? `<button class="btn" id="mtRetry">${icon('refresh')} ${t('mt_retry')}</button>` : ''}</div>`;
       return '';
