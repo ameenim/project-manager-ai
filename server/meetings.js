@@ -10,6 +10,7 @@ const err = (status, message) => Object.assign(new Error(message), { status, exp
 const J = (v) => JSON.stringify(v);
 const COLS = 'id, project_id, owner_id, title, meeting_at, duration_sec, language, minutes_lang, source, status, stage, error, notes, attendees, speakers, transcript, minutes, applied, created_at, updated_at';
 const LANGS = new Set(['auto', 'en', 'ar']);
+const SPOKEN = new Set(['auto', 'en', 'ar', 'mix']); // the spoken language can also be Arabic and English together
 const SECTIONS = ['summary', 'topics', 'decisions', 'actions', 'risks', 'updates', 'questions'];
 const BUSY = new Set(['transcribing', 'summarizing']);
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
@@ -108,7 +109,7 @@ class Meetings {
     const t = clip(title, 140); if (!t) throw err(400, 'Give the meeting a title');
     const id = this.store.nid();
     await this.q('INSERT INTO meetings(id, project_id, owner_id, title, meeting_at, language, minutes_lang, source, notes, attendees) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)',
-      [id, projectId, ownerId, t, asDate(meeting_at) || new Date().toISOString(), LANGS.has(language) ? language : 'auto', LANGS.has(minutes_lang) ? minutes_lang : 'auto', ['recording', 'upload', 'text', 'document'].includes(source) ? source : 'upload', String(notes || '').slice(0, 4000), J(this.cleanAttendees(attendees))]);
+      [id, projectId, ownerId, t, asDate(meeting_at) || new Date().toISOString(), SPOKEN.has(language) ? language : 'auto', LANGS.has(minutes_lang) ? minutes_lang : 'auto', ['recording', 'upload', 'text', 'document'].includes(source) ? source : 'upload', String(notes || '').slice(0, 4000), J(this.cleanAttendees(attendees))]);
     return id;
   }
   async update(id, b) {
@@ -116,7 +117,7 @@ class Meetings {
     const add = (col, v, cast) => { p.push(v); sets.push(`${col} = $${p.length}${cast || ''}`); };
     if (b.title != null) { const t = clip(b.title, 140); if (!t) throw err(400, 'Give the meeting a title'); add('title', t); }
     if (b.meeting_at != null) { const d = asDate(b.meeting_at); if (!d) throw err(400, 'The date and time are not valid'); add('meeting_at', d); }
-    if (b.language != null && LANGS.has(b.language)) add('language', b.language);
+    if (b.language != null && SPOKEN.has(b.language)) add('language', b.language);
     if (b.minutes_lang != null && LANGS.has(b.minutes_lang)) add('minutes_lang', b.minutes_lang);
     if (b.duration_sec != null) add('duration_sec', Math.max(0, Math.min(86400, Math.round(Number(b.duration_sec) || 0))));
     if (b.notes != null) add('notes', String(b.notes).slice(0, 4000));

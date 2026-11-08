@@ -8,12 +8,12 @@
     tab_meetings: 'Meetings', mt_title: 'Meetings', mt_new: 'New meeting', mt_empty: 'No meetings yet. Record your next meeting and the minutes will be written for you.',
     mt_sub: 'Record a meeting, get a transcript for each speaker and minutes you can send to the project.', mt_no_stt: 'Transcription is not set up on the server yet. Ask an administrator to add GEMINI_API_KEY. You can still paste a transcript.',
     mt_no_claude: 'Minutes need ANTHROPIC_API_KEY on the server.', mt_f_title: 'Meeting title', mt_f_when: 'Date and time', mt_f_lang: 'Spoken language', mt_f_mlang: 'Minutes language', mt_f_att: 'Attendees', mt_f_att_add: 'Add a name or paste a list from Outlook, then press Enter', mt_att_count: '{n} attendees', mt_att_count_1: '1 attendee', mt_f_notes: 'Notes or agenda',
-    mt_auto: 'Detect automatically', mt_en: 'English', mt_ar: 'Arabic', mt_how: 'How do you want to capture it?', mt_record: 'Record now', mt_upload: 'Upload a recording', mt_paste: 'Paste a transcript',
-    mt_record_hint: 'Uses your microphone. Share a tab or screen with audio to also capture the other people on a call.', mt_upload_hint: 'MP3, WAV, M4A, AAC, OGG, FLAC or WebM audio.', mt_paste_hint: 'One line per turn, for example Sara: We start Monday.',
+    mt_auto: 'Detect automatically', mt_mix: 'Arabic and English', mt_sys_on: 'Also capture the other side of a call', mt_sys_hint: 'You will pick the browser tab where the call runs. Keep Share tab audio ticked. For a desktop app, pick Entire screen and tick Share system audio (Windows and ChromeOS only). On a Mac, join the call in the browser instead.', mt_sys_lost: 'Meeting audio stopped. Share it again to keep recording the other side.', mt_sys_quiet: 'No sound from the meeting yet. Check that the call is playing and that its tab is not muted.', mt_sys_unsupported: 'This browser cannot share meeting audio. Use Chrome or Edge on a computer.', mt_en: 'English', mt_ar: 'Arabic', mt_how: 'How do you want to capture it?', mt_record: 'Record now', mt_upload: 'Upload a recording', mt_paste: 'Paste a transcript',
+    mt_record_hint: 'Uses your microphone.', mt_upload_hint: 'MP3, WAV, M4A, AAC, OGG, FLAC or WebM audio.', mt_paste_hint: 'One line per turn, for example Sara: We start Monday.',
     mt_start: 'Start recording', mt_create: 'Create meeting', mt_need_title: 'Give the meeting a title', mt_need_file: 'Choose a recording', mt_need_text: 'Paste the transcript',
     mt_rec_title: 'Recording', mt_rec_mic: 'Microphone', mt_rec_sys: 'Meeting audio', mt_rec_sys_off: 'Not shared. Only your microphone is recorded.', mt_rec_pause: 'Pause', mt_rec_resume: 'Resume', mt_rec_stop: 'Stop and write minutes', mt_rec_cancel: 'Discard',
     mt_rec_keep: 'Keep this tab open while recording. The recording is sent when you stop.', mt_rec_nomic: 'The microphone is blocked. Allow microphone access in the browser and try again.', mt_rec_unsupported: 'This browser cannot record. Use Chrome or Edge, or upload a recording.',
-    mt_rec_share: 'Share meeting audio', mt_rec_share_hint: 'Choose a browser tab or the whole screen and tick Share audio.', mt_rec_noaudio: 'No meeting audio was shared, so only your voice is recorded.', mt_rec_discard_q: 'Discard this recording? It cannot be recovered.',
+    mt_rec_share: 'Share meeting audio', mt_rec_share_hint: 'Choose a browser tab or the whole screen and tick Share audio.', mt_rec_noaudio: 'No sound was shared with the screen, so only your voice is recorded. Pick a browser tab and tick Share tab audio.', mt_rec_discard_q: 'Discard this recording? It cannot be recovered.',
     mt_uploading: 'Sending the recording', mt_back: 'All meetings', mt_status_draft: 'Draft', mt_status_uploaded: 'Received', mt_status_transcribing: 'Transcribing', mt_status_summarizing: 'Writing minutes', mt_status_ready: 'Ready', mt_status_failed: 'Failed',
     mt_working: 'Working on it. This page updates by itself.', mt_failed: 'This meeting could not be processed', mt_retry: 'Try again', mt_src_recording: 'Recorded', mt_src_upload: 'Uploaded', mt_src_text: 'Pasted', mt_src_document: 'Document', mt_doc: 'Upload a document', mt_doc_hint: 'A transcript or existing minutes. Word, PDF, text, or Teams and Zoom caption files (.vtt, .srt).', mt_kind: 'This file is', mt_kind_auto: 'Detect automatically', mt_kind_transcript: 'A transcript with speakers', mt_kind_minutes: 'Existing minutes or notes', mt_need_doc: 'Choose a document',
     mt_minutes: 'Minutes', mt_transcript: 'Transcript', mt_summary: 'Summary', mt_topics: 'Topics discussed', mt_decisions: 'Decisions', mt_actions: 'Actions', mt_risks: 'Risks raised', mt_updates: 'Schedule updates', mt_questions: 'Open questions',
@@ -39,12 +39,12 @@
     tab_meetings: 'الاجتماعات', mt_title: 'الاجتماعات', mt_new: 'اجتماع جديد', mt_empty: 'لا توجد اجتماعات بعد. سجل اجتماعك القادم وسيتم كتابة المحضر لك.',
     mt_sub: 'سجل اجتماعا واحصل على نص لكل متحدث ومحضر يمكنك إرساله إلى المشروع.', mt_no_stt: 'لم يتم إعداد التفريغ الصوتي على الخادم بعد. اطلب من المسؤول إضافة GEMINI_API_KEY. يمكنك لصق النص مباشرة.',
     mt_no_claude: 'يحتاج المحضر إلى ANTHROPIC_API_KEY على الخادم.', mt_f_title: 'عنوان الاجتماع', mt_f_when: 'التاريخ والوقت', mt_f_lang: 'لغة الحديث', mt_f_mlang: 'لغة المحضر', mt_f_att: 'الحضور', mt_f_att_add: 'أضف اسما أو الصق قائمة من Outlook ثم اضغط Enter', mt_att_count: '{n} حضور', mt_att_count_1: 'حاضر واحد', mt_f_notes: 'ملاحظات أو جدول الأعمال',
-    mt_auto: 'اكتشاف تلقائي', mt_en: 'الإنجليزية', mt_ar: 'العربية', mt_how: 'كيف تريد تسجيله؟', mt_record: 'سجل الآن', mt_upload: 'ارفع تسجيلا', mt_paste: 'الصق نصا',
-    mt_record_hint: 'يستخدم الميكروفون. شارك تبويبا أو الشاشة مع الصوت لتسجيل بقية المشاركين في المكالمة.', mt_upload_hint: 'ملفات صوت MP3 أو WAV أو M4A أو AAC أو OGG أو FLAC أو WebM.', mt_paste_hint: 'سطر لكل متحدث، مثل سارة: نبدأ يوم الاثنين.',
+    mt_auto: 'اكتشاف تلقائي', mt_mix: 'العربية والإنجليزية', mt_sys_on: 'سجل أيضا صوت الطرف الآخر في المكالمة', mt_sys_hint: 'ستختار تبويب المتصفح الذي تعمل فيه المكالمة. أبق خيار مشاركة صوت التبويب مفعلا. لتطبيق سطح المكتب اختر الشاشة كاملة وفعل مشاركة صوت النظام (ويندوز وChromeOS فقط). على ماك انضم إلى المكالمة من المتصفح بدلا من ذلك.', mt_sys_lost: 'توقفت مشاركة صوت الاجتماع. شاركه مرة أخرى لمتابعة تسجيل الطرف الآخر.', mt_sys_quiet: 'لا يوجد صوت من الاجتماع حتى الآن. تأكد أن المكالمة تعمل وأن التبويب غير مكتوم.', mt_sys_unsupported: 'هذا المتصفح لا يدعم مشاركة صوت الاجتماع. استخدم Chrome أو Edge على جهاز كمبيوتر.', mt_en: 'الإنجليزية', mt_ar: 'العربية', mt_how: 'كيف تريد تسجيله؟', mt_record: 'سجل الآن', mt_upload: 'ارفع تسجيلا', mt_paste: 'الصق نصا',
+    mt_record_hint: 'يستخدم الميكروفون.', mt_upload_hint: 'ملفات صوت MP3 أو WAV أو M4A أو AAC أو OGG أو FLAC أو WebM.', mt_paste_hint: 'سطر لكل متحدث، مثل سارة: نبدأ يوم الاثنين.',
     mt_start: 'ابدأ التسجيل', mt_create: 'إنشاء الاجتماع', mt_need_title: 'أدخل عنوانا للاجتماع', mt_need_file: 'اختر تسجيلا', mt_need_text: 'الصق النص',
     mt_rec_title: 'جار التسجيل', mt_rec_mic: 'الميكروفون', mt_rec_sys: 'صوت الاجتماع', mt_rec_sys_off: 'لم تتم المشاركة. يسجل الميكروفون فقط.', mt_rec_pause: 'إيقاف مؤقت', mt_rec_resume: 'استئناف', mt_rec_stop: 'إنهاء وكتابة المحضر', mt_rec_cancel: 'تجاهل',
     mt_rec_keep: 'أبق هذا التبويب مفتوحا أثناء التسجيل. يرسل التسجيل عند الإنهاء.', mt_rec_nomic: 'الميكروفون محظور. اسمح بالوصول إليه من المتصفح وحاول مرة أخرى.', mt_rec_unsupported: 'هذا المتصفح لا يدعم التسجيل. استخدم Chrome أو Edge أو ارفع تسجيلا.',
-    mt_rec_share: 'شارك صوت الاجتماع', mt_rec_share_hint: 'اختر تبويبا أو الشاشة كاملة وفعل مشاركة الصوت.', mt_rec_noaudio: 'لم تتم مشاركة صوت الاجتماع، لذلك يسجل صوتك فقط.', mt_rec_discard_q: 'تجاهل هذا التسجيل؟ لا يمكن استرجاعه.',
+    mt_rec_share: 'شارك صوت الاجتماع', mt_rec_share_hint: 'اختر تبويبا أو الشاشة كاملة وفعل مشاركة الصوت.', mt_rec_noaudio: 'لم تتم مشاركة أي صوت مع الشاشة، لذلك يسجل صوتك فقط. اختر تبويبا من المتصفح وفعل مشاركة صوت التبويب.', mt_rec_discard_q: 'تجاهل هذا التسجيل؟ لا يمكن استرجاعه.',
     mt_uploading: 'جار إرسال التسجيل', mt_back: 'كل الاجتماعات', mt_status_draft: 'مسودة', mt_status_uploaded: 'تم الاستلام', mt_status_transcribing: 'جار التفريغ', mt_status_summarizing: 'جار كتابة المحضر', mt_status_ready: 'جاهز', mt_status_failed: 'فشل',
     mt_working: 'جار العمل عليه. تتحدث الصفحة تلقائيا.', mt_failed: 'تعذرت معالجة هذا الاجتماع', mt_retry: 'حاول مرة أخرى', mt_src_recording: 'مسجل', mt_src_upload: 'مرفوع', mt_src_text: 'ملصوق', mt_src_document: 'مستند', mt_doc: 'ارفع مستندا', mt_doc_hint: 'نص الاجتماع أو محضر موجود. ملفات Word أو PDF أو نص أو ملفات الترجمة من Teams وZoom (.vtt، .srt).', mt_kind: 'هذا الملف', mt_kind_auto: 'اكتشاف تلقائي', mt_kind_transcript: 'نص مع المتحدثين', mt_kind_minutes: 'محضر أو ملاحظات موجودة', mt_need_doc: 'اختر مستندا',
     mt_minutes: 'المحضر', mt_transcript: 'النص', mt_summary: 'الملخص', mt_topics: 'المواضيع المناقشة', mt_decisions: 'القرارات', mt_actions: 'الإجراءات', mt_risks: 'المخاطر المطروحة', mt_updates: 'تحديثات الجدول', mt_questions: 'أسئلة مفتوحة',
@@ -76,8 +76,11 @@
   const localInput = (d) => { const x = d ? new Date(d) : new Date(); const p = (n) => String(n).padStart(2, '0'); return `${x.getFullYear()}-${p(x.getMonth() + 1)}-${p(x.getDate())}T${p(x.getHours())}:${p(x.getMinutes())}`; };
   const statusChip = (m) => `<span class="chip ${m.status === 'ready' ? 'green' : m.status === 'failed' ? 'red' : BUSY.includes(m.status) ? 'blue' : ''}">${t('mt_status_' + m.status)}</span>`;
   const bidi = 'style="unicode-bidi:plaintext"';
+  // one transcript line: the time stays in its own column and each line reads in its own direction, so Arabic and English mix cleanly
+  const liveLine = (l) => `<div class="lv-line"><span class="lv-t">${clock(l.start)}</span><span class="lv-x" dir="auto">${esc(l.text)}</span></div>`;
 
   // ---------------- recorder (a floating box that keeps running while the project manager moves around) ----------------
+  const canShare = () => !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
   const canRecord = () => !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
   const REC = { cur: null, subs: new Set() };
   const emit = () => REC.subs.forEach((fn) => { try { fn(); } catch { /* a view that is gone */ } });
@@ -85,12 +88,29 @@
   const loadPrefs = () => { try { return JSON.parse(localStorage.getItem('pm_rec') || '{}') || {}; } catch { return {}; } };
   const savePrefs = (o) => { try { localStorage.setItem('pm_rec', JSON.stringify(o)); } catch { /* storage blocked */ } };
 
-  async function startRecorder(meeting, onDone, liveOpt) {
+  // Asks the browser to share a tab or screen with its sound. It must run straight from a click. The picture is not
+  // used, but its track stays open at a tiny size so the share keeps running and the person can see it is active.
+  async function pickSystemAudio() {
+    if (!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia)) { toast(t('mt_sys_unsupported'), 'warn'); return null; }
+    let d;
+    try {
+      d = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: { ideal: 1, max: 2 } },
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+        systemAudio: 'include', selfBrowserSurface: 'exclude', surfaceSwitching: 'include', preferCurrentTab: false,
+      });
+    } catch { return null; } // the person closed the picker
+    if (!d.getAudioTracks().length) { d.getTracks().forEach((x) => x.stop()); toast(t('mt_rec_noaudio'), 'warn'); return null; }
+    d.getVideoTracks().forEach((v) => { try { v.applyConstraints({ frameRate: 1, width: 320, height: 180 }); } catch { /* optional */ } });
+    return d;
+  }
+
+  async function startRecorder(meeting, onDone, liveOpt, sysInit) {
     const prefs = loadPrefs();
     const getMic = (deviceId) => navigator.mediaDevices.getUserMedia({ audio: { ...(deviceId ? { deviceId: { exact: deviceId } } : {}), echoCancellation: prefs.ec !== false, noiseSuppression: prefs.ns !== false, autoGainControl: true }, video: false });
     let mic;
     try { mic = await getMic(prefs.deviceId); } catch { if (prefs.deviceId) { prefs.deviceId = ''; try { mic = await getMic(''); } catch { /* handled below */ } } }
-    if (!mic) { toast(t('mt_rec_nomic'), 'err'); return false; }
+    if (!mic) { if (sysInit) sysInit.getTracks().forEach((x) => x.stop()); toast(t('mt_rec_nomic'), 'err'); return false; }
     const AC = window.AudioContext || window.webkitAudioContext;
     const ctx = new AC(), dest = ctx.createMediaStreamDestination(), mix = ctx.createGain();
     const micGain = ctx.createGain(), micAn = ctx.createAnalyser(); micAn.fftSize = 256;
@@ -178,9 +198,9 @@
       if (lines && lines.length) cur.lines.push(...lines);
       cur.interim = interim || '';
       const box = $d('#lvBox'); if (!box) return;
-      if (lines && lines.length) { if (box.dataset.empty !== '0') { box.innerHTML = ''; box.dataset.empty = '0'; } for (const l of lines) { const d = document.createElement('div'); d.style.unicodeBidi = 'plaintext'; d.textContent = `${clock(l.start)}  ${l.text}`; box.appendChild(d); } }
-      let tail = box.querySelector('[data-interim]'); if (tail) tail.remove();
-      if (interim) { tail = document.createElement('div'); tail.dataset.interim = '1'; tail.className = 'muted'; tail.style.unicodeBidi = 'plaintext'; tail.textContent = interim; box.appendChild(tail); }
+      if (lines && lines.length) { if (box.dataset.empty !== '0') { box.innerHTML = ''; box.dataset.empty = '0'; } box.insertAdjacentHTML('beforeend', lines.map(liveLine).join('')); }
+      const tail = box.querySelector('[data-interim]'); if (tail) tail.remove();
+      if (interim) box.insertAdjacentHTML('beforeend', `<div class="lv-line muted" data-interim="1"><span class="lv-t"></span><span class="lv-x" dir="auto">${esc(interim)}</span></div>`);
       box.scrollTop = box.scrollHeight; emit();
     };
     const pump = async () => {
@@ -243,17 +263,26 @@
       window.removeEventListener('beforeunload', unload);
       try { if (upload) await onDone(new Blob(chunks, { type: (rec.mimeType || mime || 'audio/webm').split(';')[0] }), dur); } finally { dock.remove(); document.title = baseTitle; REC.cur = null; emit(); }
     }
-    $d('#rcShare').onclick = async () => {
-      if (sysAn || !navigator.mediaDevices.getDisplayMedia) return;
-      try {
-        const d = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-        d.getVideoTracks().forEach((v) => v.stop());
-        if (!d.getAudioTracks().length) { toast(t('mt_rec_noaudio'), 'warn'); return; }
-        sysStream = new MediaStream(d.getAudioTracks()); sysAn = meterSrc(sysStream);
-        $d('#sysLabel').textContent = t('mt_rec_sys'); $d('#rcShare').disabled = true;
-        d.getAudioTracks()[0].addEventListener('ended', () => { sysAn = null; $d('#sysLabel').textContent = t('mt_rec_sys_off'); $d('#rcShare').disabled = false; });
-      } catch { toast(t('mt_rec_noaudio'), 'warn'); }
+    // meeting audio: the other side of the call joins the recording and the live transcript, and the meter proves sound arrives
+    const attachSystem = (d) => {
+      sysStream = d; sysAn = meterSrc(new MediaStream(d.getAudioTracks()));
+      $d('#sysLabel').textContent = t('mt_rec_sys'); $d('#rcShare').disabled = true;
+      const lost = () => {
+        if (closed || sysStream !== d) return;
+        sysAn = null; sysStream = null; d.getTracks().forEach((x) => x.stop());
+        $d('#sysLabel').textContent = t('mt_rec_sys_off'); $d('#rcShare').disabled = false; toast(t('mt_sys_lost'), 'warn');
+      };
+      d.getAudioTracks()[0].addEventListener('ended', lost); d.getVideoTracks().forEach((v) => v.addEventListener('ended', lost));
+      let heard = 0, n = 0;
+      const check = setInterval(() => {
+        if (closed || sysStream !== d) { clearInterval(check); return; }
+        heard = Math.max(heard, sysAn ? level(sysAn) : 0);
+        if (heard > 3) clearInterval(check);
+        else if (++n >= 16) { clearInterval(check); toast(t('mt_sys_quiet'), 'warn'); }
+      }, 500);
     };
+    $d('#rcShare').onclick = async () => { if (sysStream) return; const d = await pickSystemAudio(); if (d) attachSystem(d); };
+    if (sysInit) attachSystem(sysInit);
     $d('#rcPause').onclick = (e) => {
       const b = e.currentTarget;
       if (rec.state === 'recording') { rec.pause(); pausedAt = Date.now(); cur.state = 'paused'; dock.classList.add('paused'); b.innerHTML = icon('play'); b.setAttribute('data-tip', t('mt_rec_resume')); b.setAttribute('aria-label', t('mt_rec_resume')); }
@@ -297,7 +326,7 @@
       body: `<div class="col" style="gap:14px">
         <label class="f">${t('mt_f_title')}<input type="text" id="mtT" maxlength="140" placeholder="${esc(t('mt_title_ph'))}" ${bidi}></label>
         <div class="grid g2" style="gap:14px"><label class="f">${t('mt_f_when')}<input id="mtW" type="datetime-local" value="${localInput()}"></label>
-          <label class="f">${t('mt_f_lang')}<select id="mtL"><option value="auto">${t('mt_auto')}</option><option value="en">${t('mt_en')}</option><option value="ar">${t('mt_ar')}</option></select></label></div>
+          <label class="f">${t('mt_f_lang')}<select id="mtL"><option value="mix">${t('mt_mix')}</option><option value="auto">${t('mt_auto')}</option><option value="en">${t('mt_en')}</option><option value="ar">${t('mt_ar')}</option></select></label></div>
         <label class="f">${t('mt_f_mlang')}<select id="mtM"><option value="auto">${t('mt_auto')}</option><option value="en">${t('mt_en')}</option><option value="ar">${t('mt_ar')}</option></select></label>
         <div><div class="row" style="margin-bottom:6px"><div class="small muted grow" style="font-weight:600">${t('mt_f_att')}</div><span class="small muted" id="mtAC"></span></div><div class="row wrap" id="mtA" style="gap:6px"></div><input type="text" id="mtAN" placeholder="${esc(t('mt_f_att_add'))}" ${bidi}></div>
         ${info.stt && info.stt.live && canRecord() ? `<label class="row small" style="gap:8px"><input type="checkbox" id="mtLive" checked> ${t('mt_live_on')}</label>` : ''}
@@ -336,7 +365,7 @@
     const drawMode = () => {
       $$('#mtMode button', m.el).forEach((b) => b.classList.toggle('on', b.dataset.m === mode));
       const body = $('#mtModeBody', m.el);
-      body.innerHTML = mode === 'doc' ? `<input type="file" id="mtD" accept=".txt,.md,.vtt,.srt,.docx,.pdf,text/plain"><p class="small muted">${t('mt_doc_hint')}</p><label class="f">${t('mt_kind')}<select id="mtKind"><option value="auto">${t('mt_kind_auto')}</option><option value="transcript">${t('mt_kind_transcript')}</option><option value="minutes">${t('mt_kind_minutes')}</option></select></label>` : mode === 'record' ? `<p class="small muted">${t('mt_record_hint')}</p>` : mode === 'upload' ? `<input type="file" id="mtF" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.webm"><p class="small muted">${t('mt_upload_hint')} ${t('mt_audio_deleted')}</p>`
+      body.innerHTML = mode === 'doc' ? `<input type="file" id="mtD" accept=".txt,.md,.vtt,.srt,.docx,.pdf,text/plain"><p class="small muted">${t('mt_doc_hint')}</p><label class="f">${t('mt_kind')}<select id="mtKind"><option value="auto">${t('mt_kind_auto')}</option><option value="transcript">${t('mt_kind_transcript')}</option><option value="minutes">${t('mt_kind_minutes')}</option></select></label>` : mode === 'record' ? `<p class="small muted">${t('mt_record_hint')}</p><label class="row small" style="gap:8px;margin-top:8px"><input type="checkbox" id="mtSysOn" ${canShare() && loadPrefs().sys !== false ? 'checked' : ''} ${canShare() ? '' : 'disabled'}> ${t('mt_sys_on')}</label><p class="small muted" style="margin-top:4px">${t('mt_sys_hint')}</p>` : mode === 'upload' ? `<input type="file" id="mtF" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.webm"><p class="small muted">${t('mt_upload_hint')} ${t('mt_audio_deleted')}</p>`
         : `<textarea id="mtTx" rows="6" style="width:100%" placeholder="${esc(t('mt_paste_hint'))}" ${bidi}></textarea>`;
       $('#mtGo', m.el).innerHTML = mode === 'record' ? `${icon('mic')} ${t('mt_start')}` : t('mt_create');
     };
@@ -360,7 +389,11 @@
         m.close(); after(r.meeting.id); return;
       }
       if (mode === 'record') {
-        if (!(await startRecorderFor(p, body, after, !!($('#mtLive', m.el) && $('#mtLive', m.el).checked)))) return;
+        // the browser only opens its picker straight from the click, so the meeting audio is asked for before anything else
+        const wantSys = !!($('#mtSysOn', m.el) && $('#mtSysOn', m.el).checked);
+        if (canShare()) { const pr = loadPrefs(); pr.sys = wantSys; savePrefs(pr); }
+        const sys = wantSys ? await pickSystemAudio() : null;
+        if (!(await startRecorderFor(p, body, after, !!($('#mtLive', m.el) && $('#mtLive', m.el).checked), sys))) { if (sys) sys.getTracks().forEach((x) => x.stop()); return; }
         m.close(); return;
       }
       const r = await api('POST', `/api/projects/${p.id}/meetings`, body);
@@ -373,7 +406,7 @@
     fd.append('file', blob, blob.name || 'meeting.webm'); fd.append('duration_sec', String(dur || 0));
     await api('POST', `/api/meetings/${id}/audio`, fd);
   }
-  async function startRecorderFor(p, body, after, liveOn) {
+  async function startRecorderFor(p, body, after, liveOn, sys) {
     if (PM.rec.active()) { toast(t('mt_rec_only_one'), 'err'); return false; }
     const r = await api('POST', `/api/projects/${p.id}/meetings`, body);
     const meeting = r.meeting, id = meeting.id;
@@ -385,7 +418,7 @@
         toast(t('mt_rec_sent'), 'ok', { label: t('mt_open_meeting'), fn: () => { location.hash = `#/p/${p.id}/meetings?m=${id}`; } });
       } catch (e) { toast(e.message, 'err'); }
       if (here()) window.dispatchEvent(new HashChangeEvent('hashchange'));
-    }, { id, on: liveOn });
+    }, { id, on: liveOn }, sys);
     if (!ok) { try { await api('DELETE', `/api/meetings/${id}`); } catch { /* ignore */ } return false; }
     after(id);
     return true;
@@ -434,7 +467,7 @@
     const refresh = async () => { await load(); if (!stale(token)) draw(); };
     const link = (m) => `#/p/${p.id}/meetings?m=${m.id}`;
 
-    const recLines = () => { const ls = PM.rec.lines(); return (ls.length ? ls.map((l) => `<div ${bidi}>${clock(l.start)}  ${esc(l.text)}</div>`).join('') : `<span class="muted">${t('mt_live_wait')}</span>`); };
+    const recLines = () => { const ls = PM.rec.lines(); return (ls.length ? ls.map(liveLine).join('') : `<span class="muted">${t('mt_live_wait')}</span>`); };
     const recCard = () => `<div class="card mb" id="mtRecCard"><div class="row" style="gap:10px"><span class="rec-dot"></span><b>${t('mt_rec_running')}</b><b id="mtRecT">${clock(PM.rec.seconds())}</b><span class="chip" id="mtRecS">${PM.rec.state() === 'paused' ? t('mt_rec_paused') : ''}</span></div><p class="small muted">${t('mt_rec_here')}</p><div id="mtRecLines" class="rec-live tall">${recLines()}</div></div>`;
     let off = null;
     const watchRec = () => {

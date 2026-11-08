@@ -8,6 +8,7 @@ const { WebSocketServer } = require('ws');
 let s, wss, gem, ant, u, other, p;
 const conns = [];
 let batchFail = true;
+let rejectMulti = false; // a server that does not accept two language codes
 const pcm = (n = 3200) => Buffer.alloc(n, 1).toString('base64');
 
 before(async () => {
@@ -17,7 +18,11 @@ before(async () => {
     conns.push(c);
     ws.on('message', (raw) => {
       const m = JSON.parse(raw.toString());
-      if (m.setup) { c.setup = m.setup; ws.send(JSON.stringify({ setupComplete: {} })); return; }
+      if (m.setup) {
+        c.setup = m.setup;
+        if (rejectMulti && (m.setup.inputAudioTranscription.languageCodes || []).length > 1) { ws.close(1007, 'language codes not accepted'); return; }
+        ws.send(JSON.stringify({ setupComplete: {} })); return;
+      }
       const ri = m.realtimeInput || {};
       if (ri.audio) {
         c.chunks++;
@@ -89,6 +94,39 @@ test('audio goes to Gemini Live, interim and final text come back, and the trans
   assert.equal(m.transcript.length, 3);
   assert.equal(m.speakers.S1.live, true);
   assert.equal((await send(id)).status, 409, 'audio after stop is refused');
+});
+
+test('Arabic and English together points the live model at both languages and is stored on the meeting', async () => {
+  const id = await mk('Mixed live', 'mix');
+  assert.equal((await s.call('GET', `/api/meetings/${id}`, null, u.token)).data.meeting.language, 'mix');
+  assert.equal((await s.call('GET', `/api/meetings/${await mk('Odd language', 'zz')}`, null, u.token)).data.meeting.language, 'auto', 'unknown values still fall back to auto');
+  const before = conns.length;
+  await s.call('POST', `/api/meetings/${id}/live`, null, u.token);
+  const c = await s.until(() => conns[before]);
+  await s.until(() => c.setup);
+  assert.deepEqual(c.setup.inputAudioTranscription.languageCodes, ['ar-EG', 'en-US']);
+  await s.until(async () => (await poll(id)).data.live.state === 'live');
+  await s.call('POST', `/api/meetings/${id}/live/stop`, null, u.token);
+  const auto = await mk('Plain auto', 'auto'); const b2 = conns.length;
+  await s.call('POST', `/api/meetings/${auto}/live`, null, u.token);
+  const c2 = await s.until(() => conns[b2]); await s.until(() => c2.setup);
+  assert.deepEqual(c2.setup.inputAudioTranscription.languageCodes, [], 'automatic detection stays available');
+  await s.call('POST', `/api/meetings/${auto}/live/stop`, null, u.token);
+});
+
+test('if the live service refuses two language codes it falls back to automatic detection by itself', async () => {
+  rejectMulti = true;
+  try {
+    const id = await mk('Refused codes', 'mix'); const before = conns.length;
+    await s.call('POST', `/api/meetings/${id}/live`, null, u.token);
+    await s.until(() => conns.length >= before + 2, 6000);
+    assert.equal(conns[before].setup.inputAudioTranscription.languageCodes.length, 2, 'the first try asked for both');
+    assert.deepEqual(conns[before + 1].setup.inputAudioTranscription.languageCodes, [], 'the second try asks for none');
+    await s.until(async () => (await poll(id)).data.live.state === 'live', 6000);
+    for (let i = 0; i < 3; i++) await send(id);
+    await s.until(async () => (await poll(id)).data.live.count >= 1);
+    await s.call('POST', `/api/meetings/${id}/live/stop`, null, u.token);
+  } finally { rejectMulti = false; }
 });
 
 test('only project members can use a live session', async () => {

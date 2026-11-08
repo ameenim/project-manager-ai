@@ -10,7 +10,10 @@ const MODEL = () => process.env.GEMINI_LIVE_MODEL || 'gemini-3.5-transcribe-live
 const ROTATE_MS = () => Number(process.env.LIVE_ROTATE_MS) || 8.5 * 60 * 1000;
 const IDLE_MS = () => Number(process.env.LIVE_IDLE_MS) || 90 * 1000;
 const MAX_QUEUE = 16000 * 2 * 20; // twenty seconds of audio waiting for a connection
-const BCP = { en: ['en-US'], ar: ['ar-EG'] };
+// mix is the default for this product: Arabic and English, often inside one sentence. Detecting among 85 languages on
+// every utterance turns noise and dialect into Hindi or Portuguese, so the model is pointed at the two that matter.
+const BCP = { en: ['en-US'], ar: ['ar-EG'], mix: ['ar-EG', 'en-US'] };
+const codesOf = (s) => (s.fallback ? [] : BCP[s.language] || []);
 
 function socketClass() {
   if (typeof WebSocket !== 'undefined') return WebSocket;
@@ -34,9 +37,9 @@ class LiveHub {
     if (!this.available()) { const e = new Error('Live transcription is not available on this server.'); e.status = 503; e.expose = true; throw e; }
     this.stopNow(id);
     const s = {
-      id, userId, projectId, language: language === 'en' || language === 'ar' ? language : 'auto', vocabulary: (vocabulary || []).map((x) => clip(x, 60)).filter(Boolean).slice(0, 80),
+      id, userId, projectId, language: language === 'en' || language === 'ar' || language === 'mix' ? language : 'auto', vocabulary: (vocabulary || []).map((x) => clip(x, 60)).filter(Boolean).slice(0, 80),
       startedAt: Date.now(), lastPush: Date.now(), lines: [], interim: '', state: 'connecting', error: null, queue: [], queued: 0, audioBytes: 0,
-      cur: null, next: null, retries: 0, closed: false, persistTimer: null, rotateTimer: null, idleTimer: null, words: 0, model: MODEL(),
+      cur: null, next: null, retries: 0, everLive: false, fallback: false, closed: false, persistTimer: null, rotateTimer: null, idleTimer: null, words: 0, model: MODEL(),
     };
     this.sessions.set(id, s);
     this.connect(s, false);
@@ -55,14 +58,14 @@ class LiveHub {
     const send = (o) => { try { ws.send(JSON.stringify(o)); } catch { /* closed */ } };
     link.send = send;
     ws.addEventListener('open', () => {
-      send({ setup: { model: `models/${s.model}`, generationConfig: { responseModalities: ['TEXT'] }, inputAudioTranscription: { languageCodes: BCP[s.language] || [], ...(s.vocabulary.length ? { customVocabulary: s.vocabulary } : {}) } } });
+      send({ setup: { model: `models/${s.model}`, generationConfig: { responseModalities: ['TEXT'] }, inputAudioTranscription: { languageCodes: codesOf(s), ...(s.vocabulary.length ? { customVocabulary: s.vocabulary } : {}) } } });
     });
     ws.addEventListener('message', async (ev) => {
       let m; try { m = JSON.parse(await textOf(ev.data)); } catch { return; }
       if (m.setupComplete !== undefined) {
         link.ready = true;
         if (isNext) { const old = s.cur; s.cur = link; s.next = null; this.closeLink(old, true); this.armRotate(s); }
-        else { s.state = 'live'; s.retries = 0; s.error = null; this.armRotate(s); this.flush(s); }
+        else { s.state = 'live'; s.everLive = true; s.retries = 0; s.error = null; this.armRotate(s); this.flush(s); }
         return;
       }
       if (link !== s.cur) return;
@@ -78,6 +81,8 @@ class LiveHub {
   lost(s, ev, why) {
     if (s.closed) return;
     s.cur = null; s.interim = '';
+    // two language codes were never accepted by this model version: fall back to plain automatic detection once
+    if (!s.everLive && !s.fallback && codesOf(s).length > 1) { s.fallback = true; s.state = 'connecting'; setTimeout(() => { if (!s.closed && !s.cur) this.connect(s, false); }, 0); return; }
     if (s.retries >= 6) { s.state = 'failed'; s.error = (ev && ev.reason) || why || 'The live connection was lost. The recording continues and the transcript is written after the meeting.'; return; }
     s.state = 'reconnecting'; s.retries++;
     setTimeout(() => { if (!s.closed && !s.cur) this.connect(s, false); }, Math.min(8000, 700 * s.retries));
