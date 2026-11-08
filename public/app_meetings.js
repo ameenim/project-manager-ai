@@ -299,11 +299,11 @@
         <div class="grid g2" style="gap:14px"><label class="f">${t('mt_f_when')}<input id="mtW" type="datetime-local" value="${localInput()}"></label>
           <label class="f">${t('mt_f_lang')}<select id="mtL"><option value="auto">${t('mt_auto')}</option><option value="en">${t('mt_en')}</option><option value="ar">${t('mt_ar')}</option></select></label></div>
         <label class="f">${t('mt_f_mlang')}<select id="mtM"><option value="auto">${t('mt_auto')}</option><option value="en">${t('mt_en')}</option><option value="ar">${t('mt_ar')}</option></select></label>
-        <div><div class="row" style="margin-bottom:6px"><div class="small muted grow" style="font-weight:600">${t('mt_f_att')}</div><span class="small muted" id="mtAC"></span></div><div class="row wrap" id="mtA" style="gap:6px"></div><input type="text" id="mtAN" class="mt" placeholder="${esc(t('mt_f_att_add'))}" ${bidi}></div>
+        <div><div class="row" style="margin-bottom:6px"><div class="small muted grow" style="font-weight:600">${t('mt_f_att')}</div><span class="small muted" id="mtAC"></span></div><div class="row wrap" id="mtA" style="gap:6px"></div><input type="text" id="mtAN" placeholder="${esc(t('mt_f_att_add'))}" ${bidi}></div>
         ${info.stt && info.stt.live && canRecord() ? `<label class="row small" style="gap:8px"><input type="checkbox" id="mtLive" checked> ${t('mt_live_on')}</label>` : ''}
         <label class="f">${t('mt_f_notes')}<textarea id="mtN" rows="2" maxlength="4000" ${bidi}></textarea></label>
         <div><div class="small muted" style="font-weight:600;margin-bottom:6px">${t('mt_how')}</div>
-          <div class="seg" id="mtMode">${canRecord() ? `<button data-m="record">${icon('mic')} ${t('mt_record')}</button>` : ''}<button data-m="upload">${icon('up')} ${t('mt_upload')}</button><button data-m="doc">${icon('file')} ${t('mt_doc')}</button><button data-m="text">${icon('file')} ${t('mt_paste')}</button></div>
+          <div class="seg mt-mode" id="mtMode" role="group" aria-label="${t('mt_how')}">${canRecord() ? `<button data-m="record">${icon('mic')} ${t('mt_record')}</button>` : ''}<button data-m="upload">${icon('up')} ${t('mt_upload')}</button><button data-m="doc">${icon('file')} ${t('mt_doc')}</button><button data-m="text">${icon('file')} ${t('mt_paste')}</button></div>
           <div id="mtModeBody" class="mt"></div></div></div>`,
       footer: `<button class="btn" data-close>${t('cancel')}</button><button class="btn primary" id="mtGo"></button>`,
     });
