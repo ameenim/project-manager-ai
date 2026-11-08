@@ -281,7 +281,7 @@
     const glanceIds = ['phases', 'status'].filter((id) => has(id, V));
     const all = glanceIds.length ? [{ heading: 'Project at a glance', blocks: [], ids: glanceIds, glance: true }, ...sections] : sections;
     for (const s of all) s.specs = s.ids.flatMap((id) => specsFor(id, V, meta));
-    return { brand: g.brand || null, brandName: g.brand ? (g.template || 'Client template') : 'Project Manager AI', layout: planLayout(g), title: g.title || (def && def.title) || 'Document', typeTitle: g.custom ? 'Custom document' : (def && def.title) || '', meta, date: fmtDate(meta.date), kpis: (V && V.kpis) || [], sections: all, onepager: def && def.oneSlide && !g.custom && V ? V.onepager || null : null, oneSlide: !!(def && def.oneSlide && !g.custom) };
+    return { brand: g.brand || null, brandName: g.brand ? (g.template || 'Client template') : 'Project Manager AI', layout: planLayout(g), title: g.title || (def && def.title) || 'Document', typeTitle: g.type_title || (g.custom ? 'Custom document' : (def && def.title) || ''), meta, date: fmtDate(meta.date), kpis: (V && V.kpis) || [], sections: all, onepager: def && def.oneSlide && !g.custom && V ? V.onepager || null : null, oneSlide: !!(def && def.oneSlide && !g.custom) };
   }
 
   // ---------- canvas chart rendering ----------

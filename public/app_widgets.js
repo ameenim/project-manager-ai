@@ -440,7 +440,7 @@
       <div id="wmFilters" class="wm-filters card"></div>
       <div id="wmBody"></div>`;
 
-    const filtersHtml = () => `<div class="wm-search"><span class="wm-search-i">${icon('search')}</span><input id="wmQ" type="search" value="${esc(st.q)}" placeholder="${esc(t('wm_search_ph'))}" aria-label="${esc(t('wm_search_ph'))}"></div>
+    const filtersHtml = () => `<label class="sf wm-search">${icon('search')}<input id="wmQ" type="search" value="${esc(st.q)}" placeholder="${esc(t('wm_search_ph'))}" aria-label="${esc(t('wm_search_ph'))}"></label>
       <div class="wm-selects row"><label>${esc(t('wm_source'))}<select id="wmSource">${SOURCES.map((s) => `<option value="${s}" ${st.source === s ? 'selected' : ''}>${esc(t('wm_src_' + s))}</option>`).join('')}</select></label>
       <label>${esc(t('wm_sort'))}<select id="wmSort">${SORTS.map((s) => `<option value="${s}" ${st.sort === s ? 'selected' : ''}>${esc(t('wm_sort_' + s))}</option>`).join('')}</select></label>
       <label>${esc(t('wm_min'))}<select id="wmMin">${[0, 3, 4, 5].map((n) => `<option value="${n}" ${st.min === n ? 'selected' : ''}>${esc(n ? t('wm_min_n', { n }) : t('wm_min_any'))}</option>`).join('')}</select></label></div>

@@ -255,7 +255,13 @@ test('exports, deletion and the list view', async () => {
   assert.equal(docx.status, 200); assert.equal(docx.buf.subarray(0, 2).toString(), 'PK');
   const md = await s.call('GET', `/api/meetings/${ready1.id}/export?format=md`, null, u.token);
   assert.match(md.buf.toString('utf8'), /^# Integration status/); assert.match(md.buf.toString('utf8'), /## Actions/);
+  const rep = await s.call('GET', `/api/meetings/${ready1.id}/report?transcript=1`, null, u.token);
+  assert.equal(rep.status, 200); const doc = rep.data.document;
+  assert.equal(doc.type_title, 'Minutes of meeting'); assert.equal(doc.format, 'docx'); assert.equal(doc.meta.project, p.name);
+  assert.match(doc.content, /^# Summary/m); assert.match(doc.content, /^# Actions/m); assert.match(doc.content, /^# Transcript/m);
+  assert.ok(!/^## Summary/m.test(doc.content), 'main headings are single # so each starts a new page');
   const draft = (await s.call('POST', `/api/projects/${p.id}/meetings`, { title: 'Draft only' }, u.token)).data.meeting;
+  assert.equal((await s.call('GET', `/api/meetings/${draft.id}/report`, null, u.token)).status, 400, 'nothing to export yet');
   assert.equal((await s.call('GET', `/api/meetings/${draft.id}/export`, null, u.token)).status, 400, 'nothing to export yet');
   assert.equal((await s.call('DELETE', `/api/meetings/${draft.id}`, null, u.token)).status, 200);
   assert.equal((await s.call('GET', `/api/meetings/${draft.id}`, null, u.token)).status, 404);

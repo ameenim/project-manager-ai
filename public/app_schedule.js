@@ -224,7 +224,7 @@
       const draw = () => {
         const items = data.items.filter((i) => !q || i.title.toLowerCase().includes(q));
         m.setBody(`<p class="muted" style="margin-top:0">${t('lk_task_intro', { name: `<b>${esc(tk.name)}</b>` })}</p>
-          <label class="rb-search wide">${icon('search')}<input type="search" id="lkQ" placeholder="${esc(t('g_find'))}" value="${esc(q)}"></label>
+          <label class="sf rb-search wide">${icon('search')}<input type="search" id="lkQ" placeholder="${esc(t('g_find'))}" value="${esc(q)}"></label>
           ${kindOrder.map((k) => { const list = items.filter((i) => i.kind === k); return list.length ? `<div class="lk-kind">${t('kind_' + k)}</div>${list.map((i) => `<label class="cm-row"><input type="checkbox" data-it="${i.id}" ${checked.has(i.id) ? 'checked' : ''}><span class="grow"><b>${esc(i.title)}</b></span><span class="chip ${i.state === 'closed' || i.state === 'paid' || i.state === 'invoiced' || i.state === 'mitigated' ? 'green' : 'gray'}">${esc(t('state_' + i.state) === 'state_' + i.state ? i.state : t('state_' + i.state))}</span></label>`).join('')}` : ''; }).join('') || `<div class="empty small">${t('lk_none')}</div>`}`);
         m.$$('[data-it]').forEach((c) => (c.onchange = () => { c.checked ? checked.add(Number(c.dataset.it)) : checked.delete(Number(c.dataset.it)); }));
         const inp = m.$('#lkQ'); inp.oninput = () => { q = inp.value.toLowerCase(); draw(); const n = m.$('#lkQ'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); };
@@ -251,7 +251,7 @@
       const draw = () => {
         const list = leaves.filter((x) => !q || x.name.toLowerCase().includes(q) || (g._wbsAll.get(x.id) || '') === q);
         m.setBody(`<p class="muted" style="margin-top:0">${t('lk_item_intro', { kind: esc(t('kind_' + item.kind)), name: `<b>${esc(item.title)}</b>` })}</p>
-          <label class="rb-search wide">${icon('search')}<input type="search" id="lkQ" placeholder="${esc(t('g_find'))}" value="${esc(q)}"></label>
+          <label class="sf rb-search wide">${icon('search')}<input type="search" id="lkQ" placeholder="${esc(t('g_find'))}" value="${esc(q)}"></label>
           <div class="lk-list">${list.slice(0, 200).map((x) => `<label class="cm-row"><input type="checkbox" data-tk="${x.id}" ${checked.has(x.id) ? 'checked' : ''}><span class="grow">${esc(taskLabel(x))}</span><span class="small muted">${esc(x.finish || '')}</span></label>`).join('') || `<div class="empty small">${t('lk_none')}</div>`}${list.length > 200 ? `<div class="small muted">${t('chk_more', { n: list.length - 200 })}</div>` : ''}</div>`);
         m.$$('[data-tk]').forEach((c) => (c.onchange = () => { c.checked ? checked.add(Number(c.dataset.tk)) : checked.delete(Number(c.dataset.tk)); }));
         const inp = m.$('#lkQ'); inp.oninput = () => { q = inp.value.toLowerCase(); draw(); const n = m.$('#lkQ'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); };

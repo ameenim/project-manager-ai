@@ -41,8 +41,8 @@
 .sa-bar-row .progress { height: 8px; }
 .sa-bar-row span.n { font-variant-numeric: tabular-nums; font-weight: 600; }
 .sa-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
-.sa-toolbar input[type=search], .sa-toolbar input[type=text], .sa-toolbar input[type=date], .sa-toolbar select { padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; min-height: 36px; }
-.sa-toolbar input, .sa-toolbar select { width: auto; flex: 0 0 auto; } .sa-toolbar input[type=search] { flex: 1 1 220px; min-width: 220px; max-width: 360px; }
+.sa-toolbar input[type=text], .sa-toolbar input[type=date], .sa-toolbar select { padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; min-height: 36px; }
+.sa-toolbar input:not([type=search]), .sa-toolbar select { width: auto; flex: 0 0 auto; } .sa-toolbar .sf { flex: 1 1 220px; min-width: 220px; max-width: 360px; }
 .sa-tbl td, .sa-tbl th { white-space: nowrap; }
 .sa-tbl td.wrap { white-space: normal; min-width: 200px; max-width: 420px; word-break: break-word; }
 .sa-tbl tr.click { cursor: pointer; } .sa-tbl tr.click:hover td { background: var(--surface-2); }

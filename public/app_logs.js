@@ -197,7 +197,7 @@
         <button class="btn" id="lgExport">${icon('dl')}${t('lg_export')}</button><button class="btn primary" id="lgAdd">${icon('plus')}${t('lg_add')}</button></div>
       <div class="lg-views" id="lgViews" role="group" aria-label="${esc(t('lg_views'))}"></div>
       <div class="card lg-filters">
-        <div class="lg-row"><label class="lg-search">${icon('search')}<input type="search" id="lgQ" placeholder="${esc(t('lg_search'))}" value="${esc(F.q)}" aria-label="${esc(t('lg_search'))}"></label>
+        <div class="lg-row"><label class="sf lg-search">${icon('search')}<input type="search" id="lgQ" placeholder="${esc(t('lg_search'))}" value="${esc(F.q)}" aria-label="${esc(t('lg_search'))}"></label>
           <div class="lg-kinds" role="group" aria-label="${esc(t('lg_type'))}">${KINDS.map((k) => `<button type="button" class="rd-chip ${F.kinds.includes(k) ? 'on' : ''}" data-kind="${k}" aria-pressed="${F.kinds.includes(k)}">${t('lg_kind_' + k)} <span data-count="${k}"></span></button>`).join('')}</div></div>
         <div class="lg-row lg-sels">
           <label class="f">${t('lg_status')}<select id="lgSt">${stOptions()}</select></label>

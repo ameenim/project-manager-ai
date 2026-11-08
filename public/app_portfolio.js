@@ -52,7 +52,7 @@
     }
 
     $('#content').innerHTML = `<div class="page"><div class="page-head"><h1>${t('nav_projects')}</h1><div class="row"><button class="btn" id="impProj">${icon('upload')}${t('dt_import_btn')}</button><button class="btn primary" id="newProj">${icon('plus')}${t('new_project')}</button></div></div>
-      <div class="pj-bar"><input type="search" id="pjQ" placeholder="${t('pf_search')}" value="${esc(Q.q)}" aria-label="${t('pf_search')}">
+      <div class="pj-bar"><label class="sf">${icon('search')}<input type="search" id="pjQ" placeholder="${t('pf_search')}" value="${esc(Q.q)}" aria-label="${t('pf_search')}"></label>
         <select id="pjHealth" aria-label="${t('pf_status')}"><option value="all">${t('pf_all_status')}</option><option value="green">${t('health_green')}</option><option value="amber">${t('health_amber')}</option><option value="red">${t('health_red')}</option></select>
         <select id="pjCur" aria-label="${t('currency')}"><option value="all">${t('pf_all_cur')}</option>${currencies.map((c) => `<option>${esc(c)}</option>`).join('')}</select>
         <span class="small muted grow" id="pjCount"></span>
@@ -249,7 +249,7 @@
         <button class="btn icon" id="calPrev" aria-label="${t('cal_prev')}">${icon(S.lang === 'ar' ? 'chev_r' : 'chev_l')}</button><button class="btn" id="calToday">${t('cal_today')}</button><button class="btn icon" id="calNext" aria-label="${t('cal_next')}">${icon(S.lang === 'ar' ? 'chev_l' : 'chev_r')}</button>
         <label class="cal-pick"><span class="cal-month" id="calMonth"></span><input type="month" id="calMonthPick" aria-label="${t('cal_pick')}"></label></div></div>
       <div class="card cal-filters"><div class="row wrap" style="gap:10px">
-        <div class="cal-f"><span class="small muted">${t('cal_projects')}</span>${ddHtml('ddProj', '', `<div class="dd-tools"><input type="search" class="dd-search" placeholder="${esc(t('cal_search'))}" aria-label="${esc(t('cal_search'))}"><button type="button" class="btn sm ghost" id="calAll">${t('cal_all')}</button><button type="button" class="btn sm ghost" id="calNone">${t('cal_none')}</button></div><div class="dd-list" id="ddProjList"></div>`)}</div>
+        <div class="cal-f"><span class="small muted">${t('cal_projects')}</span>${ddHtml('ddProj', '', `<div class="dd-tools"><label class="sf sm">${icon('search')}<input type="search" class="dd-search" placeholder="${esc(t('cal_search'))}" aria-label="${esc(t('cal_search'))}"></label><button type="button" class="btn sm ghost" id="calAll">${t('cal_all')}</button><button type="button" class="btn sm ghost" id="calNone">${t('cal_none')}</button></div><div class="dd-list" id="ddProjList"></div>`)}</div>
         <div class="cal-f"><span class="small muted">${t('cal_types')}</span>${ddHtml('ddType', '', `<div class="dd-tools"><button type="button" class="btn sm ghost" id="calAllT">${t('cal_all')}</button><button type="button" class="btn sm ghost" id="calNoneT">${t('cal_none')}</button></div><div class="dd-list" id="ddTypeList"></div>`)}</div>
         <button type="button" class="cal-tog" id="calOver" aria-pressed="false">${icon('alert')}${t('cal_overdue')}</button>
         <span class="grow"></span><span class="small muted" id="calCount"></span></div></div>

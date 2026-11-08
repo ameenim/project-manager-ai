@@ -34,6 +34,23 @@ function markdown(m, projectName, withTranscript) {
   return Buffer.from(out.join('\n'), 'utf8');
 }
 
+// Markdown in the shape the report builder reads: each main heading (#) becomes its own page and a topic (##) a sub heading.
+// The browser turns it into the same Word design as every other generated report.
+function reportMarkdown(m, projectName, withTranscript) {
+  const cell = (c) => String(c == null ? '' : c).replace(/\|/g, '/').replace(/\n/g, ' ');
+  const out = [];
+  for (const s of sections(m, projectName)) {
+    out.push(`# ${s.h}`, '');
+    if (s.meta) { out.push('| Detail | Value |', '| --- | --- |'); for (const [k, v] of s.meta) if (k !== 'Project') out.push(`| ${cell(k)} | ${cell(v)} |`); out.push(''); }
+    for (const p of s.paras || []) if (p) out.push(p, '');
+    for (const t of s.topics || []) { out.push(`## ${t.heading}`, ''); for (const p of t.points) out.push(`* ${p}`); out.push(''); }
+    if (s.bullets) { for (const b of s.bullets) out.push(`* ${b}`); out.push(''); }
+    if (s.table) { out.push(`| ${s.table.head.map(cell).join(' | ')} |`, `| ${s.table.head.map(() => '---').join(' | ')} |`); for (const r of s.table.rows) out.push(`| ${r.map(cell).join(' | ')} |`); out.push(''); }
+  }
+  if (withTranscript && (m.transcript || []).length) { out.push('# Transcript', ''); for (const t of m.transcript) out.push(`**[${mmss(t.start)}] ${spName(m, t.speaker)}:** ${t.text}`, ''); }
+  return out.join('\n');
+}
+
 async function docx(m, projectName, withTranscript) {
   const D = require('docx');
   const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, BorderStyle } = D;
@@ -57,4 +74,4 @@ async function docx(m, projectName, withTranscript) {
   return Packer.toBuffer(doc);
 }
 
-module.exports = { markdown, docx };
+module.exports = { markdown, docx, reportMarkdown };

@@ -42,7 +42,7 @@
     host.classList.add('bd');
     host.innerHTML = `
       <div class="bd-bar">
-        <label class="bd-search">${icon('search')}<input type="text" data-f="q" autocomplete="off" placeholder="${esc(t('b_search'))}" aria-label="${esc(t('b_search'))}"></label>
+        <label class="sf bd-search">${icon('search')}<input type="text" data-f="q" autocomplete="off" placeholder="${esc(t('b_search'))}" aria-label="${esc(t('b_search'))}"></label>
         <select data-f="owner" aria-label="${esc(t('g_owner'))}"></select>
         <select data-f="phase" aria-label="${esc(t('b_phase'))}"></select>
         <button class="btn sm" type="button" data-f="late" aria-pressed="false">${icon('alert')}${esc(t('b_late_only'))}</button>

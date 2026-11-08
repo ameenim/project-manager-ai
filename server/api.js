@@ -2209,6 +2209,16 @@ Rules:
     return new FileResult(await meetingExport.docx(full, P.p.name, withTranscript), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', `${base}.docx`);
   });
 
+  // The minutes as a generated document, so the browser builds the Word file with the same design as every other report.
+  on('GET', '/api/meetings/(\\d+)/report', async (m, q) => {
+    const [P, r] = await MT(m[1]);
+    const full = meetings.view(r, true);
+    if (!full.minutes) throw err(400, 'There are no minutes to export yet');
+    const day = (() => { try { return new Date(r.meeting_at).toLocaleDateString('en-CA', { timeZone: process.env.APP_TZ || 'Asia/Dubai' }); } catch (e) { return TODAY(); } })();
+    const g = { id: `minutes-${r.id}`, project_id: P.id, doc_type: 'minutes', type_title: 'Minutes of meeting', title: (full.minutes.title || r.title || 'Minutes of meeting').slice(0, 120), template: null, content: meetingExport.reportMarkdown(full, P.p.name, q.transcript === '1'), created_at: nowTs(), format: 'docx', meta: docMeta(P, day) };
+    return { document: g };
+  });
+
   // ---------- analysis progress, polled by the browser ----------
   on('GET', '/api/analysis/events', async (m, q) => {
     const since = Number(q.since) || 0;

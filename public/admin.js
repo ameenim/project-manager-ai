@@ -12,6 +12,7 @@
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
   const ICONS = {
+    search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
     home: '<path d="m3 11 9-8 9 8v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z"/>', users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6.5 6.5 0 0 1 3.5 5.5"/>',
     card: '<rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 10h19M6 15h4"/>', coin: '<circle cx="12" cy="12" r="9"/><path d="M14.5 9a2.5 2.5 0 0 0-2.5-1.5c-1.4 0-2.5.8-2.5 2s1 1.7 2.5 2 2.5.8 2.5 2-1.1 2-2.5 2A2.5 2.5 0 0 1 9.5 15M12 6v1.5M12 16.5V18"/>',
     route: '<circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5"/>', spark: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8Z"/>', folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
@@ -214,7 +215,7 @@
       pg.bind($('#tbl'));
     }
     setView(`<div class="page">${head('Users', '<button class="btn primary" id="addUser">' + ic('plus') + 'Add user</button>', 'Every account on the platform.')}
-      <div class="sa-toolbar"><input type="search" id="fq" placeholder="Search name or email" value="${esc(f.q)}" aria-label="Search users"><select id="fs" aria-label="Status"><option value="">Any status</option><option value="active">Active</option><option value="suspended">Suspended</option></select><select id="fr" aria-label="Role"><option value="">Any role</option><option value="super">Super admins</option></select></div>
+      <div class="sa-toolbar"><label class="sf">${ic('search')}<input type="search" id="fq" placeholder="Search name or email" value="${esc(f.q)}" aria-label="Search users"></label><select id="fs" aria-label="Status"><option value="">Any status</option><option value="active">Active</option><option value="suspended">Suspended</option></select><select id="fr" aria-label="Role"><option value="">Any role</option><option value="super">Super admins</option></select></div>
       <div class="card" id="tbl">${loading()}</div></div>`);
     $('#fs').value = f.status; $('#fr').value = f.role;
     let t; $('#fq').oninput = (e) => { clearTimeout(t); t = setTimeout(() => { f.q = e.target.value; f.page = 1; draw(); }, 250); };
@@ -279,7 +280,7 @@
       $$('[data-e]').forEach((b) => (b.onclick = () => subEditDlg(Number(b.dataset.e), r.subscriptions.find((x) => x.user_id == b.dataset.e))));
       $$('[data-a]').forEach((b) => (b.onclick = () => activateDlg(Number(b.dataset.a), r.subscriptions.find((x) => x.user_id == b.dataset.a))));
     }
-    setView(`<div class="page">${head('Subscriptions', '', 'Plans, trials and token use for every person.')}<div class="sa-toolbar"><input type="search" id="fq" placeholder="Search name or email" value="${esc(f.q)}" aria-label="Search subscriptions"><select id="fs" aria-label="State"><option value="">Any state</option><option value="trial">Trial</option><option value="active">Active</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option><option value="ended">Ended</option></select></div><div class="card" id="tbl">${loading()}</div></div>`);
+    setView(`<div class="page">${head('Subscriptions', '', 'Plans, trials and token use for every person.')}<div class="sa-toolbar"><label class="sf">${ic('search')}<input type="search" id="fq" placeholder="Search name or email" value="${esc(f.q)}" aria-label="Search subscriptions"></label><select id="fs" aria-label="State"><option value="">Any state</option><option value="trial">Trial</option><option value="active">Active</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option><option value="ended">Ended</option></select></div><div class="card" id="tbl">${loading()}</div></div>`);
     $('#fs').value = f.state; let t; $('#fq').oninput = (e) => { clearTimeout(t); t = setTimeout(() => { f.q = e.target.value; f.page = 1; draw(); }, 250); }; $('#fs').onchange = (e) => { f.state = e.target.value; f.page = 1; draw(); };
     await draw();
   };
@@ -390,7 +391,7 @@
       $$('[data-t]').forEach((b) => (b.onclick = () => { const p = r.projects.find((x) => x.id == b.dataset.t); const m = modal({ title: 'Transfer ownership', body: `<div class="sa-modal-form"><p class="muted" style="margin:0">${esc(p.name)} is owned by ${esc(p.owner_email)}.</p>${field('New owner email', '<input type="email" id="em">', 'The person must already have an account. They become the project manager.')}</div>`, footer: '<button class="btn" data-close>Cancel</button><button class="btn primary" id="go">Transfer</button>' }); m.$('#go').onclick = () => busy(m.$('#go'), async () => { const em = m.$('#em').value.trim().toLowerCase(); const found = (await api('GET', '/api/admin/users?' + qs({ q: em }))).users.find((u) => u.email === em); if (!found) throw new Error('No account uses that email'); await api('PUT', `/api/admin/projects/${p.id}`, { owner_id: found.id }); m.close(); toast('Ownership transferred'); draw(); }); }));
       $$('[data-x]').forEach((b) => (b.onclick = async () => { const p = r.projects.find((x) => x.id == b.dataset.x); if (await confirmDlg({ title: 'Delete project', message: `This permanently deletes ${esc(p.name)} with all its tasks, documents and reports. It cannot be undone.`, ok: 'Delete project', danger: true })) busy(null, async () => { await api('DELETE', `/api/admin/projects/${p.id}`); toast('Project deleted'); draw(); }); }));
     }
-    setView(`<div class="page">${head('Projects', '', 'Every project across all accounts.')}<div class="sa-toolbar"><input type="search" id="fq" placeholder="Search project or owner email" value="${esc(f.q)}" aria-label="Search projects"></div><div class="card" id="tbl">${loading()}</div></div>`);
+    setView(`<div class="page">${head('Projects', '', 'Every project across all accounts.')}<div class="sa-toolbar"><label class="sf">${ic('search')}<input type="search" id="fq" placeholder="Search project or owner email" value="${esc(f.q)}" aria-label="Search projects"></label></div><div class="card" id="tbl">${loading()}</div></div>`);
     let t; $('#fq').oninput = (e) => { clearTimeout(t); t = setTimeout(() => { f.q = e.target.value; f.page = 1; draw(); }, 250); };
     await draw();
   };
@@ -452,7 +453,7 @@
       $$('[data-d]', v).forEach((b) => (b.onclick = () => busy(b, async () => { await api('DELETE', `/api/admin/errors/${b.dataset.d}`); draw(); })));
     }
     setView(`<div class="page">${head('Error log', '<button class="btn" id="ra">Resolve all</button><button class="btn" id="cr">Clear resolved</button>', 'Server errors and problems reported by browsers. Updates every 30 seconds.')}
-      <div class="sa-toolbar"><input type="search" id="fq" placeholder="Search message, page, reference or person" value="${esc(f.q)}" aria-label="Search errors"><select id="fk" aria-label="Type"><option value="">All types</option><option value="server">Server</option><option value="browser">Browser</option></select><select id="fr" aria-label="State"><option value="0">Open</option><option value="1">Resolved</option><option value="">All</option></select></div><div id="ev">${loading()}</div></div>`);
+      <div class="sa-toolbar"><label class="sf">${ic('search')}<input type="search" id="fq" placeholder="Search message, page, reference or person" value="${esc(f.q)}" aria-label="Search errors"></label><select id="fk" aria-label="Type"><option value="">All types</option><option value="server">Server</option><option value="browser">Browser</option></select><select id="fr" aria-label="State"><option value="0">Open</option><option value="1">Resolved</option><option value="">All</option></select></div><div id="ev">${loading()}</div></div>`);
     $('#fk').value = f.kind; $('#fr').value = f.resolved; let t; $('#fq').oninput = (e) => { clearTimeout(t); t = setTimeout(() => { f.q = e.target.value; f.page = 1; draw(); }, 250); };
     $('#fk').onchange = (e) => { f.kind = e.target.value; f.page = 1; draw(); }; $('#fr').onchange = (e) => { f.resolved = e.target.value; f.page = 1; draw(); };
     $('#ra').onclick = () => busy($('#ra'), async () => { const r = await api('POST', '/api/admin/errors/resolve-all', {}); toast(`${r.count} errors resolved`); draw(); });
@@ -479,7 +480,7 @@
       const ready = c.ready_publish || 0; const pb = $('#pubAll'); if (pb) { pb.disabled = !ready; pb.textContent = `Mark ${ready} as published`; }
     }
     setView(`<div class="page">${head('Tickets', '<button class="btn" id="pubAll">Mark ready as published</button>', 'Problems and ideas from your users. Press Fix it and Claude prepares a fix on the dev branch.')}
-      <div class="sa-toolbar"><input type="search" id="tq" placeholder="Search title, text, reference or person" value="${esc(f.q)}" aria-label="Search tickets"><select id="ts" aria-label="Status"><option value="open">All open</option><option value="">Everything</option>${Object.entries(TS).map(([k, [, l]]) => `<option value="${k}">${l}</option>`).join('')}</select><select id="tk" aria-label="Type"><option value="">All types</option><option value="bug">Problems</option><option value="enhancement">Ideas</option><option value="question">Questions</option></select></div><div id="tv"></div></div>`);
+      <div class="sa-toolbar"><label class="sf">${ic('search')}<input type="search" id="tq" placeholder="Search title, text, reference or person" value="${esc(f.q)}" aria-label="Search tickets"></label><select id="ts" aria-label="Status"><option value="open">All open</option><option value="">Everything</option>${Object.entries(TS).map(([k, [, l]]) => `<option value="${k}">${l}</option>`).join('')}</select><select id="tk" aria-label="Type"><option value="">All types</option><option value="bug">Problems</option><option value="enhancement">Ideas</option><option value="question">Questions</option></select></div><div id="tv"></div></div>`);
     $('#ts').value = f.status; $('#tk').value = f.kind; let tm; $('#tq').oninput = (e) => { clearTimeout(tm); tm = setTimeout(() => { f.q = e.target.value; f.page = 1; draw(); }, 250); };
     $('#ts').onchange = (e) => { f.status = e.target.value; f.page = 1; draw(); }; $('#tk').onchange = (e) => { f.kind = e.target.value; f.page = 1; draw(); };
     $('#pubAll').onclick = async () => { if (await confirmDlg({ title: 'Mark as published', message: 'Every ticket that is ready to publish will be marked published and the reporters will be told. Do this after you publish the app.', ok: 'Mark published' })) busy($('#pubAll'), async () => { const r = await api('POST', '/api/admin/tickets/publish-ready', {}); toast(`${r.count} tickets marked published`); draw(); }); };
@@ -545,7 +546,7 @@
       $('#tbl').innerHTML = r.entries.length ? `<div class="table-wrap"><table class="t sa-tbl"><thead><tr><th>When</th><th>Admin</th><th>Action</th><th>Target</th><th>Detail</th></tr></thead><tbody>${r.entries.map((e) => `<tr><td>${dt(e.at)}</td><td>${esc(e.admin)}</td><td>${chip('blue', e.action)}</td><td>${esc(e.target)}</td><td class="wrap small muted">${esc(JSON.stringify(e.detail))}</td></tr>`).join('')}</tbody></table></div>${pg.html}` : empty('No admin actions recorded yet.');
       pg.bind($('#tbl'));
     }
-    setView(`<div class="page">${head('Audit log', '', 'Every change made in this console.')}<div class="sa-toolbar"><input type="search" id="fq" placeholder="Search action, target or admin" value="${esc(f.q)}" aria-label="Search the audit log"></div><div class="card" id="tbl">${loading()}</div></div>`);
+    setView(`<div class="page">${head('Audit log', '', 'Every change made in this console.')}<div class="sa-toolbar"><label class="sf">${ic('search')}<input type="search" id="fq" placeholder="Search action, target or admin" value="${esc(f.q)}" aria-label="Search the audit log"></label></div><div class="card" id="tbl">${loading()}</div></div>`);
     let t; $('#fq').oninput = (e) => { clearTimeout(t); t = setTimeout(() => { f.q = e.target.value; f.page = 1; draw(); }, 250); };
     await draw();
   };
