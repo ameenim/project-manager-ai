@@ -8,10 +8,10 @@
     tab_meetings: 'Meetings', mt_title: 'Meetings', mt_new: 'New meeting', mt_empty: 'No meetings yet. Record your next meeting and the minutes will be written for you.',
     mt_sub: 'Record a meeting, get a transcript for each speaker and minutes you can send to the project.', mt_no_stt: 'Transcription is not set up on the server yet. Ask an administrator to add GEMINI_API_KEY. You can still paste a transcript.',
     mt_no_claude: 'Minutes need ANTHROPIC_API_KEY on the server.', mt_f_title: 'Meeting title', mt_f_when: 'Date and time', mt_f_lang: 'Spoken language', mt_f_mlang: 'Minutes language', mt_f_att: 'Attendees', mt_f_att_add: 'Add a name or paste a list from Outlook, then press Enter', mt_att_count: '{n} attendees', mt_att_count_1: '1 attendee', mt_f_notes: 'Notes or agenda',
-    mt_auto: 'Detect automatically', mt_mix: 'Arabic and English', mt_sys_on: 'Also capture the other side of a call', mt_sys_hint: 'You will pick the browser tab where the call runs. Keep Share tab audio ticked. For a desktop app, pick Entire screen and tick Share system audio (Windows and ChromeOS only). On a Mac, join the call in the browser instead.', mt_sys_lost: 'Meeting audio stopped. Share it again to keep recording the other side.', mt_sys_quiet: 'No sound from the meeting yet. Check that the call is playing and that its tab is not muted.', mt_sys_unsupported: 'This browser cannot share meeting audio. Use Chrome or Edge on a computer.', mt_en: 'English', mt_ar: 'Arabic', mt_how: 'How do you want to capture it?', mt_record: 'Record now', mt_upload: 'Upload a recording', mt_paste: 'Paste a transcript',
+    mt_auto: 'Detect automatically', mt_mix: 'Arabic and English', mt_sysm: 'The other side of the call', mt_sysm_dev: 'Listen through an audio input', mt_sysm_dev_h: 'Best for Zoom, Teams and other desktop apps. Set it up once and no sharing window appears.', mt_sysm_share: 'Share a browser tab or screen', mt_sysm_none: 'Microphone only', mt_sysdev: 'Call audio', mt_sysdev_none: 'None', mt_sysdev_rec: 'recommended', mt_sysdev_help: 'How to set this up', mt_sysdev_choose: 'Choose the call audio input in the recording box to record the other side.', mt_sysdev_fail: 'That audio input could not be opened. Choose another one.', mt_sysdev_missing: 'The saved call audio input is not connected. Choose it again in the recording box.', mt_help_title: 'Record Zoom, Teams and other desktop apps', mt_help_why: 'A browser can only hear a desktop app through an audio input. A free virtual audio cable turns the call sound into one. Set it up once and the app remembers it.', mt_help_mac_h: 'Mac', mt_help_mac: 'Install BlackHole 2ch (free, from existential.audio).|Open Audio MIDI Setup, press the plus button and create a Multi-Output Device with your speakers or headphones and BlackHole 2ch ticked.|Set the sound output in System Settings, or the speaker in Zoom or Teams, to that Multi-Output Device. You still hear the call.|In the recording box, choose BlackHole 2ch as Call audio.', mt_help_win_h: 'Windows', mt_help_win: 'Open Sound settings and look at the recording devices. If Stereo Mix is there, enable it and choose it as Call audio.|If there is no Stereo Mix, install VB-Cable (free). In Zoom or Teams set the speaker to CABLE Input, then choose CABLE Output as Call audio.|To still hear the call, open the properties of CABLE Output, go to Listen and tick Listen to this device with your speakers or headphones.|Another way is Share a browser tab or screen with Entire screen and Share system audio.', mt_help_tip: 'Wear headphones so the microphone does not pick up the call a second time.', mt_sys_lost: 'Meeting audio stopped. Choose or share it again to keep recording the other side.', mt_sys_quiet: 'No sound from the meeting yet. Check that the call is playing and that its tab is not muted.', mt_sys_unsupported: 'This browser cannot share meeting audio. Use Chrome or Edge on a computer.', mt_en: 'English', mt_ar: 'Arabic', mt_how: 'How do you want to capture it?', mt_record: 'Record now', mt_upload: 'Upload a recording', mt_paste: 'Paste a transcript',
     mt_record_hint: 'Uses your microphone.', mt_upload_hint: 'MP3, WAV, M4A, AAC, OGG, FLAC or WebM audio.', mt_paste_hint: 'One line per turn, for example Sara: We start Monday.',
     mt_start: 'Start recording', mt_create: 'Create meeting', mt_need_title: 'Give the meeting a title', mt_need_file: 'Choose a recording', mt_need_text: 'Paste the transcript',
-    mt_rec_title: 'Recording', mt_rec_mic: 'Microphone', mt_rec_sys: 'Meeting audio', mt_rec_sys_off: 'Not shared. Only your microphone is recorded.', mt_rec_pause: 'Pause', mt_rec_resume: 'Resume', mt_rec_stop: 'Stop and write minutes', mt_rec_cancel: 'Discard',
+    mt_rec_title: 'Recording', mt_rec_mic: 'Microphone', mt_rec_sys: 'Meeting audio', mt_rec_sys_off: 'No call audio. Only your microphone is recorded.', mt_rec_pause: 'Pause', mt_rec_resume: 'Resume', mt_rec_stop: 'Stop and write minutes', mt_rec_cancel: 'Discard',
     mt_rec_keep: 'Keep this tab open while recording. The recording is sent when you stop.', mt_rec_nomic: 'The microphone is blocked. Allow microphone access in the browser and try again.', mt_rec_unsupported: 'This browser cannot record. Use Chrome or Edge, or upload a recording.',
     mt_rec_share: 'Share meeting audio', mt_rec_share_hint: 'Choose a browser tab or the whole screen and tick Share audio.', mt_rec_noaudio: 'No sound was shared with the screen, so only your voice is recorded. Pick a browser tab and tick Share tab audio.', mt_rec_discard_q: 'Discard this recording? It cannot be recovered.',
     mt_uploading: 'Sending the recording', mt_back: 'All meetings', mt_status_draft: 'Draft', mt_status_uploaded: 'Received', mt_status_transcribing: 'Transcribing', mt_status_summarizing: 'Writing minutes', mt_status_ready: 'Ready', mt_status_failed: 'Failed',
@@ -39,10 +39,10 @@
     tab_meetings: 'الاجتماعات', mt_title: 'الاجتماعات', mt_new: 'اجتماع جديد', mt_empty: 'لا توجد اجتماعات بعد. سجل اجتماعك القادم وسيتم كتابة المحضر لك.',
     mt_sub: 'سجل اجتماعا واحصل على نص لكل متحدث ومحضر يمكنك إرساله إلى المشروع.', mt_no_stt: 'لم يتم إعداد التفريغ الصوتي على الخادم بعد. اطلب من المسؤول إضافة GEMINI_API_KEY. يمكنك لصق النص مباشرة.',
     mt_no_claude: 'يحتاج المحضر إلى ANTHROPIC_API_KEY على الخادم.', mt_f_title: 'عنوان الاجتماع', mt_f_when: 'التاريخ والوقت', mt_f_lang: 'لغة الحديث', mt_f_mlang: 'لغة المحضر', mt_f_att: 'الحضور', mt_f_att_add: 'أضف اسما أو الصق قائمة من Outlook ثم اضغط Enter', mt_att_count: '{n} حضور', mt_att_count_1: 'حاضر واحد', mt_f_notes: 'ملاحظات أو جدول الأعمال',
-    mt_auto: 'اكتشاف تلقائي', mt_mix: 'العربية والإنجليزية', mt_sys_on: 'سجل أيضا صوت الطرف الآخر في المكالمة', mt_sys_hint: 'ستختار تبويب المتصفح الذي تعمل فيه المكالمة. أبق خيار مشاركة صوت التبويب مفعلا. لتطبيق سطح المكتب اختر الشاشة كاملة وفعل مشاركة صوت النظام (ويندوز وChromeOS فقط). على ماك انضم إلى المكالمة من المتصفح بدلا من ذلك.', mt_sys_lost: 'توقفت مشاركة صوت الاجتماع. شاركه مرة أخرى لمتابعة تسجيل الطرف الآخر.', mt_sys_quiet: 'لا يوجد صوت من الاجتماع حتى الآن. تأكد أن المكالمة تعمل وأن التبويب غير مكتوم.', mt_sys_unsupported: 'هذا المتصفح لا يدعم مشاركة صوت الاجتماع. استخدم Chrome أو Edge على جهاز كمبيوتر.', mt_en: 'الإنجليزية', mt_ar: 'العربية', mt_how: 'كيف تريد تسجيله؟', mt_record: 'سجل الآن', mt_upload: 'ارفع تسجيلا', mt_paste: 'الصق نصا',
+    mt_auto: 'اكتشاف تلقائي', mt_mix: 'العربية والإنجليزية', mt_sysm: 'الطرف الآخر في المكالمة', mt_sysm_dev: 'الاستماع عبر مدخل صوت', mt_sysm_dev_h: 'الأفضل لتطبيقات سطح المكتب مثل Zoom وTeams. تضبطه مرة واحدة ثم لا تظهر نافذة مشاركة.', mt_sysm_share: 'مشاركة تبويب أو شاشة من المتصفح', mt_sysm_none: 'الميكروفون فقط', mt_sysdev: 'صوت المكالمة', mt_sysdev_none: 'بدون', mt_sysdev_rec: 'موصى به', mt_sysdev_help: 'كيف أضبط هذا', mt_sysdev_choose: 'اختر مدخل صوت المكالمة في صندوق التسجيل لتسجيل الطرف الآخر.', mt_sysdev_fail: 'تعذر فتح مدخل الصوت هذا. اختر مدخلا آخر.', mt_sysdev_missing: 'مدخل صوت المكالمة المحفوظ غير متصل. اختره مرة أخرى في صندوق التسجيل.', mt_help_title: 'تسجيل Zoom وTeams وتطبيقات سطح المكتب', mt_help_why: 'لا يسمع المتصفح تطبيقات سطح المكتب إلا عبر مدخل صوت. كابل صوت افتراضي مجاني يحول صوت المكالمة إلى مدخل. تضبطه مرة واحدة ويتذكره التطبيق.', mt_help_mac_h: 'ماك', mt_help_mac: 'ثبت BlackHole 2ch (مجاني من existential.audio).|افتح Audio MIDI Setup ثم اضغط زر الزائد وأنشئ Multi-Output Device وفعل فيه سماعاتك مع BlackHole 2ch.|اجعل خرج الصوت في إعدادات النظام أو السماعة في Zoom أو Teams هو هذا الجهاز. ستظل تسمع المكالمة.|في صندوق التسجيل اختر BlackHole 2ch كصوت للمكالمة.', mt_help_win_h: 'ويندوز', mt_help_win: 'افتح إعدادات الصوت وانظر إلى أجهزة التسجيل. إذا وجدت Stereo Mix فعله واختره كصوت للمكالمة.|إذا لم يوجد Stereo Mix ثبت VB-Cable (مجاني). في Zoom أو Teams اجعل السماعة CABLE Input ثم اختر CABLE Output كصوت للمكالمة.|لتسمع المكالمة أيضا افتح خصائص CABLE Output ثم تبويب Listen وفعل Listen to this device واختر سماعاتك.|طريقة أخرى هي مشاركة تبويب أو شاشة واختيار Entire screen مع Share system audio.', mt_help_tip: 'استخدم سماعات الرأس حتى لا يلتقط الميكروفون المكالمة مرة ثانية.', mt_sys_lost: 'توقف صوت الاجتماع. اختره أو شاركه مرة أخرى لمتابعة تسجيل الطرف الآخر.', mt_sys_quiet: 'لا يوجد صوت من الاجتماع حتى الآن. تأكد أن المكالمة تعمل وأن التبويب غير مكتوم.', mt_sys_unsupported: 'هذا المتصفح لا يدعم مشاركة صوت الاجتماع. استخدم Chrome أو Edge على جهاز كمبيوتر.', mt_en: 'الإنجليزية', mt_ar: 'العربية', mt_how: 'كيف تريد تسجيله؟', mt_record: 'سجل الآن', mt_upload: 'ارفع تسجيلا', mt_paste: 'الصق نصا',
     mt_record_hint: 'يستخدم الميكروفون.', mt_upload_hint: 'ملفات صوت MP3 أو WAV أو M4A أو AAC أو OGG أو FLAC أو WebM.', mt_paste_hint: 'سطر لكل متحدث، مثل سارة: نبدأ يوم الاثنين.',
     mt_start: 'ابدأ التسجيل', mt_create: 'إنشاء الاجتماع', mt_need_title: 'أدخل عنوانا للاجتماع', mt_need_file: 'اختر تسجيلا', mt_need_text: 'الصق النص',
-    mt_rec_title: 'جار التسجيل', mt_rec_mic: 'الميكروفون', mt_rec_sys: 'صوت الاجتماع', mt_rec_sys_off: 'لم تتم المشاركة. يسجل الميكروفون فقط.', mt_rec_pause: 'إيقاف مؤقت', mt_rec_resume: 'استئناف', mt_rec_stop: 'إنهاء وكتابة المحضر', mt_rec_cancel: 'تجاهل',
+    mt_rec_title: 'جار التسجيل', mt_rec_mic: 'الميكروفون', mt_rec_sys: 'صوت الاجتماع', mt_rec_sys_off: 'لا يوجد صوت للمكالمة. يسجل الميكروفون فقط.', mt_rec_pause: 'إيقاف مؤقت', mt_rec_resume: 'استئناف', mt_rec_stop: 'إنهاء وكتابة المحضر', mt_rec_cancel: 'تجاهل',
     mt_rec_keep: 'أبق هذا التبويب مفتوحا أثناء التسجيل. يرسل التسجيل عند الإنهاء.', mt_rec_nomic: 'الميكروفون محظور. اسمح بالوصول إليه من المتصفح وحاول مرة أخرى.', mt_rec_unsupported: 'هذا المتصفح لا يدعم التسجيل. استخدم Chrome أو Edge أو ارفع تسجيلا.',
     mt_rec_share: 'شارك صوت الاجتماع', mt_rec_share_hint: 'اختر تبويبا أو الشاشة كاملة وفعل مشاركة الصوت.', mt_rec_noaudio: 'لم تتم مشاركة أي صوت مع الشاشة، لذلك يسجل صوتك فقط. اختر تبويبا من المتصفح وفعل مشاركة صوت التبويب.', mt_rec_discard_q: 'تجاهل هذا التسجيل؟ لا يمكن استرجاعه.',
     mt_uploading: 'جار إرسال التسجيل', mt_back: 'كل الاجتماعات', mt_status_draft: 'مسودة', mt_status_uploaded: 'تم الاستلام', mt_status_transcribing: 'جار التفريغ', mt_status_summarizing: 'جار كتابة المحضر', mt_status_ready: 'جاهز', mt_status_failed: 'فشل',
@@ -87,6 +87,18 @@
   PM.rec = { active: () => (REC.cur ? { id: REC.cur.id, pid: REC.cur.pid, title: REC.cur.title } : null), lines: () => (REC.cur ? REC.cur.lines : []), seconds: () => (REC.cur ? REC.cur.elapsed() : 0), state: () => (REC.cur ? REC.cur.state : ''), on: (fn) => { REC.subs.add(fn); return () => REC.subs.delete(fn); } };
   const loadPrefs = () => { try { return JSON.parse(localStorage.getItem('pm_rec') || '{}') || {}; } catch { return {}; } };
   const savePrefs = (o) => { try { localStorage.setItem('pm_rec', JSON.stringify(o)); } catch { /* storage blocked */ } };
+
+  // Virtual audio cables and loopback inputs are how a browser hears a desktop app such as Zoom or Teams without a sharing window.
+  const LOOP = /blackhole|vb-?cable|cable output|voicemeeter|stereo mix|loopback|soundflower|monitor of|what u hear/i;
+  async function openSysDevice(id) {
+    try { return await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: id }, echoCancellation: false, noiseSuppression: false, autoGainControl: false }, video: false }); } catch { return null; }
+  }
+  const sysMode0 = () => { const pr = loadPrefs(); return ['dev', 'share', 'none'].includes(pr.sysMode) ? pr.sysMode : pr.sysDev ? 'dev' : 'share'; };
+  function sysHelp() {
+    const mac = /Mac/i.test(navigator.platform || navigator.userAgent || '');
+    const block = (h, k) => `<h3 style="margin:14px 0 6px">${t(h)}</h3><ol style="margin:0;padding-inline-start:20px;display:flex;flex-direction:column;gap:6px">${t(k).split('|').map((x) => `<li>${esc(x)}</li>`).join('')}</ol>`;
+    modal({ title: t('mt_help_title'), size: 'md', body: `<p class="muted">${t('mt_help_why')}</p>${mac ? block('mt_help_mac_h', 'mt_help_mac') + block('mt_help_win_h', 'mt_help_win') : block('mt_help_win_h', 'mt_help_win') + block('mt_help_mac_h', 'mt_help_mac')}<p class="small muted" style="margin-top:14px">${t('mt_help_tip')}</p>`, footer: `<button class="btn primary" data-close>${t('close')}</button>` });
+  }
 
   // Asks the browser to share a tab or screen with its sound. It must run straight from a click. The picture is not
   // used, but its track stays open at a tiny size so the share keeps running and the person can see it is active.
@@ -143,18 +155,27 @@
         <div class="row" style="gap:8px"><label class="small muted" for="rcDev" style="min-width:64px">${t('mt_input')}</label><select id="rcDev" aria-label="${esc(t('mt_input'))}"><option value="">${t('mt_input_default')}</option></select>
           <button class="btn icon" id="rcMute" aria-pressed="false" aria-label="${esc(t('mt_mute'))}" data-tip="${esc(t('mt_mute'))}">${icon('mic')}</button></div>
         <label class="row small" style="gap:8px"><input type="checkbox" id="rcNs" ${prefs.ns !== false ? 'checked' : ''}> ${t('mt_ns')}</label>
-        <div class="row" style="gap:8px"><div class="small muted grow" id="sysLabel">${t('mt_rec_sys_off')}</div><span class="rec-lvl" aria-hidden="true"><i id="mtSys"></i></span><button class="btn small" id="rcShare">${icon('expand')} ${t('mt_rec_share')}</button></div>
+        <div class="row" style="gap:8px"><div class="small muted grow" id="sysLabel">${t('mt_rec_sys_off')}</div><span class="rec-lvl" aria-hidden="true"><i id="mtSys"></i></span></div>
+        <div class="row" style="gap:8px"><label class="small muted" for="rcSysDev" style="min-width:64px">${t('mt_sysdev')}</label><select id="rcSysDev" aria-label="${esc(t('mt_sysdev'))}"><option value="">${t('mt_sysdev_none')}</option></select></div>
+        <div class="row" style="gap:8px"><button class="btn small" id="rcShare">${icon('expand')} ${t('mt_rec_share')}</button><a href="#" class="small grow" id="rcSysHelp" style="text-align:end">${t('mt_sysdev_help')}</a></div>
         <div class="row" style="gap:8px"><input type="text" id="rcNote" maxlength="300" placeholder="${esc(t('mt_note_ph'))}" ${bidi}><button class="btn icon" id="rcNoteGo" aria-label="${esc(t('mt_note_add'))}" data-tip="${esc(t('mt_note_add'))}">${icon('plus')}</button></div>
         <div class="row"><span class="small faint grow">${t('mt_rec_keep')}</span><button class="btn ghost small" id="rcCancel">${icon('trash')} ${t('mt_rec_cancel')}</button></div>
       </div>`;
     document.body.appendChild(dock);
     const $d = (s) => $(s, dock);
     // devices
+    let sysDevId = '';
     const fillDevices = async () => {
       try {
         const list = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audioinput' && d.deviceId && d.deviceId !== 'default' && d.deviceId !== 'communications');
         const curId = (mic.getAudioTracks()[0].getSettings() || {}).deviceId || '';
         $d('#rcDev').innerHTML = `<option value="">${t('mt_input_default')}</option>` + list.map((d, i) => `<option value="${esc(d.deviceId)}" ${d.deviceId === curId && prefs.deviceId ? 'selected' : ''}>${esc(d.label || (t('mt_rec_mic') + ' ' + (i + 1)))}</option>`).join('');
+        // call audio: loopback style inputs first, the current choice stays selected
+        const all = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audioinput' && d.deviceId && d.deviceId !== 'default' && d.deviceId !== 'communications');
+        const rank = (d) => (LOOP.test(d.label) ? 0 : 1);
+        const sel = $d('#rcSysDev'), keep = sel.value || (sysDevId || '');
+        sel.innerHTML = `<option value="">${t('mt_sysdev_none')}</option>` + all.sort((a, b) => rank(a) - rank(b)).map((d, i) => `<option value="${esc(d.deviceId)}">${esc(d.label || (t('mt_rec_mic') + ' ' + (i + 1)))}${LOOP.test(d.label) ? ' (' + t('mt_sysdev_rec') + ')' : ''}</option>`).join('');
+        if ([...sel.options].some((o) => o.value === keep)) sel.value = keep;
       } catch { /* the list is optional */ }
     };
     fillDevices();
@@ -183,7 +204,7 @@
     };
     $d('#rcNoteGo').onclick = addNote; $d('#rcNote').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); addNote(); } };
     const level = (an) => { const a = new Uint8Array(an.fftSize); an.getByteTimeDomainData(a); let mx = 0; for (const v of a) mx = Math.max(mx, Math.abs(v - 128)); return Math.min(100, Math.round(mx / 128 * 160)); };
-    const meterSrc = (stream) => { const src = ctx.createMediaStreamSource(stream), an = ctx.createAnalyser(); an.fftSize = 256; src.connect(an); src.connect(dest); src.connect(mix); return an; };
+    const meterSrc = (stream) => { const src = ctx.createMediaStreamSource(stream), an = ctx.createAnalyser(); an.fftSize = 256; src.connect(an); src.connect(dest); src.connect(mix); an._src = src; return an; };
     tick = setInterval(() => {
       const s = clock(elapsed());
       $d('#rcTime').textContent = s; document.title = `● ${s} · ${baseTitle}`;
@@ -261,16 +282,22 @@
       await Promise.all([stopped, stopLive()]);
       try { ctx.close(); } catch { /* ignore */ }
       window.removeEventListener('beforeunload', unload);
+      try { navigator.mediaDevices.removeEventListener && navigator.mediaDevices.removeEventListener('devicechange', fillDevices); } catch { /* ignore */ }
       try { if (upload) await onDone(new Blob(chunks, { type: (rec.mimeType || mime || 'audio/webm').split(';')[0] }), dur); } finally { dock.remove(); document.title = baseTitle; REC.cur = null; emit(); }
     }
     // meeting audio: the other side of the call joins the recording and the live transcript, and the meter proves sound arrives
-    const attachSystem = (d) => {
-      sysStream = d; sysAn = meterSrc(new MediaStream(d.getAudioTracks()));
-      $d('#sysLabel').textContent = t('mt_rec_sys'); $d('#rcShare').disabled = true;
+    const detachSystem = () => {
+      const d = sysStream; if (!d) return;
+      sysStream = null; sysAn = null; sysDevId = ''; d.getTracks().forEach((x) => x.stop());
+      try { d._src && d._src.disconnect(); } catch { /* ignore */ }
+      $d('#sysLabel').textContent = t('mt_rec_sys_off'); $d('#rcSysDev').value = '';
+    };
+    const attachSystem = (d, devId) => {
+      sysStream = d; sysDevId = devId || ''; const an = meterSrc(new MediaStream(d.getAudioTracks())); sysAn = an; d._src = an._src;
+      $d('#sysLabel').textContent = t('mt_rec_sys'); $d('#rcSysDev').value = sysDevId;
       const lost = () => {
         if (closed || sysStream !== d) return;
-        sysAn = null; sysStream = null; d.getTracks().forEach((x) => x.stop());
-        $d('#sysLabel').textContent = t('mt_rec_sys_off'); $d('#rcShare').disabled = false; toast(t('mt_sys_lost'), 'warn');
+        detachSystem(); toast(t('mt_sys_lost'), 'warn');
       };
       d.getAudioTracks()[0].addEventListener('ended', lost); d.getVideoTracks().forEach((v) => v.addEventListener('ended', lost));
       let heard = 0, n = 0;
@@ -281,8 +308,26 @@
         else if (++n >= 16) { clearInterval(check); toast(t('mt_sys_quiet'), 'warn'); }
       }, 500);
     };
-    $d('#rcShare').onclick = async () => { if (sysStream) return; const d = await pickSystemAudio(); if (d) attachSystem(d); };
+    $d('#rcShare').onclick = async () => { const d = await pickSystemAudio(); if (d) { detachSystem(); prefs.sysMode = 'share'; savePrefs(prefs); attachSystem(d); } };
+    $d('#rcSysHelp').onclick = (e) => { e.preventDefault(); sysHelp(); };
+    $d('#rcSysDev').onchange = async (e) => {
+      const id = e.target.value; detachSystem();
+      if (!id) { prefs.sysMode = 'none'; savePrefs(prefs); return; }
+      const d = await openSysDevice(id);
+      if (!d) { toast(t('mt_sysdev_fail'), 'err'); $d('#rcSysDev').value = ''; return; }
+      prefs.sysDev = id; prefs.sysMode = 'dev'; savePrefs(prefs); attachSystem(d, id);
+    };
+    navigator.mediaDevices.addEventListener && navigator.mediaDevices.addEventListener('devicechange', fillDevices);
     if (sysInit) attachSystem(sysInit);
+    else if (liveOpt && liveOpt.sysMode === 'dev') {
+      // the saved input is opened without any prompt, so there is no sharing window
+      (async () => {
+        if (prefs.sysDev) {
+          const d = await openSysDevice(prefs.sysDev);
+          if (d) attachSystem(d, prefs.sysDev); else toast(t('mt_sysdev_missing'), 'warn');
+        } else { toast(t('mt_sysdev_choose'), 'info'); const sl = $d('#rcSysDev'); sl.classList.add('attn'); sl.focus(); }
+      })();
+    }
     $d('#rcPause').onclick = (e) => {
       const b = e.currentTarget;
       if (rec.state === 'recording') { rec.pause(); pausedAt = Date.now(); cur.state = 'paused'; dock.classList.add('paused'); b.innerHTML = icon('play'); b.setAttribute('data-tip', t('mt_rec_resume')); b.setAttribute('aria-label', t('mt_rec_resume')); }
@@ -365,11 +410,12 @@
     const drawMode = () => {
       $$('#mtMode button', m.el).forEach((b) => b.classList.toggle('on', b.dataset.m === mode));
       const body = $('#mtModeBody', m.el);
-      body.innerHTML = mode === 'doc' ? `<input type="file" id="mtD" accept=".txt,.md,.vtt,.srt,.docx,.pdf,text/plain"><p class="small muted">${t('mt_doc_hint')}</p><label class="f">${t('mt_kind')}<select id="mtKind"><option value="auto">${t('mt_kind_auto')}</option><option value="transcript">${t('mt_kind_transcript')}</option><option value="minutes">${t('mt_kind_minutes')}</option></select></label>` : mode === 'record' ? `<p class="small muted">${t('mt_record_hint')}</p><label class="row small" style="gap:8px;margin-top:8px"><input type="checkbox" id="mtSysOn" ${canShare() && loadPrefs().sys !== false ? 'checked' : ''} ${canShare() ? '' : 'disabled'}> ${t('mt_sys_on')}</label><p class="small muted" style="margin-top:4px">${t('mt_sys_hint')}</p>` : mode === 'upload' ? `<input type="file" id="mtF" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.webm"><p class="small muted">${t('mt_upload_hint')} ${t('mt_audio_deleted')}</p>`
+      body.innerHTML = mode === 'doc' ? `<input type="file" id="mtD" accept=".txt,.md,.vtt,.srt,.docx,.pdf,text/plain"><p class="small muted">${t('mt_doc_hint')}</p><label class="f">${t('mt_kind')}<select id="mtKind"><option value="auto">${t('mt_kind_auto')}</option><option value="transcript">${t('mt_kind_transcript')}</option><option value="minutes">${t('mt_kind_minutes')}</option></select></label>` : mode === 'record' ? `<p class="small muted">${t('mt_record_hint')}</p><div class="col" style="gap:8px;margin-top:10px"><div class="small" style="font-weight:600">${t('mt_sysm')}</div>${[['dev', t('mt_sysm_dev'), t('mt_sysm_dev_h')], ['share', t('mt_sysm_share'), ''], ['none', t('mt_sysm_none'), '']].map(([v, l, h]) => `<label class="row small" style="gap:8px;align-items:flex-start"><input type="radio" name="mtSysM" value="${v}" ${sysMode0() === v ? 'checked' : ''} ${v === 'share' && !canShare() ? 'disabled' : ''}><span>${l}${h ? `<br><span class="muted">${h}</span>` : ''}</span></label>`).join('')}<a href="#" class="small" id="mtSysHelp">${t('mt_sysdev_help')}</a></div>` : mode === 'upload' ? `<input type="file" id="mtF" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.webm"><p class="small muted">${t('mt_upload_hint')} ${t('mt_audio_deleted')}</p>`
         : `<textarea id="mtTx" rows="6" style="width:100%" placeholder="${esc(t('mt_paste_hint'))}" ${bidi}></textarea>`;
       $('#mtGo', m.el).innerHTML = mode === 'record' ? `${icon('mic')} ${t('mt_start')}` : t('mt_create');
     };
     drawMode();
+    m.el.addEventListener('click', (e) => { if (e.target.closest('#mtSysHelp')) { e.preventDefault(); sysHelp(); } });
     $('#mtMode', m.el).onclick = (e) => { const b = e.target.closest('button'); if (b) { mode = b.dataset.m; drawMode(); } };
     $('#mtGo', m.el).onclick = (e) => busy(e.currentTarget, async () => {
       const title = $('#mtT', m.el).value.trim();
@@ -390,10 +436,10 @@
       }
       if (mode === 'record') {
         // the browser only opens its picker straight from the click, so the meeting audio is asked for before anything else
-        const wantSys = !!($('#mtSysOn', m.el) && $('#mtSysOn', m.el).checked);
-        if (canShare()) { const pr = loadPrefs(); pr.sys = wantSys; savePrefs(pr); }
-        const sys = wantSys ? await pickSystemAudio() : null;
-        if (!(await startRecorderFor(p, body, after, !!($('#mtLive', m.el) && $('#mtLive', m.el).checked), sys))) { if (sys) sys.getTracks().forEach((x) => x.stop()); return; }
+        const sysMode = ($('input[name=mtSysM]:checked', m.el) || {}).value || 'none';
+        { const pr = loadPrefs(); pr.sysMode = sysMode; savePrefs(pr); }
+        const sys = sysMode === 'share' ? await pickSystemAudio() : null;
+        if (!(await startRecorderFor(p, body, after, !!($('#mtLive', m.el) && $('#mtLive', m.el).checked), sys, sysMode))) { if (sys) sys.getTracks().forEach((x) => x.stop()); return; }
         m.close(); return;
       }
       const r = await api('POST', `/api/projects/${p.id}/meetings`, body);
@@ -406,7 +452,7 @@
     fd.append('file', blob, blob.name || 'meeting.webm'); fd.append('duration_sec', String(dur || 0));
     await api('POST', `/api/meetings/${id}/audio`, fd);
   }
-  async function startRecorderFor(p, body, after, liveOn, sys) {
+  async function startRecorderFor(p, body, after, liveOn, sys, sysMode) {
     if (PM.rec.active()) { toast(t('mt_rec_only_one'), 'err'); return false; }
     const r = await api('POST', `/api/projects/${p.id}/meetings`, body);
     const meeting = r.meeting, id = meeting.id;
@@ -418,7 +464,7 @@
         toast(t('mt_rec_sent'), 'ok', { label: t('mt_open_meeting'), fn: () => { location.hash = `#/p/${p.id}/meetings?m=${id}`; } });
       } catch (e) { toast(e.message, 'err'); }
       if (here()) window.dispatchEvent(new HashChangeEvent('hashchange'));
-    }, { id, on: liveOn }, sys);
+    }, { id, on: liveOn, sysMode }, sys);
     if (!ok) { try { await api('DELETE', `/api/meetings/${id}`); } catch { /* ignore */ } return false; }
     after(id);
     return true;
