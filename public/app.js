@@ -14,6 +14,7 @@
   };
   const ICONS = {
     life: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/><path d="M5.6 5.6l3.9 3.9M14.5 14.5l3.9 3.9M18.4 5.6l-3.9 3.9M9.5 14.5l-3.9 3.9"/>',
+    filter: '<path d="M4 6h16M7 12h10M10 18h4"/>',
     expand: '<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>', shrink: '<path d="M14 10h6V4M10 14H4v6M20 4l-7 7M4 20l7-7"/>',
     vline: '<polyline points="3 17 9 11 13 14 21 5"/><path d="M3 21h18"/>', varea: '<path d="M3 20v-6l6-5 4 3 8-6v14z"/>', vcombo: '<rect x="4" y="13" width="4" height="7"/><rect x="10" y="9" width="4" height="11"/><rect x="16" y="15" width="4" height="5"/><polyline points="3 8 9 4 14 6 21 3"/>',
     vradar: '<polygon points="12 3 20.5 9 17.5 19.5 6.5 19.5 3.5 9"/><polygon points="12 8 16 10.8 14.6 15.5 9.4 15.5 8 10.8"/>', vfunnel: '<path d="M3 4h18l-7 8.5V19l-4 2v-8.5z"/>',

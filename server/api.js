@@ -868,7 +868,7 @@ module.exports = function createApi(store, auth, connectors, ops) {
     const totalValue = {};
     for (const P of projects) if (P.p.value) totalValue[P.p.currency] = (totalValue[P.p.currency] || 0) + P.p.value;
     return {
-      today: TODAY(), radar: win.__Radar.buildRadar(radarEntries, TODAY()), analytics: win.__Analytics.buildAnalytics(radarEntries, TODAY()), projects: cards, payments: shown.slice(0, 10), overdue: overdue.slice(0, 12), overdueTotal: overdue.length, activity: activity.slice(0, 12), pendingInbox, pendingItems, totalValue, unassigned: 0,
+      today: TODAY(), radar: win.__Radar.buildRadar(radarEntries, TODAY()), analytics: win.__Analytics.buildAnalytics(radarEntries, TODAY()), projects: cards, payments: shown.slice(0, 10), overdue: overdue.slice(0, 12), overdueTotal: overdue.length, payments_all: payments.slice(0, 500), overdue_all: overdue.slice(0, 500), activity: activity.slice(0, 12), pendingInbox, pendingItems, totalValue, unassigned: 0,
       counts: { active: projects.filter((p) => p.p.status === 'active').length, red: cards.filter((c) => c.stats.health === 'red').length, amber: cards.filter((c) => c.stats.health === 'amber').length, green: cards.filter((c) => c.stats.health === 'green').length },
     };
   }

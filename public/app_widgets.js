@@ -23,6 +23,35 @@
   const SIZE_OF = { kpi: 's', donut: 's', bar: 'm', column: 'm', line: 'm', area: 'm', combo: 'm', radar: 'm', funnel: 'm', table: 'm' };
   const blank = () => {};
 
+  // ---------------- viewer filter ----------------
+  // Per dataset: the date fields a period can use (the first is the default), the status field and the project field.
+  const DSF = {
+    projects: { dates: ['forecast_end', 'contract_end'], status: 'health', proj: 'name' },
+    tasks: { dates: ['finish', 'start'], status: 'status', proj: 'project' },
+    payments: { dates: ['due'], status: 'state', proj: 'project' },
+    risks: { dates: [], status: 'state', proj: 'project' },
+    deliverables: { dates: ['due'], status: 'state', proj: 'project' },
+  };
+  function filterRows(rows, ds, F) {
+    const c = DSF[ds], D = PM.dash.wf;
+    if (!c || !D.on(F)) return rows;
+    const r = c.dates.length ? D.range(F) : null, base = c.dates.includes(F.b) ? F.b : c.dates[0];
+    return rows.filter((x) => (!r || D.point(x[base], r)) && (!F.s || x[c.status] === F.s) && (!F.p || x[c.proj] === F.p));
+  }
+  function specWF(spec, pack) {
+    const c = DSF[spec.dataset]; if (!c) return null;
+    const rows = () => pack.datasets[spec.dataset] || [], fd = WS.fieldOf(spec.dataset, c.status);
+    const w = {
+      statuses: () => (fd && fd.values ? Object.keys(fd.values).map((v) => ({ v, label: valueLabel(v) })) : []),
+      projects: () => [...new Set(rows().map((x) => x[c.proj]).filter(Boolean))].sort(),
+    };
+    if (c.dates.length) {
+      w.dates = (d, F) => { const base = F && c.dates.includes(F.b) ? F.b : c.dates[0]; return rows().map((x) => x[base]).filter(Boolean); };
+      if (c.dates.length > 1) w.bases = () => c.dates.map((f, i) => ({ v: i ? f : '', label: fieldLabel(f) }));
+    }
+    return w;
+  }
+
   // ---------------- drawing a custom widget ----------------
   const curOf = (spec, pack) => {
     if (PM.fx.mode !== 'native') return PM.fx.mode;
@@ -44,7 +73,7 @@
 
   // own.limit: the preview and the builder show five rows themselves. On an overview the grid applies the same five row rule.
   function renderSpec(body, w, pack, ctx, own) {
-    const spec = w.spec, h = H(), rows = pack.datasets[spec.dataset] || [];
+    const spec = w.spec, h = H(), rows = filterRows(pack.datasets[spec.dataset] || [], spec.dataset, own && own.f);
     const mode = PM.fx.mode;
     const conv = (v, r) => (mode !== 'native' && r && PM.fx.known(r.currency) ? PM.fx.convert(v, r.currency, mode) : v);
     let res;
@@ -184,7 +213,7 @@
     const widgets = { ...cfg.widgets }, order = cfg.order.slice();
     for (const w of d.widgets) {
       const id = 'cw_' + w.id;
-      widgets[id] = { size: SIZE_OF[w.spec.viz] || 'm', title: '', label: w.title, community: { id: w.id, author: w.author, version: w.version, title: w.title, mine: w.mine }, render: (body, dd, ctx) => renderSpec(body, w, pack, ctx) };
+      widgets[id] = { size: SIZE_OF[w.spec.viz] || 'm', title: '', label: w.title, community: { id: w.id, author: w.author, version: w.version, title: w.title, mine: w.mine }, wf: specWF(w.spec, pack), render: (body, dd, ctx, F) => renderSpec(body, w, pack, ctx, { f: F }) };
       order.push(id);
     }
     return { ...cfg, widgets, order };

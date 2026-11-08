@@ -100,6 +100,41 @@
     return `<svg class="viz hbars" style="max-width:${W}px" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(opts.aria || '')}">${g}</svg>`;
   }
 
+  // ---------------- widget filters ----------------
+  // A viewer filter for one widget: year, quarter, month, status and project. The choice is kept on this device.
+  const WFK = 'pm_wf';
+  const wfRead = () => { try { return JSON.parse(localStorage.getItem(WFK) || '{}') || {}; } catch { return {}; } };
+  const wfGet = (key) => { const f = wfRead()[key]; return f && typeof f === 'object' ? f : {}; };
+  const wfPut = (key, f) => {
+    try {
+      const a = wfRead(), c = {};
+      for (const k of ['y', 'q', 'm', 's', 'p', 'b']) if (f[k]) c[k] = String(f[k]);
+      if (c.y || c.q || c.m || c.s || c.p) a[key] = c; else delete a[key];
+      localStorage.setItem(WFK, JSON.stringify(a));
+    } catch { /* storage may be blocked */ }
+  };
+  const wfOn = (f) => !!(f && (f.y || f.q || f.m || f.s || f.p));
+  const pad2 = (n) => String(n).padStart(2, '0');
+  // the chosen period as a date range, or null when no year is chosen
+  function wfRange(f) {
+    if (!f || !f.y) return null;
+    const y = Number(f.y); let a = 1, b = 12;
+    if (f.m) a = b = Number(f.m); else if (f.q) { a = (Number(f.q) - 1) * 3 + 1; b = a + 2; }
+    return { lo: `${y}-${pad2(a)}-01`, hi: `${y}-${pad2(b)}-${pad2(new Date(Date.UTC(y, b, 0)).getUTCDate())}` };
+  }
+  const wfPoint = (date, r) => !r || (!!date && String(date).slice(0, 10) >= r.lo && String(date).slice(0, 10) <= r.hi);
+  const wfSpan = (a, b, r) => !r || (!!(a || b) && String(a || b).slice(0, 10) <= r.hi && String(b || a).slice(0, 10) >= r.lo);
+  const monthName = (m) => new Date(Date.UTC(2000, m - 1, 1)).toLocaleDateString(S.lang === 'ar' ? 'ar-AE' : 'en-US', { month: 'long', timeZone: 'UTC' });
+  const wfLabel = (F, w, d) => {
+    const out = [];
+    if (F.y) out.push(F.y);
+    if (F.q && !F.m) out.push(t('wfl_q', { n: F.q }));
+    if (F.m) out.push(monthName(Number(F.m)));
+    if (F.s) { const o = ((w.wf.statuses && w.wf.statuses(d)) || []).find((x) => x.v === F.s); out.push(o ? o.label : F.s); }
+    if (F.p) out.push(F.p);
+    return out.join(' · ');
+  };
+
   // ---------------- widgets ----------------
   const csvOf = (rows) => rows.map((r) => r.map((c) => { let s = c == null ? '' : String(c); if (/^[=+\-@\t\r]/.test(s) && !/^[-+]?\d+([.,]\d+)?$/.test(s)) s = "'" + s; return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }).join(',')).join('\r\n');
 
@@ -278,6 +313,58 @@
       },
     },
   };
+  // Which built in widgets can be filtered, and how their data narrows. Project level widgets read the timeline rows, which
+  // carry every project's dates, health and payments.
+  const healthOpts = () => [['green', 'health_green'], ['amber', 'health_amber'], ['red', 'health_red']].map(([v, k]) => ({ v, label: t(k) }));
+  const payOpts = (late) => [['pending', 'state_pending'], ['invoiced', 'state_invoiced'], ...(late ? [['paid', 'state_paid']] : []), ['late', 'late']].map(([v, k]) => ({ v, label: t(k) }));
+  const namesOf = (d) => d.analytics.projects.map((p) => p.name);
+  const tpDates = (d) => d.analytics.timeline.projects.flatMap((p) => [p.start, p.forecast, p.contract_end]).filter(Boolean);
+  const tpOf = (d, F) => { const r = wfRange(F); return d.analytics.timeline.projects.filter((p) => (!F.p || p.name === F.p) && (!F.s || p.health === F.s) && wfSpan(p.start || p.forecast, p.forecast || p.contract_end, r)); };
+  const byIds = (d, F) => new Set(tpOf(d, F).map((p) => p.id));
+  const projWF = (extra) => ({ dates: tpDates, statuses: healthOpts, projects: namesOf, ...extra });
+  WIDGETS.health.wf = projWF({ apply(d, F) { const ids = byIds(d, F), P = d.analytics.projects.filter((p) => ids.has(p.id)), H = { green: 0, amber: 0, red: 0 }; P.forEach((p) => { H[p.health] = (H[p.health] || 0) + 1; }); return { ...d, analytics: { ...d.analytics, projects: P, health: H } }; } });
+  WIDGETS.progress.wf = projWF({ apply(d, F) { const ids = byIds(d, F); return { ...d, analytics: { ...d.analytics, projects: d.analytics.projects.filter((p) => ids.has(p.id)) } }; } });
+  WIDGETS.deliverables.wf = projWF({ apply(d, F) { const ids = byIds(d, F); return { ...d, analytics: { ...d.analytics, deliverables: d.analytics.deliverables.filter((p) => ids.has(p.id)) } }; } });
+  WIDGETS.portfolio.wf = projWF({ apply(d, F) { const ids = byIds(d, F); return { ...d, projects: d.projects.filter((p) => ids.has(p.id)) }; } });
+  WIDGETS.schedule.wf = projWF({
+    apply(d, F) {
+      const r = wfRange(F), T = d.analytics.timeline;
+      const P = tpOf(d, F).map((p) => ({ ...p, phases: r ? p.phases.filter((ph) => wfSpan(ph.start, ph.finish, r)) : p.phases, payments: r ? p.payments.filter((x) => wfPoint(x.due, r)) : p.payments }));
+      const all = P.flatMap((p) => [p.start, p.forecast, p.contract_end, ...p.phases.flatMap((ph) => [ph.start, ph.finish])]).filter(Boolean).sort();
+      return { ...d, analytics: { ...d.analytics, timeline: { ...T, min: all[0] || null, max: all[all.length - 1] || null, projects: P } } };
+    },
+  });
+  WIDGETS.payments.wf = {
+    dates: (d) => d.analytics.timeline.projects.flatMap((p) => p.payments.map((x) => x.due)), statuses: () => payOpts(true), projects: namesOf,
+    apply(d, F) {
+      const r = wfRange(F), today = d.analytics.timeline.today, money = {};
+      for (const p of d.analytics.timeline.projects) {
+        if (F.p && p.name !== F.p) continue;
+        const cur = p.currency || '';
+        for (const x of p.payments) {
+          if (!wfPoint(x.due, r)) continue;
+          const b = x.state === 'paid' ? 'paid' : x.state === 'invoiced' ? 'invoiced' : x.due < today ? 'late' : 'pending';
+          if (F.s && F.s !== b) continue;
+          if (!money[cur]) money[cur] = { currency: cur, paid: 0, invoiced: 0, pending: 0, late: 0, total: 0 };
+          money[cur][b] += x.amount || 0; money[cur].total += x.amount || 0;
+        }
+      }
+      return { ...d, analytics: { ...d.analytics, payments: Object.values(money) } };
+    },
+  };
+  WIDGETS.payments_list.wf = {
+    dates: (d) => (d.payments_all || d.payments).map((x) => x.due), statuses: () => payOpts(false), projects: (d) => [...new Set((d.payments_all || d.payments).map((x) => x.project))],
+    apply(d, F) { const r = wfRange(F); return { ...d, payments: (d.payments_all || d.payments).filter((x) => wfPoint(x.due, r) && (!F.p || x.project === F.p) && (!F.s || (F.s === 'late' ? x.late : x.state === F.s && !x.late))) }; },
+  };
+  WIDGETS.overdue.wf = {
+    dates: (d) => (d.overdue_all || d.overdue).map((x) => x.finish), projects: (d) => [...new Set((d.overdue_all || d.overdue).map((x) => x.project))],
+    apply(d, F) { const r = wfRange(F), L = (d.overdue_all || d.overdue).filter((x) => wfPoint(x.finish, r) && (!F.p || x.project === F.p)); return { ...d, overdue: L, overdueTotal: L.length }; },
+  };
+  WIDGETS.activity.wf = {
+    dates: (d) => d.activity.map((a) => a.ts), projects: (d) => [...new Set(d.activity.map((a) => a.project))],
+    apply(d, F) { const r = wfRange(F); return { ...d, activity: d.activity.filter((a) => wfPoint(a.ts, r) && (!F.p || a.project === F.p)) }; },
+  };
+
   const planned = (p) => (p.planned != null ? `· ${t('planned')} ${p.planned}%` : '');
   const DEFAULT_ORDER = ['kpi', 'radar', 'schedule', 'health', 'deliverables', 'payments', 'progress', 'workload', 'portfolio', 'payments_list', 'overdue', 'activity'];
   const SIZES = ['s', 'm', 'l'];
@@ -489,17 +576,18 @@
       visible().forEach((id) => { if (!SKIP_RELAYOUT.has(id)) rerender(id); });
     };
     function frame(id, i) {
-      const w = cfg.widgets[id];
+      const w = cfg.widgets[id], wkey = (cfg.key || 'main') + ':' + id, F = w.wf ? wfGet(wkey) : null, fon = wfOn(F);
       const el = document.createElement('section');
       el.className = `dw sz-${sizeOf(id)}`; el.dataset.w = id; el.style.setProperty('--i', i);
-      el.innerHTML = `<header class="dw-h"><button class="dw-grip" aria-label="${esc(t('dash_move'))}" title="${esc(t('dash_drag_hint'))}">${icon('grip')}</button><h3>${esc(wlabel(w))}</h3><span class="grow"></span><button class="dw-more btn ghost icon" aria-haspopup="menu" aria-label="${esc(t('dash_widget_menu'))}">${icon('more')}</button></header><div class="dw-body"></div>`;
+      el.innerHTML = `<header class="dw-h"><button class="dw-grip" aria-label="${esc(t('dash_move'))}" title="${esc(t('dash_drag_hint'))}">${icon('grip')}</button><h3>${esc(wlabel(w))}</h3><span class="grow"></span>${w.wf ? `<button class="dw-wf btn ghost icon${fon ? ' on' : ''}" aria-haspopup="dialog" aria-expanded="false" aria-label="${esc(t('wfl_title'))}" title="${esc(t('wfl_title'))}">${icon('filter')}</button>` : ''}<button class="dw-more btn ghost icon" aria-haspopup="menu" aria-label="${esc(t('dash_widget_menu'))}">${icon('more')}</button></header><div class="dw-body"></div>`;
       const body = $('.dw-body', el);
       const span = { l: 12, m: 6, s: 4 }[sizeOf(id)] || 12, gw = grid.clientWidth || 1100, vw = innerWidth, cols = vw <= 860 ? 1 : vw <= 1180 && span === 4 ? 2 : 0;
       const sp = cols === 1 ? 12 : cols === 2 ? 6 : span;
       CW = (gw - 11 * 16) / 12 * sp + (sp - 1) * 16 - 38;
       PM.fx.mode = modeNow();
       PMCL.scope(id);
-      infos[id] = w.render(body, d, ctx) || { csv: () => [] };
+      if (fon) { const bar = document.createElement('div'); bar.className = 'dw-fs'; bar.innerHTML = `<span class="dw-fs-t">${icon('filter')}<span>${esc(wfLabel(F, w, d))}</span></span><button type="button" class="dw-fx" aria-label="${esc(t('wfl_clear_chip'))}" title="${esc(t('wfl_clear_chip'))}">${icon('x')}</button>`; body.before(bar); }
+      infos[id] = w.render(body, fon && w.wf.apply ? w.wf.apply(d, F) : d, ctx, F) || { csv: () => [] };
       const cl = PMCL.collect()[0];
       if (cl) { const more = $('.dw-more', el); if (more) more.insertAdjacentHTML('beforebegin', PMCL.button(cl)); PMCL.bind(el, () => rerender(id)); }
       if (id !== 'radar') limitRows(el, body, id);
@@ -595,7 +683,51 @@
       };
       $('button:not([disabled])', menu).focus();
     }
+    // ----- widget filter -----
+    let fpop = null, fpFor = null;
+    const closeFilter = () => { if (fpop) { fpop.remove(); fpop = null; const b = fpFor && $(`.dw[data-w="${fpFor}"] .dw-wf`, grid); if (b) b.setAttribute('aria-expanded', 'false'); fpFor = null; } };
+    document.addEventListener('pointerdown', (e) => { if (fpop && !fpop.contains(e.target) && !e.target.closest('.dw-wf')) closeFilter(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeFilter(); });
+    function openFilter(btn, id) {
+      closeMenu();
+      if (fpop && fpFor === id) { closeFilter(); return; }
+      closeFilter();
+      const w = cfg.widgets[id], wkey = (cfg.key || 'main') + ':' + id, W = w.wf;
+      let F = { ...wfGet(wkey) };
+      const years = () => { const set = new Set((W.dates ? W.dates(d, F) : []).map((x) => String(x).slice(0, 4)).filter((x) => /^\d{4}$/.test(x))); set.add(String(new Date().getFullYear())); if (F.y) set.add(F.y); return [...set].sort(); };
+      const opt = (v, l, cur) => `<option value="${esc(v)}" ${String(cur || '') === String(v) ? 'selected' : ''}>${esc(l)}</option>`;
+      const sel = (k, label, all, list) => `<label class="dw-fp-f"><span>${esc(label)}</span><select data-f="${k}">${opt('', all, F[k])}${list.map((o) => opt(o.v, o.label, F[k])).join('')}</select></label>`;
+      const draw = () => {
+        const period = !!(W.dates || W.bases), bases = W.bases ? W.bases(d) : null;
+        const qs = [1, 2, 3, 4].map((n) => ({ v: String(n), label: t('wfl_q', { n }) }));
+        const ms = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].filter((m) => !F.q || Math.ceil(m / 3) === Number(F.q)).map((m) => ({ v: String(m), label: monthName(m) }));
+        const st = W.statuses ? W.statuses(d) : null, pr = W.projects ? W.projects(d) : null;
+        fpop.innerHTML = `<div class="dw-fp-h"><b>${esc(t('wfl_title'))}</b><button type="button" class="btn sm ghost" data-clear ${wfOn(F) ? '' : 'disabled'}>${esc(t('wfl_clear'))}</button></div>` +
+          (period ? sel('y', t('wfl_year'), t('wfl_all_years'), years().map((y) => ({ v: y, label: y }))) + `<div class="dw-fp-2">${sel('q', t('wfl_quarter'), t('wfl_all_quarters'), qs)}${sel('m', t('wfl_month'), t('wfl_all_months'), ms)}</div>` : '') +
+          (bases && bases.length > 1 ? sel('b', t('wfl_based'), bases[0].label, bases.slice(1)) : '') +
+          (st && st.length ? sel('s', t('wfl_status'), t('wfl_all_status'), st) : '') + (pr && pr.length > 1 ? sel('p', t('wfl_project'), t('wfl_all_projects'), pr.map((x) => ({ v: x, label: x }))) : '');
+      };
+      fpop = document.createElement('div'); fpop.className = 'dw-fp'; fpop.setAttribute('role', 'dialog'); fpop.setAttribute('aria-label', t('wfl_title')); fpFor = id;
+      document.body.appendChild(fpop); draw();
+      btn.setAttribute('aria-expanded', 'true');
+      const place = () => { const r = btn.getBoundingClientRect(), mw = fpop.offsetWidth; fpop.style.left = Math.min(Math.max(8, S.lang === 'ar' ? r.left : r.right - mw), innerWidth - mw - 8) + 'px'; fpop.style.top = Math.min(r.bottom + 6, Math.max(8, innerHeight - fpop.offsetHeight - 8)) + 'px'; };
+      place();
+      const apply = (focusK) => { wfPut(wkey, F); rerender(id); const nb = $(`.dw[data-w="${id}"] .dw-wf`, grid); if (nb) { nb.setAttribute('aria-expanded', 'true'); btn = nb; } draw(); place(); const fe = focusK && $(`[data-f="${focusK}"]`, fpop); if (fe) fe.focus(); };
+      fpop.onchange = (e) => {
+        const k = e.target.dataset && e.target.dataset.f; if (!k) return;
+        F[k] = e.target.value;
+        if ((k === 'q' || k === 'm') && F[k] && !F.y) F.y = String(new Date().getFullYear());
+        if (k === 'q' && F.q && F.m && Math.ceil(Number(F.m) / 3) !== Number(F.q)) F.m = '';
+        if (k === 'y' && !F.y) { F.q = ''; F.m = ''; }
+        apply(k);
+      };
+      fpop.onclick = (e) => { if (e.target.closest('[data-clear]')) { F = {}; apply(); } };
+      const first = $('select', fpop); if (first) first.focus();
+    }
+
     grid.addEventListener('click', (e) => {
+      const fb = e.target.closest('.dw-wf'); if (fb) { openFilter(fb, fb.closest('.dw').dataset.w); return; }
+      const fx = e.target.closest('.dw-fx'); if (fx) { const fid = fx.closest('.dw').dataset.w; wfPut((cfg.key || 'main') + ':' + fid, {}); closeFilter(); rerender(fid); return; }
       const b = e.target.closest('.dw-more'); if (b) { openMenu(b, b.closest('.dw').dataset.w); return; }
       const go = e.target.closest('[data-go]'); if (go && !e.target.closest('.dw-h') && !e.target.closest('button')) { e.stopPropagation(); const m = /^#\/p\/(\d+)\/?(\w+)?/.exec(go.dataset.go); if (m && PM.act) PM.act.peek(Number(m[1]), m[2] && m[2] !== 'overview' ? m[2] : null); else location.hash = go.dataset.go; }
     });
@@ -730,5 +862,5 @@
     if (animate) setTimeout(() => grid.classList.remove('anim'), 2200);
   }
 
-  PM.dash = { mount, main: MAIN, layout: layoutApi, h: { setWidth: (n) => { CW = n; }, bindTips, listRow, projLink, stamp, width: () => CW, tipAttr: tip, hbars, donut, legend, empty, tip, num, dnum, ymd, trunc, countUp, csvOf, reduced, WIDGETS } };
+  PM.dash = { mount, main: MAIN, layout: layoutApi, wf: { range: wfRange, point: wfPoint, on: wfOn }, h: { setWidth: (n) => { CW = n; }, bindTips, listRow, projLink, stamp, width: () => CW, tipAttr: tip, hbars, donut, legend, empty, tip, num, dnum, ymd, trunc, countUp, csvOf, reduced, WIDGETS } };
 })();
