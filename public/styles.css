@@ -106,6 +106,32 @@ svg.i { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-widt
 input:not([type]), input[type=text], input[type=search], input[type=tel], input[type=url], input[type=email], input[type=password], input[type=number], input[type=date], input[type=time], input[type=datetime-local], select, textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); outline: none; }
 input:focus, select:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
 
+/* Date picker (public/datepicker.js). Tokens only, light and dark, left to right and right to left. */
+.dp-w { position: relative; display: block; } .dp-w input { color: var(--text); font-size: var(--fs-body); font-weight: 400; padding-inline-end: 40px; cursor: pointer; } .dp-w.open input { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+.dp-btn { position: absolute; inset-inline-end: 4px; top: 50%; transform: translateY(-50%); width: 30px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 6px; background: none; color: var(--faint); cursor: pointer; transition: color .15s var(--ease), background .15s var(--ease); }
+.dp-btn:hover, .dp-w.open .dp-btn { color: var(--primary); background: var(--primary-soft); } .dp-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.dp-row { display: grid; grid-template-columns: minmax(0, 1fr) 108px; gap: 8px; align-items: center; } .dp-row .dp-time { width: 100%; padding-inline: 8px; } .dp-row .dp-w input { padding-inline-end: 32px; } .dp-row .dp-btn { inset-inline-end: 2px; width: 28px; }
+.dp-pop { position: fixed; z-index: 600; width: 300px; max-width: calc(100vw - 16px); padding: 12px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-lg); opacity: 0; transform: translateY(-4px) scale(.98); transform-origin: top; transition: opacity .15s var(--ease), transform .2s var(--ease); }
+.dp-pop.above { transform-origin: bottom; transform: translateY(4px) scale(.98); } .dp-pop.on { opacity: 1; transform: none; } .dp-pop[hidden] { display: none; }
+.dp-head { display: flex; align-items: center; gap: 4px; margin-bottom: 8px; }
+.dp-nav { flex: none; width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 8px; background: none; color: var(--muted); cursor: pointer; transition: background .15s var(--ease), color .15s var(--ease); }
+.dp-nav:hover { background: var(--surface-2); color: var(--text); } [dir=rtl] .dp-nav .i { transform: scaleX(-1); }
+.dp-title { flex: 1; min-width: 0; height: 32px; border: 0; border-radius: 8px; background: none; color: var(--text); font: inherit; font-size: var(--fs-body); font-weight: 600; cursor: pointer; transition: background .15s var(--ease); } .dp-title:hover { background: var(--surface-2); }
+.dp-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; } .dp-wds { margin-bottom: 2px; }
+.dp-wd { text-align: center; padding: 4px 0; color: var(--muted); font-size: var(--fs-small); font-weight: 600; } .dp-wd.wk { color: var(--faint); }
+.dp-d, .dp-m { height: 36px; display: grid; place-items: center; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--text); font: inherit; font-size: var(--fs-body); font-variant-numeric: tabular-nums; cursor: pointer; transition: background .12s var(--ease), border-color .12s var(--ease); }
+.dp-m { height: 44px; } .dp-pick { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.dp-d:hover:not(:disabled), .dp-m:hover { background: var(--primary-soft); } .dp-d.off { color: var(--faint); } .dp-d.wk:not(.sel):not(.off) { color: var(--muted); }
+.dp-d.today, .dp-m.today { border-color: var(--primary); color: var(--primary); font-weight: 600; }
+.dp-d.sel, .dp-m.sel { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 600; } .dp-d.sel:hover, .dp-m.sel:hover { background: var(--primary-600); }
+.dp-d.foc:not(.sel) { outline: 2px solid var(--primary); outline-offset: -2px; }
+.dp-d:disabled { opacity: .4; cursor: not-allowed; }
+.dp-d:focus-visible, .dp-m:focus-visible, .dp-nav:focus-visible, .dp-title:focus-visible, .dp-link:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.dp-foot { display: flex; justify-content: space-between; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
+.dp-link { padding: 4px 8px; border: 0; border-radius: 6px; background: none; color: var(--primary); font: inherit; font-size: var(--fs-body); font-weight: 600; cursor: pointer; } .dp-link:hover { background: var(--primary-soft); }
+@media (max-width: 600px) { .dp-d { height: 40px; } .dp-btn { width: 36px; height: 36px; } }
+@media (prefers-reduced-motion: reduce) { .dp-pop, .dp-pop.above { transition: none; transform: none; } }
+
 /* Search field: one look everywhere. An icon, a quiet field, the primary ring on focus. */
 .sf { position: relative; display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 36px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); transition: border-color .15s var(--ease), box-shadow .15s var(--ease); }
 .sf:hover { border-color: var(--faint); } .sf:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }

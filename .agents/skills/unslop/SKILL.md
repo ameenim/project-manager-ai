@@ -34,6 +34,10 @@ MEDIUM, review:
 
 Subtle grid or tint backgrounds, glass headers that keep a visible edge, and bento style dashboards are fine when they carry meaning. Violet stays only as the token for milestones and AI suggestions (`--violet`), never as the brand color.
 
+## Native browser controls
+
+Date fields use the shared picker in `public/datepicker.js`. It upgrades every `type=date` and `type=datetime-local` field automatically, so keep using those input types and load the script on any new page that has date fields. Do not style or rebuild the browser calendar.
+
 ## Brand artwork
 
 The logo mark in `public/logo.js` and `public/brand/` uses a blue to violet gradient. It is brand identity, not UI styling. Do not change it as part of an unslop pass. Raise it as an owner decision.
