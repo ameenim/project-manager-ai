@@ -184,7 +184,7 @@
               ${F.dim !== 'all' ? `<span class="rd-chip on" data-dim="all">${t('dim_' + F.dim)} ×</span>` : ''}
               ${filtered ? `<button class="btn sm ghost" id="rdClear">${t('radar_clear')}</button>` : ''}</div>
             <div class="rd-list">${rows || `<div class="empty small">${t('radar_none_match')}</div>`}</div></div></div>`
-        : `<div class="empty"><div class="big">✅</div><p>${t('radar_empty')}</p></div>`}</div>`;
+        : `<div class="empty"><div class="big ok">${icon('check')}</div><p>${t('radar_empty')}</p></div>`}</div>`;
       const listEl = host.querySelector('.rd-list'); if (listEl && keepScroll) listEl.scrollTop = keepScroll;
       $$('[data-cell]', host).forEach((b) => (b.onclick = () => { const [p, i] = b.dataset.cell.split('|'); F.cell = F.cell && F.cell[0] === p && F.cell[1] === i ? null : [p, i]; draw(); }));
       $$('[data-sev]', host).forEach((b) => (b.onclick = () => { F.sev = F.sev === b.dataset.sev ? 'all' : b.dataset.sev; draw(); }));

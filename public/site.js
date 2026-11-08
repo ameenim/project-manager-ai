@@ -124,11 +124,6 @@
   if (window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches && !reduce) {
     document.addEventListener('pointermove', function (e) {
       var c = e.target.closest && e.target.closest('.feat, .card, .fact, .step, .who, .ex-row, .fmt-grid > *, .upd');
-      if (c) {
-        var r = c.getBoundingClientRect();
-        c.style.setProperty('--mx', (e.clientX - r.left) + 'px');
-        c.style.setProperty('--my', (e.clientY - r.top) + 'px');
-      }
       var d = e.target.closest && e.target.closest('.dash');
       if (d) {
         var q = d.getBoundingClientRect();

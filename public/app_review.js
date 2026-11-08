@@ -315,7 +315,7 @@
         ${!p.analyzing && items.length ? hero : ''}
         ${analysisCard(an, p.analyzing, items.length)}
         ${p.analyzing ? '' : planCard(an, items.filter((i) => i.kind === 'schedule' && i.status === 'proposed').length)}
-        ${!p.analyzing && !items.length ? `<div class="card empty mb"><div class="big">📄</div><p>${t('no_items_yet')}</p><a class="btn primary" href="#/p/${p.id}/documents">${icon('upload')}${t('upload_docs')}</a></div>` : ''}
+        ${!p.analyzing && !items.length ? `<div class="card empty mb"><div class="big">${icon('file')}</div><p>${t('no_items_yet')}</p><a class="btn primary" href="#/p/${p.id}/documents">${icon('upload')}${t('upload_docs')}</a></div>` : ''}
         ${items.length ? `<div class="card">${tabs}${kind === 'schedule' ? `<div class="small muted mb">${t('schedule_note')} <a href="#/p/${p.id}/schedule">${t('open_schedule')}</a></div>` : ''}${toolbar}<div class="rv-list">${rows}</div></div>` : ''}</div>`;
       bind();
     }
@@ -537,7 +537,7 @@
       await api('POST', `/api/projects/${p.id}/wizard/finish`).catch(() => {});
       const sched = Q.some((x) => x.kind === 'schedule');
       const tl = (n, l, c) => `<div class="rv-stat ${c}"><b>${n}</b><span>${l}</span></div>`;
-      $('#wz', m.el).innerHTML = `<div class="wz-finish"><div class="big">🎉</div><h2>${t('review_complete')}</h2><p class="muted">${t('wz_finish_p')}</p><div class="rv-stats center">${tl(tally.confirmed, t('wz_stat_c'), 'ok')}${tl(tally.ignored, t('wz_stat_i'), '')}${tl(tally.skipped, t('wz_stat_s'), tally.skipped ? 'warn' : '')}</div></div>`;
+      $('#wz', m.el).innerHTML = `<div class="wz-finish"><div class="big ok">${icon('check')}</div><h2>${t('review_complete')}</h2><p class="muted">${t('wz_finish_p')}</p><div class="rv-stats center">${tl(tally.confirmed, t('wz_stat_c'), 'ok')}${tl(tally.ignored, t('wz_stat_i'), '')}${tl(tally.skipped, t('wz_stat_s'), tally.skipped ? 'warn' : '')}</div></div>`;
       m.setFooter(`<button class="btn" id="wzClose">${t('close')}</button>${sched ? `<a class="btn primary" href="#/p/${p.id}/schedule" id="wzSched">${icon('cal')}${t('open_schedule')}</a>` : ''}`);
       $('#wzClose', m.el).onclick = () => { m.close(); onDone && onDone(); };
       const a = $('#wzSched', m.el); if (a) a.onclick = () => m.close();

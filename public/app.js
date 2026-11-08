@@ -331,7 +331,7 @@
       <div class="mt"><div class="row small"><span class="grow">${t('progress')} ${p.stats.progress}%</span><span class="muted">${p.value ? money(p.value, p.currency) : ''}</span></div><div class="progress" style="margin-top:6px"><i style="width:${p.stats.progress}%"></i></div></div>
       <div class="row small muted mt wrap"><span>${p.start_date || '?'} to ${p.end_date || '?'}</span>${p.stats.pendingItems + p.stats.pendingInbox ? `<span class="chip blue">${p.stats.pendingItems + p.stats.pendingInbox} ${t('to_review')}</span>` : ''}</div></a>`).join('');
     $('#content').innerHTML = `<div class="page"><div class="page-head"><h1>${t('nav_projects')}</h1><button class="btn primary" id="newProj">${icon('plus')}${t('new_project')}</button></div>
-      ${S.projects.length ? `<div class="grid g3">${cards}</div>` : `<div class="card empty"><div class="big">📁</div><p>${t('empty_projects')}</p></div>`}</div>`;
+      ${S.projects.length ? `<div class="grid g3">${cards}</div>` : `<div class="card empty"><div class="big">${icon('folder')}</div><p>${t('empty_projects')}</p></div>`}</div>`;
     $('#newProj').onclick = newProjectDialog;
   };
 

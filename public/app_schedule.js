@@ -185,7 +185,7 @@
           return `<div class="chk-grp"><div class="chk-h"><span class="chip ${sev[top.severity]}">${t('sev_' + top.severity)}</span><b class="grow">${esc(chkText('chk_t_', top) || top.message)}</b><span class="small muted">${arr.length}</span></div>${shown.map(row).join('')}${arr.length > shown.length ? `<div class="small muted" style="padding:6px 2px">${t('chk_more', { n: arr.length - shown.length })}</div>` : ''}</div>`;
         }).join('');
         m.setBody(`${tiles}<div class="asst-wrap">${aiHtml()}</div><div class="chk-tabs" role="tablist">${['all', 'logic', 'links', 'overall'].map((k) => `<button type="button" class="filter-chip ${cat === k ? 'on' : ''}" data-cat="${k}">${t('chk_cat_' + k)} <b>${counts[k]}</b></button>`).join('')}</div>
-          ${list.length ? grp : `<div class="empty"><div class="big">&#10003;</div><p>${t('validate_ok')}</p></div>`}`);
+          ${list.length ? grp : `<div class="empty"><div class="big ok">${icon('check')}</div><p>${t('validate_ok')}</p></div>`}`);
         m.$$('[data-cat]').forEach((el) => (el.onclick = () => { cat = el.dataset.cat; draw(); }));
         const run = m.$('#asstRun');
         if (run) run.onclick = async () => { running = true; dismissed.clear(); draw(); try { ai = await api('POST', `${base}/schedule/assist`); } catch (e) { toast(e.message, 'err'); ai = null; } running = false; await refresh(ai); };

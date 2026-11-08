@@ -119,7 +119,7 @@
   }
 
   function emptyState() {
-    return `<div class="card empty"><div class="big">📁</div><h3>${t('dt_empty_h')}</h3><p>${t('dt_empty_p')}</p><div class="row wrap" style="justify-content:center"><button class="btn primary" data-newproj>${icon('plus')}${t('new_project')}</button><button class="btn" data-impproj>${icon('upload')}${t('dt_import_btn')}</button>${S.user && S.user.sample_loaded ? '' : `<button class="btn" data-sample>${icon('spark')}${t('dt_sample')}</button>`}</div></div>`;
+    return `<div class="card empty"><div class="big">${icon('folder')}</div><h3>${t('dt_empty_h')}</h3><p>${t('dt_empty_p')}</p><div class="row wrap" style="justify-content:center"><button class="btn primary" data-newproj>${icon('plus')}${t('new_project')}</button><button class="btn" data-impproj>${icon('upload')}${t('dt_import_btn')}</button>${S.user && S.user.sample_loaded ? '' : `<button class="btn" data-sample>${icon('spark')}${t('dt_sample')}</button>`}</div></div>`;
   }
   function bindEmpty(root) {
     $$('[data-newproj]', root).forEach((b) => (b.onclick = PM.newProjectDialog));
