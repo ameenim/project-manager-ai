@@ -7,7 +7,7 @@
   Object.assign(PM.I18N.en, {
     tab_meetings: 'Meetings', mt_title: 'Meetings', mt_new: 'New meeting', mt_empty: 'No meetings yet. Record your next meeting and the minutes will be written for you.',
     mt_sub: 'Record a meeting, get a transcript for each speaker and minutes you can send to the project.', mt_no_stt: 'Transcription is not set up on the server yet. Ask an administrator to add GEMINI_API_KEY. You can still paste a transcript.',
-    mt_no_claude: 'Minutes need ANTHROPIC_API_KEY on the server.', mt_f_title: 'Meeting title', mt_f_when: 'Date and time', mt_f_lang: 'Spoken language', mt_f_mlang: 'Minutes language', mt_f_att: 'Attendees', mt_f_att_add: 'Add a name and press Enter', mt_f_notes: 'Notes or agenda',
+    mt_no_claude: 'Minutes need ANTHROPIC_API_KEY on the server.', mt_f_title: 'Meeting title', mt_f_when: 'Date and time', mt_f_lang: 'Spoken language', mt_f_mlang: 'Minutes language', mt_f_att: 'Attendees', mt_f_att_add: 'Add a name or paste a list from Outlook, then press Enter', mt_att_count: '{n} attendees', mt_att_count_1: '1 attendee', mt_f_notes: 'Notes or agenda',
     mt_auto: 'Detect automatically', mt_en: 'English', mt_ar: 'Arabic', mt_how: 'How do you want to capture it?', mt_record: 'Record now', mt_upload: 'Upload a recording', mt_paste: 'Paste a transcript',
     mt_record_hint: 'Uses your microphone. Share a tab or screen with audio to also capture the other people on a call.', mt_upload_hint: 'MP3, WAV, M4A, AAC, OGG, FLAC or WebM audio.', mt_paste_hint: 'One line per turn, for example Sara: We start Monday.',
     mt_start: 'Start recording', mt_create: 'Create meeting', mt_need_title: 'Give the meeting a title', mt_need_file: 'Choose a recording', mt_need_text: 'Paste the transcript',
@@ -38,7 +38,7 @@
   Object.assign(PM.I18N.ar, {
     tab_meetings: 'الاجتماعات', mt_title: 'الاجتماعات', mt_new: 'اجتماع جديد', mt_empty: 'لا توجد اجتماعات بعد. سجل اجتماعك القادم وسيتم كتابة المحضر لك.',
     mt_sub: 'سجل اجتماعا واحصل على نص لكل متحدث ومحضر يمكنك إرساله إلى المشروع.', mt_no_stt: 'لم يتم إعداد التفريغ الصوتي على الخادم بعد. اطلب من المسؤول إضافة GEMINI_API_KEY. يمكنك لصق النص مباشرة.',
-    mt_no_claude: 'يحتاج المحضر إلى ANTHROPIC_API_KEY على الخادم.', mt_f_title: 'عنوان الاجتماع', mt_f_when: 'التاريخ والوقت', mt_f_lang: 'لغة الحديث', mt_f_mlang: 'لغة المحضر', mt_f_att: 'الحضور', mt_f_att_add: 'اكتب اسما واضغط Enter', mt_f_notes: 'ملاحظات أو جدول الأعمال',
+    mt_no_claude: 'يحتاج المحضر إلى ANTHROPIC_API_KEY على الخادم.', mt_f_title: 'عنوان الاجتماع', mt_f_when: 'التاريخ والوقت', mt_f_lang: 'لغة الحديث', mt_f_mlang: 'لغة المحضر', mt_f_att: 'الحضور', mt_f_att_add: 'أضف اسما أو الصق قائمة من Outlook ثم اضغط Enter', mt_att_count: '{n} حضور', mt_att_count_1: 'حاضر واحد', mt_f_notes: 'ملاحظات أو جدول الأعمال',
     mt_auto: 'اكتشاف تلقائي', mt_en: 'الإنجليزية', mt_ar: 'العربية', mt_how: 'كيف تريد تسجيله؟', mt_record: 'سجل الآن', mt_upload: 'ارفع تسجيلا', mt_paste: 'الصق نصا',
     mt_record_hint: 'يستخدم الميكروفون. شارك تبويبا أو الشاشة مع الصوت لتسجيل بقية المشاركين في المكالمة.', mt_upload_hint: 'ملفات صوت MP3 أو WAV أو M4A أو AAC أو OGG أو FLAC أو WebM.', mt_paste_hint: 'سطر لكل متحدث، مثل سارة: نبدأ يوم الاثنين.',
     mt_start: 'ابدأ التسجيل', mt_create: 'إنشاء الاجتماع', mt_need_title: 'أدخل عنوانا للاجتماع', mt_need_file: 'اختر تسجيلا', mt_need_text: 'الصق النص',
@@ -267,6 +267,26 @@
     return true;
   }
 
+  // Reads a pasted list such as Outlook gives: "Name <email>; Name <email>". Same rules as the server.
+  function parseAttendees(text) {
+    const src = String(text == null ? '' : text), semi = /[;\n\r]/.test(src), parts = []; let cur = '', angle = 0, quoted = false;
+    for (const ch of src) {
+      if (ch === '"') quoted = !quoted; else if (ch === '<') angle++; else if (ch === '>') angle = Math.max(0, angle - 1);
+      if (!quoted && !angle && (semi ? (ch === ';' || ch === '\n' || ch === '\r') : ch === ',')) { parts.push(cur); cur = ''; } else cur += ch;
+    }
+    parts.push(cur);
+    const pretty = (e) => e.split('@')[0].replace(/[._]+/g, ' ').replace(/\b\p{L}/gu, (c) => c.toUpperCase());
+    const out = [];
+    for (const raw of parts) {
+      const x = raw.trim(); if (!x) continue;
+      const m = x.match(/^(.*?)<\s*([^<>\s]+@[^<>\s]+)\s*>$/);
+      if (m) { const name = m[1].replace(/^["'\s]+|["'\s]+$/g, ''); out.push({ name: name || pretty(m[2]), email: m[2].toLowerCase() }); continue; }
+      if (/^[^\s<>@]+@[^\s<>@]+$/.test(x)) { out.push({ name: pretty(x), email: x.toLowerCase() }); continue; }
+      out.push({ name: x.replace(/^["'\s]+|["'\s]+$/g, '') });
+    }
+    return out;
+  }
+
   // ---------------- new meeting dialog ----------------
   async function newMeeting(p, info, after) {
     let mode = canRecord() ? 'record' : 'upload';
@@ -279,7 +299,7 @@
         <div class="grid g2" style="gap:14px"><label class="f">${t('mt_f_when')}<input id="mtW" type="datetime-local" value="${localInput()}"></label>
           <label class="f">${t('mt_f_lang')}<select id="mtL"><option value="auto">${t('mt_auto')}</option><option value="en">${t('mt_en')}</option><option value="ar">${t('mt_ar')}</option></select></label></div>
         <label class="f">${t('mt_f_mlang')}<select id="mtM"><option value="auto">${t('mt_auto')}</option><option value="en">${t('mt_en')}</option><option value="ar">${t('mt_ar')}</option></select></label>
-        <div><div class="small muted" style="font-weight:600;margin-bottom:6px">${t('mt_f_att')}</div><div class="row wrap" id="mtA" style="gap:6px"></div><input type="text" id="mtAN" class="mt" placeholder="${esc(t('mt_f_att_add'))}" maxlength="80" ${bidi}></div>
+        <div><div class="row" style="margin-bottom:6px"><div class="small muted grow" style="font-weight:600">${t('mt_f_att')}</div><span class="small muted" id="mtAC"></span></div><div class="row wrap" id="mtA" style="gap:6px"></div><input type="text" id="mtAN" class="mt" placeholder="${esc(t('mt_f_att_add'))}" ${bidi}></div>
         ${info.stt && info.stt.live && canRecord() ? `<label class="row small" style="gap:8px"><input type="checkbox" id="mtLive" checked> ${t('mt_live_on')}</label>` : ''}
         <label class="f">${t('mt_f_notes')}<textarea id="mtN" rows="2" maxlength="4000" ${bidi}></textarea></label>
         <div><div class="small muted" style="font-weight:600;margin-bottom:6px">${t('mt_how')}</div>
@@ -288,8 +308,19 @@
       footer: `<button class="btn" data-close>${t('cancel')}</button><button class="btn primary" id="mtGo"></button>`,
     });
     const drawAtt = () => {
-      $('#mtA', m.el).innerHTML = people.map((x) => `<button type="button" class="chip ${att.some((a) => a.name === x.name) ? 'blue' : ''}" data-p="${esc(x.name)}">${esc(x.name)}</button>`).join('')
-        + att.filter((a) => a.external).map((a) => `<button type="button" class="chip blue" data-x="${esc(a.name)}">${esc(a.name)} ${icon('x')}</button>`).join('');
+      const isPerson = (x) => att.some((a) => a.name === x.name);
+      $('#mtA', m.el).innerHTML = people.map((x) => `<button type="button" class="chip ${isPerson(x) ? 'blue' : ''}" data-p="${esc(x.name)}" ${x.email ? `data-tip="${esc(x.email)}"` : ''}>${esc(x.name)}</button>`).join('')
+        + att.filter((a) => !people.some((x) => x.name === a.name)).map((a) => `<button type="button" class="chip blue" data-x="${esc(a.name)}" ${a.email ? `data-tip="${esc(a.email)}"` : ''} aria-label="${esc(t('mt_remove') + ' ' + a.name)}">${esc(a.name)} ${icon('x')}</button>`).join('');
+      const c = $('#mtAC', m.el); if (c) c.textContent = att.length ? t('mt_att_count', { n: att.length }) : '';
+    };
+    // one name, one email, or a whole pasted list (Outlook style) becomes separate attendees
+    const addPeople = (text) => {
+      for (const a of parseAttendees(text)) {
+        if (att.some((x) => x.name.toLowerCase() === a.name.toLowerCase() || (x.email && a.email && x.email === a.email))) continue;
+        const known = people.find((x) => x.name.toLowerCase() === a.name.toLowerCase() || (x.email && a.email && x.email.toLowerCase() === a.email));
+        att.push(known ? { name: known.name, email: known.email, role: known.role } : { ...a, external: true });
+      }
+      drawAtt();
     };
     drawAtt();
     $('#mtA', m.el).onclick = (e) => {
@@ -298,7 +329,10 @@
       if (b.dataset.x) att.splice(att.findIndex((a) => a.name === b.dataset.x), 1);
       drawAtt();
     };
-    $('#mtAN', m.el).onkeydown = (e) => { if (e.key !== 'Enter') return; e.preventDefault(); const v = e.target.value.trim(); if (v && !att.some((a) => a.name === v)) { att.push({ name: v, external: !people.some((x) => x.name === v) }); } e.target.value = ''; drawAtt(); };
+    const inp = $('#mtAN', m.el);
+    inp.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ';') { e.preventDefault(); addPeople(e.target.value); e.target.value = ''; } };
+    inp.onpaste = (e) => { const txt = (e.clipboardData || window.clipboardData).getData('text'); if (/[;\n\r<]/.test(txt)) { e.preventDefault(); addPeople(txt); } };
+    inp.onblur = () => { if (inp.value.trim()) { addPeople(inp.value); inp.value = ''; } };
     const drawMode = () => {
       $$('#mtMode button', m.el).forEach((b) => b.classList.toggle('on', b.dataset.m === mode));
       const body = $('#mtModeBody', m.el);

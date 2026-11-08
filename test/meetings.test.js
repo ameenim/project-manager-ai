@@ -260,3 +260,20 @@ test('exports, deletion and the list view', async () => {
   assert.equal((await s.call('DELETE', `/api/meetings/${draft.id}`, null, u.token)).status, 200);
   assert.equal((await s.call('GET', `/api/meetings/${draft.id}`, null, u.token)).status, 404);
 });
+
+test('a pasted Outlook style attendee list becomes separate attendees with emails', async () => {
+  const { parseAttendees } = require('../server/meetings');
+  const list = 'Zaid AlRadaideh <zaid.alradaideh@tarjama.com>; Bids <bids@tarjama.com>; Amin Shafaqouj <amin.shafaqouj@tarjama.com>; Iyad Ahmad <iyad.ahmad@tarjama.com>; Legal Team <Legal.team@tarjama.com>; Abdulrahman Al-Osaili <abdulrahman.alosaili@tarjama.com>';
+  const parsed = parseAttendees(list);
+  assert.equal(parsed.length, 6);
+  assert.deepEqual(parsed[4], { name: 'Legal Team', email: 'legal.team@tarjama.com' });
+  const c = await s.call('POST', `/api/projects/${p.id}/meetings`, { title: 'Pasted list', source: 'recording', attendees: [list] }, u.token);
+  assert.equal(c.status, 200, JSON.stringify(c.data));
+  assert.equal(c.data.meeting.attendees.length, 6);
+  assert.equal(c.data.meeting.attendees[0].email, 'zaid.alradaideh@tarjama.com');
+  assert.equal(c.data.meeting.attendees[5].name, 'Abdulrahman Al-Osaili');
+  assert.deepEqual(parseAttendees('Doe, John <j@x.com>; sara@x.com; Omar').map((a) => a.name), ['Doe, John', 'Sara', 'Omar'], 'a comma inside a name is kept when semicolons separate people');
+  assert.equal(parseAttendees('Sara, Omar, Lina').length, 3, 'commas separate plain names');
+  const dup = await s.call('POST', `/api/projects/${p.id}/meetings`, { title: 'Dups', source: 'recording', attendees: ['A <a@x.com>; B <b@x.com>; Another <a@x.com>'] }, u.token);
+  assert.equal(dup.data.meeting.attendees.length, 2, 'the same email is added once');
+});

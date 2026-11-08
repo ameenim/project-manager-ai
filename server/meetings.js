@@ -19,6 +19,31 @@ const AUDIO_KEEP_DAYS = 7;
 const clip = (s, n) => String(s == null ? '' : s).replace(/\s+/g, ' ').trim().slice(0, n);
 const validDate = (d) => typeof d === 'string' && ISO.test(d) && !isNaN(Date.parse(d + 'T00:00:00Z')) && new Date(d + 'T00:00:00Z').toISOString().slice(0, 10) === d;
 const mmss = (n) => { n = Math.max(0, Math.round(Number(n) || 0)); const h = Math.floor(n / 3600), m = Math.floor((n % 3600) / 60), s = n % 60; return (h ? h + ':' + String(m).padStart(2, '0') : String(m)) + ':' + String(s).padStart(2, '0'); };
+// Reads a pasted attendee list such as Outlook gives: "Name <email>; Name <email>". Semicolons or new lines separate people.
+// Without them, commas separate people, except inside angle brackets or quotes.
+function parseAttendees(text) {
+  const src = String(text == null ? '' : text);
+  const semi = /[;\n\r]/.test(src);
+  const parts = []; let cur = '', angle = 0, quoted = false;
+  for (const ch of src) {
+    if (ch === '"') quoted = !quoted;
+    else if (ch === '<') angle++;
+    else if (ch === '>') angle = Math.max(0, angle - 1);
+    const sep = !quoted && !angle && (semi ? (ch === ';' || ch === '\n' || ch === '\r') : ch === ',');
+    if (sep) { parts.push(cur); cur = ''; } else cur += ch;
+  }
+  parts.push(cur);
+  const pretty = (email) => email.split('@')[0].replace(/[._]+/g, ' ').replace(/\b\p{L}/gu, (c) => c.toUpperCase());
+  const out = [];
+  for (const raw of parts) {
+    const x = raw.trim(); if (!x) continue;
+    const m = x.match(/^(.*?)<\s*([^<>\s]+@[^<>\s]+)\s*>$/);
+    if (m) { const name = m[1].replace(/^["'\s]+|["'\s]+$/g, ''); out.push({ name: name || pretty(m[2]), email: m[2].toLowerCase() }); continue; }
+    if (/^[^\s<>@]+@[^\s<>@]+$/.test(x)) { out.push({ name: pretty(x), email: x.toLowerCase() }); continue; }
+    out.push({ name: x.replace(/^["'\s]+|["'\s]+$/g, '') });
+  }
+  return out;
+}
 const norm = (s) => String(s || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 const asDate = (v) => (v == null || v === '' ? null : isNaN(Date.parse(v)) ? null : new Date(v).toISOString());
 const iso = (v) => (v instanceof Date ? v.toISOString() : v || null);
@@ -69,10 +94,11 @@ class Meetings {
   // ---------- writing ----------
   cleanAttendees(list) {
     const out = [];
-    for (const a of Array.isArray(list) ? list : []) {
-      const o = typeof a === 'string' ? { name: a } : a || {};
+    const flat = (Array.isArray(list) ? list : typeof list === 'string' ? [list] : []).flatMap((a) => (typeof a === 'string' ? parseAttendees(a) : [a]));
+    for (const a of flat) {
+      const o = a || {};
       const name = clip(o.name, 80); if (!name) continue;
-      if (out.some((x) => norm(x.name) === norm(name))) continue;
+      if (out.some((x) => norm(x.name) === norm(name) || (x.email && o.email && x.email === String(o.email).toLowerCase()))) continue;
       out.push({ name, email: clip(o.email, 120) || null, role: clip(o.role, 80) || null, external: !!o.external });
       if (out.length >= 60) break;
     }
@@ -347,4 +373,4 @@ class Meetings {
   }
 }
 
-module.exports = { Meetings, SECTIONS, mmss, validDate };
+module.exports = { Meetings, SECTIONS, mmss, validDate, parseAttendees };
