@@ -11,6 +11,9 @@
   Object.assign(PM.I18N.en, {
     th_expand: 'Open as a full page', th_collapse: 'Back to the side panel', th_deep: 'Think deeper', th_deep_tip: 'Think deeper takes longer and uses more of your tokens. Best for schedules and trade offs.', th_deep_on: 'Think deeper is on', th_attach: 'Attach a file', th_attach_tip: 'Attach a file to this project. I can read it and create related documents. Nothing changes until you press Apply.', th_attach_need: 'Open a project first, then attach a file to it.', th_attach_fail: 'The file could not be attached.', th_att_rm: 'Remove from this message', th_uploading: 'Uploading',
     th_sees: 'The AI can see', th_ctx_docs: 'Documents of this project', th_ctx_data: 'Data of this project', th_ctx_portfolio: 'Data of all your projects',
+    th_sug_h: 'Suggestions', th_sug_count: '{n} suggestions', th_sug_one: '1 suggestion', th_sug_discuss: 'Discuss', th_sug_snooze: 'Snooze 7 days', th_sug_dismiss: 'Dismiss', th_sug_dismissed: 'Suggestion dismissed', th_sug_snoozed: 'Snoozed for 7 days', th_sug_none: 'No suggestions right now.',
+    cht_s_late_tasks: 'Late tasks: {n}', cht_s_low_spi: 'The schedule index is {n}', cht_s_forecast_late: 'The forecast end {n} is after the contract end', cht_s_no_baseline: 'Tasks without a baseline: {n}', cht_s_deliverable_no_task: 'Deliverables due within 7 days with no task: {n}', cht_s_late_payments: 'Late payments: {n}', cht_s_waiting_updates: 'Updates waiting for review: {n}', cht_s_weekly: 'Your weekly summary is ready to write',
+    cht_qs_low_spi: 'The schedule index is below 0.95. Why is the project behind plan and what should I do to recover?', cht_qs_forecast_late: 'The forecast end of the project is after the contract end. Suggest an updated schedule to recover.', cht_qs_no_baseline: 'This project has no baseline. Explain what a baseline would lock in and when to set it.', cht_qs_deliverable_no_task: 'Which deliverables due within 7 days have no task in the schedule? Propose tasks for them.', cht_qs_weekly: 'Write my weekly summary across my projects with progress, risks, late items and next steps.',
     th_start: 'Start with', th_quick: 'Quick questions',
     th_threads: 'Threads', th_search: 'Search threads', th_new: 'New thread', th_pin: 'Pin this thread', th_unpin: 'Unpin this thread', th_rename: 'Rename this thread', th_rename_title: 'Rename thread', th_name_ph: 'Thread name', th_pinned: 'Pinned', th_no_match: 'No threads match.', th_renamed: 'Thread renamed', th_save: 'Save', th_cancel: 'Cancel',
     nav_thinking: 'Thinking Area', tab_thinking: 'Thinking',
@@ -38,6 +41,9 @@
   Object.assign(PM.I18N.ar, {
     th_expand: 'افتح كصفحة كاملة', th_collapse: 'العودة إلى اللوحة الجانبية', th_deep: 'فكّر بعمق', th_deep_tip: 'التفكير بعمق يستغرق وقتا أطول ويستهلك رموزا أكثر. مناسب للجداول والمفاضلات.', th_deep_on: 'التفكير بعمق مفعّل', th_attach: 'أرفق ملفا', th_attach_tip: 'أرفق ملفا بهذا المشروع. يمكنني قراءته وإنشاء مستندات مرتبطة به. لا يتغير شيء حتى تضغط تطبيق.', th_attach_need: 'افتح مشروعا أولا ثم أرفق الملف به.', th_attach_fail: 'تعذر إرفاق الملف.', th_att_rm: 'أزل من هذه الرسالة', th_uploading: 'جار الرفع',
     th_sees: 'ما يراه الذكاء الاصطناعي', th_ctx_docs: 'مستندات هذا المشروع', th_ctx_data: 'بيانات هذا المشروع', th_ctx_portfolio: 'بيانات كل مشاريعك',
+    th_sug_h: 'اقتراحات', th_sug_count: '{n} اقتراحات', th_sug_one: 'اقتراح واحد', th_sug_discuss: 'ناقش', th_sug_snooze: 'تأجيل 7 أيام', th_sug_dismiss: 'تجاهل', th_sug_dismissed: 'تم تجاهل الاقتراح', th_sug_snoozed: 'تم التأجيل 7 أيام', th_sug_none: 'لا توجد اقتراحات الآن.',
+    cht_s_late_tasks: 'مهام متأخرة: {n}', cht_s_low_spi: 'مؤشر الجدول {n}', cht_s_forecast_late: 'نهاية المشروع المتوقعة {n} بعد نهاية العقد', cht_s_no_baseline: 'مهام بلا خط أساس: {n}', cht_s_deliverable_no_task: 'مخرجات مستحقة خلال 7 أيام بلا مهمة: {n}', cht_s_late_payments: 'دفعات متأخرة: {n}', cht_s_waiting_updates: 'تحديثات بانتظار المراجعة: {n}', cht_s_weekly: 'ملخصك الأسبوعي جاهز للكتابة',
+    cht_qs_low_spi: 'مؤشر الجدول أقل من 0.95. لماذا المشروع متأخر عن الخطة وماذا أفعل للتعافي؟', cht_qs_forecast_late: 'نهاية المشروع المتوقعة بعد نهاية العقد. اقترح جدولا محدثا للتعافي.', cht_qs_no_baseline: 'هذا المشروع بلا خط أساس. اشرح ما الذي يثبته خط الأساس ومتى أحدده.', cht_qs_deliverable_no_task: 'ما المخرجات المستحقة خلال 7 أيام وليس لها مهمة في الجدول؟ اقترح مهاما لها.', cht_qs_weekly: 'اكتب ملخصي الأسبوعي لمشاريعي مع التقدم والمخاطر والبنود المتأخرة والخطوات القادمة.',
     th_start: 'ابدأ بـ', th_quick: 'أسئلة سريعة',
     th_threads: 'المحادثات', th_search: 'ابحث في المحادثات', th_new: 'محادثة جديدة', th_pin: 'تثبيت هذه المحادثة', th_unpin: 'إلغاء تثبيت هذه المحادثة', th_rename: 'إعادة تسمية هذه المحادثة', th_rename_title: 'إعادة تسمية المحادثة', th_name_ph: 'اسم المحادثة', th_pinned: 'مثبتة', th_no_match: 'لا توجد محادثات مطابقة.', th_renamed: 'تمت إعادة تسمية المحادثة', th_save: 'حفظ', th_cancel: 'إلغاء',
     nav_thinking: 'مساحة التفكير', tab_thinking: 'التفكير',
@@ -198,6 +204,7 @@
       const q = new URLSearchParams({ screen: S.ctx.screen }); if (S.ctx.projectId) q.set('project_id', S.ctx.projectId);
       const d = await PM.api('GET', '/api/chat?' + q);
       S.data = d; S.msgs = d.messages.slice();
+      await loadSug();
     } catch (e) { S.data = { suggestions: [], capabilities: '', ai: true, can_write: true, project: null }; S.msgs = []; S.loadError = e.message; }
     paint(true);
   }
@@ -240,7 +247,7 @@
     const sug = (d.suggestions || []).map((s) => `<button class="btn sm cht-sug" type="button" data-act="sug" data-q="${esc(s)}">${esc(s)}</button>`).join('');
     const b = d.brief || [];
     const brief = d.brief ? `<div class="cht-brief"><div class="small muted">${esc(t('cht_brief_h'))}</div>${b.length ? b.map((x) => `<button class="cht-tile" type="button" data-act="sug" data-q="${esc(t('cht_q_' + x.key))}"><b>${esc(String(x.n))}</b><span>${esc(t('cht_b_' + x.key, { n: '' }).trim())}</span></button>`).join('') : `<div class="small muted">${esc(t('cht_brief_clear'))}</div>`}</div>` : '';
-    return `<div class="cht-empty"><div class="cht-empty-ic">${icon('spark')}</div><h3>${esc(t('cht_empty_title'))}</h3><p class="muted">${esc(d.capabilities || '')}</p>${S.loadError ? `<p class="cht-err small" role="alert">${esc(S.loadError)}</p>` : ''}${brief}${starters}${sug ? `<div class="small muted cht-quick">${esc(t('th_quick'))}</div>` : ''}<div class="cht-sugs">${sug}</div></div>`;
+    return `<div class="cht-empty"><div class="cht-empty-ic">${icon('spark')}</div><h3>${esc(t('cht_empty_title'))}</h3><p class="muted">${esc(d.capabilities || '')}</p>${S.loadError ? `<p class="cht-err small" role="alert">${esc(S.loadError)}</p>` : ''}${proact()}${brief}${starters}${sug ? `<div class="small muted cht-quick">${esc(t('th_quick'))}</div>` : ''}<div class="cht-sugs">${sug}</div></div>`;
   }
   const when = (x) => { try { return new Date(x).toLocaleString(PM.state.lang === 'ar' ? 'ar' : 'en', { dateStyle: 'medium', timeStyle: 'short' }); } catch (e) { return ''; } };
   function historyHtml() {
@@ -536,6 +543,7 @@
     if (act === 'send') return submit();
     if (act === 'stop') { if (S.ctl) S.ctl.abort(); return; }
     if (act === 'sug') { return send(el.dataset.q); }
+    if (act === 'sgdo' || act === 'sgsn' || act === 'sgdm') return sugAct(act, id);
     if (act === 'new') { if (S.busy) return; S.mode = 'chat'; S.hist = null; S.needReload = false; PM.api('POST', '/api/chat/clear', { project_id: S.ctx.projectId }).then(() => { load(); if (S.page) loadThreads(); }).catch((x) => PM.toast(x.message, 'err')); return; }
     if (act === 'copy') { const m = find(id); if (m && navigator.clipboard) navigator.clipboard.writeText(m.text).then(() => PM.toast(t('cht_copied'), 'ok')).catch(() => {}); return; }
     if (act === 'up' || act === 'down') {
@@ -548,6 +556,79 @@
     if (act === 'cancel') return cardCall(id, 'cancel');
     if (act === 'undo') return cardCall(id, 'undo');
     if (act === 'edit') { const i = $q('#chtIn'); i.value = t('cht_edit_prefix'); grow(); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
+  }
+
+
+  // ---------- proactive suggestions ----------
+  const inProject = () => !!ctxFromHash().projectId;
+  const sugText = (x) => (x.project && !inProject() ? x.project + ': ' : '') + t('cht_s_' + x.rule, { n: x.n });
+  const sugQ = (x) => {
+    const q = x.rule === 'late_tasks' ? t('cht_q_late_tasks') : x.rule === 'late_payments' ? t('cht_q_late_payments') : x.rule === 'waiting_updates' ? t('cht_q_updates') : t('cht_qs_' + x.rule);
+    return x.project && !inProject() ? x.project + ': ' + q : q;
+  };
+  async function loadSug() {
+    try { const q = S.ctx.projectId ? '?project_id=' + S.ctx.projectId : ''; S.sug = (await PM.api('GET', '/api/chat/suggestions' + q)).items || []; }
+    catch (e) { S.sug = []; }
+  }
+  const sugRows = () => (S.sug || []).map((x) => `<div class="sg-row"><span class="sg-t">${esc(sugText(x))}</span><span class="sg-a"><button class="btn sm primary" type="button" data-act="sgdo" data-id="${esc(x.id)}">${esc(t('th_sug_discuss'))}</button><button class="btn sm" type="button" data-act="sgsn" data-id="${esc(x.id)}">${esc(t('th_sug_snooze'))}</button><button class="btn sm ghost" type="button" data-act="sgdm" data-id="${esc(x.id)}">${esc(t('th_sug_dismiss'))}</button></span></div>`).join('');
+  const proact = () => ((S.sug || []).length ? `<div class="sg-box"><div class="small muted">${esc(t('th_sug_h'))}</div>${sugRows()}</div>` : '');
+  async function sugAct(act, id) {
+    const x = (S.sug || []).find((y) => y.id === id); if (!x) return;
+    if (act === 'sgdo') { closePop(); if (S.busy) return; if (!S.open) await open(); S.mode = 'chat'; S.hist = null; return send(sugQ(x)); }
+    try {
+      await PM.api('POST', '/api/chat/suggestions/dismiss', { project_id: x.project_id, rule: x.rule, mode: act === 'sgsn' ? 'snooze' : 'dismiss' });
+      S.sug = S.sug.filter((y) => y.id !== id);
+      PM.toast(t(act === 'sgsn' ? 'th_sug_snoozed' : 'th_sug_dismissed'), 'ok');
+      if (S.data && !S.msgs.length) paint(); popRefresh(); chipRefresh();
+    } catch (e) { PM.toast(e.message, 'err'); }
+  }
+  // a small count on the Overview, the Schedule and the portfolio dashboard, with the same list in a popover
+  let pop = null, chipTimer = 0, chipAt = 0;
+  function closePop() { if (pop) { pop.remove(); pop = null; } const c = document.querySelector('.sug-chip'); if (c) c.setAttribute('aria-expanded', 'false'); }
+  function popRefresh() { if (!pop) return; if (!(S.sug || []).length) return closePop(); pop.innerHTML = `<div class="small muted">${esc(t('th_sug_h'))}</div>${sugRows()}`; }
+  function openPop(chipEl) {
+    if (pop) return closePop();
+    pop = document.createElement('div'); pop.className = 'sg-pop'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', t('th_sug_h'));
+    pop.innerHTML = `<div class="small muted">${esc(t('th_sug_h'))}</div>${sugRows()}`;
+    document.body.appendChild(pop);
+    const r = chipEl.getBoundingClientRect(); const w = Math.min(380, window.innerWidth - 16);
+    pop.style.width = w + 'px'; pop.style.top = (r.bottom + 6) + 'px'; pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + 'px';
+    chipEl.setAttribute('aria-expanded', 'true');
+    pop.addEventListener('click', (e) => { const b = e.target.closest('[data-act]'); if (b) sugAct(b.dataset.act, b.dataset.id); });
+  }
+  function chipHost() {
+    const c = ctxFromHash();
+    const ph = document.querySelector('#main > .proj-head');
+    if (ph && c.projectId && (c.screen === 'overview' || c.screen === 'schedule')) return { pid: c.projectId, place: (el) => { const g = ph.querySelector('.grow'); if (g) g.before(el); else ph.appendChild(el); } };
+    const dh = document.querySelector('#content .page.dash .page-head');
+    if (dh && !c.projectId) return { pid: null, place: (el) => { const h1 = dh.querySelector('h1'); if (h1) h1.after(el); else dh.prepend(el); } };
+    return null;
+  }
+  async function chipRefresh() {
+    if (!PM.state.token) return;
+    const host = chipHost(); const old = document.querySelector('.sug-chip');
+    if (!host) { if (old) old.remove(); closePop(); return; }
+    if (Date.now() - chipAt > 15000 || !S.sugFor || S.sugFor !== String(host.pid)) {
+      chipAt = Date.now(); S.sugFor = String(host.pid);
+      try { S.sug = (await PM.api('GET', '/api/chat/suggestions' + (host.pid ? '?project_id=' + host.pid : ''))).items || []; } catch (e) { S.sug = []; }
+      if (!chipHost()) return;
+    }
+    const n = (S.sug || []).length;
+    if (!n) { if (old) old.remove(); closePop(); return; }
+    const label = n === 1 ? t('th_sug_one') : t('th_sug_count', { n });
+    let el = document.querySelector('.sug-chip');
+    if (!el) { el = document.createElement('button'); el.type = 'button'; el.className = 'sug-chip'; el.addEventListener('click', () => openPop(el)); host.place(el); }
+    el.innerHTML = `${icon('spark')}<span>${esc(String(n))}</span>`;
+    el.setAttribute('aria-label', label); el.setAttribute('data-tip', label); el.setAttribute('aria-haspopup', 'dialog');
+  }
+  function chipSoon() { clearTimeout(chipTimer); chipTimer = setTimeout(() => { if (!document.querySelector('.sug-chip') || chipHost()) chipRefresh(); }, 350); }
+  function startChips() {
+    window.addEventListener('hashchange', () => { closePop(); chipAt = 0; chipSoon(); });
+    const main = document.getElementById('app') || document.body;
+    new MutationObserver(() => { const h = chipHost(); if (h && !document.querySelector('.sug-chip') && (S.sug || []).length && S.sugFor === String(h.pid)) chipSoon(); else if (!h && document.querySelector('.sug-chip')) chipSoon(); }).observe(main, { childList: true, subtree: true });
+    document.addEventListener('pointerdown', (e) => { if (pop && !pop.contains(e.target) && !(e.target.closest && e.target.closest('.sug-chip'))) closePop(); }, true);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && pop) closePop(); });
+    chipSoon();
   }
 
   // ---------- start ----------
@@ -572,6 +653,7 @@
     build(); bindFab();
     new MutationObserver(() => rebuild()).observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
     window.addEventListener('hashchange', onHash);
+    startChips();
     window.addEventListener('resize', () => { if (root) { applyWidth(); place(); } });
     // a click anywhere outside the chat closes it. Dialogs, toasts, tooltips and the loading screen are not "outside".
     document.addEventListener('pointerdown', (e) => {

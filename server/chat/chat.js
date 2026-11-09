@@ -7,6 +7,7 @@ const prompt = require('./prompt');
 const tools = require('./tools');
 const claude = require('../claude');
 const skill = require('./skill');
+const { createSuggest } = require('./suggest');
 
 const MINUTE_LIMIT = Number(process.env.CHAT_PER_MINUTE || 20);
 const DAY_LIMIT = Number(process.env.CHAT_PER_DAY || 200);
@@ -38,6 +39,7 @@ function createChat({ db, store, api, auth, ops, model }) {
 
   // ---------- storage ----------
   const q = (text, params) => db.query(text, params);
+  let suggest = null; // built after access() below
   const msgView = (m) => ({ id: m.id, role: m.role, text: m.text, sources: (m.meta && m.meta.sources) || [], links: (m.meta && m.meta.links) || [], notes: (m.meta && m.meta.notes) || [], suggestions: (m.meta && m.meta.suggestions) || [], card: m.card ? cardView(m.id, m.card) : null, feedback: m.feedback || 0, created_at: m.created_at });
   function cardView(id, c) {
     let status = c.status;
@@ -471,6 +473,8 @@ function createChat({ db, store, api, auth, ops, model }) {
     const pid = (v) => (v == null || v === '' || v === 'null' ? null : Number(v));
     let m;
     if (method === 'GET' && p === '/api/chat') { io.json(res, 200, await view(user, pid(url.searchParams.get('project_id')), url.searchParams.get('screen'))); return true; }
+    if (method === 'GET' && p === '/api/chat/suggestions') { suggest = suggest || createSuggest({ q, api, access }); io.json(res, 200, await suggest.list(user, pid(url.searchParams.get('project_id')))); return true; }
+    if (method === 'POST' && p === '/api/chat/suggestions/dismiss') { suggest = suggest || createSuggest({ q, api, access }); io.json(res, 200, await suggest.dismiss(user, await read())); return true; }
     if (method === 'GET' && p === '/api/chat/feedback') { io.json(res, 200, await feedbackList(user)); return true; }
     if (method === 'GET' && p === '/api/chat/history') { io.json(res, 200, await historyList(user, pid(url.searchParams.get('project_id')), url.searchParams.get('q'))); return true; }
     if (method === 'POST' && (m = p.match(/^\/api\/chat\/threads\/(\d+)\/update$/))) { io.json(res, 200, await updateThread(user, m[1], await read())); return true; }

@@ -375,6 +375,20 @@ const MIGRATIONS = [
   ALTER TABLE chat_threads ADD COLUMN IF NOT EXISTS title TEXT NOT NULL DEFAULT '';
   ALTER TABLE chat_threads ADD COLUMN IF NOT EXISTS pinned BOOLEAN NOT NULL DEFAULT false;
   `,
+  // 11: proactive suggestions. A person can dismiss a suggestion or snooze it for 7 days. The choice belongs to the person.
+  // project_id 0 stands for the all projects view.
+  `
+  CREATE TABLE IF NOT EXISTS chat_suggest_state (
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    project_id BIGINT NOT NULL DEFAULT 0,
+    rule TEXT NOT NULL,
+    sig TEXT NOT NULL DEFAULT '',
+    mode TEXT NOT NULL,
+    until_day TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, project_id, rule)
+  );
+  `,
 ];
 
 async function openPg(url) {

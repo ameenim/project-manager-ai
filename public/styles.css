@@ -1768,3 +1768,15 @@ body.chat-page .cht-fab { display: none; }
 .wk-qband { fill: var(--muted); opacity: .09; } .wk-qband.alt { opacity: .2; }
 .wk-line .wk-qlbl { font-size: var(--fs-micro); font-weight: 600; opacity: .8; }
 .wk-line text.cl { paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
+
+/* Proactive suggestions: the count on Overview, Schedule and the dashboard, the list in the Thinking Area and the popover. */
+.sug-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 20px; border: 1px solid var(--border); background: var(--violet-soft); color: var(--violet); font: inherit; font-size: var(--fs-small); font-weight: 600; cursor: pointer; transition: background 150ms var(--ease); }
+.sug-chip:hover { background: var(--surface-2); }
+.sug-chip svg { width: 14px; height: 14px; }
+.sg-box { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 560px; margin: 14px auto 0; text-align: start; }
+.sg-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.sg-t { flex: 1 1 200px; min-width: 0; font-size: var(--fs-body); font-weight: 600; overflow-wrap: anywhere; }
+.sg-a { display: flex; gap: 6px; flex-wrap: wrap; }
+.sg-pop { position: fixed; z-index: 60; display: flex; flex-direction: column; gap: 8px; padding: 12px; max-height: 70vh; overflow: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); box-shadow: var(--shadow-lg); animation: sgIn 220ms var(--ease); }
+@keyframes sgIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .sg-pop { animation: none; } .sug-chip { transition: none; } }
