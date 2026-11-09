@@ -1831,3 +1831,17 @@ body.chat-page .cht-fab { display: none; }
 .nc-meter { flex: 1 1 80px; height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; }
 .nc-meter i { display: block; height: 100%; background: var(--primary); }
 @media (prefers-reduced-motion: reduce) { .nc-pop { animation: none; } }
+
+/* Thinking Area page: no page scroll, calmer empty state */
+body.chat-page .main { overflow: hidden; }
+.th-page { padding-bottom: 16px; }
+.cht-panel.page .cht-empty p { max-width: 460px; }
+.cht-panel.page .cht-empty { margin: 0; padding: 12px 4px; }
+.sg-box { gap: 6px; margin-top: 10px; max-width: 520px; }
+.sg-row { padding: 8px 10px; gap: 8px; }
+.sg-row .btn.sm { padding: 4px 9px; }
+.sg-more { align-self: center; }
+#chtRoot { padding: 0; margin: 0; height: 0; width: 0; max-width: 0; overflow: visible; }
+.cht-empty p { font-size: var(--fs-small); color: var(--muted); line-height: 1.45; }
+.cht-panel.page .cht-empty p { max-width: 520px; margin-bottom: 4px; }
+.cht-empty-ic { width: 36px; height: 36px; }
