@@ -9,7 +9,7 @@
   const { esc, t, icon } = PM;
 
   Object.assign(PM.I18N.en, {
-    th_expand: 'Open as a full page', th_collapse: 'Back to the side panel', th_deep: 'Think deeper', th_deep_tip: 'Think deeper takes longer and uses more of your tokens. Best for schedules and trade offs.', th_deep_on: 'Think deeper is on',
+    th_expand: 'Open as a full page', th_collapse: 'Back to the side panel', th_deep: 'Think deeper', th_deep_tip: 'Think deeper takes longer and uses more of your tokens. Best for schedules and trade offs.', th_deep_on: 'Think deeper is on', th_attach: 'Attach a file', th_attach_tip: 'Attach a file to this project. I can read it and create related documents. Nothing changes until you press Apply.', th_attach_need: 'Open a project first, then attach a file to it.', th_attach_fail: 'The file could not be attached.', th_att_rm: 'Remove from this message', th_uploading: 'Uploading',
     th_sees: 'The AI can see', th_ctx_docs: 'Documents of this project', th_ctx_data: 'Data of this project', th_ctx_portfolio: 'Data of all your projects',
     th_start: 'Start with', th_quick: 'Quick questions',
     th_threads: 'Threads', th_search: 'Search threads', th_new: 'New thread', th_pin: 'Pin this thread', th_unpin: 'Unpin this thread', th_rename: 'Rename this thread', th_rename_title: 'Rename thread', th_name_ph: 'Thread name', th_pinned: 'Pinned', th_no_match: 'No threads match.', th_renamed: 'Thread renamed', th_save: 'Save', th_cancel: 'Cancel',
@@ -36,7 +36,7 @@
     cht_v_open: 'Open', cht_v_progress: 'In progress', cht_v_closed: 'Closed', cht_v_mitigated: 'Mitigated', cht_v_transferred: 'Transferred', cht_v_pending: 'Pending', cht_v_invoiced: 'Invoiced', cht_v_paid: 'Paid', cht_v_low: 'Low', cht_v_medium: 'Medium', cht_v_high: 'High',
   });
   Object.assign(PM.I18N.ar, {
-    th_expand: 'افتح كصفحة كاملة', th_collapse: 'العودة إلى اللوحة الجانبية', th_deep: 'فكّر بعمق', th_deep_tip: 'التفكير بعمق يستغرق وقتا أطول ويستهلك رموزا أكثر. مناسب للجداول والمفاضلات.', th_deep_on: 'التفكير بعمق مفعّل',
+    th_expand: 'افتح كصفحة كاملة', th_collapse: 'العودة إلى اللوحة الجانبية', th_deep: 'فكّر بعمق', th_deep_tip: 'التفكير بعمق يستغرق وقتا أطول ويستهلك رموزا أكثر. مناسب للجداول والمفاضلات.', th_deep_on: 'التفكير بعمق مفعّل', th_attach: 'أرفق ملفا', th_attach_tip: 'أرفق ملفا بهذا المشروع. يمكنني قراءته وإنشاء مستندات مرتبطة به. لا يتغير شيء حتى تضغط تطبيق.', th_attach_need: 'افتح مشروعا أولا ثم أرفق الملف به.', th_attach_fail: 'تعذر إرفاق الملف.', th_att_rm: 'أزل من هذه الرسالة', th_uploading: 'جار الرفع',
     th_sees: 'ما يراه الذكاء الاصطناعي', th_ctx_docs: 'مستندات هذا المشروع', th_ctx_data: 'بيانات هذا المشروع', th_ctx_portfolio: 'بيانات كل مشاريعك',
     th_start: 'ابدأ بـ', th_quick: 'أسئلة سريعة',
     th_threads: 'المحادثات', th_search: 'ابحث في المحادثات', th_new: 'محادثة جديدة', th_pin: 'تثبيت هذه المحادثة', th_unpin: 'إلغاء تثبيت هذه المحادثة', th_rename: 'إعادة تسمية هذه المحادثة', th_rename_title: 'إعادة تسمية المحادثة', th_name_ph: 'اسم المحادثة', th_pinned: 'مثبتة', th_no_match: 'لا توجد محادثات مطابقة.', th_renamed: 'تمت إعادة تسمية المحادثة', th_save: 'حفظ', th_cancel: 'إلغاء',
@@ -65,7 +65,7 @@
 
   const pref = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* storage blocked */ } return null; };
   const DEF_W = 420, MIN_W = 340, WIDE_W = 760, MIN_IN = 38;
-  const S = { open: false, busy: false, ctl: null, ctx: { projectId: null, screen: 'portfolio' }, data: null, msgs: [], confirming: null, raf: 0, mode: 'chat', hist: null, w: Number(pref('pm_chat_w')) || DEF_W, inH: Number(pref('pm_chat_inh')) || 0, dragging: false, page: false, deep: pref('pm_think_deep') === '1', th: { items: null, q: '', confirm: null } };
+  const S = { open: false, busy: false, ctl: null, ctx: { projectId: null, screen: 'portfolio' }, data: null, msgs: [], confirming: null, raf: 0, mode: 'chat', hist: null, w: Number(pref('pm_chat_w')) || DEF_W, inH: Number(pref('pm_chat_inh')) || 0, dragging: false, page: false, att: [], upl: false, deep: pref('pm_think_deep') === '1', th: { items: null, q: '', confirm: null } };
   let root = null;
   const $q = (sel) => (root ? root.querySelector(sel) : null);
   const ctxFromHash = () => {
@@ -121,7 +121,10 @@
           <div class="cht-grip" id="chtGrip" role="separator" aria-orientation="horizontal" aria-label="${esc(t('cht_grow'))}" data-tip="${esc(t('cht_grow'))}"></div>
           <div class="cht-ctxbar small" id="chtCtxBar"></div>
           <div class="small muted cht-note" id="chtNote"></div>
+          <div class="cht-atts small" id="chtAtts"></div>
           <div class="cht-composer">
+            <button class="btn ghost icon cht-attach" id="chtAttach" type="button" data-act="attach" aria-label="${esc(t('th_attach'))}" data-tip="${esc(t('th_attach_tip'))}">${icon('file')}</button>
+            <input type="file" id="chtFile" multiple hidden accept=".pdf,.docx,.xlsx,.pptx,.txt,.md,.csv">
             <button class="btn ghost icon cht-deep" id="chtDeep" type="button" data-act="deep" aria-pressed="false" aria-label="${esc(t('th_deep'))}" data-tip="${esc(t('th_deep_tip'))}">${icon('spark')}</button>
             <textarea id="chtIn" rows="1" maxlength="4000" placeholder="${esc(t('cht_ph'))}" aria-label="${esc(t('cht_ph'))}"></textarea>
             <button class="btn primary icon" id="chtSend" type="button" data-act="send" aria-label="${esc(t('cht_send'))}" data-tip="${esc(t('cht_send'))}">${icon('up')}</button>
@@ -136,6 +139,7 @@
     inp.addEventListener('input', grow);
     applyWidth(); applyInputHeight(); bindResize();
     root.addEventListener('input', (e) => { if (e.target && e.target.id === 'thSearch') onSearch(e); });
+    root.addEventListener('change', (e) => { if (e.target && e.target.id === 'chtFile') onFiles(e); });
     root.addEventListener('keydown', (e) => { if (e.key === 'Escape' && S.open && !S.page) { e.stopPropagation(); close(); } else if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('cht-h-item')) { e.preventDefault(); openChat(e.target.dataset.id); } else if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('th-item')) { e.preventDefault(); openThread(e.target.dataset.id); } });
   }
   // the message box grows with the text up to a cap. A person can raise the base height by dragging its top line.
@@ -278,6 +282,7 @@
   function paintShell() {
     root.classList.toggle('page', S.page);
     const pnl = $q('#chtPanel'); if (pnl) pnl.classList.toggle('page', S.page);
+    paintAtts();
     const ex = $q('#chtExpandBtn');
     if (ex) { const lab = t(S.page ? 'th_collapse' : 'th_expand'); ex.dataset.act = S.page ? 'collapse' : 'expand'; ex.innerHTML = icon(S.page ? 'shrink' : 'cols'); ex.setAttribute('aria-label', lab); ex.dataset.tip = lab; }
     const narrow = window.matchMedia('(max-width: 820px)').matches;
@@ -385,10 +390,33 @@
 
   const soon = () => { if (S.raf) return; S.raf = requestAnimationFrame(() => { S.raf = 0; paint(); }); };
 
+  // ---------- attachments ----------
+  function paintAtts() {
+    const box = $q('#chtAtts'); if (!box) return;
+    if (S.att.length && S.attPid !== S.ctx.projectId) S.att = [];
+    box.innerHTML = S.att.map((a) => `<span class="cht-att"><span class="cht-att-n">${esc(a.filename)}</span><button class="btn ghost icon" type="button" data-act="attrm" data-id="${a.id}" aria-label="${esc(t('th_att_rm'))}" data-tip="${esc(t('th_att_rm'))}">${icon('x')}</button></span>`).join('') + (S.upl ? `<span class="muted">${esc(t('th_uploading'))}</span>` : '');
+    const b = $q('#chtAttach'); if (b) b.disabled = S.upl || S.busy;
+  }
+  async function onFiles(e) {
+    const files = [...(e.target.files || [])]; e.target.value = '';
+    if (!files.length) return;
+    if (!S.ctx.projectId) return PM.toast(t('th_attach_need'), 'err');
+    S.upl = true; paintAtts();
+    try {
+      const fd = new FormData(); fd.append('purpose', 'store'); files.forEach((f) => fd.append('files', f));
+      const r = await PM.api('POST', `/api/projects/${S.ctx.projectId}/documents`, fd);
+      S.attPid = S.ctx.projectId;
+      for (const x of (r.results || [])) { if (x.handled === 'failed' || x.error) PM.toast(`${x.filename}: ${x.error || t('th_attach_fail')}`, 'err'); if (x.id && x.handled !== 'failed') S.att.push({ id: x.id, filename: x.filename }); }
+    } catch (x) { PM.toast(x.message || t('th_attach_fail'), 'err'); }
+    S.upl = false; paintAtts();
+    const i = $q('#chtIn'); if (i) i.focus();
+  }
+
   // ---------- sending ----------
   function submit() {
-    const i = $q('#chtIn'); const text = i.value.trim();
-    if (!text || S.busy) return;
+    const i = $q('#chtIn'); let text = i.value.trim();
+    if (!text || S.busy || S.upl) return;
+    if (S.att.length && S.attPid === S.ctx.projectId) { text += '\n[Attached: ' + S.att.map((a) => a.filename).join(', ') + ']'; S.att = []; paintAtts(); }
     i.value = ''; grow(); send(text);
   }
   async function send(text) {
@@ -502,6 +530,8 @@
     if (act === 'hdel') { S.hist.confirm = Number(id); return paint(); }
     if (act === 'hkeep') { S.hist.confirm = null; return paint(); }
     if (act === 'hdel2') return deleteChat(id);
+    if (act === 'attach') { const f = $q('#chtFile'); if (f) f.click(); return; }
+    if (act === 'attrm') { S.att = S.att.filter((a) => String(a.id) !== String(id)); return paintAtts(); }
     if (act === 'send') return submit();
     if (act === 'stop') { if (S.ctl) S.ctl.abort(); return; }
     if (act === 'sug') { return send(el.dataset.q); }
