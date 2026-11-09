@@ -422,13 +422,23 @@ function createChat({ db, store, api, auth, ops, model }) {
   }
   // ---------- history ----------
   // Every chat the person started stays in the list. One chat per context (a project, or all projects) is the open one.
+  // Production gets its tables from Replit Publish, so a new column can be missing for a while after a release.
+  // The thread list must keep working then, only without rename and pin.
+  let colsAt = 0, colsOk = false;
+  async function threadCols() {
+    if (colsOk || Date.now() - colsAt < 60000) return colsOk;
+    colsAt = Date.now();
+    try { colsOk = (await q("SELECT count(*) AS c FROM information_schema.columns WHERE table_name = 'chat_threads' AND column_name IN ('title', 'pinned')")).rows[0].c >= 2; } catch (e) { colsOk = false; }
+    return colsOk;
+  }
   async function historyList(user, projectId, search) {
     await access(user, projectId);
     const term = String(search || '').trim().slice(0, 80);
+    const cols = await threadCols();
     const params = [user.id, projectId || 0];
     let find = '';
-    if (term) { params.push('%' + term.replace(/[%_\\]/g, (c) => '\\' + c) + '%'); find = " AND (t.title ILIKE $3 OR EXISTS (SELECT 1 FROM chat_messages y WHERE y.thread_id = t.id AND y.role IN ('user','assistant') AND y.text ILIKE $3))"; }
-    const r = await q("SELECT t.id, t.archived, t.updated_at, t.created_at, t.title AS custom, t.pinned, (SELECT x.text FROM chat_messages x WHERE x.thread_id = t.id AND x.role = 'user' ORDER BY x.id LIMIT 1) AS title, (SELECT COUNT(*) FROM chat_messages x WHERE x.thread_id = t.id AND x.role IN ('user','assistant')) AS n FROM chat_threads t WHERE t.user_id = $1 AND COALESCE(t.project_id, 0) = $2 AND EXISTS (SELECT 1 FROM chat_messages x WHERE x.thread_id = t.id AND x.role = 'user')" + find + " ORDER BY t.pinned DESC, t.updated_at DESC LIMIT 100", params);
+    if (term) { params.push('%' + term.replace(/[%_\\]/g, (c) => '\\' + c) + '%'); find = " AND (" + (cols ? 't.title ILIKE $3 OR ' : '') + "EXISTS (SELECT 1 FROM chat_messages y WHERE y.thread_id = t.id AND y.role IN ('user','assistant') AND y.text ILIKE $3))"; }
+    const r = await q("SELECT t.id, t.archived, t.updated_at, t.created_at, " + (cols ? 't.title AS custom, t.pinned' : "'' AS custom, false AS pinned") + ", (SELECT x.text FROM chat_messages x WHERE x.thread_id = t.id AND x.role = 'user' ORDER BY x.id LIMIT 1) AS title, (SELECT COUNT(*) FROM chat_messages x WHERE x.thread_id = t.id AND x.role IN ('user','assistant')) AS n FROM chat_threads t WHERE t.user_id = $1 AND COALESCE(t.project_id, 0) = $2 AND EXISTS (SELECT 1 FROM chat_messages x WHERE x.thread_id = t.id AND x.role = 'user')" + find + " ORDER BY " + (cols ? 't.pinned DESC, ' : '') + "t.updated_at DESC LIMIT 100", params);
     return { items: r.rows.map((x) => ({ id: x.id, current: !x.archived, pinned: !!x.pinned, title: clip(String(x.custom || x.title || '').replace(/\s+/g, ' ').trim(), 90), messages: Number(x.n), updated_at: x.updated_at })) };
   }
   async function ownThread(user, id) {
@@ -447,6 +457,7 @@ function createChat({ db, store, api, auth, ops, model }) {
   // Rename or pin a chat. A blank title goes back to the first question.
   async function updateThread(user, id, body) {
     const t = await ownThread(user, id);
+    if (!(await threadCols())) throw err(503, 'Renaming and pinning need a database update that is not in place yet. Publish the latest version, then try again.');
     if (body.title !== undefined) await q('UPDATE chat_threads SET title = $2 WHERE id = $1', [t.id, clip(String(body.title || '').replace(/\s+/g, ' ').trim(), 90)]);
     if (body.pinned !== undefined) await q('UPDATE chat_threads SET pinned = $2 WHERE id = $1', [t.id, body.pinned === true]);
     return { ok: true };

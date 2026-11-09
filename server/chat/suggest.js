@@ -34,8 +34,9 @@ function rulesFor(p, sc, items, inbox, today) {
 
 function createSuggest({ q, api, access }) {
   async function states(userId) {
-    const r = await q('SELECT project_id, rule, sig, mode, until_day FROM chat_suggest_state WHERE user_id = $1', [userId]);
     const m = new Map();
+    let r;
+    try { r = await q('SELECT project_id, rule, sig, mode, until_day FROM chat_suggest_state WHERE user_id = $1', [userId]); } catch (e) { return m; } // the table arrives with the next Publish
     for (const x of r.rows) m.set(Number(x.project_id) + ':' + x.rule, x);
     return m;
   }
@@ -80,7 +81,7 @@ function createSuggest({ q, api, access }) {
     const hit = r.items.find((x) => x.rule === rule && x.project_id === (projectId || 0));
     if (!hit) return { ok: true, gone: true };
     const until = mode === 'snooze' ? addDays(r.today, SNOOZE_DAYS) : null;
-    await q('INSERT INTO chat_suggest_state(user_id, project_id, rule, sig, mode, until_day) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (user_id, project_id, rule) DO UPDATE SET sig = $4, mode = $5, until_day = $6, created_at = now()', [user.id, projectId || 0, rule, hit.sig, mode, until]);
+    try { await q('INSERT INTO chat_suggest_state(user_id, project_id, rule, sig, mode, until_day) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (user_id, project_id, rule) DO UPDATE SET sig = $4, mode = $5, until_day = $6, created_at = now()', [user.id, projectId || 0, rule, hit.sig, mode, until]); } catch (e) { throw Object.assign(new Error('Dismiss and snooze need a database update that is not in place yet. Publish the latest version, then try again.'), { status: 503, expose: true }); }
     return { ok: true, mode, until };
   }
   return { list, dismiss };
