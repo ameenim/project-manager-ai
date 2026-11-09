@@ -37,7 +37,7 @@ test('development retains existing migration behavior', async () => {
   await prepareSchema({
     async query(sql) {
       statements.push(sql);
-      return { rows: [{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }, { version: 5 }, { version: 6 }, { version: 7 }, { version: 8 }, { version: 9 }, { version: 10 }, { version: 11 }] };
+      return { rows: Array.from({ length: 200 }, (_, i) => ({ version: i + 1 })) }; // every migration is already applied
     },
     async tx() { assert.fail('Already applied migrations must not run again'); },
   });
