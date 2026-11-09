@@ -214,3 +214,51 @@ test('the Thinking Area nudges a person with no connection, and has a connect st
   assert.ok(v.starters.some((x) => x.id === 'connect'));
   const ar = prompt.startersFor('ar').find((x) => x.id === 'connect'); assert.ok(ar && ar.label && ar.q);
 });
+
+// ---------- templates and widgets ----------
+test('templates are listed, used in a report only when they fit, and the card shows the template', async () => {
+  const { u, p } = await setup();
+  const fd = new FormData(); fd.append('name', 'Board layout'); fd.append('doc_type', 'progress_weekly'); fd.append('body', '# Overview\n\n# Next steps\n');
+  const t = await s.call('POST', '/api/templates', fd, u.token); assert.equal(t.status, 200, JSON.stringify(t.data));
+  say(use('list_templates', {}, 'l1')); say(use('generate_report', { type: 'progress_weekly', template: 'Board layout' }, 'g1')); say(text('Prepared the weekly report with your template.'));
+  const r = await talk(u.token, { project_id: p.id, text: 'Generate the weekly report for this project with my Board layout template' });
+  assert.match(JSON.stringify(sc.seen[1].messages), /Board layout/);
+  const item = r.message.card.items[0];
+  assert.ok(item.changes.some((c) => c.field === 'template' && /Board layout/.test(c.after)));
+  assert.equal((await s.call('GET', `/api/projects/${p.id}/generated`, null, u.token)).data.generated.length, 0, 'nothing before Apply');
+  assert.equal((await s.call('POST', `/api/chat/messages/${r.message.id}/apply`, {}, u.token)).status, 200);
+  assert.match((await s.call('GET', `/api/projects/${p.id}/generated`, null, u.token)).data.generated[0].template || '', /Board layout/);
+  // a template for another document type is turned back
+  say(use('generate_report', { type: 'charter', template: 'Board layout' }, 'g2')); say(text('That template does not fit the charter.'));
+  const bad = await talk(u.token, { project_id: p.id, text: 'Generate the charter for this project with my Board layout template' });
+  assert.equal(bad.message.card, null);
+  say(use('generate_report', { type: 'charter', template: 'Nope' }, 'g3')); say(text('I could not find that template.'));
+  assert.equal((await talk(u.token, { project_id: p.id, text: 'Generate the charter for this project with the Nope template' })).message.card, null);
+});
+
+test('a custom widget is created as a private draft only after Apply, added to the overview, and undo removes it', async () => {
+  const { u, p } = await setup();
+  const spec = { dataset: 'tasks', viz: 'donut', groupBy: 'status', agg: 'count', filters: [{ field: 'milestone', op: 'eq', value: 'no' }] };
+  say(use('create_widget', { title: 'Task status split', description: 'Share of tasks by status', group: 'delivery', add_to: 'project', spec }, 'w1')); say(text('Prepared the widget.'));
+  const r = await talk(u.token, { project_id: p.id, text: 'Create a widget for this project showing tasks by status' });
+  assert.equal(r.message.card.items[0].sum.op, 'create_widget');
+  assert.equal((await s.call('GET', '/api/widgets/mine', null, u.token)).data.widgets.length, 0, 'nothing before Apply');
+  assert.equal((await s.call('POST', `/api/chat/messages/${r.message.id}/apply`, {}, u.token)).status, 200);
+  const mine = (await s.call('GET', '/api/widgets/mine', null, u.token)).data.widgets;
+  assert.equal(mine.length, 1); assert.equal(mine[0].title, 'Task status split'); assert.equal(mine[0].status, 'draft');
+  assert.equal(mine[0].added.project, true);
+  await s.call('POST', `/api/chat/messages/${r.message.id}/undo`, {}, u.token);
+  assert.equal((await s.call('GET', '/api/widgets/mine', null, u.token)).data.widgets.length, 0);
+});
+
+test('an invalid widget definition never makes a card', async () => {
+  const { u, p } = await setup();
+  const cases = [{ dataset: 'tasks', viz: 'donut', groupBy: 'status', agg: 'avg', measure: 'duration' }, { dataset: 'nothing', viz: 'bar' }, { dataset: 'tasks', viz: 'bar', groupBy: 'owner', agg: 'sum', measure: 'name' }, { dataset: 'tasks', viz: 'table', columns: [] }];
+  for (const [i, spec] of cases.entries()) {
+    say(use('create_widget', { title: 'Bad ' + i, group: 'delivery', spec }, 'b' + i)); say(text('That definition is not valid.'));
+    const r = await talk(u.token, { project_id: p.id, text: 'Create a widget for this project, attempt ' + i });
+    assert.equal(r.message.card, null, 'case ' + i);
+  }
+  say(use('create_widget', { title: 'Wrong group', group: 'finance', spec: { dataset: 'tasks', viz: 'kpi' } }, 'bg')); say(text('That group is not valid.'));
+  assert.equal((await talk(u.token, { project_id: p.id, text: 'Create a widget for this project in the finance group' })).message.card, null);
+});
