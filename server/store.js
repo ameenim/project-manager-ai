@@ -24,12 +24,19 @@ class Store {
     this.events = [];            // recent analysis events, newest last
     this.evSeq = 0;
     this.next = 0; this.limit = 0; this.spare = null; this.reserving = false;
+    this.sharded = true;         // false when the project_parts table is missing: everything then stays in the project row
   }
 
   // ---------- ids ----------
   // Every process takes a block of ten million ids from a database sequence, so ids never repeat across projects,
   // users or server instances, and creating an id never waits for the database.
-  async init() { await this.reserve(true); }
+  async init() {
+    await this.reserve(true);
+    // A database that has not got the project_parts table yet (a published app whose schema was not updated) must still
+    // work, so the app keeps the older layout, where everything is in the project row, until the table exists.
+    try { this.sharded = !!(await this.db.query("SELECT to_regclass('public.project_parts') AS t")).rows[0].t; } catch (e) { this.sharded = false; }
+    if (!this.sharded) console.error('project_parts table not found, projects stay in one row until the database schema is updated');
+  }
   async reserve(first) {
     const n = (await this.db.query("SELECT nextval('id_blocks') AS n")).rows[0].n;
     const start = Number(n) * BLOCK;
@@ -68,7 +75,7 @@ class Store {
   async readRows(ids) {
     const rows = (await this.db.query('SELECT id, data, version FROM projects WHERE id = ANY($1::bigint[])', [ids])).rows;
     if (!rows.length) return [];
-    const pr = (await this.db.query('SELECT project_id, k, data FROM project_parts WHERE project_id = ANY($1::bigint[])', [rows.map((r) => r.id)])).rows;
+    const pr = this.sharded ? (await this.db.query('SELECT project_id, k, data FROM project_parts WHERE project_id = ANY($1::bigint[])', [rows.map((r) => r.id)])).rows : [];
     const by = new Map();
     for (const r of pr) { if (!by.has(r.project_id)) by.set(r.project_id, {}); by.get(r.project_id)[r.k] = r.data; }
     return rows.map((row) => {
@@ -107,14 +114,14 @@ class Store {
     const run = prev.catch(() => {}).then(async () => {
       const c0 = this.cache.get(id);
       if (!c0) return false;
-      const heavy = new Set(['versions', 'texts']);
+      const heavy = new Set(this.sharded ? ['versions', 'texts'] : []);
       const keys = Object.keys(P).filter((k) => !k.startsWith('_') && P[k] !== undefined && !heavy.has(k));
       const parts = {}, sums = {};
       for (const k of keys) { const s = JSON.stringify(P[k]); if (s === undefined) continue; parts[k] = s; sums[k] = md5(s); }
 
       // heavy parts: one row per schedule version and one for the document texts
       const pknown = c0.psums, psums = {}, pwrite = {};
-      const vers = Array.isArray(P.versions) ? P.versions : null;
+      const vers = this.sharded && Array.isArray(P.versions) ? P.versions : null;
       if (vers && vers.every((v) => v && typeof v === 'object' && Number.isFinite(v.id))) {
         const recent = new Set(vers.slice(-2));
         for (const v of vers) {
@@ -126,7 +133,7 @@ class Store {
         }
         const order = JSON.stringify(vers.map((v) => v.id)); parts.vorder = order; sums.vorder = md5(order);
       } else if (vers) { const s = JSON.stringify(vers); parts.versions = s; sums.versions = md5(s); }
-      const tx = P.texts;
+      const tx = this.sharded ? P.texts : undefined;
       if (tx && typeof tx === 'object') {
         const ref = pknown && pknown.textsRef, ks = Object.keys(tx);
         const same = ref && ks.length === Object.keys(ref).length && ks.every((k) => ref[k] === tx[k]);
@@ -134,7 +141,7 @@ class Store {
         psums.texts = 'x';
         if (!same || !pknown || pknown.texts === undefined) pwrite.texts = JSON.stringify(tx);
       } else if (tx !== undefined) { const s = JSON.stringify(tx); parts.texts = s; sums.texts = md5(s); }
-      const stale = pknown ? Object.keys(pknown).filter((k) => k !== 'textsRef' && !(k in psums)) : null;
+      const stale = !this.sharded ? [] : pknown ? Object.keys(pknown).filter((k) => k !== 'textsRef' && !(k in psums)) : null;
 
       const known = c0.sums;
       let ver = null;

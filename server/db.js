@@ -34,12 +34,6 @@ const MIGRATIONS = [
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
   );
-  CREATE TABLE IF NOT EXISTS project_parts (
-    project_id BIGINT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    k TEXT NOT NULL,
-    data JSONB NOT NULL,
-    PRIMARY KEY (project_id, k)
-  );
   CREATE TABLE IF NOT EXISTS project_members (
     project_id BIGINT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -387,6 +381,16 @@ const MIGRATIONS = [
     until_day TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (user_id, project_id, rule)
+  );
+  `,
+  // 12: the heavy parts of a project (schedule versions, extracted document text) get their own rows, so a small edit
+  // does not rewrite megabytes. A project that still keeps everything in its own row is moved on its first save.
+  `
+  CREATE TABLE IF NOT EXISTS project_parts (
+    project_id BIGINT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    k TEXT NOT NULL,
+    data JSONB NOT NULL,
+    PRIMARY KEY (project_id, k)
   );
   `,
 ];

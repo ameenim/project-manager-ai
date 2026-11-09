@@ -146,3 +146,40 @@ test('another server adding a version is picked up and saved over without losing
   const back = (await s.app.store.readRows([q.id]))[0].data;
   assert.equal(back.versions[back.versions.length - 1].label, 'From other'); assert.equal(back.p.name, 'Edited after reload');
 });
+
+// ---------- a database from before the heavy parts got their own table ----------
+test('a database that already ran the older migrations gets the project_parts table', async () => {
+  const { prepareSchema } = require('../server/db');
+  const db = s.app.store.db;
+  await db.query('DROP TABLE project_parts');
+  const last = Number((await db.query('SELECT max(version) AS v FROM schema_migrations')).rows[0].v);
+  await db.query('DELETE FROM schema_migrations WHERE version = $1', [last]);
+  assert.equal((await db.query("SELECT to_regclass('public.project_parts') AS t")).rows[0].t, null);
+  await prepareSchema(db, {});
+  assert.ok((await db.query("SELECT to_regclass('public.project_parts') AS t")).rows[0].t, 'the table is created by the newest migration');
+});
+
+test('without the project_parts table the app keeps working with everything in the project row', async () => {
+  const store = s.app.store, db = store.db;
+  const q = await s.project(u.token, 'No parts table', 'plain text');
+  await s.call('POST', `/api/projects/${q.id}/tasks`, { name: 'T', duration: 2, start: '2026-01-05' }, u.token);
+  await s.call('POST', `/api/projects/${q.id}/schedule/versions`, { label: 'One' }, u.token);
+  await store.flush();
+  await db.query('DROP TABLE project_parts');
+  try {
+    await store.init();
+    assert.equal(store.sharded, false);
+    const P = (await store.forUser(u.id)).projects[q.id];
+    P.p.name = 'Saved without the table';
+    await s.call('POST', `/api/projects/${q.id}/schedule/versions`, { label: 'Two' }, u.token);
+    await store.save(P); await store.flush();
+    const row = (await db.query('SELECT data FROM projects WHERE id = $1', [q.id])).rows[0].data;
+    assert.ok(Array.isArray(row.versions) && row.versions.length >= 2, 'versions are inside the project row');
+    assert.equal(typeof row.texts, 'object');
+    assert.equal((await s.call('GET', `/api/projects/${q.id}`, null, u.token)).status, 200);
+  } finally {
+    await db.query('CREATE TABLE IF NOT EXISTS project_parts (project_id BIGINT NOT NULL REFERENCES projects(id) ON DELETE CASCADE, k TEXT NOT NULL, data JSONB NOT NULL, PRIMARY KEY (project_id, k))');
+    await store.init();
+  }
+  assert.equal(store.sharded, true);
+});
