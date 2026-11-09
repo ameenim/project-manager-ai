@@ -1242,6 +1242,8 @@ module.exports = function createApi(store, auth, connectors, ops) {
     const out = [], src = [];
     for (const d of await addDocuments(P, files)) {
       audit(P, ACTOR(), 'document_uploaded', { summary: `Uploaded ${d.filename} (${d.kind})` });
+      // the Thinking Area only stores the file and reads its text. Nothing is analyzed and no suggestion is created.
+      if (mode === 'store') { out.push({ id: d.id, filename: d.filename, kind: d.kind, handled: 'stored', ...(d.read_error ? { error: d.read_error } : {}) }); continue; }
       if (d.read_error) { out.push({ id: d.id, filename: d.filename, kind: d.kind, handled: 'failed', error: d.read_error }); continue; }
       const asSource = mode === 'source' || (mode === 'auto' && ['proposal', 'contract', 'po'].includes(d.kind));
       if (asSource) { src.push(d); out.push({ id: d.id, filename: d.filename, kind: d.kind, handled: 'extraction' }); }
@@ -1249,6 +1251,12 @@ module.exports = function createApi(store, auth, connectors, ops) {
     }
     if (src.length) analyzeDocs(P, src).catch((e) => console.error(e));
     return { results: out };
+  });
+  // The text of one stored document, a page at a time, so the Thinking Area can read it before writing something related.
+  on('GET', '/api/projects/(\\d+)/documents/(\\d+)/text', async (m, q) => {
+    const P = P_(m[1]); const d = P.documents.find((x) => x.id === Number(m[2])); if (!d) throw err(404, 'Document not found');
+    const text = String(P.texts[d.id] || ''); const off = Math.max(0, Number(q.offset) || 0); const size = 6000;
+    return { id: d.id, filename: d.filename, kind: d.kind, total: text.length, offset: off, text: text.slice(off, off + size), next: off + size < text.length ? off + size : null };
   });
   // Finds the passages of stored document text that match a question, with the file name and the exact sentence.
   const SEARCH_STOP = new Set(['the', 'a', 'an', 'of', 'to', 'and', 'or', 'in', 'on', 'for', 'is', 'are', 'was', 'what', 'does', 'do', 'say', 'says', 'about', 'my', 'our', 'this', 'that', 'with', 'by', 'it', 'at', 'as', 'be', 'any', 'there', 'contract', 'document', 'من', 'في', 'على', 'ما', 'هو', 'هي', 'عن', 'هل', 'الى', 'إلى', 'و', 'ماذا', 'يقول']);
@@ -1364,6 +1372,12 @@ module.exports = function createApi(store, auth, connectors, ops) {
     const P = P_(m[1]); if (!String(b.name || '').trim()) throw err(400, 'Name is required');
     const r = { id: nid(), project_id: P.id, name: b.name.trim(), email: b.email || null, role: b.role || null, organization: String(b.organization || '').trim().slice(0, 80) || null, jira_account: b.jira_account || null, teams_name: b.teams_name || null };
     P.resources.push(r); return { resource: r };
+  });
+  on('PUT', '/api/projects/(\\d+)/resources/(\\d+)', async (m, q, b) => {
+    const P = P_(m[1]); const r = P.resources.find((x) => x.id === Number(m[2])); if (!r) throw err(404, 'Person not found');
+    if ('name' in b) { const n = String(b.name || '').replace(/\s+/g, ' ').trim().slice(0, 120); if (!n) throw err(400, 'Name is required'); r.name = n; }
+    for (const [k, len] of [['role', 80], ['organization', 80], ['email', 120], ['teams_name', 120], ['jira_account', 120]]) if (k in b) r[k] = String(b[k] || '').trim().slice(0, len) || null;
+    return { resource: clone(r) };
   });
   // The people named in the schedule's Owner column, as suggestions for the team.
   on('GET', '/api/projects/(\\d+)/team/from-schedule', async (m) => {

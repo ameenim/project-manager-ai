@@ -1764,3 +1764,21 @@ body.chat-page .cht-fab { display: none; }
 .cl-pop { animation: pop .4s var(--ease); }
 @media (max-width: 600px) { .cl-acc { grid-template-columns: 1fr; } .cl-actions { justify-content: flex-start; } }
 @media (prefers-reduced-motion: reduce) { .cl-pop { animation: none; } }
+/* Settings team card: grouped by organization */
+.card-head h3.tm-title { flex: none; } #teamCard .card-head { flex-wrap: wrap; row-gap: 8px; }
+.tm-search { position: relative; margin-bottom: 14px; } .tm-search input { width: 100%; padding-inline-start: 34px; } .tm-search-i { position: absolute; inset-inline-start: 10px; top: 50%; transform: translateY(-50%); color: var(--faint); display: grid; pointer-events: none; }
+.tm-table { table-layout: auto; } table.t.tm-table td { vertical-align: middle; } .tm-table td:not(:first-child) { white-space: nowrap; } .tm-who { display: flex; align-items: center; gap: 10px; min-width: 150px; } .tm-name { font-weight: 600; unicode-bidi: plaintext; }
+.tm-cut span { unicode-bidi: plaintext; display: block; overflow: hidden; text-overflow: ellipsis; } .tm-cut { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-small); color: var(--muted); }
+.tm-act { white-space: nowrap; width: 1%; position: sticky; inset-inline-end: 0; background: var(--surface); } .tm-table tr:hover .tm-act { background: var(--surface-2); }
+.tm-sort { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: inherit; cursor: pointer; display: inline-flex; gap: 4px; align-items: center; } .tm-sort:hover, .tm-sort.on { color: var(--text); } .tm-arr { color: var(--primary); }
+.tm-pager { display: flex; align-items: center; gap: 4px; margin-top: 12px; flex-wrap: wrap; }
+.tm-err { color: var(--danger); margin-top: 10px; }
+
+/* Thinking Area attachments */
+.cht-atts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 2px 6px; }
+.cht-atts:empty { display: none; }
+.cht-att { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; padding: 2px 4px 2px 10px; border: 1px solid var(--border-strong); border-radius: 20px; background: var(--surface-2); color: var(--text); font-size: var(--fs-small); }
+[dir="rtl"] .cht-att { padding: 2px 10px 2px 4px; }
+.cht-att-n { min-width: 0; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cht-att .btn.icon { min-width: 24px; min-height: 24px; padding: 2px; }
+.cht-attach { flex: none; align-self: flex-end; }

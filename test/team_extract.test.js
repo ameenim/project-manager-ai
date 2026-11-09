@@ -55,3 +55,18 @@ test('a viewer can read the suggestions but cannot add people, and strangers get
   assert.equal((await s.call('POST', `/api/projects/${p.id}/team/from-schedule`, { people: [{ name: 'X Y' }] }, vw.token)).status, 403);
   assert.equal((await s.call('GET', `/api/projects/${p.id}/team/from-schedule`, null, other.token)).status, 404);
 });
+
+test('a team member can be edited, and bad input is refused', async () => {
+  const u = await s.user(), p = await s.project(u.token, 'Edit team');
+  const add = await s.call('POST', `/api/projects/${p.id}/resources`, { name: 'Mona Younes', organization: 'Tarjama' }, u.token);
+  assert.equal(add.status, 200);
+  const id = add.data.resource.id;
+  const put = await s.call('PUT', `/api/projects/${p.id}/resources/${id}`, { role: 'Project manager', email: 'mona@example.com', organization: 'DGE' }, u.token);
+  assert.equal(put.status, 200); assert.equal(put.data.resource.role, 'Project manager'); assert.equal(put.data.resource.organization, 'DGE'); assert.equal(put.data.resource.name, 'Mona Younes', 'fields not sent are kept');
+  const clear = await s.call('PUT', `/api/projects/${p.id}/resources/${id}`, { email: '' }, u.token);
+  assert.equal(clear.data.resource.email, null);
+  assert.equal((await s.call('PUT', `/api/projects/${p.id}/resources/${id}`, { name: '  ' }, u.token)).status, 400);
+  assert.equal((await s.call('PUT', `/api/projects/${p.id}/resources/999999`, { role: 'x' }, u.token)).status, 404);
+  const list = await s.call('GET', `/api/projects/${p.id}/resources`, null, u.token);
+  assert.equal(list.data.resources.length, 1);
+});
