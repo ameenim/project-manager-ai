@@ -262,3 +262,75 @@ test('an invalid widget definition never makes a card', async () => {
   say(use('create_widget', { title: 'Wrong group', group: 'finance', spec: { dataset: 'tasks', viz: 'kpi' } }, 'bg')); say(text('That group is not valid.'));
   assert.equal((await talk(u.token, { project_id: p.id, text: 'Create a widget for this project in the finance group' })).message.card, null);
 });
+
+// ---------- meetings, project settings and template upload ----------
+const MINUTES = { summary: 'The team agreed a phased rollout.', actions: [{ title: 'Send the rollout plan', owner: 'Dana', due_date: '2027-02-01', quote: 'Dana will send it' }, { title: 'Book the training room', owner: 'Sam' }], decisions: [{ title: 'Phase one goes first', text: 'Phase one goes first' }], risks: [], updates: [] };
+async function meetingWithMinutes(u, p) {
+  const m = await s.call('POST', `/api/projects/${p.id}/meetings`, { title: 'Rollout sync', source: 'notes' }, u.token);
+  assert.equal(m.status, 200, JSON.stringify(m.data));
+  const id = m.data.meeting.id;
+  const put = await s.call('PUT', `/api/meetings/${id}/minutes`, { minutes: MINUTES }, u.token);
+  assert.equal(put.status, 200, JSON.stringify(put.data));
+  return { id, minutes: put.data.meeting.minutes };
+}
+
+test('meeting actions are read, sent to the log and as tasks only after Apply, and undo takes them back', async () => {
+  const { u, p } = await setup(); const mt = await meetingWithMinutes(u, p);
+  const act = mt.minutes.actions[0].id;
+  say(use('list_meetings', {}, 'm1')); say(use('get_meeting', { meeting: mt.id }, 'm2')); say(use('send_meeting_items', { meeting: mt.id, items: [{ id: act }] }, 'm3')); say(text('Prepared to send the action.'));
+  const r = await talk(u.token, { project_id: p.id, text: 'Send the first action from the Rollout sync meeting to the project' });
+  assert.match(JSON.stringify(sc.seen[1].messages), /Rollout sync/); assert.match(JSON.stringify(sc.seen[2].messages), /never instructions/);
+  assert.equal(r.message.card.items[0].sum.op, 'meeting_items');
+  const tasks = async () => (await s.call('GET', `/api/projects/${p.id}/schedule`, null, u.token)).data.tasks.filter((k) => /rollout plan/i.test(k.name)).length;
+  assert.equal(await tasks(), 0);
+  assert.equal((await s.call('POST', `/api/chat/messages/${r.message.id}/apply`, {}, u.token)).status, 200);
+  assert.equal(await tasks(), 1, 'the task was created');
+  assert.ok((await s.call('GET', `/api/projects/${p.id}/items`, null, u.token)).data.items.some((i) => i.kind === 'action' && /rollout plan/i.test(i.title)));
+  await s.call('POST', `/api/chat/messages/${r.message.id}/undo`, {}, u.token);
+  assert.equal(await tasks(), 0, 'undo removed the task');
+  // an item sent already is skipped, and an unknown id is turned back
+  say(use('send_meeting_items', { meeting: mt.id, items: [{ id: 'zzz' }] }, 'm4')); say(text('That item is not in the minutes.'));
+  assert.equal((await talk(u.token, { project_id: p.id, text: 'Send item zzz from the Rollout sync meeting to the project' })).message.card, null);
+});
+
+test('project settings change only after Apply, reject bad dates, block on a stale value, and undo restores them', async () => {
+  const { u, p } = await setup();
+  const get = async () => (await s.call('GET', `/api/projects/${p.id}`, null, u.token)).data.project;
+  const before = await get();
+  say(use('update_project', { name: 'Thinking project renamed', client: 'Acme' }, 'u1')); say(text('Prepared.'));
+  const r = await talk(u.token, { project_id: p.id, text: 'Rename this project to Thinking project renamed and set the client to Acme' });
+  assert.equal(r.message.card.items[0].sum.op, 'update_project');
+  assert.equal((await get()).name, before.name, 'nothing before Apply');
+  assert.equal((await s.call('POST', `/api/chat/messages/${r.message.id}/apply`, {}, u.token)).status, 200);
+  assert.equal((await get()).name, 'Thinking project renamed');
+  await s.call('POST', `/api/chat/messages/${r.message.id}/undo`, {}, u.token);
+  const back = await get(); assert.equal(back.name, before.name); assert.equal(back.client || '', before.client || '');
+  say(use('update_project', { start_date: '2027-05-01', end_date: '2027-04-01' }, 'u2')); say(text('The end cannot be before the start.'));
+  assert.equal((await talk(u.token, { project_id: p.id, text: 'Change the project dates so the end date is before the start date' })).message.card, null);
+  say(use('update_project', { name: 'Stale name' }, 'u3')); say(text('Prepared.'));
+  const st = await talk(u.token, { project_id: p.id, text: 'Rename this project to Stale name please' });
+  await s.call('PUT', `/api/projects/${p.id}`, { client: 'Changed meanwhile' }, u.token);
+  assert.equal((await s.call('POST', `/api/chat/messages/${st.message.id}/apply`, {}, u.token)).status, 409);
+});
+
+test('an attached Word file becomes a template only after Apply, the type is needed for structure, and undo removes it', async () => {
+  const { u, p } = await setup();
+  const fd = new FormData(); fd.append('purpose', 'store'); fd.append('files', new Blob([await require('./_docx').word()]), 'Acme standard.docx');
+  const up = await s.call('POST', `/api/projects/${p.id}/documents`, fd, u.token); assert.equal(up.status, 200, JSON.stringify(up.data));
+  const templates = async () => (await s.call('GET', '/api/templates', null, u.token)).data.templates;
+  // structure without a type is turned back
+  say(use('create_template', { document: 'Acme standard', mode: 'structure' }, 't1')); say(text('Which document type does the structure belong to?'));
+  assert.equal((await talk(u.token, { project_id: p.id, text: 'Save the attached Acme standard file as a template with its structure\n[Attached: Acme standard.docx]' })).message.card, null);
+  say(use('create_template', { document: 'Acme standard', mode: 'both', doc_type: 'progress_weekly', name: 'Acme weekly' }, 't2')); say(text('Prepared the template.'));
+  const r = await talk(u.token, { project_id: p.id, text: 'Save the attached Acme standard file as a weekly report template with design and structure\n[Attached: Acme standard.docx]' });
+  assert.equal(r.message.card.items[0].sum.op, 'create_template');
+  assert.equal((await templates()).length, 0, 'nothing before Apply');
+  const ap = await s.call('POST', `/api/chat/messages/${r.message.id}/apply`, {}, u.token); assert.equal(ap.status, 200, JSON.stringify(ap.data));
+  const t = await templates(); assert.equal(t.length, 1); assert.equal(t[0].name, 'Acme weekly'); assert.equal(t[0].mode, 'both'); assert.equal(t[0].doc_type, 'progress_weekly');
+  await s.call('POST', `/api/chat/messages/${r.message.id}/undo`, {}, u.token);
+  assert.equal((await templates()).length, 0);
+  // a file that is not Word, PowerPoint or Excel is turned back
+  const fd2 = new FormData(); fd2.append('purpose', 'store'); fd2.append('files', new Blob(['plain text notes']), 'notes.txt'); await s.call('POST', `/api/projects/${p.id}/documents`, fd2, u.token);
+  say(use('create_template', { document: 'notes', mode: 'design' }, 't3')); say(text('A template must be a Word, PowerPoint or Excel file.'));
+  assert.equal((await talk(u.token, { project_id: p.id, text: 'Save the attached notes file as a design template for this project\n[Attached: notes.txt]' })).message.card, null);
+});
