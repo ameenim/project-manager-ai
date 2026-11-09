@@ -47,7 +47,7 @@
   const DAY = 864e5;
   const dnum = (s) => { const [y, m, d] = s.split('-').map(Number); return Date.UTC(y, m - 1, d) / DAY; };
   const loc = () => (S.lang === 'ar' ? 'ar-AE' : 'en-US');
-  const dayShort = (d) => new Date(d + 'T00:00:00Z').toLocaleDateString(loc(), { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  const dayShort = (d) => PM.dtf(loc(), { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(d + 'T00:00:00Z'));
   const dayLong = (d) => new Date(d + 'T00:00:00Z').toLocaleDateString(loc(), { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
   const nf = (v, o) => Number(v).toLocaleString(loc(), { maximumFractionDigits: 0, ...(o || {}) });
   const num = (v) => v != null && Number.isFinite(v);

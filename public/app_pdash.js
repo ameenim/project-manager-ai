@@ -187,7 +187,7 @@
   // ================= project dashboard widgets =================
   const SRC = { teams: 'chat', email: 'mail', jira: 'jira', upload: 'file', manual: 'edit' };
   const stateTone = (s) => (s === 'paid' || s === 'closed' ? 'green' : s === 'invoiced' ? 'blue' : '');
-  const monthLabel = (m) => new Date(m + '-01T00:00:00Z').toLocaleDateString(S.lang === 'ar' ? 'ar-AE' : 'en-US', { month: 'short', year: '2-digit', timeZone: 'UTC' });
+  const monthLabel = (m) => PM.dtf(S.lang === 'ar' ? 'ar-AE' : 'en-US', { month: 'short', year: '2-digit', timeZone: 'UTC' }).format(new Date(m + '-01T00:00:00Z'));
   const short = (n) => (Math.abs(n) >= 1e6 ? (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M' : Math.abs(n) >= 1e3 ? Math.round(n / 1e3) + 'K' : String(Math.round(n)));
   const W = () => Math.max(300, Math.min(1600, Math.round(H().width())));
   const nice = (max) => { const p = Math.pow(10, Math.floor(Math.log10(max || 1))); const f = max / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p; };

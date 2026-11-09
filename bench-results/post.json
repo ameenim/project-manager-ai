@@ -1,0 +1,899 @@
+{
+  "label": "post",
+  "dbLatencyMs": 0,
+  "runs": 7,
+  "bigTasks": 600,
+  "when": "2026-11-09T06:12:14.161Z",
+  "node": "v22.23.4",
+  "results": [
+    {
+      "screen": "Shell",
+      "action": "Boot: me",
+      "call": "GET /api/me",
+      "status": 200,
+      "kb": 0.3,
+      "median": 1.7,
+      "p95": 1.9,
+      "queries": 2,
+      "min": 1.6,
+      "max": 1.9
+    },
+    {
+      "screen": "Shell",
+      "action": "Boot: projects list",
+      "call": "GET /api/projects",
+      "status": 200,
+      "kb": 13.5,
+      "median": 22.7,
+      "p95": 31.4,
+      "queries": 2,
+      "min": 19.8,
+      "max": 31.4
+    },
+    {
+      "screen": "Shell",
+      "action": "Notifications and inbox",
+      "call": "GET /api/projects/10001402/inbox",
+      "status": 200,
+      "kb": 3.6,
+      "median": 2.4,
+      "p95": 4.6,
+      "queries": 2,
+      "min": 2.1,
+      "max": 4.6
+    },
+    {
+      "screen": "Shell",
+      "action": "Analysis events poll",
+      "call": "GET /api/analysis/events?since=0",
+      "status": 200,
+      "kb": 0,
+      "median": 1.7,
+      "p95": 2,
+      "queries": 2,
+      "min": 1.7,
+      "max": 2
+    },
+    {
+      "screen": "Portfolio",
+      "action": "Open portfolio dashboard",
+      "call": "GET /api/dashboard",
+      "status": 200,
+      "kb": 111.4,
+      "median": 37.3,
+      "p95": 39.7,
+      "queries": 4,
+      "min": 35,
+      "max": 39.7
+    },
+    {
+      "screen": "Portfolio",
+      "action": "Open portfolio trends",
+      "call": "GET /api/trends?days=30",
+      "status": 200,
+      "kb": 10.9,
+      "median": 3,
+      "p95": 3.6,
+      "queries": 3,
+      "min": 2.9,
+      "max": 3.6
+    },
+    {
+      "screen": "Portfolio",
+      "action": "Calendar",
+      "call": "GET /api/calendar",
+      "status": 200,
+      "kb": 507.6,
+      "median": 24.2,
+      "p95": 24.8,
+      "queries": 2,
+      "min": 22.6,
+      "max": 24.8
+    },
+    {
+      "screen": "Portfolio",
+      "action": "Widgets installed",
+      "call": "GET /api/widgets/installed?scope=portfolio",
+      "status": 200,
+      "kb": 0,
+      "median": 2.3,
+      "p95": 2.4,
+      "queries": 3,
+      "min": 2.1,
+      "max": 2.4
+    },
+    {
+      "screen": "Project overview",
+      "action": "Open project (small)",
+      "call": "GET /api/projects/10001401",
+      "status": 200,
+      "kb": 0.8,
+      "median": 1.9,
+      "p95": 4.4,
+      "queries": 2,
+      "min": 1.8,
+      "max": 4.4
+    },
+    {
+      "screen": "Project overview",
+      "action": "Open project (large)",
+      "call": "GET /api/projects/10001402",
+      "status": 200,
+      "kb": 0.6,
+      "median": 3.9,
+      "p95": 8.3,
+      "queries": 2,
+      "min": 3.8,
+      "max": 8.3
+    },
+    {
+      "screen": "Project overview",
+      "action": "Project dashboard (large)",
+      "call": "GET /api/projects/10001402/dashboard",
+      "status": 200,
+      "kb": 35.7,
+      "median": 23.1,
+      "p95": 31.3,
+      "queries": 4,
+      "min": 19.7,
+      "max": 31.3
+    },
+    {
+      "screen": "Project overview",
+      "action": "Project trends (large)",
+      "call": "GET /api/projects/10001402/trends?days=30",
+      "status": 200,
+      "kb": 1.1,
+      "median": 3,
+      "p95": 3.7,
+      "queries": 3,
+      "min": 2.9,
+      "max": 3.7
+    },
+    {
+      "screen": "Project overview",
+      "action": "Widgets installed (project)",
+      "call": "GET /api/widgets/installed?scope=project",
+      "status": 200,
+      "kb": 0,
+      "median": 3.2,
+      "p95": 3.6,
+      "queries": 3,
+      "min": 3,
+      "max": 3.6
+    },
+    {
+      "screen": "Schedule",
+      "action": "Open schedule (large)",
+      "call": "GET /api/projects/10001402/schedule",
+      "status": 200,
+      "kb": 270.3,
+      "median": 6.7,
+      "p95": 8,
+      "queries": 2,
+      "min": 6.4,
+      "max": 8
+    },
+    {
+      "screen": "Schedule",
+      "action": "Validate schedule",
+      "call": "GET /api/projects/10001402/schedule/validate",
+      "status": 200,
+      "kb": 21.1,
+      "median": 20.1,
+      "p95": 22.3,
+      "queries": 2,
+      "min": 18.8,
+      "max": 22.3
+    },
+    {
+      "screen": "Schedule",
+      "action": "Versions list",
+      "call": "GET /api/projects/10001402/schedule/versions",
+      "status": 200,
+      "kb": 18.7,
+      "median": 2.5,
+      "p95": 2.8,
+      "queries": 2,
+      "min": 2.4,
+      "max": 2.8
+    },
+    {
+      "screen": "Logs and risks",
+      "action": "Open items list",
+      "call": "GET /api/projects/10001402/items",
+      "status": 200,
+      "kb": 65.6,
+      "median": 3,
+      "p95": 3.5,
+      "queries": 2,
+      "min": 2.9,
+      "max": 3.5
+    },
+    {
+      "screen": "Documents",
+      "action": "Open documents",
+      "call": "GET /api/projects/10001402/documents",
+      "status": 200,
+      "kb": 0.7,
+      "median": 1.8,
+      "p95": 1.8,
+      "queries": 2,
+      "min": 1.7,
+      "max": 1.8
+    },
+    {
+      "screen": "Documents",
+      "action": "Search documents",
+      "call": "GET /api/projects/10001402/documents/search?q=acceptance",
+      "status": 200,
+      "kb": 0.8,
+      "median": 34.6,
+      "p95": 37.9,
+      "queries": 2,
+      "min": 29.2,
+      "max": 37.9
+    },
+    {
+      "screen": "Reports",
+      "action": "Open generated documents",
+      "call": "GET /api/projects/10001402/generated",
+      "status": 200,
+      "kb": 0,
+      "median": 1.8,
+      "p95": 2.2,
+      "queries": 2,
+      "min": 1.7,
+      "max": 2.2
+    },
+    {
+      "screen": "Reports",
+      "action": "Folders",
+      "call": "GET /api/projects/10001402/folders",
+      "status": 200,
+      "kb": 0,
+      "median": 1.7,
+      "p95": 2.8,
+      "queries": 2,
+      "min": 1.6,
+      "max": 2.8
+    },
+    {
+      "screen": "Reports",
+      "action": "Templates",
+      "call": "GET /api/templates",
+      "status": 200,
+      "kb": 0,
+      "median": 1.6,
+      "p95": 1.7,
+      "queries": 2,
+      "min": 1.5,
+      "max": 1.7
+    },
+    {
+      "screen": "Reports",
+      "action": "Doc types",
+      "call": "GET /api/doc-types",
+      "status": 200,
+      "kb": 2.5,
+      "median": 2.3,
+      "p95": 2.6,
+      "queries": 2,
+      "min": 2,
+      "max": 2.6
+    },
+    {
+      "screen": "Resources",
+      "action": "Open resources",
+      "call": "GET /api/projects/10001402/resources",
+      "status": 200,
+      "kb": 0,
+      "median": 2,
+      "p95": 2.2,
+      "queries": 2,
+      "min": 1.8,
+      "max": 2.2
+    },
+    {
+      "screen": "Meetings",
+      "action": "Open meetings",
+      "call": "GET /api/projects/10001402/meetings",
+      "status": 200,
+      "kb": 0.1,
+      "median": 2.1,
+      "p95": 2.3,
+      "queries": 3,
+      "min": 2,
+      "max": 2.3
+    },
+    {
+      "screen": "Settings",
+      "action": "Members",
+      "call": "GET /api/projects/10001402/members",
+      "status": 200,
+      "kb": 0.1,
+      "median": 2,
+      "p95": 2.8,
+      "queries": 3,
+      "min": 2,
+      "max": 2.8
+    },
+    {
+      "screen": "Settings",
+      "action": "Audit trail",
+      "call": "GET /api/projects/10001402/audit",
+      "status": 200,
+      "kb": 23.5,
+      "median": 2.6,
+      "p95": 3.5,
+      "queries": 2,
+      "min": 2.4,
+      "max": 3.5
+    },
+    {
+      "screen": "Settings",
+      "action": "Connections",
+      "call": "GET /api/connections",
+      "status": 200,
+      "kb": 0.8,
+      "median": 1.9,
+      "p95": 2,
+      "queries": 3,
+      "min": 1.8,
+      "max": 2
+    },
+    {
+      "screen": "Settings",
+      "action": "Billing",
+      "call": "GET /api/billing",
+      "status": 200,
+      "kb": 0.3,
+      "median": 3.3,
+      "p95": 3.4,
+      "queries": 8,
+      "min": 3.3,
+      "max": 3.4
+    },
+    {
+      "screen": "Widgets",
+      "action": "Marketplace list",
+      "call": "GET /api/widgets?",
+      "status": 200,
+      "kb": 0,
+      "median": 3.4,
+      "p95": 5.5,
+      "queries": 3,
+      "min": 3.3,
+      "max": 5.5
+    },
+    {
+      "screen": "Widgets",
+      "action": "Datasets",
+      "call": "GET /api/widgets/datasets?project=10001402",
+      "status": 200,
+      "kb": 624,
+      "median": 37,
+      "p95": 42.3,
+      "queries": 2,
+      "min": 34.6,
+      "max": 42.3
+    },
+    {
+      "screen": "Chat",
+      "action": "Open chat history",
+      "call": "GET /api/chat?",
+      "status": 200,
+      "kb": 0.7,
+      "median": 32,
+      "p95": 65.7,
+      "queries": 7,
+      "min": 31.6,
+      "max": 65.7
+    },
+    {
+      "screen": "Schedule",
+      "action": "Edit task progress (full answer)",
+      "call": "POST /api/projects/10001402/schedule/apply",
+      "status": 200,
+      "kb": 270.3,
+      "median": 41.9,
+      "p95": 49.8,
+      "queries": 3,
+      "min": 39.2,
+      "max": 49.8
+    },
+    {
+      "screen": "Schedule",
+      "action": "Edit task progress (slim answer)",
+      "call": "POST /api/projects/10001402/schedule/apply",
+      "status": 200,
+      "kb": 0,
+      "median": 37.5,
+      "p95": 51,
+      "queries": 3,
+      "min": 32.5,
+      "max": 51
+    },
+    {
+      "screen": "Schedule",
+      "action": "Change task duration",
+      "call": "POST /api/projects/10001402/schedule/apply",
+      "status": 200,
+      "kb": 270.3,
+      "median": 40.2,
+      "p95": 42.8,
+      "queries": 3,
+      "min": 36.1,
+      "max": 42.8
+    },
+    {
+      "screen": "Schedule",
+      "action": "Preview a change",
+      "call": "POST /api/projects/10001402/schedule/preview",
+      "status": 200,
+      "kb": 0.3,
+      "median": 10.9,
+      "p95": 12.7,
+      "queries": 3,
+      "min": 10.5,
+      "max": 12.7
+    },
+    {
+      "screen": "Schedule",
+      "action": "Add a task",
+      "call": "POST /api/projects/10001402/tasks",
+      "status": 200,
+      "kb": 273.3,
+      "median": 43.1,
+      "p95": 47.7,
+      "queries": 3,
+      "min": 41.4,
+      "max": 47.7
+    },
+    {
+      "screen": "Schedule",
+      "action": "Save a version",
+      "call": "POST /api/projects/10001402/schedule/versions",
+      "status": 200,
+      "kb": 18.7,
+      "median": 27.1,
+      "p95": 67.6,
+      "queries": 3,
+      "min": 22,
+      "max": 67.6
+    },
+    {
+      "screen": "Schedule",
+      "action": "Set baseline",
+      "call": "POST /api/projects/10001402/schedule/baseline",
+      "status": 200,
+      "kb": 282.8,
+      "median": 21.9,
+      "p95": 24.6,
+      "queries": 3,
+      "min": 21.6,
+      "max": 24.6
+    },
+    {
+      "screen": "Logs and risks",
+      "action": "Edit a risk",
+      "call": "PUT /api/items/10002005",
+      "status": 200,
+      "kb": 0.5,
+      "median": 10.8,
+      "p95": 10.8,
+      "queries": 3,
+      "min": 10.7,
+      "max": 10.8
+    },
+    {
+      "screen": "Logs and risks",
+      "action": "Add an item",
+      "call": "POST /api/projects/10001402/items",
+      "status": 200,
+      "kb": 0.3,
+      "median": 12.6,
+      "p95": 14.8,
+      "queries": 3,
+      "min": 11.3,
+      "max": 14.8
+    },
+    {
+      "screen": "Logs and risks",
+      "action": "Confirm / reopen item",
+      "call": "POST /api/items/10002005/confirm",
+      "status": 200,
+      "kb": 1,
+      "median": 12.6,
+      "p95": 15,
+      "queries": 3,
+      "min": 11.6,
+      "max": 15
+    },
+    {
+      "screen": "Project overview",
+      "action": "Edit project field",
+      "call": "PUT /api/projects/10001402",
+      "status": 200,
+      "kb": 0.6,
+      "median": 13.9,
+      "p95": 15.5,
+      "queries": 3,
+      "min": 13,
+      "max": 15.5
+    },
+    {
+      "screen": "Resources",
+      "action": "Add resource",
+      "call": "POST /api/projects/10001402/resources",
+      "status": 200,
+      "kb": 0.2,
+      "median": 10,
+      "p95": 11.3,
+      "queries": 3,
+      "min": 9.7,
+      "max": 11.3
+    },
+    {
+      "screen": "Settings",
+      "action": "Save profile",
+      "call": "PUT /api/me",
+      "status": 200,
+      "kb": 0.2,
+      "median": 2.1,
+      "p95": 2.2,
+      "queries": 3,
+      "min": 2,
+      "max": 2.2
+    },
+    {
+      "screen": "Portfolio",
+      "action": "Save dashboard layout",
+      "call": "PUT /api/me",
+      "status": 200,
+      "kb": 0.2,
+      "median": 2,
+      "p95": 2,
+      "queries": 3,
+      "min": 1.9,
+      "max": 2
+    }
+  ],
+  "static": [
+    {
+      "file": "app.html",
+      "kb": 3.5,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "styles.css",
+      "kb": 193.2,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "onboard.css",
+      "kb": 6.4,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "support.css",
+      "kb": 3.1,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "i18n.js",
+      "kb": 168,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "logo.js",
+      "kb": 18.7,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "app_loader.js",
+      "kb": 3.8,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "engine.js",
+      "kb": 164.1,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "visuals.js",
+      "kb": 12.8,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "chartlabels.js",
+      "kb": 9.3,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "gantt.js",
+      "kb": 77.4,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "widgetspec.js",
+      "kb": 16.6,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "app.js",
+      "kb": 50.5,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "datepicker.js",
+      "kb": 14.3,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "tracker.js",
+      "kb": 5.5,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "export.js",
+      "kb": 43.1,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "app_review.js",
+      "kb": 60.5,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "app_board.js",
+      "kb": 37.1,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "app_schedule.js",
+      "kb": 50.6,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "app_logs.js",
+      "kb": 44.1,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "app_other.js",
+      "kb": 80.5,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "app_meetings.js",
+      "kb": 84.3,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "app_editor.js",
+      "kb": 49.3,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "app_clienttpl.js",
+      "kb": 21.8,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "app_data.js",
+      "kb": 12.5,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "app_radar.js",
+      "kb": 15.6,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "fx.js",
+      "kb": 1.2,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "app_dash.js",
+      "kb": 64.4,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "app_portfolio.js",
+      "kb": 26.4,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "app_pdash.js",
+      "kb": 35.6,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "app_connect.js",
+      "kb": 14.5,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "app_brand.js",
+      "kb": 9.8,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "app_onboard.js",
+      "kb": 47.4,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "app_trends.js",
+      "kb": 32.5,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "app_widgets.js",
+      "kb": 51.8,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "app_widget_builder.js",
+      "kb": 20.9,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "app_notify.js",
+      "kb": 6.5,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "app_chat.js",
+      "kb": 39.4,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "app_support.js",
+      "kb": 15.1,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    },
+    {
+      "file": "tips.js",
+      "kb": 2.8,
+      "encoding": "gzip",
+      "cache": "no-cache",
+      "etag": true,
+      "repeatStatus": 304
+    }
+  ],
+  "seed": {
+    "ms": 3730,
+    "projects": 18,
+    "bigTasks": 600
+  },
+  "pageLoad": {
+    "files": 40,
+    "firstLoadKB": 1615,
+    "repeatLoadKB": 0,
+    "gzipEstimateKB": 467,
+    "compressedFiles": 40,
+    "firstMs": 99,
+    "repeatMs": 31
+  },
+  "concurrentOpen": 120.3
+}

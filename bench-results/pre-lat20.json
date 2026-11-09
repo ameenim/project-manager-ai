@@ -1,0 +1,899 @@
+{
+  "label": "pre-lat20",
+  "dbLatencyMs": 20,
+  "runs": 7,
+  "bigTasks": 600,
+  "when": "2026-11-09T05:51:28.839Z",
+  "node": "v22.23.4",
+  "results": [
+    {
+      "screen": "Shell",
+      "action": "Boot: me",
+      "call": "GET /api/me",
+      "status": 200,
+      "kb": 0.3,
+      "median": 43.3,
+      "p95": 43.9,
+      "queries": 2,
+      "min": 43.1,
+      "max": 43.9
+    },
+    {
+      "screen": "Shell",
+      "action": "Boot: projects list",
+      "call": "GET /api/projects",
+      "status": 200,
+      "kb": 13.5,
+      "median": 79.6,
+      "p95": 101.1,
+      "queries": 2,
+      "min": 74.5,
+      "max": 101.1
+    },
+    {
+      "screen": "Shell",
+      "action": "Notifications and inbox",
+      "call": "GET /api/projects/10001402/inbox",
+      "status": 200,
+      "kb": 3.6,
+      "median": 43.2,
+      "p95": 43.9,
+      "queries": 2,
+      "min": 42.5,
+      "max": 43.9
+    },
+    {
+      "screen": "Shell",
+      "action": "Analysis events poll",
+      "call": "GET /api/analysis/events?since=0",
+      "status": 200,
+      "kb": 0,
+      "median": 42.9,
+      "p95": 43.7,
+      "queries": 2,
+      "min": 41.2,
+      "max": 43.7
+    },
+    {
+      "screen": "Portfolio",
+      "action": "Open portfolio dashboard",
+      "call": "GET /api/dashboard",
+      "status": 200,
+      "kb": 111.4,
+      "median": 153.1,
+      "p95": 156.9,
+      "queries": 4,
+      "min": 148.9,
+      "max": 156.9
+    },
+    {
+      "screen": "Portfolio",
+      "action": "Open portfolio trends",
+      "call": "GET /api/trends?days=30",
+      "status": 200,
+      "kb": 10.9,
+      "median": 64.8,
+      "p95": 65.7,
+      "queries": 3,
+      "min": 64.5,
+      "max": 65.7
+    },
+    {
+      "screen": "Portfolio",
+      "action": "Calendar",
+      "call": "GET /api/calendar",
+      "status": 200,
+      "kb": 507.6,
+      "median": 157.7,
+      "p95": 197.2,
+      "queries": 2,
+      "min": 151,
+      "max": 197.2
+    },
+    {
+      "screen": "Portfolio",
+      "action": "Widgets installed",
+      "call": "GET /api/widgets/installed?scope=portfolio",
+      "status": 200,
+      "kb": 0,
+      "median": 64.2,
+      "p95": 85.2,
+      "queries": 3,
+      "min": 64.2,
+      "max": 85.2
+    },
+    {
+      "screen": "Project overview",
+      "action": "Open project (small)",
+      "call": "GET /api/projects/10001401",
+      "status": 200,
+      "kb": 0.8,
+      "median": 44,
+      "p95": 45.3,
+      "queries": 2,
+      "min": 43.6,
+      "max": 45.3
+    },
+    {
+      "screen": "Project overview",
+      "action": "Open project (large)",
+      "call": "GET /api/projects/10001402",
+      "status": 200,
+      "kb": 0.6,
+      "median": 51.5,
+      "p95": 54.6,
+      "queries": 2,
+      "min": 50.6,
+      "max": 54.6
+    },
+    {
+      "screen": "Project overview",
+      "action": "Project dashboard (large)",
+      "call": "GET /api/projects/10001402/dashboard",
+      "status": 200,
+      "kb": 35.7,
+      "median": 116.1,
+      "p95": 138.2,
+      "queries": 4,
+      "min": 111,
+      "max": 138.2
+    },
+    {
+      "screen": "Project overview",
+      "action": "Project trends (large)",
+      "call": "GET /api/projects/10001402/trends?days=30",
+      "status": 200,
+      "kb": 1.1,
+      "median": 64.2,
+      "p95": 64.4,
+      "queries": 3,
+      "min": 63.9,
+      "max": 64.4
+    },
+    {
+      "screen": "Project overview",
+      "action": "Widgets installed (project)",
+      "call": "GET /api/widgets/installed?scope=project",
+      "status": 200,
+      "kb": 0,
+      "median": 64.2,
+      "p95": 65,
+      "queries": 3,
+      "min": 63.4,
+      "max": 65
+    },
+    {
+      "screen": "Schedule",
+      "action": "Open schedule (large)",
+      "call": "GET /api/projects/10001402/schedule",
+      "status": 200,
+      "kb": 270.3,
+      "median": 49.8,
+      "p95": 53.3,
+      "queries": 2,
+      "min": 49.1,
+      "max": 53.3
+    },
+    {
+      "screen": "Schedule",
+      "action": "Validate schedule",
+      "call": "GET /api/projects/10001402/schedule/validate",
+      "status": 200,
+      "kb": 21.1,
+      "median": 181.9,
+      "p95": 219.4,
+      "queries": 2,
+      "min": 166.2,
+      "max": 219.4
+    },
+    {
+      "screen": "Schedule",
+      "action": "Versions list",
+      "call": "GET /api/projects/10001402/schedule/versions",
+      "status": 200,
+      "kb": 18.7,
+      "median": 44.1,
+      "p95": 44.5,
+      "queries": 2,
+      "min": 42.8,
+      "max": 44.5
+    },
+    {
+      "screen": "Logs and risks",
+      "action": "Open items list",
+      "call": "GET /api/projects/10001402/items",
+      "status": 200,
+      "kb": 65.6,
+      "median": 45.1,
+      "p95": 46.3,
+      "queries": 2,
+      "min": 43.6,
+      "max": 46.3
+    },
+    {
+      "screen": "Documents",
+      "action": "Open documents",
+      "call": "GET /api/projects/10001402/documents",
+      "status": 200,
+      "kb": 0.7,
+      "median": 43.1,
+      "p95": 43.2,
+      "queries": 2,
+      "min": 42.7,
+      "max": 43.2
+    },
+    {
+      "screen": "Documents",
+      "action": "Search documents",
+      "call": "GET /api/projects/10001402/documents/search?q=acceptance",
+      "status": 200,
+      "kb": 0.8,
+      "median": 80.8,
+      "p95": 90.4,
+      "queries": 2,
+      "min": 74.7,
+      "max": 90.4
+    },
+    {
+      "screen": "Reports",
+      "action": "Open generated documents",
+      "call": "GET /api/projects/10001402/generated",
+      "status": 200,
+      "kb": 0,
+      "median": 43,
+      "p95": 46.4,
+      "queries": 2,
+      "min": 42.8,
+      "max": 46.4
+    },
+    {
+      "screen": "Reports",
+      "action": "Folders",
+      "call": "GET /api/projects/10001402/folders",
+      "status": 200,
+      "kb": 0,
+      "median": 42.9,
+      "p95": 43.4,
+      "queries": 2,
+      "min": 42.7,
+      "max": 43.4
+    },
+    {
+      "screen": "Reports",
+      "action": "Templates",
+      "call": "GET /api/templates",
+      "status": 200,
+      "kb": 0,
+      "median": 42.8,
+      "p95": 43.2,
+      "queries": 2,
+      "min": 42.7,
+      "max": 43.2
+    },
+    {
+      "screen": "Reports",
+      "action": "Doc types",
+      "call": "GET /api/doc-types",
+      "status": 200,
+      "kb": 2.5,
+      "median": 42.9,
+      "p95": 45.4,
+      "queries": 2,
+      "min": 42.8,
+      "max": 45.4
+    },
+    {
+      "screen": "Resources",
+      "action": "Open resources",
+      "call": "GET /api/projects/10001402/resources",
+      "status": 200,
+      "kb": 0,
+      "median": 43,
+      "p95": 45.6,
+      "queries": 2,
+      "min": 42.7,
+      "max": 45.6
+    },
+    {
+      "screen": "Meetings",
+      "action": "Open meetings",
+      "call": "GET /api/projects/10001402/meetings",
+      "status": 200,
+      "kb": 0.1,
+      "median": 64.3,
+      "p95": 65.2,
+      "queries": 3,
+      "min": 64,
+      "max": 65.2
+    },
+    {
+      "screen": "Settings",
+      "action": "Members",
+      "call": "GET /api/projects/10001402/members",
+      "status": 200,
+      "kb": 0.1,
+      "median": 63.9,
+      "p95": 65.5,
+      "queries": 3,
+      "min": 62.9,
+      "max": 65.5
+    },
+    {
+      "screen": "Settings",
+      "action": "Audit trail",
+      "call": "GET /api/projects/10001402/audit",
+      "status": 200,
+      "kb": 23.5,
+      "median": 44.3,
+      "p95": 48.3,
+      "queries": 2,
+      "min": 43.3,
+      "max": 48.3
+    },
+    {
+      "screen": "Settings",
+      "action": "Connections",
+      "call": "GET /api/connections",
+      "status": 200,
+      "kb": 0.8,
+      "median": 63.6,
+      "p95": 63.9,
+      "queries": 3,
+      "min": 63.4,
+      "max": 63.9
+    },
+    {
+      "screen": "Settings",
+      "action": "Billing",
+      "call": "GET /api/billing",
+      "status": 200,
+      "kb": 0.3,
+      "median": 168.7,
+      "p95": 170.5,
+      "queries": 8,
+      "min": 166.7,
+      "max": 170.5
+    },
+    {
+      "screen": "Widgets",
+      "action": "Marketplace list",
+      "call": "GET /api/widgets?",
+      "status": 200,
+      "kb": 0,
+      "median": 65.7,
+      "p95": 66.7,
+      "queries": 3,
+      "min": 65.5,
+      "max": 66.7
+    },
+    {
+      "screen": "Widgets",
+      "action": "Datasets",
+      "call": "GET /api/widgets/datasets?project=10001402",
+      "status": 200,
+      "kb": 624,
+      "median": 103.7,
+      "p95": 111,
+      "queries": 2,
+      "min": 94.4,
+      "max": 111
+    },
+    {
+      "screen": "Chat",
+      "action": "Open chat history",
+      "call": "GET /api/chat?",
+      "status": 200,
+      "kb": 0.7,
+      "median": 216.2,
+      "p95": 251.7,
+      "queries": 7,
+      "min": 210.9,
+      "max": 251.7
+    },
+    {
+      "screen": "Schedule",
+      "action": "Edit task progress (full answer)",
+      "call": "POST /api/projects/10001402/schedule/apply",
+      "status": 200,
+      "kb": 270.3,
+      "median": 877.4,
+      "p95": 918.6,
+      "queries": 3,
+      "min": 833.6,
+      "max": 918.6
+    },
+    {
+      "screen": "Schedule",
+      "action": "Edit task progress (slim answer)",
+      "call": "POST /api/projects/10001402/schedule/apply",
+      "status": 200,
+      "kb": 0,
+      "median": 862.6,
+      "p95": 980.4,
+      "queries": 3,
+      "min": 804.7,
+      "max": 980.4
+    },
+    {
+      "screen": "Schedule",
+      "action": "Change task duration",
+      "call": "POST /api/projects/10001402/schedule/apply",
+      "status": 200,
+      "kb": 270.3,
+      "median": 815.8,
+      "p95": 909.4,
+      "queries": 3,
+      "min": 804.8,
+      "max": 909.4
+    },
+    {
+      "screen": "Schedule",
+      "action": "Preview a change",
+      "call": "POST /api/projects/10001402/schedule/preview",
+      "status": 200,
+      "kb": 0.3,
+      "median": 298.4,
+      "p95": 381.4,
+      "queries": 3,
+      "min": 269.5,
+      "max": 381.4
+    },
+    {
+      "screen": "Schedule",
+      "action": "Add a task",
+      "call": "POST /api/projects/10001402/tasks",
+      "status": 200,
+      "kb": 273.3,
+      "median": 829.1,
+      "p95": 944.1,
+      "queries": 3,
+      "min": 792.6,
+      "max": 944.1
+    },
+    {
+      "screen": "Schedule",
+      "action": "Save a version",
+      "call": "POST /api/projects/10001402/schedule/versions",
+      "status": 200,
+      "kb": 18.7,
+      "median": 795.1,
+      "p95": 857.2,
+      "queries": 3,
+      "min": 781.8,
+      "max": 857.2
+    },
+    {
+      "screen": "Schedule",
+      "action": "Set baseline",
+      "call": "POST /api/projects/10001402/schedule/baseline",
+      "status": 200,
+      "kb": 282.8,
+      "median": 377.1,
+      "p95": 452.7,
+      "queries": 3,
+      "min": 370.3,
+      "max": 452.7
+    },
+    {
+      "screen": "Logs and risks",
+      "action": "Edit a risk",
+      "call": "PUT /api/items/10002005",
+      "status": 200,
+      "kb": 0.5,
+      "median": 376.2,
+      "p95": 428.7,
+      "queries": 3,
+      "min": 365,
+      "max": 428.7
+    },
+    {
+      "screen": "Logs and risks",
+      "action": "Add an item",
+      "call": "POST /api/projects/10001402/items",
+      "status": 200,
+      "kb": 0.3,
+      "median": 381.7,
+      "p95": 487.5,
+      "queries": 3,
+      "min": 371.8,
+      "max": 487.5
+    },
+    {
+      "screen": "Logs and risks",
+      "action": "Confirm / reopen item",
+      "call": "POST /api/items/10002005/confirm",
+      "status": 200,
+      "kb": 1,
+      "median": 383.3,
+      "p95": 504.8,
+      "queries": 3,
+      "min": 372.9,
+      "max": 504.8
+    },
+    {
+      "screen": "Project overview",
+      "action": "Edit project field",
+      "call": "PUT /api/projects/10001402",
+      "status": 200,
+      "kb": 0.6,
+      "median": 382.5,
+      "p95": 514,
+      "queries": 3,
+      "min": 366.4,
+      "max": 514
+    },
+    {
+      "screen": "Resources",
+      "action": "Add resource",
+      "call": "POST /api/projects/10001402/resources",
+      "status": 200,
+      "kb": 0.2,
+      "median": 382.3,
+      "p95": 473,
+      "queries": 3,
+      "min": 353.9,
+      "max": 473
+    },
+    {
+      "screen": "Settings",
+      "action": "Save profile",
+      "call": "PUT /api/me",
+      "status": 200,
+      "kb": 0.2,
+      "median": 64.5,
+      "p95": 66.4,
+      "queries": 3,
+      "min": 63.8,
+      "max": 66.4
+    },
+    {
+      "screen": "Portfolio",
+      "action": "Save dashboard layout",
+      "call": "PUT /api/me",
+      "status": 200,
+      "kb": 0.2,
+      "median": 64.4,
+      "p95": 65.3,
+      "queries": 3,
+      "min": 63.9,
+      "max": 65.3
+    }
+  ],
+  "static": [
+    {
+      "file": "app.html",
+      "kb": 3,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "styles.css",
+      "kb": 192.9,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "onboard.css",
+      "kb": 6.4,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "support.css",
+      "kb": 3.1,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "i18n.js",
+      "kb": 168,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "logo.js",
+      "kb": 18.7,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "app_loader.js",
+      "kb": 3.8,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "engine.js",
+      "kb": 161.7,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "visuals.js",
+      "kb": 12.8,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "chartlabels.js",
+      "kb": 9.3,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "gantt.js",
+      "kb": 77,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "widgetspec.js",
+      "kb": 16.6,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "app.js",
+      "kb": 46.3,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "datepicker.js",
+      "kb": 14.3,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "tracker.js",
+      "kb": 5.5,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "export.js",
+      "kb": 43.1,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "app_review.js",
+      "kb": 60.5,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "app_board.js",
+      "kb": 37.1,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "app_schedule.js",
+      "kb": 50.6,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "app_logs.js",
+      "kb": 44.1,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "app_other.js",
+      "kb": 80.5,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "app_meetings.js",
+      "kb": 84.3,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "app_editor.js",
+      "kb": 49.3,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "app_clienttpl.js",
+      "kb": 21.8,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "app_data.js",
+      "kb": 12.5,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "app_radar.js",
+      "kb": 15.6,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "fx.js",
+      "kb": 1.2,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "app_dash.js",
+      "kb": 64.4,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "app_portfolio.js",
+      "kb": 26.4,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "app_pdash.js",
+      "kb": 35.6,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "app_connect.js",
+      "kb": 14.5,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "app_brand.js",
+      "kb": 9.8,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "app_onboard.js",
+      "kb": 47.4,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "app_trends.js",
+      "kb": 32.5,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "app_widgets.js",
+      "kb": 51.8,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "app_widget_builder.js",
+      "kb": 20.9,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "app_notify.js",
+      "kb": 6.4,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "app_chat.js",
+      "kb": 39.4,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "app_support.js",
+      "kb": 15.1,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    },
+    {
+      "file": "tips.js",
+      "kb": 2.8,
+      "encoding": "none",
+      "cache": "no-cache",
+      "etag": false,
+      "repeatStatus": 200
+    }
+  ],
+  "seed": {
+    "ms": 39620,
+    "projects": 18,
+    "bigTasks": 600
+  },
+  "pageLoad": {
+    "files": 40,
+    "firstLoadKB": 1607,
+    "repeatLoadKB": 1607,
+    "gzipEstimateKB": 465,
+    "compressedFiles": 0,
+    "firstMs": 34,
+    "repeatMs": 62
+  },
+  "concurrentOpen": 257.9
+}

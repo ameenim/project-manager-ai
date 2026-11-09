@@ -5,6 +5,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const zlib = require('zlib');
 const Busboy = require('busboy');
 const dbm = require('./db');
 const { Store } = require('./store');
@@ -33,9 +34,21 @@ const SECURITY = {
   'Permissions-Policy': 'camera=(), microphone=(self), display-capture=(self), geolocation=()',
 };
 
+// Answers over about 1.4 KB are sent gzipped when the browser accepts it. A project or schedule answer is mostly repeated
+// field names, so it shrinks to a fraction, and that is the part of a slow screen that no amount of server speed fixes.
 const json = (res, status, data, extra) => {
   const body = JSON.stringify(data);
-  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...SECURITY, ...(extra || {}) });
+  const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...SECURITY, ...(extra || {}) };
+  const accepts = String((res.req && res.req.headers['accept-encoding']) || '');
+  if (body.length > 1400 && /\bgzip\b/.test(accepts)) {
+    return zlib.gzip(body, { level: 4 }, (e, z) => {
+      if (res.writableEnded || res.destroyed) return;
+      if (e) { res.writeHead(status, headers); return res.end(body); }
+      res.writeHead(status, { ...headers, 'Content-Encoding': 'gzip', Vary: 'Accept-Encoding', 'Content-Length': z.length });
+      res.end(z);
+    });
+  }
+  res.writeHead(status, headers);
   res.end(body);
 };
 const bearer = (req) => { const h = String(req.headers.authorization || ''); return /^Bearer /i.test(h) ? h.slice(7).trim() : null; };
@@ -226,35 +239,97 @@ async function createApp(opts = {}) {
     }
   }
 
-  function serveStatic(req, res, url) {
+  // ---------- static files ----------
+  // Every file is read once and kept (checked against its modified time on each request, so an edit shows at once). It is
+  // sent with an ETag, so a repeat visit gets a tiny "not modified" instead of the whole file, and text files are sent
+  // compressed (brotli or gzip, made once and kept). Pages name their scripts and styles with a version taken from the file
+  // itself, and a file asked for with that version is cached by the browser for a year, because a changed file gets a new
+  // version and with it a new address.
+  const assets = new Map();                 // file path to { mtimeMs, size, etag, buf }
+  const compCache = new Map();              // key to a promise of the compressed bytes
+  const COMPRESS = new Set(['.html', '.js', '.css', '.svg', '.json', '.txt', '.xml']);
+  const KEEP_BYTES = 3 * 1024 * 1024;
+  async function assetOf(file) {
+    const st = await fs.promises.stat(file);
+    if (!st.isFile()) { const e = new Error('not a file'); e.code = 'ENOENT'; throw e; }
+    let a = assets.get(file);
+    if (!a || a.mtimeMs !== st.mtimeMs || a.size !== st.size) {
+      a = { mtimeMs: st.mtimeMs, size: st.size, etag: `"${st.size.toString(16)}-${Math.floor(st.mtimeMs).toString(16)}"`, buf: null };
+      assets.set(file, a);
+    }
+    if (!a.buf) { const buf = await fs.promises.readFile(file); if (buf.length <= KEEP_BYTES) a.buf = buf; else return { ...a, buf }; }
+    return a;
+  }
+  function compressed(key, enc, buf) {
+    const k = key + '|' + enc;
+    let p = compCache.get(k);
+    if (!p) {
+      p = new Promise((ok, no) => {
+        const done = (e, r) => (e ? no(e) : ok(r));
+        if (enc === 'br') zlib.brotliCompress(buf, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 5, [zlib.constants.BROTLI_PARAM_SIZE_HINT]: buf.length } }, done);
+        else zlib.gzip(buf, { level: 6 }, done);
+      });
+      compCache.set(k, p);
+      if (compCache.size > 300) compCache.delete(compCache.keys().next().value);
+      p.catch(() => compCache.delete(k));
+    }
+    return p;
+  }
+  const notModified = (req, etag) => String(req.headers['if-none-match'] || '').split(',').some((x) => x.trim().replace(/^W\//, '') === etag);
+  async function sendBytes(req, res, { key, buf, type, etag, cache, compressible }) {
+    const headers = { 'Content-Type': type, ETag: etag, 'Cache-Control': cache, Vary: 'Accept-Encoding', ...SECURITY };
+    if (notModified(req, etag)) { res.writeHead(304, headers); return res.end(); }
+    let body = buf;
+    const accepts = String(req.headers['accept-encoding'] || '');
+    const enc = compressible && buf.length > 1024 ? (/\bbr\b/.test(accepts) ? 'br' : /\bgzip\b/.test(accepts) ? 'gzip' : null) : null;
+    if (enc) { try { body = await compressed(key + '|' + etag, enc, buf); headers['Content-Encoding'] = enc; } catch (e) { body = buf; } }
+    headers['Content-Length'] = body.length;
+    res.writeHead(200, headers);
+    res.end(req.method === 'HEAD' ? undefined : body);
+  }
+  // a page with its scripts and styles given a version taken from each file, kept for a few seconds
+  const pages = new Map();
+  async function pageHtml(file) {
+    const hit = pages.get(file);
+    if (hit && Date.now() - hit.at < 5000) return hit.html;
+    let html = await fs.promises.readFile(file, 'utf8');
+    const refs = [...new Set([...html.matchAll(/\s(?:src|href)="([^"#?:]+?\.(?:js|css))"/g)].map((m) => m[1]).filter((r) => !r.startsWith('/') && !r.includes('..')))];
+    const ver = new Map();
+    await Promise.all(refs.map(async (r) => { try { const a = await assetOf(path.join(ROOT, r)); ver.set(r, crypto.createHash('sha1').update(a.etag).digest('hex').slice(0, 10)); } catch (e) { /* left as it was */ } }));
+    html = html.replace(/(\s(?:src|href)=")([^"#?:]+?\.(?:js|css))(")/g, (m, a, r, c) => (ver.has(r) ? `${a}${r}?v=${ver.get(r)}${c}` : m));
+    pages.set(file, { at: Date.now(), html });
+    return html;
+  }
+  async function sendPage(req, res, file, extra) {
+    let html;
+    try { html = await pageHtml(file); } catch (e) { res.writeHead(404, { 'Content-Type': 'text/plain', ...SECURITY }); return res.end('Not found'); }
+    if (extra) html = extra(html);
+    const buf = Buffer.from(html, 'utf8');
+    const etag = '"' + crypto.createHash('sha1').update(buf).digest('hex').slice(0, 20) + '"';
+    return sendBytes(req, res, { key: file, buf, type: TYPES['.html'], etag, cache: 'no-cache', compressible: true });
+  }
+
+  async function serveStatic(req, res, url) {
     const o = origin(req);
     if (req.method === 'GET' && url.pathname === '/robots.txt') { res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-cache', ...SECURITY }); return res.end('User-agent: *\nAllow: /\nDisallow: /app.html\nDisallow: /admin\nDisallow: /api/\n\nSitemap: ' + o + '/sitemap.xml\n'); }
     if (req.method === 'GET' && url.pathname === '/sitemap.xml') { res.writeHead(200, { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'no-cache', ...SECURITY }); return res.end('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>' + o + '/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>\n</urlset>\n'); }
     if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405, { Allow: 'GET, HEAD', ...SECURITY }); return res.end(); }
     if (url.pathname === '/' || url.pathname === '/index.html') {
-      return fs.readFile(path.join(ROOT, 'index.html'), 'utf8', (err, html) => {
-        if (err) { res.writeHead(404, { 'Content-Type': 'text/plain' }); return res.end('Not found'); }
-        const tags = '<link rel="canonical" href="' + o + '/">\n<meta property="og:url" content="' + o + '/">\n<meta property="og:image" content="' + o + '/brand/mark-512.png">\n<meta name="twitter:image" content="' + o + '/brand/mark-512.png">\n';
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache', ...SECURITY });
-        res.end(html.replace('</head>', tags + '</head>'));
-      });
+      const tags = '<link rel="canonical" href="' + o + '/">\n<meta property="og:url" content="' + o + '/">\n<meta property="og:image" content="' + o + '/brand/mark-512.png">\n<meta name="twitter:image" content="' + o + '/brand/mark-512.png">\n';
+      return sendPage(req, res, path.join(ROOT, 'index.html'), (html) => html.replace('</head>', tags + '</head>'));
     }
-    if (url.pathname === '/admin' || url.pathname === '/admin/') {
-      return fs.readFile(path.join(ROOT, 'admin.html'), (err, html) => {
-        if (err) { res.writeHead(404, { 'Content-Type': 'text/plain' }); return res.end('Not found'); }
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache', ...SECURITY });
-        res.end(req.method === 'HEAD' ? undefined : html);
-      });
-    }
+    if (url.pathname === '/admin' || url.pathname === '/admin/') return sendPage(req, res, path.join(ROOT, 'admin.html'));
     let urlPath; try { urlPath = decodeURIComponent(url.pathname); } catch (e) { res.writeHead(400); return res.end('Bad request'); }
     if (urlPath.includes('\0')) { res.writeHead(400); return res.end('Bad request'); }
     const file = path.normalize(path.join(ROOT, urlPath));
     if (file !== ROOT && !file.startsWith(ROOT + path.sep)) { res.writeHead(403); return res.end('Forbidden'); }
-    fs.readFile(file, (err, data) => {
-      if (err) { res.writeHead(404, { 'Content-Type': 'text/plain', ...SECURITY }); return res.end('Not found'); }
-      res.writeHead(200, { 'Content-Type': TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream', 'Cache-Control': 'no-cache', ...SECURITY });
-      res.end(req.method === 'HEAD' ? undefined : data);
-    });
+    const ext = path.extname(file).toLowerCase();
+    if (ext === '.html') return sendPage(req, res, file);
+    let a;
+    try { a = await assetOf(file); } catch (err) { res.writeHead(404, { 'Content-Type': 'text/plain', ...SECURITY }); return res.end('Not found'); }
+    // a file asked for by the version a page named is the one that version stands for, so it never needs checking again
+    const versioned = url.searchParams.has('v') && (ext === '.js' || ext === '.css');
+    return sendBytes(req, res, { key: file, buf: a.buf, type: TYPES[ext] || 'application/octet-stream', etag: a.etag, cache: versioned ? 'public, max-age=31536000, immutable' : 'no-cache', compressible: COMPRESS.has(ext) });
   }
 
   const server = http.createServer(async (req, res) => {
@@ -265,7 +340,7 @@ async function createApp(opts = {}) {
       if (req.method === 'GET' && url.pathname === '/srv/ai/status') return json(res, 200, { configured: !!process.env.ANTHROPIC_API_KEY, model: MODEL });
       if (req.method === 'GET' && /^\/oauth\/callback\/(jira|outlook)$/.test(url.pathname)) return await oauthCallback(req, res, url);
       if (url.pathname.startsWith('/api/')) return await handleApi(req, res, url);
-      return serveStatic(req, res, url);
+      return await serveStatic(req, res, url);
     } catch (e) {
       const status = e.status && e.status >= 400 && e.status < 600 ? e.status : 500;
       if (status >= 500 && !e.expose) { const id = crypto.randomBytes(4).toString('hex'); console.error(`[${id}] ${req.method} ${url.pathname}`, e); const rec = { kind: 'server', status, method: req.method, path: url.pathname, message: e.message, stack: e.stack, ref: id }; ops.logError(rec).then(() => tickets.noteServerError(rec)); if (!res.headersSent) return json(res, 500, { error: `Something went wrong on the server (reference ${id}). Try again.`, ref: id }); return res.end(); }

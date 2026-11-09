@@ -26,9 +26,13 @@ const als = new AsyncLocalStorage();
 const ctx = () => { const c = als.getStore(); if (!c) throw new Error('No request context'); return c; };
 const err = (status, message) => { const e = new Error(message); e.status = status; return e; };
 const clone = (x) => JSON.parse(JSON.stringify(x));
-const dateIn = (d = new Date()) => d.toLocaleDateString('en-CA', { timeZone: TZ });
+// Building a date formatter is slow (about a tenth of a millisecond each), and these run once per task and per audit
+// entry, so the two formatters are built once. The text they give is the same as toLocaleDateString and toLocaleTimeString.
+const DAY_FMT = new Intl.DateTimeFormat('en-CA', { timeZone: TZ });
+const TIME_FMT = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false });
+const dateIn = (d = new Date()) => DAY_FMT.format(d);
 const TODAY = () => dateIn();
-const nowTs = () => `${TODAY()} ${new Date().toLocaleTimeString('en-GB', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false })}`;
+const nowTs = () => `${TODAY()} ${TIME_FMT.format(new Date())}`;
 
 // A result that is a file instead of JSON (downloads).
 class FileResult { constructor(buffer, type, filename) { this.buffer = buffer; this.type = type; this.filename = filename; } }
@@ -918,7 +922,7 @@ module.exports = function createApi(store, auth, connectors, ops) {
     for (let i = 0; i < ids.length; i += 20) {
       const list = [], need = [];
       for (const id of ids.slice(i, i + 20)) { const c = store.cache.get(id); if (c && c.P) list.push(c.P); else need.push(id); }
-      if (need.length) for (const row of (await store.db.query('SELECT id, data FROM projects WHERE id = ANY($1::bigint[])', [need])).rows) { if (row.data && row.data.id == null) row.data.id = row.id; list.push(row.data); }
+      if (need.length) for (const row of await store.readRows(need)) { if (row.data && row.data.id == null) row.data.id = row.id; list.push(row.data); }
       saved += await capture(list, true);
       await new Promise((ok) => setImmediate(ok));
     }

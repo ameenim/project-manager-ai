@@ -43,6 +43,7 @@ function calendar(project) {
 const prep = (c) => {
   if (!c._dow) {
     c._dow = [0, 1, 2, 3, 4, 5, 6].map((k) => c.days.has(k));
+    c._wk = c._dow.filter(Boolean).length;
     const h = new Set();
     for (const x of c.holidays) if (/^\d{4}-\d{2}-\d{2}$/.test(x)) { const n = dayOf(x); if (n === n) h.add(n); }
     c._hol = h;
@@ -75,11 +76,18 @@ function addWork(s, n, c) {
 }
 
 // Inclusive count of working days between two dates.
+// Whole weeks are counted by arithmetic, the few left over days one by one, and the holidays that fall on a working
+// weekday inside the range are taken off. Gives exactly what counting every day gave, but the cost no longer grows
+// with the length of the range (a project that runs for years used to loop over every day, for every summary task).
 function countWork(a, b, c) {
   prep(c);
-  const end = dayOf(b);
-  let n = 0;
-  for (let d = dayOf(a); d <= end; d++) if (workDay(d, c)) n++;
+  const lo = dayOf(a), hi = dayOf(b);
+  if (!(lo <= hi)) return 0;           // reversed range, or a date that could not be read
+  const dow = c._dow;
+  const full = Math.floor((hi - lo + 1) / 7);
+  let n = full * c._wk;
+  for (let d = lo + full * 7; d <= hi; d++) if (dow[(((d + 4) % 7) + 7) % 7]) n++;
+  for (const h of c._hol) if (h >= lo && h <= hi && dow[(((h + 4) % 7) + 7) % 7]) n--;
   return n;
 }
 
@@ -120,7 +128,26 @@ const depsOf = (t) => {
 
 // Runs the schedule. Dependencies push tasks later but never pull them earlier,
 // so a stored start behaves as a "start no earlier than" constraint.
+// The same task list is scheduled again and again: once for the project card, again for the dashboard, again for the
+// progress figures, again for the check. The answer depends only on the tasks and the working calendar, so the last few
+// answers are kept under a key made from exactly those, and every caller gets its own copy to change as it likes.
+const SCHED_KEEP = 6, SCHED_MAX_KEY = 3e6, schedMemo = new Map();
+const copyRow = (t) => ({ ...t, deps: Array.isArray(t.deps) ? t.deps.map((d) => ({ ...d })) : t.deps });
 function schedule(tasks, project) {
+  let key = null;
+  try { key = String(project.work_days || '') + '|' + String(project.holidays || '') + '|' + JSON.stringify(tasks); } catch (e) { key = null; }
+  if (key && key.length <= SCHED_MAX_KEY) {
+    const hit = schedMemo.get(key);
+    if (hit) { schedMemo.delete(key); schedMemo.set(key, hit); return hit.map(copyRow); }
+  } else key = null;
+  const out = scheduleRaw(tasks, project);
+  if (key) {
+    schedMemo.set(key, out.map(copyRow));
+    while (schedMemo.size > SCHED_KEEP) schedMemo.delete(schedMemo.keys().next().value);
+  }
+  return out;
+}
+function scheduleRaw(tasks, project) {
   const c = calendar(project);
   const byId = new Map();
   for (const t of tasks) byId.set(t.id, { ...t, deps: depsOf(t) });
@@ -168,8 +195,9 @@ function schedule(tasks, project) {
       }
       if (s !== t.start) { t.start = s; changed = true; }
     }
-    for (const t of byId.values()) if (isSummary(t) && !t.parent_id) roll(t);
-    for (const t of byId.values()) if (isSummary(t) && t.parent_id) roll(t);
+    // roll() walks every summary below the one it is given, so only the top ones are started here (a summary whose
+    // parent is missing counts as a top one). Rolling the lower ones again would only repeat the same sums.
+    for (const t of byId.values()) if (isSummary(t) && (!t.parent_id || !byId.has(t.parent_id))) roll(t);
     if (!changed) break;
   }
 
@@ -310,22 +338,26 @@ function hierarchy(tasks) {
 }
 
 // Would giving task `id` these predecessors create a loop?
-function wouldLoop(tasks, id, deps) {
-  const map = new Map(tasks.map((t) => [t.id, depsOf(t)]));
+function wouldLoop(tasks, id, deps, linkMap) {
+  // linkMap lets a caller that checks every task share one map of the links instead of rebuilding it each time
+  const map = linkMap || new Map(tasks.map((t) => [t.id, depsOf(t)]));
+  const had = map.has(id), prev = map.get(id);
   map.set(id, deps);
-  const seen = new Set();
-  const dfs = (n) => {
-    if (n === id) return true;
-    if (seen.has(n)) return false;
-    seen.add(n);
-    return (map.get(n) || []).some((d) => dfs(d.id));
-  };
-  return (deps || []).some((d) => d.id === id || dfs(d.id));
+  try {
+    const seen = new Set();
+    const dfs = (n) => {
+      if (n === id) return true;
+      if (seen.has(n)) return false;
+      seen.add(n);
+      return (map.get(n) || []).some((d) => dfs(d.id));
+    };
+    return (deps || []).some((d) => d.id === id || dfs(d.id));
+  } finally { if (linkMap) { if (had) map.set(id, prev); else map.delete(id); } }
 }
 
 // Returns a list of plain English problems with a proposed predecessor list. Empty means valid.
-function validateLinks(tasks, id, deps) {
-  const H = hierarchy(tasks);
+function validateLinks(tasks, id, deps, shared) {
+  const H = (shared && shared.H) || hierarchy(tasks);
   const t = H.byId.get(id);
   const errs = [];
   if (!t) return ['Task not found'];
@@ -343,7 +375,7 @@ function validateLinks(tasks, id, deps) {
     if (!Number.isFinite(Number(d.lag || 0)) || Math.abs(d.lag || 0) > 365) errs.push(`Lag for ${label} must be between -365 and 365 days`);
     if (anc.has(d.id) || H.ancestors(d.id).has(id)) errs.push(`${label} and this task are in the same branch, so they cannot be linked`);
   }
-  if (!errs.length && wouldLoop(tasks, id, deps)) errs.push('That link would create a circular dependency');
+  if (!errs.length && wouldLoop(tasks, id, deps, shared && shared.links)) errs.push('That link would create a circular dependency');
   return errs;
 }
 
@@ -354,9 +386,11 @@ function validateSchedule(tasks, project) {
   const add = (severity, task, code, message) => issues.push({ severity, task_id: task ? task.id : null, task: task ? task.name : null, code, message });
   const succ = new Map();
   for (const t of tasks) for (const d of depsOf(t)) { if (!succ.has(d.id)) succ.set(d.id, []); succ.get(d.id).push(t.id); }
+  // the outline and the map of links are the same for every task, so they are built once for the whole check
+  const shared = { H, links: new Map(tasks.map((t) => [t.id, depsOf(t)])) };
   for (const t of tasks) {
     const deps = depsOf(t);
-    for (const e of validateLinks(tasks, t.id, deps)) add('error', t, 'link', e);
+    for (const e of validateLinks(tasks, t.id, deps, shared)) add('error', t, 'link', e);
     if (H.level(t.id) > MAX_LEVEL) add('error', t, 'depth', `Nested deeper than ${MAX_LEVEL} levels`);
     if (!t.is_milestone && !H.kids.has(t.id) && (t.duration || 0) <= 0) add('warn', t, 'duration', 'No duration. Set a duration or mark it as a milestone');
     if (!t.start) add('warn', t, 'start', 'No start date');

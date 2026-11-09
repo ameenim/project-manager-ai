@@ -1,0 +1,272 @@
+{
+  "label": "post-slow",
+  "cpu": 4,
+  "latencyMs": 100,
+  "when": "2026-11-09T06:21:00.358Z",
+  "seedMs": 3964,
+  "screens": [
+    {
+      "screen": "Portfolio dashboard",
+      "hash": "#/",
+      "readyMs": 442,
+      "maxMs": 471,
+      "longTaskMs": 305,
+      "longestTaskMs": 305,
+      "requests": 1,
+      "domNodes": 4830
+    },
+    {
+      "screen": "Projects list",
+      "hash": "#/projects",
+      "readyMs": 48,
+      "maxMs": 88,
+      "longTaskMs": 0,
+      "longestTaskMs": 0,
+      "requests": 0,
+      "domNodes": 819
+    },
+    {
+      "screen": "Calendar",
+      "hash": "#/calendar",
+      "readyMs": 397,
+      "maxMs": 582,
+      "longTaskMs": 95,
+      "longestTaskMs": 95,
+      "requests": 2,
+      "domNodes": 987
+    },
+    {
+      "screen": "Widgets marketplace",
+      "hash": "#/widgets",
+      "readyMs": 180,
+      "maxMs": 180,
+      "longTaskMs": 0,
+      "longestTaskMs": 0,
+      "requests": 1,
+      "domNodes": 979
+    },
+    {
+      "screen": "Account",
+      "hash": "#/account",
+      "readyMs": 178,
+      "maxMs": 250,
+      "longTaskMs": 0,
+      "longestTaskMs": 0,
+      "requests": 1,
+      "domNodes": 630
+    },
+    {
+      "screen": "Billing",
+      "hash": "#/billing",
+      "readyMs": 75,
+      "maxMs": 153,
+      "longTaskMs": 0,
+      "longestTaskMs": 0,
+      "requests": 0,
+      "domNodes": 544
+    },
+    {
+      "screen": "Overview (large)",
+      "hash": "#/p/10001402/overview",
+      "readyMs": 394,
+      "maxMs": 577,
+      "longTaskMs": 201,
+      "longestTaskMs": 201,
+      "requests": 3,
+      "domNodes": 2991
+    },
+    {
+      "screen": "Overview (small)",
+      "hash": "#/p/10001401/overview",
+      "readyMs": 353,
+      "maxMs": 367,
+      "longTaskMs": 172,
+      "longestTaskMs": 172,
+      "requests": 2,
+      "domNodes": 1929
+    },
+    {
+      "screen": "Review",
+      "hash": "#/p/10001402/review",
+      "readyMs": 242,
+      "maxMs": 420,
+      "longTaskMs": 52,
+      "longestTaskMs": 52,
+      "requests": 2,
+      "domNodes": 1091
+    },
+    {
+      "screen": "Schedule (large)",
+      "hash": "#/p/10001402/schedule",
+      "readyMs": 1387,
+      "maxMs": 1774,
+      "longTaskMs": 1234,
+      "longestTaskMs": 1234,
+      "requests": 3,
+      "domNodes": 20161
+    },
+    {
+      "screen": "Logs and risks",
+      "hash": "#/p/10001402/logs",
+      "readyMs": 210,
+      "maxMs": 550,
+      "longTaskMs": 56,
+      "longestTaskMs": 56,
+      "requests": 3,
+      "domNodes": 1279
+    },
+    {
+      "screen": "Meetings",
+      "hash": "#/p/10001402/meetings",
+      "readyMs": 166,
+      "maxMs": 169,
+      "longTaskMs": 0,
+      "longestTaskMs": 0,
+      "requests": 2,
+      "domNodes": 567
+    },
+    {
+      "screen": "Inbox",
+      "hash": "#/p/10001402/inbox",
+      "readyMs": 187,
+      "maxMs": 195,
+      "longTaskMs": 0,
+      "longestTaskMs": 0,
+      "requests": 3,
+      "domNodes": 667
+    },
+    {
+      "screen": "Documents",
+      "hash": "#/p/10001402/documents",
+      "readyMs": 206,
+      "maxMs": 424,
+      "longTaskMs": 0,
+      "longestTaskMs": 0,
+      "requests": 4,
+      "domNodes": 726
+    },
+    {
+      "screen": "Reports",
+      "hash": "#/p/10001402/reports",
+      "readyMs": 190,
+      "maxMs": 191,
+      "longTaskMs": 0,
+      "longestTaskMs": 0,
+      "requests": 3,
+      "domNodes": 589
+    },
+    {
+      "screen": "Project settings",
+      "hash": "#/p/10001402/settings",
+      "readyMs": 238,
+      "maxMs": 246,
+      "longTaskMs": 0,
+      "longestTaskMs": 0,
+      "requests": 3,
+      "domNodes": 740
+    }
+  ],
+  "actions": [
+    {
+      "action": "Switch project tab: overview to schedule",
+      "readyMs": 1699,
+      "maxMs": 1929,
+      "longTaskMs": 1448,
+      "requests": 2
+    },
+    {
+      "action": "Switch project tab: schedule to logs",
+      "readyMs": 581,
+      "maxMs": 648,
+      "longTaskMs": 256,
+      "requests": 3
+    },
+    {
+      "action": "Switch project tab: logs to documents",
+      "readyMs": 326,
+      "maxMs": 450,
+      "longTaskMs": 55,
+      "requests": 4
+    },
+    {
+      "action": "Toggle dark mode",
+      "readyMs": 870,
+      "maxMs": 1391,
+      "longTaskMs": 370,
+      "requests": 4
+    },
+    {
+      "action": "Switch language to Arabic and back",
+      "readyMs": 1018,
+      "maxMs": 1051,
+      "longTaskMs": 396,
+      "requests": 3
+    },
+    {
+      "action": "Open Projects flyout and pick a project",
+      "readyMs": 1026,
+      "maxMs": 1406,
+      "longTaskMs": 213,
+      "requests": 3
+    },
+    {
+      "action": "Schedule: edit progress inline",
+      "readyMs": 1614,
+      "maxMs": 1824,
+      "longTaskMs": 1066,
+      "requests": 1
+    },
+    {
+      "action": "Schedule: edit duration, impact dialog opens",
+      "readyMs": 840,
+      "maxMs": 1108,
+      "longTaskMs": 470,
+      "requests": 1
+    },
+    {
+      "action": "Schedule: confirm the impact dialog (apply)",
+      "readyMs": 1087,
+      "maxMs": 1313,
+      "longTaskMs": 988,
+      "requests": 1
+    },
+    {
+      "action": "Schedule: scroll and select a row",
+      "readyMs": 102,
+      "maxMs": 153,
+      "longTaskMs": 0,
+      "requests": 0
+    },
+    {
+      "action": "Logs: open a risk editor",
+      "readyMs": 35,
+      "maxMs": 36,
+      "longTaskMs": 0,
+      "requests": 0
+    }
+  ],
+  "load": {
+    "cold": {
+      "loadEventMs": 1014,
+      "domContentLoadedMs": 1005,
+      "dashboardReadyMs": 1931,
+      "requests": 48,
+      "transferredKB": 484
+    },
+    "repeat": {
+      "loadEventMs": 631,
+      "domContentLoadedMs": 619,
+      "dashboardReadyMs": 1429,
+      "requests": 48,
+      "transferredKB": 19
+    },
+    "repeat2": {
+      "loadEventMs": 628,
+      "domContentLoadedMs": 615,
+      "dashboardReadyMs": 1502,
+      "requests": 48,
+      "transferredKB": 19
+    }
+  },
+  "errors": []
+}

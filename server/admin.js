@@ -298,7 +298,7 @@ module.exports = function createAdmin({ db, store, auth, ops, usage, tickets }) 
     return { total, page: p, size, projects: rows.map((r) => ({ id: r.id, name: r.name || 'Untitled', owner_id: r.owner_id, owner_email: r.owner_email, owner_name: r.owner_name, members: num(r.members), tasks: num(r.tasks), created_at: iso(r.created_at), updated_at: iso(r.updated_at) })) };
   });
   on('GET', '/projects/(\\d+)', async ({ m }) => {
-    const id = idOf(m[1]); const r = (await q("SELECT p.id, p.data->'p'->>'name' AS name, p.owner_id, p.created_at, p.updated_at, pg_column_size(p.data) AS bytes FROM projects p WHERE p.id = $1", [id])).rows[0];
+    const id = idOf(m[1]); const r = (await q("SELECT p.id, p.data->'p'->>'name' AS name, p.owner_id, p.created_at, p.updated_at, pg_column_size(p.data) + COALESCE((SELECT sum(pg_column_size(x.data)) FROM project_parts x WHERE x.project_id = p.id), 0) AS bytes FROM projects p WHERE p.id = $1", [id])).rows[0];
     if (!r) throw err(404, 'Project not found');
     return { project: { id: r.id, name: r.name || 'Untitled', owner_id: r.owner_id, created_at: iso(r.created_at), updated_at: iso(r.updated_at), bytes: num(r.bytes) }, members: (await store.members(id)).map((x) => ({ user_id: x.user_id, name: x.name, email: x.email, role: x.role })) };
   });

@@ -47,7 +47,11 @@
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
   const today = () => new Date().toLocaleDateString('en-CA');
   const avatarHtml = (u, cls = '') => `<div class="avatar ${cls}">${u.avatar ? `<img src="${esc(u.avatar)}" alt="">` : esc(initials(u.name))}</div>`;
-  Object.assign(PM, { esc, t, icon, money, initials, $, $$, avatarHtml, today });
+  // A date formatter costs about a tenth of a millisecond to build, so a screen that formats hundreds of dates built them
+  // for most of its time. One is built per language and set of options and then reused.
+  const dtfs = new Map();
+  const dtf = (loc, o) => { const k = loc + JSON.stringify(o); let f = dtfs.get(k); if (!f) { f = new Intl.DateTimeFormat(loc, o); dtfs.set(k, f); } return f; };
+  Object.assign(PM, { esc, t, icon, money, initials, $, $$, avatarHtml, today, dtf });
 
   function applyPrefs() {
     document.documentElement.dataset.theme = S.theme;
@@ -58,7 +62,52 @@
   }
 
   // ---------- api ----------
+  // A screen used to ask again, on every move, for things that had not changed: the project list, the plan and usage
+  // ribbon, the unread support count. Those reads are now kept for a few seconds and shared when two ask at once.
+  // Any change made from here (anything that is not a read) empties the kept answers first and again when it finishes,
+  // so a screen never shows what it just changed as it was before. Answers are kept as text and parsed for each caller,
+  // so one screen can change what it got without the next screen seeing the change.
+  const KEEP = [[/^\/api\/projects$/, 5000], [/^\/api\/billing$/, 20000], [/^\/api\/tickets\/summary$/, 30000], [/^\/api\/doc-types$/, 600000], [/^\/api\/templates$/, 10000]];
+  const kept = new Map();      // path to { at, text } where text is a promise of the answer as JSON text
+  const early = new Map();     // path to { at, p } for a read started early, handed to the first caller that asks for it
+  const EARLY_MS = 4000;
+  const keepFor = (path) => { for (const [re, ms] of KEEP) if (re.test(path)) return ms; return 0; };
+  const forget = () => { kept.clear(); early.clear(); };
+  const quiet = (method, path) => method === 'GET' || /^\/api\/(usage|client-error)$/.test(path) || (method === 'PUT' && path === '/api/me');
   async function api(method, path, body) {
+    if (method === 'GET') {
+      const ms = keepFor(path), now = Date.now();
+      if (ms) {
+        let k = kept.get(path);
+        if (!k || now - k.at >= ms) {
+          const mine = { at: now, text: rawApi('GET', path).then((d) => JSON.stringify(d)) };
+          kept.set(path, mine);
+          mine.text.catch(() => { if (kept.get(path) === mine) kept.delete(path); });
+          k = mine;
+        }
+        return k.text.then((x) => JSON.parse(x));
+      }
+      const e = early.get(path);
+      if (e) { early.delete(path); if (now - e.at < EARLY_MS) return e.p; }
+      return rawApi('GET', path);
+    }
+    if (quiet(method, path)) return rawApi(method, path, body);
+    forget();
+    try { return await rawApi(method, path, body); } finally { forget(); }
+  }
+  // starts reads that a screen is about to need, at the same time as the read it will wait for first
+  function prefetch(paths) {
+    const now = Date.now();
+    for (const path of paths || []) {
+      if (keepFor(path)) { api('GET', path).catch(() => {}); continue; }
+      const e = early.get(path);
+      if (e && now - e.at < EARLY_MS) continue;
+      const p = rawApi('GET', path);
+      p.catch(() => {});
+      early.set(path, { at: now, p });
+    }
+  }
+  async function rawApi(method, path, body) {
     const init = { method, headers: {} };
     if (S.token) init.headers.Authorization = `Bearer ${S.token}`;
     if (body instanceof FormData) init.body = body;
@@ -84,7 +133,7 @@
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   }
-  Object.assign(PM, { api, download });
+  Object.assign(PM, { api, download, prefetch, forgetReads: forget });
 
   // ---------- toast and modal ----------
   function toast(msg, type = '', action) {
@@ -287,8 +336,16 @@
     const mo = new MutationObserver(() => { if (!host.isConnected) { fly.remove(); mo.disconnect(); } });
     mo.observe(document.getElementById('app'), { childList: true });
   }
+  // Dark mode and language change on screen at once. The change is saved while the screen redraws (the redraw does not
+  // depend on it), so a switch no longer waits for the save to finish before it starts.
   async function setPref(p) {
-    try { const r = await api('PUT', '/api/me', p); setUser(r.user); PM.vt(route); } catch (e) { toast(e.message, 'err'); }
+    const was = { lang: S.lang, theme: S.theme };
+    if (p.theme) S.theme = p.theme;
+    if (p.language) S.lang = p.language;
+    const saving = api('PUT', '/api/me', p);
+    PM.vt(route);
+    try { setUser((await saving).user); }
+    catch (e) { S.lang = was.lang; S.theme = was.theme; applyPrefs(); toast(e.message, 'err'); PM.vt(route); }
   }
   PM.setPref = setPref;
   PM.shell = shell;
@@ -383,6 +440,18 @@
   };
 
   // ---------- project shell ----------
+  // what each tab asks for first, so it can be asked for while the project itself is still on its way
+  const TAB_READS = {
+    overview: (id) => [`/api/projects/${id}/dashboard`],
+    review: (id) => [`/api/projects/${id}/items`],
+    schedule: (id) => [`/api/projects/${id}/schedule`],
+    logs: (id) => [`/api/projects/${id}/items`, '/api/me/log-views'],
+    meetings: (id) => [`/api/projects/${id}/meetings`],
+    inbox: (id) => [`/api/projects/${id}/inbox`, `/api/projects/${id}/sync-history`],
+    documents: (id) => [`/api/projects/${id}/documents`, `/api/projects/${id}/items?kind=deliverable`],
+    reports: (id) => ['/api/doc-types', '/api/templates', `/api/projects/${id}/generated`, `/api/projects/${id}/folders`],
+    settings: (id) => [`/api/projects/${id}/resources`, `/api/projects/${id}/members`],
+  };
   const TABS = [['overview', 'chart'], ['review', 'check'], ['schedule', 'cal'], ['logs', 'list'], ['meetings', 'mic'], ['inbox', 'inbox'], ['documents', 'file'], ['reports', 'spark'], ['thinking', 'chat'], ['settings', 'gear']];
   // Project shortcuts in the header: icon only buttons, each with a tooltip and an accessible name.
   const projLinks = (p) => {
@@ -395,7 +464,8 @@
     const soft = !!(opts && opts.soft) && S.project && S.project.id === id && !!$('#main > .proj-head') && !!$('#content');
     if (!soft && (!S.project || S.project.id !== id)) shell('', spot());
     let p;
-    // the project and the project list are independent, so they load together
+    // the project, the project list and what the tab is going to show are independent, so they load together
+    prefetch((TAB_READS[tab] || (() => []))(id));
     try { p = (await Promise.all([api('GET', `/api/projects/${id}`), loadProjects()]))[0].project; } catch (e) { toast(e.message, 'err'); location.hash = '#/projects'; return; }
     S.project = p;
     const badge = (k) => (k === 'review' && p.stats.pendingItems ? `<span class="badge-count">${p.stats.pendingItems}</span>` : k === 'inbox' && p.stats.pendingInbox ? `<span class="badge-count">${p.stats.pendingInbox}</span>` : '');

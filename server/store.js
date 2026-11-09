@@ -9,6 +9,11 @@ const err = (status, message) => Object.assign(new Error(message), { status });
 const ROLES = ['manager', 'editor', 'viewer'];
 const RANK = { viewer: 1, editor: 2, manager: 3 };
 const replacer = (k, v) => (k.startsWith('_') ? undefined : v);
+const md5 = (s) => crypto.createHash('md5').update(s).digest('hex');
+const vkey = (id) => 'v:' + id;
+// What each schedule version entry was last fingerprinted as, so an old entry that nobody touches is never stringified again.
+// The value 'stored' means the entry came from the database and has not been looked at since.
+const vmemo = new WeakMap();
 
 class Store {
   constructor(db) {
@@ -45,17 +50,38 @@ class Store {
     const rows = (await this.db.query('SELECT p.id, p.version, m.role FROM project_members m JOIN projects p ON p.id = m.project_id WHERE m.user_id = $1 ORDER BY p.id', [userId])).rows;
     const need = rows.filter((r) => { const c = this.cache.get(r.id); return !c || c.version !== r.version; }).map((r) => r.id);
     if (need.length) {
-      const res = await this.db.query('SELECT id, data, version FROM projects WHERE id = ANY($1::bigint[])', [need]);
-      for (const row of res.rows) {
+      for (const row of await this.readRows(need)) {
         const old = this.cache.get(row.id);
         // the project object is replaced in place so a running analysis keeps writing to the object everyone reads
-        if (old && old.P) { for (const k of Object.keys(old.P)) if (!k.startsWith('_')) delete old.P[k]; Object.assign(old.P, row.data); old.version = row.version; old.sums = null; }
-        else this.cache.set(row.id, { P: row.data, version: row.version, sums: null });
+        if (old && old.P) { for (const k of Object.keys(old.P)) if (!k.startsWith('_')) delete old.P[k]; Object.assign(old.P, row.data); old.version = row.version; old.sums = null; old.psums = row.psums; }
+        else this.cache.set(row.id, { P: row.data, version: row.version, sums: null, psums: row.psums });
       }
     }
     const projects = {}, roles = {}, order = [];
     for (const r of rows) { const c = this.cache.get(r.id); if (!c) continue; projects[r.id] = c.P; roles[r.id] = r.role; order.push(r.id); }
     return { projects, roles, order };
+  }
+
+  // The heavy, rarely changing parts of a project (extracted document text and the schedule version history) live in
+  // their own rows, one row per version entry. The project row keeps the order of the versions. Rows written before this
+  // layout still hold everything inline and are moved on their first save.
+  async readRows(ids) {
+    const rows = (await this.db.query('SELECT id, data, version FROM projects WHERE id = ANY($1::bigint[])', [ids])).rows;
+    if (!rows.length) return [];
+    const pr = (await this.db.query('SELECT project_id, k, data FROM project_parts WHERE project_id = ANY($1::bigint[])', [rows.map((r) => r.id)])).rows;
+    const by = new Map();
+    for (const r of pr) { if (!by.has(r.project_id)) by.set(r.project_id, {}); by.get(r.project_id)[r.k] = r.data; }
+    return rows.map((row) => {
+      const parts = by.get(row.id) || null, d = row.data;
+      let psums = null;
+      if (parts) {
+        psums = {};
+        for (const k of Object.keys(parts)) psums[k] = 'stored';
+        if (Array.isArray(d.vorder)) { d.versions = d.vorder.map((id) => parts[vkey(id)]).filter((v) => v !== undefined); delete d.vorder; for (const v of d.versions) vmemo.set(v, 'stored'); }
+        if ('texts' in parts) { d.texts = parts.texts; psums.textsRef = { ...parts.texts }; }
+      }
+      return { id: row.id, version: row.version, data: d, psums };
+    });
   }
 
   roleOf(projectId, userId) {
@@ -64,12 +90,12 @@ class Store {
 
   // ---------- writing ----------
   async create(P, ownerId) {
-    const data = JSON.stringify(P, replacer);
     await this.db.tx(async (t) => {
-      await t.query('INSERT INTO projects(id, owner_id, data) VALUES ($1, $2, $3::jsonb)', [P.id, ownerId, data]);
+      await t.query("INSERT INTO projects(id, owner_id, data) VALUES ($1, $2, '{}'::jsonb)", [P.id, ownerId]);
       await t.query("INSERT INTO project_members(project_id, user_id, role) VALUES ($1, $2, 'manager')", [P.id, ownerId]);
     });
-    this.cache.set(P.id, { P, version: 1, sums: null });
+    this.cache.set(P.id, { P, version: 1, sums: null, psums: null });
+    await this.save(P);
   }
 
   // A project is one JSON document, but most of its weight (extracted document text, schedule version history) almost
@@ -81,23 +107,70 @@ class Store {
     const run = prev.catch(() => {}).then(async () => {
       const c0 = this.cache.get(id);
       if (!c0) return false;
-      const keys = Object.keys(P).filter((k) => !k.startsWith('_') && P[k] !== undefined);
+      const heavy = new Set(['versions', 'texts']);
+      const keys = Object.keys(P).filter((k) => !k.startsWith('_') && P[k] !== undefined && !heavy.has(k));
       const parts = {}, sums = {};
-      for (const k of keys) { const s = JSON.stringify(P[k]); if (s === undefined) continue; parts[k] = s; sums[k] = crypto.createHash('md5').update(s).digest('hex'); }
+      for (const k of keys) { const s = JSON.stringify(P[k]); if (s === undefined) continue; parts[k] = s; sums[k] = md5(s); }
+
+      // heavy parts: one row per schedule version and one for the document texts
+      const pknown = c0.psums, psums = {}, pwrite = {};
+      const vers = Array.isArray(P.versions) ? P.versions : null;
+      if (vers && vers.every((v) => v && typeof v === 'object' && Number.isFinite(v.id))) {
+        const recent = new Set(vers.slice(-2));
+        for (const v of vers) {
+          const k = vkey(v.id); let m = vmemo.get(v);
+          let json = null;
+          if (m === undefined || recent.has(v)) { json = JSON.stringify(v); m = md5(json); vmemo.set(v, m); }
+          psums[k] = m;
+          if (!pknown || pknown[k] !== m) pwrite[k] = json;      // null means stringify when it is written
+        }
+        const order = JSON.stringify(vers.map((v) => v.id)); parts.vorder = order; sums.vorder = md5(order);
+      } else if (vers) { const s = JSON.stringify(vers); parts.versions = s; sums.versions = md5(s); }
+      const tx = P.texts;
+      if (tx && typeof tx === 'object') {
+        const ref = pknown && pknown.textsRef, ks = Object.keys(tx);
+        const same = ref && ks.length === Object.keys(ref).length && ks.every((k) => ref[k] === tx[k]);
+        psums.textsRef = same ? ref : { ...tx };
+        psums.texts = 'x';
+        if (!same || !pknown || pknown.texts === undefined) pwrite.texts = JSON.stringify(tx);
+      } else if (tx !== undefined) { const s = JSON.stringify(tx); parts.texts = s; sums.texts = md5(s); }
+      const stale = pknown ? Object.keys(pknown).filter((k) => k !== 'textsRef' && !(k in psums)) : null;
+
       const known = c0.sums;
-      let r;
-      if (!known) {
-        // nothing is known about what is stored (just loaded or created), so this first save writes everything
-        const data = '{' + Object.keys(parts).map((k) => JSON.stringify(k) + ':' + parts[k]).join(',') + '}';
-        r = await this.db.query('UPDATE projects SET data = $2::jsonb, version = version + 1, updated_at = now() WHERE id = $1 RETURNING version', [id, data]);
-      } else {
+      let ver = null;
+      const writeMain = async (q) => {
+        if (!known) {
+          const data = '{' + Object.keys(parts).map((k) => JSON.stringify(k) + ':' + parts[k]).join(',') + '}';
+          return q('UPDATE projects SET data = $2::jsonb, version = version + 1, updated_at = now() WHERE id = $1 RETURNING version', [id, data]);
+        }
         const changed = Object.keys(parts).filter((k) => known[k] !== sums[k]);
         const gone = Object.keys(known).filter((k) => !(k in parts));
         const patch = '{' + changed.map((k) => JSON.stringify(k) + ':' + parts[k]).join(',') + '}';
-        r = await this.db.query('UPDATE projects SET data = (data - $3::text[]) || $2::jsonb, version = version + 1, updated_at = now() WHERE id = $1 RETURNING version', [id, patch, gone]);
+        return q('UPDATE projects SET data = (data - $3::text[]) || $2::jsonb, version = version + 1, updated_at = now() WHERE id = $1 RETURNING version', [id, patch, gone]);
+      };
+      const writeParts = async (q) => {
+        for (const k of Object.keys(pwrite)) {
+          let json = pwrite[k];
+          if (json === null) json = JSON.stringify(vers.find((v) => vkey(v.id) === k));
+          await q('INSERT INTO project_parts(project_id, k, data) VALUES ($1, $2, $3::jsonb) ON CONFLICT (project_id, k) DO UPDATE SET data = EXCLUDED.data', [id, k, json]);
+        }
+        if (stale === null) await q('DELETE FROM project_parts WHERE project_id = $1 AND k <> ALL($2::text[])', [id, Object.keys(psums).filter((k) => k !== 'textsRef' && k !== 'texts').concat(psums.texts ? ['texts'] : [])]);
+        else if (stale.length) await q('DELETE FROM project_parts WHERE project_id = $1 AND k = ANY($2::text[])', [id, stale]);
+      };
+      const needParts = Object.keys(pwrite).length > 0 || stale === null || stale.length > 0;
+      if (needParts) {
+        await this.db.tx(async (t) => {
+          const r = await writeMain((text, p) => t.query(text, p));
+          if (!r.rows[0]) return;
+          ver = r.rows[0].version;
+          await writeParts((text, p) => t.query(text, p));
+        });
+      } else {
+        const r = await writeMain((text, p) => this.db.query(text, p));
+        if (r.rows[0]) ver = r.rows[0].version;
       }
-      if (!r.rows[0]) { this.cache.delete(id); return false; } // deleted meanwhile
-      const c = this.cache.get(id); if (c) { c.P = P; c.version = r.rows[0].version; c.sums = sums; }
+      if (ver === null) { this.cache.delete(id); return false; } // deleted meanwhile
+      const c = this.cache.get(id); if (c) { c.P = P; c.version = ver; c.sums = sums; c.psums = psums; }
       return true;
     });
     this.chain.set(id, run);

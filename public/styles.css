@@ -1760,3 +1760,6 @@ body.chat-page .cht-fab { display: none; }
 .cht-att-n { min-width: 0; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cht-att .btn.icon { min-width: 24px; min-height: 24px; padding: 2px; }
 .cht-attach { flex: none; align-self: flex-end; }
+/* Performance. Rows of a long schedule that are scrolled out of view are not laid out or painted until they come into
+   view. Every row has a fixed height (34px, the ROW value in gantt.js), so nothing moves when one is drawn. */
+.gt-cells { content-visibility: auto; contain-intrinsic-size: auto 34px; }

@@ -34,6 +34,12 @@ const MIGRATIONS = [
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
   );
+  CREATE TABLE IF NOT EXISTS project_parts (
+    project_id BIGINT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    k TEXT NOT NULL,
+    data JSONB NOT NULL,
+    PRIMARY KEY (project_id, k)
+  );
   CREATE TABLE IF NOT EXISTS project_members (
     project_id BIGINT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

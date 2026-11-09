@@ -7,7 +7,7 @@
   const STATUSES = ['todo', 'prog', 'done'];
   const noMotion = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
   const locale = () => (S.lang === 'ar' ? 'ar-AE' : 'en-US');
-  const fmt = (s) => (s ? new Date(s + 'T00:00:00Z').toLocaleDateString(locale(), { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '');
+  const fmt = (s) => (s ? PM.dtf(locale(), { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(s + 'T00:00:00Z')) : '');
   const longDate = (s) => (s ? new Date(s + 'T00:00:00Z').toLocaleDateString(locale(), { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : '');
   // status comes from progress, so there is one source of truth and no new field
   const stOf = (x) => ((x.progress || 0) >= 100 ? 'done' : (x.progress || 0) > 0 ? 'prog' : 'todo');

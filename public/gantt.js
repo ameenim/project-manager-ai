@@ -75,7 +75,7 @@
       // very large plans open collapsed to work package level, so the first view is fast and readable
       if (!this._auto && this.tasks.length > 400) {
         this._auto = true; this.ui.level = 3; this.ui.collapsed = new Set();
-        for (const t of this.tasks) if (t.summary && this.depthOf(t) >= 3) this.ui.collapsed.add(t.id);
+        { const by = new Map(this.tasks.map((x) => [x.id, x])); for (const t of this.tasks) if (t.summary && this.depthOf(t, by) >= 3) this.ui.collapsed.add(t.id); }
       }
       this.render();
     }
@@ -336,11 +336,13 @@
 
     // ---------- outline levels ----------
     maxDepth() { let m = 1; for (const t of this.tasks) if (t._depth != null) m = Math.max(m, t._depth + 1); return m; }
-    depthOf(t) { let n = 1, p = t; const by = new Map(this.tasks.map((x) => [x.id, x])); let g = 0; while (p.parent_id && by.has(p.parent_id) && g++ < 50) { p = by.get(p.parent_id); n++; } return n; }
+    // by is a map of the tasks by id; a caller that asks for many tasks builds it once and passes it in
+    depthOf(t, by) { let n = 1, p = t; by = by || new Map(this.tasks.map((x) => [x.id, x])); let g = 0; while (p.parent_id && by.has(p.parent_id) && g++ < 50) { p = by.get(p.parent_id); n++; } return n; }
     updateLevels() {
       const sel = this.root.querySelector('select[data-g="level"]');
       if (!sel) return;
-      let deepest = 1; for (const t of this.tasks) deepest = Math.max(deepest, this.depthOf(t));
+      const by = new Map(this.tasks.map((x) => [x.id, x]));
+      let deepest = 1; for (const t of this.tasks) deepest = Math.max(deepest, this.depthOf(t, by));
       const opts = [['all', this.t('g_all_levels')]];
       for (let i = 1; i <= Math.max(deepest, 5); i++) opts.push([String(i), `${this.t('g_level')} ${i}`]);
       const html = opts.map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('');
@@ -351,7 +353,8 @@
     showLevel(n) {
       this.ui.level = Number.isFinite(n) && n > 0 ? n : null;
       this.ui.collapsed = new Set();
-      if (this.ui.level) for (const t of this.tasks) if (t.summary && this.depthOf(t) >= this.ui.level) this.ui.collapsed.add(t.id);
+      const by = new Map(this.tasks.map((x) => [x.id, x]));
+      if (this.ui.level) for (const t of this.tasks) if (t.summary && this.depthOf(t, by) >= this.ui.level) this.ui.collapsed.add(t.id);
       this.render();
     }
 
@@ -431,7 +434,8 @@
     headers(R) {
       const ppd = this.ppd;
       const loc = this.o.lang === 'ar' ? 'ar' : 'en-US';
-      const mname = (d, w) => new Intl.DateTimeFormat(loc, { month: w, timeZone: 'UTC' }).format(P(d));
+      const fmts = {}; // built once per width, not once per header cell
+      const mname = (d, w) => (fmts[w] || (fmts[w] = new Intl.DateTimeFormat(loc, { month: w, timeZone: 'UTC' }))).format(P(d));
       let h1 = '', h2 = '';
       if (this.ui.zoom === 'month') {
         let y = R.min.slice(0, 4);

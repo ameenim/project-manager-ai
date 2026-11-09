@@ -93,6 +93,7 @@
         first = false;
       }
       seq = Math.max(seq, r.seq || 0);
+      if (list.length && PM.forgetReads) PM.forgetReads(); // a project changed on the server, so kept answers are out of date
       list.forEach((e) => window.dispatchEvent(new CustomEvent('pm:analysis', { detail: e })));
     } catch (e) { /* the next poll tries again */ }
     timer = setTimeout(poll, running.size ? 1500 : document.visibilityState === 'visible' ? 4000 : 15000);
