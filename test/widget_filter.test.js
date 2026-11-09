@@ -6,7 +6,7 @@ const { start } = require('./helpers');
 let s; before(async () => { s = await start({ snapshotJob: false }); }); after(() => s.close());
 
 test('the dashboard carries every payment, not only the next few', async () => {
-  const u = (await s.call('POST', '/api/auth/register', { name: 'Filter User', email: 'wf@test.co', password: 'password1' })).data;
+  const u = (await s.call('POST', '/api/auth/register', { name: 'Filter User', email: 'wf@test.co', password: 'Pm-Test-4821' })).data;
   const fd = new FormData(); fd.append('name', 'Filter project');
   const p = (await s.call('POST', '/api/projects', fd, u.token)).data.project;
   for (const due of ['2027-01-10', '2027-03-10', '2027-06-10', '2027-09-10', '2027-12-10', '2028-02-10']) {

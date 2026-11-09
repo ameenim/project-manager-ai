@@ -10,7 +10,7 @@ const A = (m, p, b, t) => s.call(m, p, b, t || boss.token);
 before(async () => {
   s = await start({ opsJobs: false });
   process.env.SUPER_ADMIN_ALLOW_REGISTER = '1';
-  const r = await s.call('POST', '/api/auth/register', { name: 'Boss', email: 'boss@test.co', password: 'password1' });
+  const r = await s.call('POST', '/api/auth/register', { name: 'Boss', email: 'boss@test.co', password: 'Pm-Test-4821' });
   delete process.env.SUPER_ADMIN_ALLOW_REGISTER;
   boss = { token: r.data.token, id: r.data.user.id };
   alice = await s.user('Alice'); bob = await s.user('Bob');
@@ -18,7 +18,7 @@ before(async () => {
 after(() => s.close());
 
 test('a reserved super admin address cannot be claimed by signing up', async () => {
-  const r = await s.call('POST', '/api/auth/register', { name: 'Fake', email: 'BOSS@test.co', password: 'password1' });
+  const r = await s.call('POST', '/api/auth/register', { name: 'Fake', email: 'BOSS@test.co', password: 'Pm-Test-4821' });
   assert.equal(r.status, 403);
 });
 test('the reserved account is promoted and sees the flag', async () => {
@@ -39,13 +39,13 @@ test('overview, health, ai, config and audit load for the super admin', async ()
   assert.equal((await A('GET', '/api/admin/audit')).status, 200);
 });
 test('user management: create, edit, suspend, reset password, delete', async () => {
-  const c = await A('POST', '/api/admin/users', { name: 'Carol', email: 'carol@test.co', password: 'password1' }); assert.equal(c.status, 200);
+  const c = await A('POST', '/api/admin/users', { name: 'Carol', email: 'carol@test.co', password: 'Pm-Test-4821' }); assert.equal(c.status, 200);
   const id = c.data.user.id;
-  assert.equal((await A('POST', '/api/admin/users', { name: 'Dup', email: 'carol@test.co', password: 'password1' })).status, 409);
-  const login = await s.call('POST', '/api/auth/login', { email: 'carol@test.co', password: 'password1' }); assert.equal(login.status, 200);
+  assert.equal((await A('POST', '/api/admin/users', { name: 'Dup', email: 'carol@test.co', password: 'Pm-Test-4821' })).status, 409);
+  const login = await s.call('POST', '/api/auth/login', { email: 'carol@test.co', password: 'Pm-Test-4821' }); assert.equal(login.status, 200);
   assert.equal((await A('PUT', `/api/admin/users/${id}`, { name: 'Carol B', status: 'suspended' })).status, 200);
   assert.equal((await s.call('GET', '/api/me', null, login.data.token)).status, 401, 'sessions end when suspended');
-  assert.equal((await s.call('POST', '/api/auth/login', { email: 'carol@test.co', password: 'password1' })).status, 403);
+  assert.equal((await s.call('POST', '/api/auth/login', { email: 'carol@test.co', password: 'Pm-Test-4821' })).status, 403);
   await A('PUT', `/api/admin/users/${id}`, { status: 'active' });
   assert.equal((await A('POST', `/api/admin/users/${id}/password`, { password: 'newpassword1' })).status, 200);
   assert.equal((await s.call('POST', '/api/auth/login', { email: 'carol@test.co', password: 'newpassword1' })).status, 200);
@@ -103,7 +103,7 @@ test('configuration is validated, saved and used', async () => {
   assert.equal((await A('PUT', '/api/admin/config', { settings: { trial_days: -3 } })).status, 400);
   assert.equal((await A('PUT', '/api/admin/config', { settings: { nope: 1 } })).status, 400);
   assert.equal((await A('PUT', '/api/admin/config', { settings: { signup_enabled: false } })).status, 200);
-  assert.equal((await s.call('POST', '/api/auth/register', { name: 'Late', email: 'late@test.co', password: 'password1' })).status, 403);
+  assert.equal((await s.call('POST', '/api/auth/register', { name: 'Late', email: 'late@test.co', password: 'Pm-Test-4821' })).status, 403);
   await A('PUT', '/api/admin/config', { settings: { signup_enabled: true, maintenance_mode: true, maintenance_message: 'Back soon' } });
   assert.equal((await s.call('GET', '/api/projects', null, alice.token)).status, 503);
   assert.equal((await s.call('GET', '/api/projects', null, boss.token)).status, 200, 'super admins still work');

@@ -17,7 +17,7 @@ async function start(opts = {}) {
   async function user(name = 'User') {
     n++;
     const email = `u${n}_${Date.now()}@test.co`;
-    const r = await call('POST', '/api/auth/register', { name: `${name} ${n}`, email, password: 'password1' });
+    const r = await call('POST', '/api/auth/register', { name: `${name} ${n}`, email, password: 'Pm-Test-4821' });
     if (r.status !== 200) throw new Error('register failed ' + r.status + ' ' + JSON.stringify(r.data));
     return { email, token: r.data.token, id: r.data.user.id };
   }

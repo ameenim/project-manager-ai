@@ -14,7 +14,7 @@ const flow = (screens) => screens.map((x, i) => ({ k: 'view', s: x, ago: (screen
 before(async () => {
   s = await start({ opsJobs: false });
   process.env.SUPER_ADMIN_ALLOW_REGISTER = '1';
-  const r = await s.call('POST', '/api/auth/register', { name: 'Boss', email: 'boss@test.co', password: 'password1' });
+  const r = await s.call('POST', '/api/auth/register', { name: 'Boss', email: 'boss@test.co', password: 'Pm-Test-4821' });
   delete process.env.SUPER_ADMIN_ALLOW_REGISTER;
   boss = { token: r.data.token, id: r.data.user.id };
   pms = [await s.user('Pm One'), await s.user('Pm Two'), await s.user('Pm Three')];

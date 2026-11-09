@@ -1,5 +1,7 @@
 // Reads plain text out of uploaded files: PDF, Word, PowerPoint, Excel, pictures and text.
 'use strict';
+const { openSafeZip } = require('./safezip');
+const { readSpreadsheet } = require('./xlsx_text');
 const path = require('path');
 const { callClaude } = require('./claude');
 
@@ -53,8 +55,8 @@ function htmlToText(html) {
 }
 
 async function extractPptx(buf) {
-  const JSZip = require('jszip');
-  const zip = await JSZip.loadAsync(buf);
+  const zip = await openSafeZip(buf);
+  if (!zip) throw Object.assign(new Error('This PowerPoint file could not be opened. Save it again as .pptx and try again.'), { status: 422, expose: true });
   const num = (n) => Number((n.match(/(\d+)\.xml$/) || [])[1] || 0);
   const slides = Object.keys(zip.files).filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n)).sort((a, b) => num(a) - num(b));
   const parts = [];
@@ -97,22 +99,16 @@ async function extractText(buf, name) {
     return { text: t, kind: 'image', ocr: true };
   }
   if (ext === '.docx') {
+    await openSafeZip(buf);
     const mammoth = require('mammoth');
     const r = await mammoth.convertToHtml({ buffer: buf });
     return { text: htmlToText(r.value || ''), kind: 'docx' };
   }
   if (ext === '.pptx') return extractPptx(buf);
   if (ext === '.xlsx' || ext === '.xls') {
-    const XLSX = require('xlsx');
-    const wb = XLSX.read(buf, { type: 'buffer', cellDates: true });
-    const parts = [];
-    for (const sheet of wb.SheetNames) {
-      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheet], { header: 1, raw: false, defval: '' });
-      parts.push(`Sheet: ${sheet}`);
-      for (const r of rows) if (r.some((c) => String(c).trim() !== '')) parts.push('| ' + r.map((c) => String(c).trim()).join(' | ') + ' |');
-      parts.push('');
-    }
-    return { text: parts.join('\n'), sheets: wb.SheetNames.length, kind: 'xlsx' };
+    if (buf[0] === 0x50 && buf[1] === 0x4b) await openSafeZip(buf);
+    const r = await readSpreadsheet(buf);
+    return { text: r.text, sheets: r.sheets, kind: 'xlsx' };
   }
   if (ext === '.mpp') throw Object.assign(new Error('Microsoft Project .mpp files cannot be read directly. In Project choose File, Save As, then XML Format, and upload the .xml file.'), { status: 415 });
   if (ext === '.doc' || ext === '.ppt') throw Object.assign(new Error(`Old ${ext} files cannot be read. Save the file as ${ext}x and upload it again.`), { status: 415 });

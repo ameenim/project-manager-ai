@@ -3,6 +3,7 @@
 'use strict';
 const crypto = require('crypto');
 const { Ops, DAY } = require('./ops');
+const { checkPassword } = require('./auth');
 
 const err = (status, message) => Object.assign(new Error(message), { status });
 const num = (v) => Number(v || 0);
@@ -103,7 +104,7 @@ module.exports = function createAdmin({ db, store, auth, ops, usage, tickets }) 
     const name = String(body.name || '').trim(), email = String(body.email || '').trim().toLowerCase(), password = String(body.password || '');
     if (!name || name.length > 120) throw err(400, 'Enter a name up to 120 characters');
     if (!EMAIL_RE.test(email) || email.length > 200) throw err(400, 'Enter a valid email address');
-    if (password.length < 8 || password.length > 200) throw err(400, 'Use 8 to 200 characters for the password');
+    { const bad = checkPassword(password, email); if (bad) throw err(400, bad); }
     const salt = crypto.randomBytes(16).toString('hex');
     let row;
     try { row = (await q('INSERT INTO users(email, name, pw_salt, pw_hash) VALUES ($1,$2,$3,$4) RETURNING id', [email, name, salt, await scrypt(password, salt)])).rows[0]; }
@@ -141,7 +142,7 @@ module.exports = function createAdmin({ db, store, auth, ops, usage, tickets }) 
   on('POST', '/users/(\\d+)/password', async ({ m, admin, body }) => {
     const id = idOf(m[1]); await userRow(id);
     const pw = String(body.password || '');
-    if (pw.length < 8 || pw.length > 200) throw err(400, 'Use 8 to 200 characters for the password');
+    { const bad = checkPassword(pw, ''); if (bad) throw err(400, bad); }
     const salt = crypto.randomBytes(16).toString('hex');
     await q('UPDATE users SET pw_salt = $2, pw_hash = $3 WHERE id = $1', [id, salt, await scrypt(pw, salt)]);
     await auth.logoutEverywhere(id);

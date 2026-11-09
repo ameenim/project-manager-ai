@@ -34,7 +34,7 @@ const result = (t, over) => ({ attempt: 1, phase: 'fixed', ci: 'passed', merged:
 before(async () => {
   s = await start({ opsJobs: false, ticketDispatcher: dispatcher });
   process.env.SUPER_ADMIN_ALLOW_REGISTER = '1';
-  const r = await s.call('POST', '/api/auth/register', { name: 'Boss', email: 'boss@test.co', password: 'password1' });
+  const r = await s.call('POST', '/api/auth/register', { name: 'Boss', email: 'boss@test.co', password: 'Pm-Test-4821' });
   delete process.env.SUPER_ADMIN_ALLOW_REGISTER;
   boss = { token: r.data.token, id: r.data.user.id, email: 'boss@test.co' };
   alice = await s.user('Alice'); bob = await s.user('Bob'); carol = await s.user('Carol');

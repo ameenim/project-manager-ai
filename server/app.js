@@ -10,6 +10,7 @@ const Busboy = require('busboy');
 const dbm = require('./db');
 const { Store } = require('./store');
 const authm = require('./auth');
+const { clientIp } = require('./net');
 const { Connectors } = require('./connectors');
 const createApi = require('./api');
 const { MODEL } = require('./claude');
@@ -27,11 +28,34 @@ const MAX_JSON = 8 * 1024 * 1024;          // a normal JSON request
 const MAX_IMPORT = 64 * 1024 * 1024;       // a backup file, which can carry original documents
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.json': 'application/json; charset=utf-8', '.ico': 'image/x-icon', '.mp4': 'video/mp4', '.txt': 'text/plain; charset=utf-8' };
 
+// The Content Security Policy tells the browser which sources a page may load from, so an injected script cannot run
+// or send data anywhere else. Styles allow inline because the screens set colors with style attributes. Fonts come from
+// Google Fonts. Set CSP_MODE=report-only to watch for problems without blocking, or CSP_MODE=off to remove it.
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com data:",
+  "img-src 'self' data: blob:",
+  "media-src 'self' blob: data:",
+  "connect-src 'self'",
+  "frame-src 'self' blob:",
+  "worker-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'self'",
+].join('; ');
+const cspMode = String(process.env.CSP_MODE || 'on').toLowerCase();
 const SECURITY = {
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'X-Frame-Options': 'SAMEORIGIN',
-  'Permissions-Policy': 'camera=(), microphone=(self), display-capture=(self), geolocation=()',
+  'Permissions-Policy': 'camera=(), microphone=(self), display-capture=(self), geolocation=(), payment=(), usb=()',
+  'Strict-Transport-Security': 'max-age=31536000',
+  'Cross-Origin-Resource-Policy': 'same-origin',
+  'X-Permitted-Cross-Domain-Policies': 'none',
+  ...(cspMode === 'off' ? {} : { [cspMode === 'report-only' ? 'Content-Security-Policy-Report-Only' : 'Content-Security-Policy']: CSP }),
 };
 
 // Answers over about 1.4 KB are sent gzipped when the browser accepts it. A project or schedule answer is mostly repeated
@@ -52,7 +76,6 @@ const json = (res, status, data, extra) => {
   res.end(body);
 };
 const bearer = (req) => { const h = String(req.headers.authorization || ''); return /^Bearer /i.test(h) ? h.slice(7).trim() : null; };
-const clientIp = (req) => String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
 
 // A simple allowance per address and minute, so one visitor cannot flood the server.
 function limiter(max, windowMs) {
@@ -130,9 +153,10 @@ async function createApp(opts = {}) {
 
   // The optional demo account. It is off unless asked for, because everyone who knows its password shares its data.
   if (opts.demoAccount || process.env.DEMO_ACCOUNT === '1') {
+    if (process.env.REPLIT_DEPLOYMENT) console.warn('SECURITY: DEMO_ACCOUNT is on in a live deployment. Its password is public, so anyone can sign in to it. Remove DEMO_ACCOUNT unless this is a demo site.');
     const exists = await store.userByEmail('pm@example.com');
     if (!exists) {
-      const r = await auth.register({ name: 'Demo Project Manager', email: 'pm@example.com', password: 'demo1234' });
+      const r = await auth.register({ name: 'Demo Project Manager', email: 'pm@example.com', password: 'demo1234' }, { skipPolicy: true });
       const u = await auth.userForToken(r.token);
       await api.handle({ user: u, method: 'POST', path: '/api/workspace/sample', query: {}, body: {} });
     }

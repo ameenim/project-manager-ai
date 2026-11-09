@@ -4,6 +4,7 @@
 'use strict';
 const path = require('path');
 const JSZip = require('jszip');
+const { openSafeZip } = require('./safezip');
 
 // ---------- color helpers ----------
 const clean = (v) => String(v || '').replace(/^#/, '').toUpperCase();
@@ -367,7 +368,8 @@ async function extract(buffer, filename, opts) {
   const kind = /^(docx|dotx|docm|dotm)$/.test(ext) ? 'word' : /^(pptx|potx|ppsx|pptm|potm)$/.test(ext) ? 'ppt' : /^(xlsx|xltx|xlsm|xltm)$/.test(ext) ? 'excel' : null;
   if (!kind) throw Object.assign(new Error('Upload a Word (.docx, .dotx), PowerPoint (.pptx, .potx) or Excel (.xlsx, .xltx) template'), { status: 400 });
   let zip;
-  try { zip = await JSZip.loadAsync(buffer); } catch (e) { throw Object.assign(new Error('The file could not be opened. Save it again as .docx or .pptx and try again.'), { status: 400 }); }
+  zip = await openSafeZip(buffer);
+  if (!zip) throw Object.assign(new Error('The file could not be opened. Save it again as .docx or .pptx and try again.'), { status: 400 });
   if (!zip.file(KIND_MAIN[kind])) throw Object.assign(new Error('This does not look like a Word, PowerPoint or Excel file.'), { status: 400 });
   const warnings = [];
   const themePath = names(zip, KIND_THEME[kind])[0];

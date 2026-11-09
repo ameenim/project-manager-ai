@@ -940,9 +940,21 @@ module.exports = function createApi(store, auth, connectors, ops) {
     return buildTrends(rows, { today, days, projects: list.map((P) => ({ id: P.id, name: P.p.name, currency: P.p.currency })) });
   }
 
+  // The type a browser reports for an upload is only what the sender says. The first bytes of the file say what it is.
+  const imageMatchesType = (b, type) => {
+    const head = b.subarray(0, 16);
+    if (/^image\/png$/.test(type)) return head.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    if (/^image\/jpe?g$/.test(type)) return head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff;
+    if (/^image\/gif$/.test(type)) return /^GIF8[79]a/.test(head.toString('latin1', 0, 6));
+    if (/^image\/webp$/.test(type)) return head.toString('latin1', 0, 4) === 'RIFF' && head.toString('latin1', 8, 12) === 'WEBP';
+    if (/^image\/svg\+xml$/.test(type)) { const t = b.toString('utf8', 0, Math.min(b.length, 4096)).replace(/^\uFEFF/, ''); return /<svg[\s>]/i.test(t) && !/<script|\son\w+\s*=|javascript:/i.test(b.toString('utf8')); }
+    return false;
+  };
+
   const fileToDataUrl = async (f, maxBytes = 1.5 * 1024 * 1024) => {
     if (!/^image\/(png|jpe?g|webp|gif|svg\+xml)$/.test(f.type || '')) throw err(400, 'Choose a picture in PNG, JPG, WebP, GIF or SVG format');
     if (f.buffer.length > maxBytes) throw err(413, 'The picture is too large. Use one under 1.5 MB.');
+    if (!imageMatchesType(f.buffer, f.type)) throw err(400, 'This file is not really a picture of that kind. Choose a PNG, JPG, WebP, GIF or SVG file.');
     return `data:${f.type};base64,${f.buffer.toString('base64')}`;
   };
 

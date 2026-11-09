@@ -56,7 +56,7 @@ test('sql style input is harmless', async () => {
   const u = await s.user();
   const p = await s.project(u.token, `x'); DROP TABLE projects;--`);
   assert.equal((await s.call('GET', '/api/projects', null, u.token)).data.projects.length, 1);
-  assert.equal((await s.call('POST', '/api/auth/login', { email: `' OR '1'='1`, password: 'password1' })).status, 401);
+  assert.equal((await s.call('POST', '/api/auth/login', { email: `' OR '1'='1`, password: 'Pm-Test-4821' })).status, 401);
   assert.ok(p.id);
 });
 test('downloads cannot be used with another account token', async () => {

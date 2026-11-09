@@ -47,14 +47,6 @@
 <script src="app_chat.js"></script>
 <script src="app_support.js"></script>
 <script src="tips.js"></script>
-<script>
-  (function () {
-    var tk = null;
-    try { tk = localStorage.getItem('pm_token'); } catch (e) { /* storage blocked */ }
-    if (!tk) { location.replace('login.html'); return; }
-    PM.state.token = tk;
-    PM.start();
-  })();
-</script>
+<script src="app_start.js"></script>
 
 </body></html>

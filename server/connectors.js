@@ -32,13 +32,24 @@ class Connectors {
   constructor(db, opts = {}) { this.db = db; this.fetch = opts.fetch || ((...a) => fetch(...a)); this.P = opts.providers || providers(); this._key = null; }
 
   // ----- encryption -----
+  // The key comes from the APP_SECRET setting. Without it a key is made and kept in the database, which works but puts the
+  // key beside the data it protects, so anyone who copies the database can read every saved token. Production should
+  // set APP_SECRET. When it is set later, tokens saved under the database key are still read, then saved again under the
+  // new key the next time they are written.
   async key() {
     if (this._key) return this._key;
     if (process.env.APP_SECRET) { this._key = crypto.createHash('sha256').update(process.env.APP_SECRET).digest(); return this._key; }
-    await this.db.query('INSERT INTO app_secrets(key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING', ['conn_key', crypto.randomBytes(32).toString('hex')]);
+    if (process.env.REPLIT_DEPLOYMENT && !this._warned) { this._warned = true; console.warn('SECURITY: APP_SECRET is not set, so connection tokens are encrypted with a key stored in the same database. Set APP_SECRET to a long random value.'); }
+    return this.dbKey(true);
+  }
+  async dbKey(create) {
+    if (this._dbKey) return this._dbKey;
+    if (create) await this.db.query('INSERT INTO app_secrets(key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING', ['conn_key', crypto.randomBytes(32).toString('hex')]);
     const r = await this.db.query('SELECT value FROM app_secrets WHERE key = $1', ['conn_key']);
-    this._key = Buffer.from(r.rows[0].value, 'hex');
-    return this._key;
+    if (!r.rows[0]) return null;
+    this._dbKey = Buffer.from(r.rows[0].value, 'hex');
+    if (!process.env.APP_SECRET) this._key = this._dbKey;
+    return this._dbKey;
   }
   async seal(obj) {
     const iv = crypto.randomBytes(12), c = crypto.createCipheriv('aes-256-gcm', await this.key(), iv);
@@ -46,11 +57,17 @@ class Connectors {
     return [iv, c.getAuthTag(), enc].map((b) => b.toString('base64')).join('.');
   }
   async open(text) {
-    try {
-      const [iv, tag, enc] = String(text).split('.').map((s) => Buffer.from(s, 'base64'));
-      const d = crypto.createDecipheriv('aes-256-gcm', await this.key(), iv); d.setAuthTag(tag);
+    const [iv, tag, enc] = String(text).split('.').map((s) => Buffer.from(s, 'base64'));
+    const tryKey = (key) => {
+      const d = crypto.createDecipheriv('aes-256-gcm', key, iv); d.setAuthTag(tag);
       return JSON.parse(Buffer.concat([d.update(enc), d.final()]).toString('utf8'));
-    } catch (e) { throw err(409, 'The saved connection can no longer be read. Disconnect it and connect again.'); }
+    };
+    try { return tryKey(await this.key()); } catch (e) { /* maybe saved under the older database key */ }
+    try {
+      const old = process.env.APP_SECRET ? await this.dbKey(false) : null;
+      if (old) return tryKey(old);
+    } catch (e) { /* falls through to the message below */ }
+    throw err(409, 'The saved connection can no longer be read. Disconnect it and connect again.');
   }
 
   // ----- what the screen needs -----

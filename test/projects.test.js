@@ -84,7 +84,7 @@ test('data survives a server restart', async () => {
   const run = async (fn) => { const app = await createApp({ dbOptions: { dir: path.join(dir, 'db') } }); await new Promise((ok) => app.server.listen(0, ok)); const base = 'http://localhost:' + app.server.address().port; try { return await fn(base); } finally { await app.close(); } };
   const j = async (base, m, p, body, tok) => { const r = await fetch(base + p, { method: m, headers: { ...(body && !(body instanceof FormData) ? { 'content-type': 'application/json' } : {}), ...(tok ? { authorization: 'Bearer ' + tok } : {}) }, body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined }); return r.json(); };
   const { token, ids } = await run(async (base) => {
-    const reg = await j(base, 'POST', '/api/auth/register', { name: 'Persist', email: 'p@test.co', password: 'password1' });
+    const reg = await j(base, 'POST', '/api/auth/register', { name: 'Persist', email: 'p@test.co', password: 'Pm-Test-4821' });
     const ids = [];
     for (const n of ['One', 'Two']) { const fd = new FormData(); fd.append('name', n); ids.push((await j(base, 'POST', '/api/projects', fd, reg.token)).project.id); }
     await j(base, 'POST', `/api/projects/${ids[0]}/tasks`, { name: 'Kept task', duration: 2 }, reg.token);
