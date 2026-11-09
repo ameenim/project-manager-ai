@@ -365,3 +365,68 @@ test('a layout is saved only after Apply, unknown widgets never make a card, a s
   await s.call('POST', `/api/chat/messages/${r.message.id}/undo`, {}, u.token);
   assert.equal((await s.call('GET', '/api/layouts?scope=project', null, u.token)).data.layouts.length, 0);
 });
+
+test('schedule versions are listed and compared, saved, restored and the baseline set only after Apply, with Undo', async () => {
+  const { u, p } = await setup();
+  const add = (b) => s.call('POST', `/api/projects/${p.id}/tasks`, b, u.token);
+  const ids = []; for (let i = 0; i < 3; i++) ids.push((await add({ name: 'Step ' + i, duration: 2, start: '2027-03-0' + (i + 1) })).data.created);
+  const versions = async () => (await s.call('GET', `/api/projects/${p.id}/schedule/versions`, null, u.token)).data.versions;
+  // save a named version
+  say(use('save_schedule_version', { project_id: p.id, label: 'Before the change' }, 'v1')); say(text('Prepared the version.'));
+  const r1 = await talk(u.token, { project_id: p.id, text: 'Save the current schedule of this project as a version called Before the change' });
+  assert.equal(r1.message.card.items[0].sum.op, 'save_version');
+  const n0 = (await versions()).length;
+  await s.call('POST', `/api/chat/messages/${r1.message.id}/apply`, {}, u.token);
+  const vs = await versions(); assert.equal(vs.length, n0 + 1); assert.equal(vs[0].label, 'Before the change');
+  const saved = vs[0].id;
+  // change the schedule, then compare and restore
+  await s.call('POST', `/api/projects/${p.id}/schedule/apply`, { changes: { [ids[0]]: { duration: 9 } } }, u.token);
+  say(use('list_schedule_versions', { project_id: p.id, compare_to: saved }, 'v2')); say(text('One task changed.'));
+  const r2 = await talk(u.token, { project_id: p.id, text: 'What changed in the schedule of this project since the version Before the change?' });
+  assert.ok(r2.done);
+  say(use('restore_schedule_version', { project_id: p.id, version_id: saved }, 'v3')); say(text('Prepared the restore.'));
+  const r3 = await talk(u.token, { project_id: p.id, text: 'Restore the schedule of this project to the version Before the change' });
+  assert.equal(r3.message.card.items[0].sum.op, 'restore_version');
+  const dur = async () => (await s.call('GET', `/api/projects/${p.id}/schedule`, null, u.token)).data.tasks.find((t) => t.id === ids[0]).duration;
+  assert.equal(await dur(), 9, 'nothing before Apply');
+  assert.equal(r3.message.card.strong, true, 'a restore needs the second confirmation');
+  assert.equal((await s.call('POST', `/api/chat/messages/${r3.message.id}/apply`, {}, u.token)).status, 400);
+  assert.equal(await dur(), 9, 'still nothing without the second confirmation');
+  const ap = await s.call('POST', `/api/chat/messages/${r3.message.id}/apply`, { confirmed: true }, u.token);
+  assert.equal(ap.status, 200);
+  assert.equal(await dur(), 2, 'restored');
+  await s.call('POST', `/api/chat/messages/${r3.message.id}/undo`, {}, u.token);
+  assert.equal(await dur(), 9, 'undo brings the earlier schedule back');
+  // an unknown version never makes a card
+  say(use('restore_schedule_version', { project_id: p.id, version_id: 999 }, 'v4')); say(text('That version does not exist.'));
+  assert.equal((await talk(u.token, { project_id: p.id, text: 'Restore the schedule of this project to version 999' })).message.card, null);
+  // baseline
+  say(use('set_baseline', { project_id: p.id }, 'v5')); say(text('Prepared the baseline.'));
+  const r5 = await talk(u.token, { project_id: p.id, text: 'Set the baseline for the schedule of this project' });
+  assert.equal(r5.message.card.items[0].sum.op, 'set_baseline');
+  const has = async () => (await s.call('GET', `/api/projects/${p.id}/schedule`, null, u.token)).data.has_baseline;
+  assert.equal(await has(), false);
+  await s.call('POST', `/api/chat/messages/${r5.message.id}/apply`, {}, u.token);
+  assert.equal(await has(), true);
+  await s.call('POST', `/api/chat/messages/${r5.message.id}/undo`, {}, u.token);
+  assert.equal(await has(), false, 'undo removes the baseline');
+});
+
+test('task links are proposed with a type and lag, refuse loops, and undo restores the old links', async () => {
+  const u = await s.user('Linker'); const p = await s.project(u.token, 'Links project');
+  const add = (b) => s.call('POST', `/api/projects/${p.id}/tasks`, b, u.token);
+  const ids = []; for (let i = 0; i < 3; i++) ids.push((await add({ name: 'Link step ' + i, duration: 2, start: '2027-03-0' + (i + 1) })).data.created);
+  const deps = async (id) => (await s.call('GET', `/api/projects/${p.id}/schedule`, null, u.token)).data.tasks.find((t) => t.id === id).deps || [];
+  say(use('set_task_links', { project_id: p.id, task: ids[1], predecessors: [{ task: ids[0], type: 'FS', lag: 2 }] }, 'l1')); say(text('Prepared the link.'));
+  const r = await talk(u.token, { project_id: p.id, text: 'Link the schedule task Link step 1 after Link step 0 with 2 days lag' });
+  assert.equal(r.message.card.items[0].sum.op, 'change_schedule');
+  assert.equal((await deps(ids[1])).length, 0, 'nothing before Apply');
+  assert.equal((await s.call('POST', `/api/chat/messages/${r.message.id}/apply`, {}, u.token)).status, 200);
+  const d = await deps(ids[1]); assert.equal(d.length, 1); assert.equal(d[0].lag, 2);
+  // a loop never makes a card
+  say(use('set_task_links', { project_id: p.id, task: ids[0], predecessors: [{ task: ids[1] }] }, 'l2')); say(text('That would make a loop.'));
+  const r2 = await talk(u.token, { project_id: p.id, text: "Link the schedule task Link step 0 after Link step 1" });
+  assert.equal(r2.message.card, null);
+  await s.call('POST', `/api/chat/messages/${r.message.id}/undo`, {}, u.token);
+  assert.equal((await deps(ids[1])).length, 0, 'undo removes the link');
+});

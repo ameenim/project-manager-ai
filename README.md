@@ -131,7 +131,9 @@ A chat button at the bottom corner of every screen opens a side panel. In a proj
 - Phase D: an empty chat shows a Today brief (late tasks, late payments, waiting updates, off track projects or open high risks) as plain counts from the same routes as the screens, and each count opens the matching question. Suggestions follow the screen. `GET /api/chat/feedback` lists your own thumbs down answers with the question that led to each, for quality review. The Arabic scope check has its own test set.
 - Reports: the chat can propose generating a standard document (charter, plans, weekly or biweekly status) in Word, Excel or PowerPoint. It is created from the project data without AI, appears in the Reports tab after Apply, and Undo removes it. A card that fails removes any document it made.
 - Proactive suggestions: `server/chat/suggest.js` computes plain rules with no AI call (late tasks, schedule index below 0.95, forecast end after contract end, no baseline, deliverable due within 7 days with no task, late payments, waiting updates, weekly summary Monday to Wednesday). `GET /api/chat/suggestions` lists them and `POST /api/chat/suggestions/dismiss` hides one (dismiss until the condition changes, or snooze 7 days). The choice is stored per person in `chat_suggest_state` (migration 11). A count with a popover shows on the project Overview, the Schedule and the main dashboard.
-- Not in this release: schedule versions and a link to a notification center (the platform has none yet).
+- Schedule versions and baseline: the chat can list saved versions and compare one with the current schedule, save a version, set the baseline, and restore an earlier version (strong card, the current schedule is saved first, so Undo brings it back). No new migration.
+- Task links: `set_task_links` replaces the predecessors of one task (types FS, SS, FF, SF with a lag). Loops are refused by the same preview route as the Schedule screen, the card shows the effect on the project end, and Undo restores the old links. Skill version 1.7.1.
+- Not in this release: nothing planned from the original Thinking Area scope is left open.
 
 ## Tests
 

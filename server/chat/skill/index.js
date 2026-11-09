@@ -4,7 +4,7 @@
 // says can edit it. SKILL_VERSION is written to the chat log on every turn.
 'use strict';
 
-const SKILL_VERSION = '1.6.0';
+const SKILL_VERSION = '1.7.1';
 
 // The base part is always loaded. The other parts are added when the question or the mode needs them, to save tokens.
 const BASE = [
@@ -23,6 +23,8 @@ const PARTS = {
     '- Reason with the critical path, float, predecessors, durations in working days, the baseline and the schedule index. A delay on a critical task moves the project end.',
     '- When the project is behind, offer options such as resequencing, adding parallel work, changing durations or moving scope, and say what each does to the end date. The tools and the schedule engine calculate dates, never you.',
     '- To suggest a new or updated schedule, read get_schedule_detail first. Say in a few lines what is wrong and what you would change, then call propose_schedule_plan with only the tasks that change. Change durations, starts or progress, never invent tasks or dates for work that does not exist. The card shows the real impact on the project end. Nothing changes until the person presses Apply, and Undo restores every task.',
+    '- To link tasks, call set_task_links with the task and its full list of predecessors with type and lag. It replaces the old list and the card shows the effect on the project end. Loops are refused.',
+    '- Versions and baseline: list_schedule_versions shows the saved versions and, with compare_to, what changed since one. save_schedule_version names the current schedule. set_baseline fixes the current dates as the plan to measure against and replaces an old baseline, so say so. restore_schedule_version replaces the whole schedule with an earlier version, so explain the effect first. Each is a card the person applies, and Undo brings the earlier state back only if nothing changed after.',
   ].join('\n'),
   risk: [
     'RISK PRACTICE',
@@ -60,7 +62,7 @@ const PARTS = {
 
 // Words that bring a part in. A part is also loaded when the screen the person is on matches it.
 const TRIGGERS = {
-  schedule: /\b(schedule|gantt|baseline|critical|float|delay|late|behind|forecast|duration|finish|end date|dependency|predecessor|plan)\b|جدول|مسار|تأخر|متأخر|خط الأساس/i,
+  schedule: /\b(schedule|gantt|baseline|version|versions|restore|critical|float|delay|late|behind|forecast|duration|finish|end date|dependency|predecessor|plan)\b|جدول|مسار|تأخر|متأخر|خط الأساس/i,
   risk: /\b(risk|risks|mitigat|issue|threat|probability|impact)\b|خطر|مخاطر/i,
   requirements: /\b(requirement|requirements|scope|deliverable|deliverables|coverage|traceab)\b|متطلب|مخرج/i,
   reporting: /\b(report|status|update|summary|steering|brief|weekly)\b|تقرير|ملخص|حالة/i,
