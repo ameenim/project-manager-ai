@@ -1845,3 +1845,9 @@ body.chat-page .main { overflow: hidden; }
 .cht-empty p { font-size: var(--fs-small); color: var(--muted); line-height: 1.45; }
 .cht-panel.page .cht-empty p { max-width: 520px; margin-bottom: 4px; }
 .cht-empty-ic { width: 36px; height: 36px; }
+/* Schedule check and link manager filters: pill chips, not default buttons */
+.chk-tabs .filter-chip { appearance: none; display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface-2); color: var(--text); font: inherit; font-size: var(--fs-small); font-weight: 600; line-height: 1.4; transition: background .15s var(--ease), border-color .15s var(--ease); }
+.chk-tabs .filter-chip b { font-weight: 650; font-variant-numeric: tabular-nums; }
+.chk-tabs .filter-chip:hover { border-color: var(--primary); background: var(--primary-soft); }
+.chk-tabs .filter-chip.on { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+.chk-tabs .filter-chip:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
