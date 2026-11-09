@@ -334,3 +334,34 @@ test('an attached Word file becomes a template only after Apply, the type is nee
   say(use('create_template', { document: 'notes', mode: 'design' }, 't3')); say(text('A template must be a Word, PowerPoint or Excel file.'));
   assert.equal((await talk(u.token, { project_id: p.id, text: 'Save the attached notes file as a design template for this project\n[Attached: notes.txt]' })).message.card, null);
 });
+
+test('a layout is saved only after Apply, unknown widgets never make a card, a second save replaces and undo restores', async () => {
+  const { u, p } = await setup();
+  // unknown widget id
+  say(use('save_layout', { project_id: p.id, scope: 'project', name: 'Bad', show: ['pkpi', 'nope'] }, 'l0')); say(text('Those ids are not valid.'));
+  const bad = await talk(u.token, { project_id: p.id, text: 'Save a layout for this project overview with nope widget' });
+  assert.equal(bad.message.card, null);
+  // list shows the ids
+  say(use('list_layouts', { project_id: p.id, scope: 'project' }, 'l1')); say(text('Here are the widgets.'));
+  await talk(u.token, { project_id: p.id, text: 'Which widgets can this project overview layout show?' });
+  // save
+  say(use('save_layout', { project_id: p.id, scope: 'project', name: 'Weekly review', show: ['pkpi', 'pradar', 'pcritical'], hidden: ['pcash'], sizes: { pkpi: 'l', pradar: 'm', pcash: 'x' } }, 'l2')); say(text('Prepared the layout.'));
+  const r = await talk(u.token, { project_id: p.id, text: 'Save a layout for this project overview called Weekly review' });
+  assert.ok(r.message.card, r.message.text + JSON.stringify(r.events.slice(-3)));
+  assert.equal(r.message.card.items[0].sum.op, 'save_layout');
+  assert.equal((await s.call('GET', '/api/layouts?scope=project', null, u.token)).data.layouts.length, 0, 'nothing before Apply');
+  assert.equal((await s.call('POST', `/api/chat/messages/${r.message.id}/apply`, {}, u.token)).status, 200);
+  let L = (await s.call('GET', '/api/layouts?scope=project', null, u.token)).data.layouts;
+  assert.equal(L.length, 1); assert.deepEqual(L[0].layout.order, ['pkpi', 'pradar', 'pcritical']); assert.deepEqual(L[0].layout.hidden, ['pcash']); assert.deepEqual(L[0].layout.size, { pkpi: 'l', pradar: 'm' });
+  // same name replaces, undo restores the first
+  say(use('save_layout', { project_id: p.id, scope: 'project', name: 'weekly review', show: ['pstatus'] }, 'l3')); say(text('Prepared the change.'));
+  const r2 = await talk(u.token, { project_id: p.id, text: 'Replace the weekly review layout of this project overview with the status widget only' });
+  await s.call('POST', `/api/chat/messages/${r2.message.id}/apply`, {}, u.token);
+  L = (await s.call('GET', '/api/layouts?scope=project', null, u.token)).data.layouts;
+  assert.equal(L.length, 1); assert.deepEqual(L[0].layout.order, ['pstatus']);
+  await s.call('POST', `/api/chat/messages/${r2.message.id}/undo`, {}, u.token);
+  L = (await s.call('GET', '/api/layouts?scope=project', null, u.token)).data.layouts;
+  assert.deepEqual(L[0].layout.order, ['pkpi', 'pradar', 'pcritical']);
+  await s.call('POST', `/api/chat/messages/${r.message.id}/undo`, {}, u.token);
+  assert.equal((await s.call('GET', '/api/layouts?scope=project', null, u.token)).data.layouts.length, 0);
+});
