@@ -635,42 +635,38 @@
     const save = async (body, btn) => { const r = await busy(btn, () => api('PUT', `/api/projects/${p.id}`, body)); if (r) { proj = r.project; S.project = r.project; toast(t('saved'), 'ok'); } return r; };
 
     // ----- Team card: grouped by organization, searchable, edit in a dialog -----
-    const TM_SHOW = 5;
-    const tmOpen = new Set();
-    let tmQ = '';
+    const TM_PAGE = 5;
+    let tmQ = '', tmPage = 1, tmSort = { k: 'name', dir: 1 };
     const reloadTeam = async () => { team = (await api('GET', `/api/projects/${p.id}/resources`)).resources; if (!stale(token)) drawTeam(); };
     const tmFields = (r) => ({ name: r.name, role: r.role || '', organization: r.organization || '', email: r.email || '', teams_name: r.teams_name || '', jira_account: r.jira_account || '' });
     const tmMatch = (r, q) => !q || [r.name, r.role, r.organization, r.email, r.teams_name, r.jira_account].some((x) => String(x || '').toLowerCase().includes(q));
-    const tmGroups = (list) => {
-      const m = new Map();
-      for (const r of list) { const k = String(r.organization || '').trim(); if (!m.has(k)) m.set(k, []); m.get(k).push(r); }
-      return [...m.entries()].sort((a, b) => (a[0] ? 0 : 1) - (b[0] ? 0 : 1) || a[0].localeCompare(b[0]));
-    };
+    const tmCols = [['name', 'name'], ['role', 'role'], ['organization', 'tx_org'], ['email', 'email'], ['teams_name', 'Teams'], ['jira_account', 'Jira']];
     const tmRow = (r) => {
-      const ids = [r.teams_name ? `<span class="tm-id"><span class="faint">Teams</span> ${esc(r.teams_name)}</span>` : '', r.jira_account ? `<span class="tm-id"><span class="faint">Jira</span> ${esc(r.jira_account)}</span>` : ''].join('');
-      return `<div class="tm-row"><div class="avatar" aria-hidden="true">${esc(PM.initials(r.name))}</div>
-        <div class="tm-main"><div class="tm-name" data-tip="${esc(r.name)}">${esc(r.name)}</div><div class="small ${r.role ? 'muted' : 'faint'}">${esc(r.role || t('tm_no_role'))}</div></div>
-        <div class="tm-contact small muted">${r.email ? `<span class="tm-email" data-tip="${esc(r.email)}">${esc(r.email)}</span>` : ''}${ids}</div>
-        <div class="tm-act"><button type="button" class="btn sm ghost icon" data-redit="${r.id}" data-tip="${esc(t('tm_edit_tip', { name: r.name }))}" aria-label="${esc(t('tm_edit_tip', { name: r.name }))}">${icon('edit')}</button><button type="button" class="btn sm ghost icon" data-rdel="${r.id}" data-tip="${esc(t('tm_del_tip', { name: r.name }))}" aria-label="${esc(t('tm_del_tip', { name: r.name }))}">${icon('trash')}</button></div></div>`;
+      const cell = (v) => (v ? `<span data-tip="${esc(v)}">${esc(v)}</span>` : '');
+      return `<tr><td><div class="tm-who"><div class="avatar" aria-hidden="true">${esc(PM.initials(r.name))}</div><span class="tm-name" data-tip="${esc(r.name)}">${esc(r.name)}</span></div></td><td>${r.role ? esc(r.role) : '<span class="faint">' + t('tm_no_role') + '</span>'}</td><td>${r.organization ? esc(r.organization) : '<span class="faint">' + t('tm_no_org') + '</span>'}</td><td class="tm-cut">${cell(r.email)}</td><td class="tm-cut">${cell(r.teams_name)}</td><td class="tm-cut">${cell(r.jira_account)}</td>
+        <td class="right tm-act"><button type="button" class="btn sm ghost icon" data-redit="${r.id}" data-tip="${esc(t('tm_edit_tip', { name: r.name }))}" aria-label="${esc(t('tm_edit_tip', { name: r.name }))}">${icon('edit')}</button><button type="button" class="btn sm ghost icon" data-rdel="${r.id}" data-tip="${esc(t('tm_del_tip', { name: r.name }))}" aria-label="${esc(t('tm_del_tip', { name: r.name }))}">${icon('trash')}</button></td></tr>`;
     };
     function drawTeam() {
       const card = $('#teamCard', root); if (!card) return;
       card.innerHTML = `<div class="card-head"><h3 class="tm-title">${t('team')}</h3><span class="chip" aria-label="${team.length}">${team.length}</span><span class="grow"></span><button type="button" class="btn sm" id="r_extract" data-tip="${esc(t('tx_tip'))}">${icon('spark')}${t('tx_btn')}</button><button type="button" class="btn sm primary" id="r_add">${icon('plus')}${t('tm_add')}</button></div>
         ${team.length ? `<div class="tm-search"><span class="tm-search-i">${icon('search')}</span><input type="search" id="tmQ" value="${esc(tmQ)}" placeholder="${esc(t('tm_search'))}" aria-label="${esc(t('tm_search'))}"></div><div id="tmList"></div>` : `<div class="empty small">${t('no_team')}</div>`}
         <div class="small muted mt">${t('team_hint')}</div>`;
-      if (team.length) { drawTeamList(); const q = $('#tmQ', card); q.oninput = () => { tmQ = q.value; drawTeamList(); }; }
+      if (team.length) { drawTeamList(); const q = $('#tmQ', card); q.oninput = () => { tmQ = q.value; tmPage = 1; drawTeamList(); }; }
       $('#r_add', card).onclick = () => personDialog(null);
       $('#r_extract', card).onclick = extractFromSchedule;
     }
     function drawTeamList() {
       const box = $('#tmList', root); if (!box) return;
-      const q = tmQ.trim().toLowerCase();
-      const groups = tmGroups(team.filter((r) => tmMatch(r, q)));
-      box.innerHTML = groups.length ? groups.map(([org, list]) => {
-        const open = !!q || tmOpen.has(org), shown = open ? list : list.slice(0, TM_SHOW);
-        return `<section class="tm-group"><div class="tm-gh"><b>${esc(org || t('tm_no_org'))}</b><span class="chip">${list.length}</span></div><div class="tm-rows">${shown.map(tmRow).join('')}</div>${!q && list.length > TM_SHOW ? `<button type="button" class="btn sm ghost tm-more" data-tmmore="${esc(org)}">${open ? t('dash_show_less') : t('dash_show_more', { n: list.length - TM_SHOW })}</button>` : ''}</section>`;
-      }).join('') : `<div class="empty small">${t('tm_none')}</div>`;
-      $$('[data-tmmore]', box).forEach((b) => (b.onclick = () => { const k = b.dataset.tmmore; if (tmOpen.has(k)) tmOpen.delete(k); else tmOpen.add(k); drawTeamList(); }));
+      const q = tmQ.trim().toLowerCase(), { k, dir } = tmSort;
+      const list = team.filter((r) => tmMatch(r, q)).sort((a, b) => dir * String(a[k] || '').localeCompare(String(b[k] || '')) || a.name.localeCompare(b.name));
+      const pages = Math.max(1, Math.ceil(list.length / TM_PAGE)); tmPage = Math.min(Math.max(tmPage, 1), pages);
+      const from = (tmPage - 1) * TM_PAGE, rows = list.slice(from, from + TM_PAGE);
+      const th = tmCols.map(([key, lab]) => { const on = tmSort.k === key; return `<th aria-sort="${on ? (dir > 0 ? 'ascending' : 'descending') : 'none'}"><button type="button" class="tm-sort${on ? ' on' : ''}" data-sort="${key}" data-tip="${esc(t('tm_sort_tip'))}">${t(lab) === lab ? lab : t(lab)}${on ? `<span class="tm-arr">${dir > 0 ? '↑' : '↓'}</span>` : ''}</button></th>`; }).join('');
+      const nums = Array.from({ length: pages }, (_, i) => i + 1).map((n) => `<button type="button" class="btn sm${n === tmPage ? ' primary' : ' ghost'}" data-pg="${n}" ${n === tmPage ? 'aria-current="page"' : ''}>${n}</button>`).join('');
+      box.innerHTML = list.length ? `<div class="table-wrap"><table class="t tm-table"><thead><tr>${th}<th></th></tr></thead><tbody>${rows.map(tmRow).join('')}</tbody></table></div>
+        <div class="tm-pager"><span class="small muted">${t('tm_range', { from: from + 1, to: from + rows.length, total: list.length })}</span><span class="grow"></span>${pages > 1 ? `<button type="button" class="btn sm ghost icon" data-pg="${tmPage - 1}" ${tmPage === 1 ? 'disabled' : ''} data-tip="${esc(t('tm_prev'))}" aria-label="${esc(t('tm_prev'))}">${icon(S.lang === 'ar' ? 'fwd' : 'back')}</button>${nums}<button type="button" class="btn sm ghost icon" data-pg="${tmPage + 1}" ${tmPage === pages ? 'disabled' : ''} data-tip="${esc(t('tm_next'))}" aria-label="${esc(t('tm_next'))}">${icon(S.lang === 'ar' ? 'back' : 'fwd')}</button>` : ''}</div>` : `<div class="empty small">${t('tm_none')}</div>`;
+      $$('[data-sort]', box).forEach((b) => (b.onclick = () => { tmSort = tmSort.k === b.dataset.sort ? { k: tmSort.k, dir: -tmSort.dir } : { k: b.dataset.sort, dir: 1 }; tmPage = 1; drawTeamList(); }));
+      $$('[data-pg]', box).forEach((b) => (b.onclick = () => { tmPage = Number(b.dataset.pg); drawTeamList(); }));
       $$('[data-redit]', box).forEach((b) => (b.onclick = () => personDialog(team.find((x) => x.id === Number(b.dataset.redit)))));
       $$('[data-rdel]', box).forEach((b) => (b.onclick = async () => {
         const r0 = team.find((x) => x.id === Number(b.dataset.rdel)); if (!r0) return;

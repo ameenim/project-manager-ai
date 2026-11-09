@@ -1745,16 +1745,12 @@ body.chat-page .cht-fab { display: none; }
 /* Settings team card: grouped by organization */
 .card-head h3.tm-title { flex: none; } #teamCard .card-head { flex-wrap: wrap; row-gap: 8px; }
 .tm-search { position: relative; margin-bottom: 14px; } .tm-search input { width: 100%; padding-inline-start: 34px; } .tm-search-i { position: absolute; inset-inline-start: 10px; top: 50%; transform: translateY(-50%); color: var(--faint); display: grid; pointer-events: none; }
-.tm-group + .tm-group { margin-top: 18px; }
-.tm-gh { display: flex; align-items: center; gap: 8px; padding: 6px 4px 8px; border-bottom: 1px solid var(--border); } .tm-gh b { font-size: var(--fs-body); font-weight: 600; }
-.tm-row { display: grid; grid-template-columns: 36px minmax(0, 1.2fr) minmax(0, 1.4fr) auto; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--border); transition: background .12s var(--ease); } .tm-row:hover { background: var(--surface-2); }
-.tm-main { min-width: 0; } .tm-name { font-size: var(--fs-body); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; unicode-bidi: plaintext; }
-.tm-main .small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tm-contact { display: flex; flex-wrap: wrap; gap: 2px 14px; min-width: 0; } .tm-email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; } .tm-id { white-space: nowrap; }
-.tm-act { display: flex; gap: 2px; }
-.tm-more { margin-top: 6px; }
+.tm-table { table-layout: auto; } table.t.tm-table td { vertical-align: middle; } .tm-table td:not(:first-child) { white-space: nowrap; } .tm-who { display: flex; align-items: center; gap: 10px; min-width: 150px; } .tm-name { font-weight: 600; unicode-bidi: plaintext; }
+.tm-cut span { unicode-bidi: plaintext; display: block; overflow: hidden; text-overflow: ellipsis; } .tm-cut { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-small); color: var(--muted); }
+.tm-act { white-space: nowrap; width: 1%; position: sticky; inset-inline-end: 0; background: var(--surface); } .tm-table tr:hover .tm-act { background: var(--surface-2); }
+.tm-sort { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: inherit; cursor: pointer; display: inline-flex; gap: 4px; align-items: center; } .tm-sort:hover, .tm-sort.on { color: var(--text); } .tm-arr { color: var(--primary); }
+.tm-pager { display: flex; align-items: center; gap: 4px; margin-top: 12px; flex-wrap: wrap; }
 .tm-err { color: var(--danger); margin-top: 10px; }
-@media (max-width: 600px) { .tm-row { grid-template-columns: 36px minmax(0, 1fr) auto; } .tm-contact { grid-column: 2 / 3; grid-row: 2; } .tm-act { grid-row: 1; grid-column: 3; } }
 
 /* Thinking Area attachments */
 .cht-atts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 2px 6px; }
