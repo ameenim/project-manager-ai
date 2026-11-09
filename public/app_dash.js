@@ -190,9 +190,20 @@
           const y0 = AX + i * RH;
           g += `<g class="tl-proj" data-go="#/p/${p.id}/schedule" style="cursor:pointer" ${tip(`<b>${esc(p.name)}</b><br>${p.progress}% ${t('complete_word')}`)}><rect class="hit" x="0" y="${y0}" width="${LW - 10}" height="${RH - 6}"/><circle class="hd ${p.health}" cx="6" cy="${y0 + 22}" r="4.5"/><text class="lab" x="18" y="${y0 + 26}">${esc(trunc(p.name, 22))}</text><text class="lab-sub" x="18" y="${y0 + 41}">${p.progress}% ${planned(p)}</text></g>`;
           g += `<line class="tl-row" x1="0" x2="${W}" y1="${y0 + RH - 3}" y2="${y0 + RH - 3}"/>`;
+          // Phase names sit above their bars. Each name gets only the room up to the next name (and no more than its own bar),
+          // so names of phases that overlap or follow closely never print over each other. A name with too little room is
+          // left out and is still in the tooltip.
+          const lay = p.phases.map((ph) => { const a = x(dnum(ph.start)), b = x(dnum(ph.finish) + 1); return { ph, x1: a, w: Math.max(b - a - 2, 3) }; }).sort((u, v) => u.x1 - v.x1 || v.w - u.w);
+          let edge = -Infinity;
+          for (let i = 0; i < lay.length; i++) {
+            const c = lay[i];
+            if (c.x1 < edge) continue;                                    // starts inside the name before it
+            const next = lay.slice(i + 1).find((o) => o.x1 > c.x1 + 1);   // the next name that starts later
+            const room = Math.min(c.w, next ? next.x1 - c.x1 - 8 : Infinity);
+            if (room > 40) { g += `<text class="tl-ph" x="${c.x1}" y="${y0 + 16}">${esc(trunc(c.ph.name, Math.floor(room / 6.4)))}</text>`; edge = c.x1 + Math.min(room, trunc(c.ph.name, Math.floor(room / 6.4)).length * 6.4 + 6); }
+          }
           p.phases.forEach((ph, k) => {
             const x1 = x(dnum(ph.start)), x2 = x(dnum(ph.finish) + 1), w = Math.max(x2 - x1 - 2, 3);
-            if (w > 54) g += `<text class="tl-ph" x="${x1}" y="${y0 + 16}">${esc(trunc(ph.name, Math.floor(w / 6.4)))}</text>`;
             g += `<g ${tip(`<b>${esc(ph.name)}</b><br>${ph.start} ${t('to')} ${ph.finish}<br>${ph.progress}% ${t('complete_word')}`)}><rect class="tl-bar" x="${x1}" y="${y0 + 22}" width="${w}" height="16" rx="4"/><rect class="tl-fill" x="${x1}" y="${y0 + 22}" width="${w * (ph.progress / 100)}" height="16" rx="4" style="--i:${k}"/></g>`;
             rows.push([p.name, ph.name, ph.start, ph.finish, ph.progress]);
           });
