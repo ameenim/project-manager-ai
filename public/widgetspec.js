@@ -245,6 +245,24 @@
     let groups = [...buckets].map(([key, list]) => { const m = measureOf(spec, list, opts); const g = { key, value: m.value == null ? 0 : m.value, count: m.n, tone: gb.type === T.enum ? gb.values[key] || null : null }; if (second) { const m2 = measureOf(second, list, opts); g.value2 = m2.value == null ? 0 : m2.value; } return g; });
     if (spec.sort === 'label' || gb.type === T.date) groups.sort((a, b) => (a.key === '' ? 1 : b.key === '' ? -1 : String(a.key).localeCompare(String(b.key))));
     else groups.sort((a, b) => (spec.sort === 'value_asc' ? a.value - b.value : b.value - a.value));
+    // rows with no date cannot sit on a time axis, so a trend leaves them out
+    if (gb.type === T.date && (spec.viz === 'line' || spec.viz === 'area' || spec.viz === 'combo')) groups = groups.filter((g) => g.key !== '');
+    // A trend by month shows every month between the first and the last one. A month with no rows counts as zero, so the
+    // axis is even, the quarters line up and a running total carries over. Averages and the like are left as they are.
+    if (gb.type === T.date && (spec.viz === 'line' || spec.viz === 'area' || spec.viz === 'combo') && (spec.agg === 'count' || spec.agg === 'sum') && (!second || second.agg === 'count' || second.agg === 'sum')) {
+      const ok = groups.filter((g) => /^\d{4}-\d{2}$/.test(g.key));
+      if (ok.length > 1) {
+        const have = new Map(ok.map((g) => [g.key, g])), first = ok[0].key, last = ok[ok.length - 1].key, filled = [];
+        let y = Number(first.slice(0, 4)), m = Number(first.slice(5, 7));
+        for (let guard = 0; guard < 600; guard++) {
+          const k = y + '-' + String(m).padStart(2, '0');
+          filled.push(have.get(k) || (second ? { key: k, value: 0, count: 0, tone: null, value2: 0 } : { key: k, value: 0, count: 0, tone: null }));
+          if (k === last) break;
+          if (++m > 12) { m = 1; y++; }
+        }
+        groups = filled.concat(groups.filter((g) => !/^\d{4}-\d{2}$/.test(g.key)));
+      }
+    }
     let other = null;
     if (groups.length > spec.limit) {
       const keep = spec.viz === 'donut' ? spec.limit - 1 : spec.limit;

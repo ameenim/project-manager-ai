@@ -269,3 +269,24 @@ test('line, area, combo, radar and funnel follow their own rules and compute the
   const fun = W.run(W.normalize({ dataset: 'payments', viz: 'funnel', agg: 'count', groupBy: 'state' }), rows, { today });
   assert.deepEqual(fun.groups.map((g) => g.value), [2, 2]);
 });
+
+test('a monthly trend shows every month in between, empty months count as zero and the running total carries over', () => {
+  const rows = [
+    { title: 'a', amount: 10, due: '2026-01-05', state: 'paid', project: 'A' }, { title: 'b', amount: 20, due: '2026-03-10', state: 'paid', project: 'B' },
+    { title: 'c', amount: 30, due: '2026-05-02', state: 'paid', project: 'C' }, { title: 'd', amount: 5, due: '2026-12-03', state: 'paid', project: 'D' },
+  ];
+  const r = W.run(W.normalize({ dataset: 'payments', viz: 'combo', agg: 'sum', measure: 'amount', groupBy: 'due', line: 'cumulative', limit: 12 }), rows, { today: '2027-02-01' });
+  assert.equal(r.groups.length, 12, 'January to December 2026');
+  assert.deepEqual(r.groups.slice(0, 5).map((g) => g.key), ['2026-01', '2026-02', '2026-03', '2026-04', '2026-05']);
+  assert.deepEqual(r.groups.slice(0, 5).map((g) => g.value), [10, 0, 20, 0, 30]);
+  assert.deepEqual(r.groups.slice(0, 5).map((g) => g.value2), [10, 10, 30, 30, 60]);
+  assert.equal(r.groups[11].value2, 65);
+  const avg = W.run(W.normalize({ dataset: 'payments', viz: 'line', agg: 'avg', measure: 'amount', groupBy: 'due' }), rows, { today: '2027-02-01' });
+  assert.equal(avg.groups.length, 4, 'an average is not filled with zeros');
+});
+
+test('a trend leaves out rows that have no date', () => {
+  const rows = [{ title: 'a', amount: 10, due: '2026-01-05', state: 'paid', project: 'A' }, { title: 'b', amount: 20, due: '2026-02-10', state: 'paid', project: 'B' }, { title: 'c', amount: 99, due: '', state: 'paid', project: 'C' }];
+  const r = W.run(W.normalize({ dataset: 'payments', viz: 'line', agg: 'sum', measure: 'amount', groupBy: 'due' }), rows, { today: '2026-03-01' });
+  assert.deepEqual(r.groups.map((g) => g.key), ['2026-01', '2026-02']);
+});

@@ -146,12 +146,28 @@
       groups.forEach((gr, i) => { if (i % step === 0 || i === n - 1 && step === 1) g += `<text x="${x(i).toFixed(1)}" y="${Ht - 12}" text-anchor="middle" direction="ltr">${esc(clip(groupName(gr, res), 9))}</text>`; });
       const cl = PMCL.get(combo ? 'column' : 'line', { percent: false });
       const labelOn = cl.on && n <= 14;
+      // quarter bands: every other quarter gets a darker background so the quarters can be read at a glance
+      const nd = groups.findIndex((q) => !/^\d{4}-\d{2}$/.test(q.key)), nm = nd < 0 ? n : nd; // a group with no date sits last and is left out
+      if (res.dateBuckets && nm > 1) {
+        const qOf = (key) => key.slice(0, 4) + 'Q' + (Math.floor((Number(key.slice(5, 7)) - 1) / 3) + 1);
+        let bands = '', i0 = 0, seq = 0;
+        for (let i = 1; i <= nm; i++) {
+          if (i < nm && qOf(groups[i].key) === qOf(groups[i0].key)) continue;
+          const k = groups[i0].key, qn = Math.floor((Number(k.slice(5, 7)) - 1) / 3) + 1, wq = band * (i - i0);
+          bands += `<rect class="wk-qband ${seq % 2 ? 'alt' : ''}" x="${(L + band * i0).toFixed(1)}" y="${T}" width="${wq.toFixed(1)}" height="${ph}"/>`;
+          bands += `<text class="wk-qlbl" x="${(L + band * i0 + 5).toFixed(1)}" y="${T - 5}" direction="ltr">${wq >= 80 ? 'Q' + qn + ' ' + k.slice(0, 4) : 'Q' + qn}</text>`;
+          seq++; i0 = i;
+        }
+        g = bands + g;
+      }
+      let labels = '';
       if (combo) {
         const bw = Math.min(44, band * 0.6);
         groups.forEach((gr, i) => {
           const yy = y(Math.max(gr.value, 0)), hh = Math.max(2, y(0) - yy);
+          if (gr.count === 0 && !(gr.value > 0)) return;
           g += `<rect class="wk-sbar" x="${(x(i) - bw / 2).toFixed(1)}" y="${(y(0) - hh).toFixed(1)}" width="${bw.toFixed(1)}" height="${hh.toFixed(1)}" rx="4" data-tip="${esc(tipOf(gr))}"/>`;
-          if (labelOn) g += PMCL.text(x(i), y(0) - hh, short(gr.value), cl.pos === 'below' ? 'above' : cl.pos);
+          if (labelOn && gr.count > 0 && short(gr.value).length * 6.4 + 4 <= band) labels += PMCL.text(x(i), y(0) - hh, short(gr.value), cl.pos === 'below' ? 'above' : cl.pos);
         });
       }
       const pts = groups.map((gr, i) => [x(i), y(combo ? gr.value2 : gr.value), gr]);
@@ -161,9 +177,10 @@
       pts.forEach(([px, py, gr], i) => {
         const tip = combo ? `${groupName(gr, res)}: ${lineLabel} ${fmtValue(gr.value2, mfd2, cur)}` : tipOf(gr);
         g += `<circle class="tr-dot ${combo ? 'c2' : 'c1'}" cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="4" data-tip="${esc(tip)}"/>`;
-        if (!combo && labelOn) g += PMCL.text(px, py, short(gr.value), cl.pos);
-        else if (combo && i === n - 1) g += PMCL.text(px, py, short(gr.value2), 'above');
+        if (!combo && labelOn) labels += PMCL.text(px, py, short(gr.value), cl.pos);
+        else if (combo && i === n - 1) labels += PMCL.text(px, py, short(gr.value2), 'above');
       });
+      g += labels; // value labels are drawn last, on top of the line and the dots
       const legend = combo ? h.legend([['c1', aggLabel(spec)], ['c2 line', lineLabel]]) : '';
       body.innerHTML = `<svg class="viz wk-line" viewBox="0 0 ${Wd} ${Ht}" width="${Wd}" height="${Ht}" role="img" aria-label="${esc(aria)}">${g}</svg>${legend}${note}`;
       return { csv: combo ? () => [[fieldLabel(res.grouped), aggLabel(spec), lineLabel], ...groups.map((gr) => [groupName(gr, res), gr.value, gr.value2])] : csv, chart: true };
