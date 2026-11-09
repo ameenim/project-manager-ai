@@ -152,11 +152,11 @@ test('a database that already ran the older migrations gets the project_parts ta
   const { prepareSchema } = require('../server/db');
   const db = s.app.store.db;
   await db.query('DROP TABLE project_parts');
-  const last = Number((await db.query('SELECT max(version) AS v FROM schema_migrations')).rows[0].v);
+  const last = 12; // the migration that creates project_parts. Later migrations may exist, so it is named, not looked up as the newest
   await db.query('DELETE FROM schema_migrations WHERE version = $1', [last]);
   assert.equal((await db.query("SELECT to_regclass('public.project_parts') AS t")).rows[0].t, null);
   await prepareSchema(db, {});
-  assert.ok((await db.query("SELECT to_regclass('public.project_parts') AS t")).rows[0].t, 'the table is created by the newest migration');
+  assert.ok((await db.query("SELECT to_regclass('public.project_parts') AS t")).rows[0].t, 'the table is created by its migration');
 });
 
 test('without the project_parts table the app keeps working with everything in the project row', async () => {

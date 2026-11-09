@@ -13,6 +13,7 @@
     return s;
   };
   const ICONS = {
+    bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
     life: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/><path d="M5.6 5.6l3.9 3.9M14.5 14.5l3.9 3.9M18.4 5.6l-3.9 3.9M9.5 14.5l-3.9 3.9"/>',
     filter: '<path d="M4 6h16M7 12h10M10 18h4"/>',
     expand: '<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>', shrink: '<path d="M14 10h6V4M10 14H4v6M20 4l-7 7M4 20l7-7"/>',
@@ -274,7 +275,7 @@
   }
   function shell(active, content, projHead) {
     $('#app').innerHTML = `${PM.billing ? PM.billing.ribbon() : ''}<div class="shell"><aside class="sidebar"><div class="brand"><div class="logo">${PM.logo.mark()}</div><span class="grow">${t('app_name')}</span><button class="btn ghost icon sm" id="navHide" type="button" aria-label="${t('nav_hide')}" title="${t('nav_hide')}">${icon('chev_l')}</button></div>
-      <nav class="nav"><a href="#/" class="${active === 'dash' ? 'active' : ''}">${icon('home')}${t('nav_dashboard')}</a><div class="nav-fly" id="navFly"><a href="#/projects" class="${active === 'projects' ? 'active' : ''}" aria-haspopup="true" aria-expanded="false">${icon('folder')}<span class="grow">${t('nav_projects')}</span><span class="nav-caret">${icon('chev_r')}</span></a></div><a href="#/thinking" class="${active === 'thinking' ? 'active' : ''}">${icon('spark')}${t('nav_thinking')}</a><a href="#/calendar" class="${active === 'calendar' ? 'active' : ''}">${icon('cal')}${t('nav_calendar')}</a><a href="#/widgets" class="${active === 'widgets' ? 'active' : ''}">${icon('grid')}${t('nav_widgets')}</a><a href="#/billing" class="${active === 'billing' ? 'active' : ''}">${icon('coin')}${t('nav_billing')}</a><a href="#/support" id="navSupport" class="${active === 'support' ? 'active' : ''}">${icon('life')}${t('nav_support')}</a>${S.user && S.user.is_super ? `<a href="/admin">${icon('gear')}${t('nav_admin')}</a>` : ''}</nav>
+      <nav class="nav"><a href="#/" class="${active === 'dash' ? 'active' : ''}">${icon('home')}${t('nav_dashboard')}</a><div class="nav-fly" id="navFly"><a href="#/projects" class="${active === 'projects' ? 'active' : ''}" aria-haspopup="true" aria-expanded="false">${icon('folder')}<span class="grow">${t('nav_projects')}</span><span class="nav-caret">${icon('chev_r')}</span></a></div><a href="#/thinking" class="${active === 'thinking' ? 'active' : ''}">${icon('spark')}${t('nav_thinking')}</a><a href="#/calendar" class="${active === 'calendar' ? 'active' : ''}">${icon('cal')}${t('nav_calendar')}</a><a href="#/widgets" class="${active === 'widgets' ? 'active' : ''}">${icon('grid')}${t('nav_widgets')}</a><span id="ntSlot" class="nt-slot"></span><a href="#/billing" class="${active === 'billing' ? 'active' : ''}">${icon('coin')}${t('nav_billing')}</a><a href="#/support" id="navSupport" class="${active === 'support' ? 'active' : ''}">${icon('life')}${t('nav_support')}</a>${S.user && S.user.is_super ? `<a href="/admin">${icon('gear')}${t('nav_admin')}</a>` : ''}</nav>
       <div class="spacer"></div>
       <div class="side-prefs">
         <div class="pref"><span class="pref-ic">${icon(S.theme === 'dark' ? 'moon' : 'sun')}</span><span class="grow">${t('dark_mode')}</span><button type="button" class="tgl ${S.theme === 'dark' ? 'on' : ''}" id="themeBtn" role="switch" aria-checked="${S.theme === 'dark'}" aria-label="${t('dark_mode')}" data-tip="${t('dark_mode')}"><i>${icon(S.theme === 'dark' ? 'moon' : 'sun')}</i></button></div>
@@ -308,6 +309,7 @@
     $('#langBtn').onclick = () => setPref({ language: S.lang === 'ar' ? 'en' : 'ar' });
     $('#logoutBtn').onclick = () => signOut();
     if (PM.billing) PM.billing.bind();
+    if (PM.notify) PM.notify.mount();
   }
   // hover the Projects menu item to see every project, click one to open its workspace
   function projectFlyout() {

@@ -167,6 +167,9 @@
   // The ribbon can be closed. It stays closed until the plan state gets worse (warning, then limit reached or ended).
   const SEV = { ok: 0, paid: 0, warn: 1, bad: 2 };
   function ribbon() {
+    // the notification center carries the plan status. The ribbon is only the fallback when the center is not available.
+    let off = false; try { off = localStorage.getItem('pm_nc_off') === '1'; } catch (e) { off = false; }
+    if (!off) return '';
     const i = info();
     if (B.rbHide != null) {
       if (SEV[i.tone] < SEV[B.rbHide]) { B.rbHide = i.tone; saveB(); }

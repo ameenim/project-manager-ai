@@ -393,6 +393,25 @@ const MIGRATIONS = [
     PRIMARY KEY (project_id, k)
   );
   `,
+  // 13: the notification center. One row per person, project and kind. sig describes the condition, so a dismissed
+  // notification comes back only when the condition changes. project_id 0 stands for the account (plan and tokens).
+  `
+  CREATE TABLE IF NOT EXISTS notifications (
+    id BIGINT PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    project_id BIGINT NOT NULL DEFAULT 0,
+    kind TEXT NOT NULL,
+    sig TEXT NOT NULL DEFAULT '',
+    n INT NOT NULL DEFAULT 0,
+    extra JSONB NOT NULL DEFAULT '{}'::jsonb,
+    read_at TIMESTAMPTZ,
+    dismissed BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (user_id, project_id, kind)
+  );
+  CREATE INDEX IF NOT EXISTS notifications_user_idx ON notifications(user_id, updated_at);
+  `,
 ];
 
 async function openPg(url) {

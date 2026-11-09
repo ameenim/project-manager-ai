@@ -15,6 +15,7 @@ const { Connectors } = require('./connectors');
 const createApi = require('./api');
 const { MODEL } = require('./claude');
 const { createChat } = require('./chat/chat');
+const { createNotifications } = require('./notifications');
 const { Ops } = require('./ops');
 const createAdmin = require('./admin');
 const { createUsage } = require('./usage');
@@ -145,6 +146,7 @@ async function createApp(opts = {}) {
   const api = createApi(store, auth, connectors, ops);
   // The Project Chat. opts.chatModel lets tests replace the model with a scripted one.
   const chat = createChat({ db, store, api, auth, ops, model: opts.chatModel });
+  const notifications = createNotifications({ db, store, api });
   const apiLimit = limiter(Number(process.env.API_RATE || 900), 60e3);
   const signupLimit = limiter(30, 3600e3);
   const clientErrLimit = limiter(30, 60e3);
@@ -226,6 +228,7 @@ async function createApp(opts = {}) {
 
     if (p.startsWith('/api/tickets') && (await tickets.route(req, res, url, user, { json, readBody, SECURITY }))) return;
     if (p.startsWith('/api/chat') && (await chat.route(req, res, url, user, { json, readBody, SECURITY }))) return;
+    if (p.startsWith('/api/notifications') && (await notifications.route(req, res, url, user, { json, readBody, SECURITY }))) return;
 
     let body = null;
     if (method !== 'GET' && method !== 'HEAD') {
