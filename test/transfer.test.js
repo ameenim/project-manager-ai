@@ -161,3 +161,21 @@ test('report folders, formats and names work and respect roles', async () => {
   const folders = (await s.call('GET', `/api/projects/${im.data.imported[0].id}/folders`, null, mgr.token)).data.folders;
   assert.equal(folders.length, 1); assert.equal(folders[0].count, 1);
 });
+
+test('the workspace export is streamed, can be gzipped, and decodes to the same backup', async () => {
+  const zlib = require('zlib'), http = require('http');
+  const a = await s.user(); await ready(a, 'S1'); await ready(a, 'S2'); await ready(a, 'S3');
+  const plain = JSON.parse((await s.call('GET', '/api/workspace/export', null, a.token)).buf.toString());
+  const got = await new Promise((ok, no) => {
+    const port = s.app.server.address().port;
+    http.get({ host: 'localhost', port, path: '/api/workspace/export', headers: { authorization: 'Bearer ' + a.token, 'accept-encoding': 'gzip' } }, (r) => {
+      const parts = []; r.on('data', (c) => parts.push(c)); r.on('end', () => ok({ headers: r.headers, body: Buffer.concat(parts), status: r.statusCode }));
+    }).on('error', no);
+  });
+  assert.equal(got.status, 200); assert.equal(got.headers['content-encoding'], 'gzip'); assert.equal(got.headers['content-length'], undefined);
+  const ws = JSON.parse(zlib.gunzipSync(got.body).toString());
+  assert.equal(ws.format, 'pmai-workspace'); assert.equal(ws.projects.length, 3);
+  assert.deepEqual(ws.projects.map((p) => p.project.p.name).sort(), plain.projects.map((p) => p.project.p.name).sort());
+  assert.ok(ws.projects.every((p) => p.format === 'pmai-project' && Array.isArray(p.snapshots) && Array.isArray(p.files)));
+  assert.ok(!JSON.stringify(ws).includes('"_'), 'private working fields are not exported');
+});

@@ -25,6 +25,14 @@ function projectBackup(P, { files = [], by, snapshots = [] } = {}) {
   };
 }
 
+// The same backup as projectBackup, written straight to text. The project is not copied first, so a large project (a long
+// schedule history, a lot of document text) needs far less memory.
+function projectBackupJson(P, { files = [], by, snapshots = [] } = {}) {
+  const head = { format: 'pmai-project', version: VERSION, app: 'Project Manager AI', exported_at: new Date().toISOString(), exported_by: by || null };
+  const fl = files.map((f) => ({ doc_id: f.doc_id, filename: f.filename, mime: f.mime || null, size: f.size, data_base64: f.buffer.toString('base64') }));
+  return JSON.stringify(head).slice(0, -1) + ',"project":' + JSON.stringify(P, (k, v) => (k.startsWith('_') ? undefined : v)) + ',"snapshots":' + JSON.stringify(snapshots) + ',"files":' + JSON.stringify(fl) + '}';
+}
+
 // ---------- schedule ----------
 // Rows in outline order with an outline number such as 2.1.3, the way the schedule screen shows them.
 function outline(computed) {
@@ -229,4 +237,4 @@ async function report(g, P, fmt) {
   throw Object.assign(new Error('Unknown format'), { status: 400 });
 }
 
-module.exports = { VERSION, projectBackup, scheduleCsv, scheduleXlsx, report, parseMarkdown, MIME };
+module.exports = { VERSION, projectBackup, projectBackupJson, scheduleCsv, scheduleXlsx, report, parseMarkdown, MIME };

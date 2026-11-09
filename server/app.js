@@ -238,6 +238,18 @@ async function createApp(opts = {}) {
       }
     }
     const out = await api.handle({ user, method, path: p, query: Object.fromEntries(url.searchParams), body, origin: origin(req) });
+    if (out instanceof api.StreamResult) {
+      const name = encodeURIComponent(out.filename).replace(/['()]/g, escape), gz = /\bgzip\b/.test(String(req.headers['accept-encoding'] || ''));
+      res.writeHead(200, { 'Content-Type': out.type, 'Content-Disposition': `attachment; filename="download"; filename*=UTF-8''${name}`, 'Cache-Control': 'no-store', Vary: 'Accept-Encoding', ...(gz ? { 'Content-Encoding': 'gzip' } : {}), ...SECURITY });
+      const sink = gz ? zlib.createGzip({ level: 4 }) : res;
+      if (gz) sink.pipe(res);
+      const wait = () => new Promise((ok) => sink.once('drain', ok));
+      try {
+        for await (const piece of out.parts()) { if (!sink.write(piece)) await wait(); }
+        sink.end();
+      } catch (e) { console.error('export stream', e.message); res.destroy(e); }
+      return;
+    }
     if (out instanceof api.FileResult) {
       const name = encodeURIComponent(out.filename).replace(/['()]/g, escape);
       res.writeHead(200, { 'Content-Type': out.type, 'Content-Length': out.buffer.length, 'Content-Disposition': `attachment; filename="download"; filename*=UTF-8''${name}`, 'Cache-Control': 'no-store', ...SECURITY });

@@ -125,8 +125,8 @@
   }
   async function download(path, filename) {
     const r = await fetch(path, { headers: { Authorization: `Bearer ${S.token}` } });
-    if (!r.ok) { let m = ''; try { m = (await r.json()).error || ''; } catch (e) { /* not JSON */ } toast(m || t('err_download'), 'err'); return; }
-    const blob = await r.blob();
+    if (!r.ok) { let m = ''; try { m = (await r.json()).error || ''; } catch (e) { /* not JSON */ } toast(m || `${t('err_download')} (${r.status})`, 'err'); return; }
+    let blob; try { blob = await r.blob(); } catch (e) { toast(`${t('err_download')} (${t('err_network')})`, 'err'); return; }
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = filename;

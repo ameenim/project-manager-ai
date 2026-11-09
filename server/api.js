@@ -37,6 +37,8 @@ const nowTs = () => `${TODAY()} ${TIME_FMT.format(new Date())}`;
 
 // A result that is a file instead of JSON (downloads).
 class FileResult { constructor(buffer, type, filename) { this.buffer = buffer; this.type = type; this.filename = filename; } }
+// A download written piece by piece, so a large export never has to sit in memory as one block. parts() yields strings.
+class StreamResult { constructor(parts, type, filename) { this.parts = parts; this.type = type; this.filename = filename; } }
 
 // The browser bundles (scheduling engine, report writer, AI helpers, document analysis) run here unchanged.
 function loadBundles() {
@@ -2149,10 +2151,18 @@ Rules:
     return new FileResult(Buffer.from(JSON.stringify(out)), 'application/json', `${safeName(P.p.name)}.pmai.json`);
   });
   on('GET', '/api/workspace/export', async () => {
-    const list = [];
-    for (const id of DB.order) { const P = DB.projects[id]; if (RANK[roleOf(P)] >= RANK.editor) list.push(exporter.projectBackup(P, { by: DB.user.email, snapshots: await snapshots.all(P.id) })); }
-    const out = { format: 'pmai-workspace', version: exporter.VERSION, exported_at: new Date().toISOString(), projects: list, templates: DB.templates };
-    return new FileResult(Buffer.from(JSON.stringify(out)), 'application/json', 'project-manager-ai-workspace.pmai.json');
+    // One project at a time: each backup is turned into text and let go before the next one is made.
+    const mine = DB.order.filter((id) => RANK[roleOf(DB.projects[id])] >= RANK.editor).map((id) => DB.projects[id]), by = DB.user.email, templates = DB.templates; // read now, while the request is still running
+    async function* parts() {
+      yield `{"format":"pmai-workspace","version":${JSON.stringify(exporter.VERSION)},"exported_at":${JSON.stringify(new Date().toISOString())},"projects":[`;
+      let first = true;
+      for (const P of mine) {
+        yield (first ? '' : ',') + exporter.projectBackupJson(P, { by, snapshots: await snapshots.all(P.id) });
+        first = false;
+      }
+      yield `],"templates":${JSON.stringify(templates === undefined ? null : templates)}}`;
+    }
+    return new StreamResult(parts, 'application/json', 'project-manager-ai-workspace.pmai.json');
   });
   async function importOne(backup) {
     const checked = importer.prepare(backup, nid, { S });
@@ -2521,6 +2531,7 @@ Rules:
     return ran;
   }
 
-  return { handle, runAs, runDueSyncs, FileResult, userView, saveUserFor: null, running, TODAY, captureAll, snapshots };
+  return { handle, runAs, runDueSyncs, FileResult, StreamResult, userView, saveUserFor: null, running, TODAY, captureAll, snapshots };
 };
 module.exports.FileResult = FileResult;
+module.exports.StreamResult = StreamResult;
