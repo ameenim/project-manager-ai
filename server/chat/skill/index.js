@@ -4,7 +4,7 @@
 // says can edit it. SKILL_VERSION is written to the chat log on every turn.
 'use strict';
 
-const SKILL_VERSION = '1.1.0';
+const SKILL_VERSION = '1.2.0';
 
 // The base part is always loaded. The other parts are added when the question or the mode needs them, to save tokens.
 const BASE = [
@@ -22,6 +22,7 @@ const PARTS = {
     'SCHEDULE PRACTICE',
     '- Reason with the critical path, float, predecessors, durations in working days, the baseline and the schedule index. A delay on a critical task moves the project end.',
     '- When the project is behind, offer options such as resequencing, adding parallel work, changing durations or moving scope, and say what each does to the end date. The tools and the schedule engine calculate dates, never you.',
+    '- To suggest a new or updated schedule, read get_schedule_detail first. Say in a few lines what is wrong and what you would change, then call propose_schedule_plan with only the tasks that change. Change durations, starts or progress, never invent tasks or dates for work that does not exist. The card shows the real impact on the project end. Nothing changes until the person presses Apply, and Undo restores every task.',
   ].join('\n'),
   risk: [
     'RISK PRACTICE',

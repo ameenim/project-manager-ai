@@ -483,3 +483,41 @@ test('chat history lists earlier chats, opens one, deletes one and keeps other p
   assert.equal((await s.call('DELETE', `/api/chat/threads/${spare.id}`, null, u.token)).status, 200);
   assert.equal((await list()).length, 1);
 });
+
+// ---------- schedule plans ----------
+test('a schedule plan changes several tasks, shows one combined impact, needs Apply, and undo restores every task', async () => {
+  const u = await person(); const p = await s.project(u.token, 'Plan chat'); const t = await chain(u, p);
+  const before = await sched(u, p);
+  say(use('get_schedule_detail', {}, 'g1'));
+  say(use('propose_schedule_plan', { title: 'Recover the build', reason: 'Design finished early.', changes: [{ task: 'Design', duration: 3 }, { task: 'Build', duration: 8 }] }, 'p1')); say(text('Here is the plan.'));
+  const r = await talk(u.token, { project_id: p.id, text: 'Suggest an updated schedule for this project' });
+  const item = r.message.card.items[0];
+  assert.equal(item.sum.op, 'schedule_plan');
+  assert.ok(item.changes.some((c) => c.field === 'reason'));
+  assert.equal(item.changes.filter((c) => c.field === 'task').length, 2);
+  assert.ok(item.impact && item.impact.endAfter);
+  const pv = (await s.call('POST', `/api/projects/${p.id}/schedule/preview`, { changes: { [t.a]: { duration: 3 }, [t.b]: { duration: 8 } } }, u.token)).data;
+  assert.equal(item.impact.endAfter, pv.projectEnd.after, 'same project end as the screen preview');
+  assert.ok(/Design/.test(JSON.stringify(sc.seen[1].messages)), 'the detail tool returned the tasks');
+  assert.deepEqual((await sched(u, p)).tasks.map((k) => k.finish), before.tasks.map((k) => k.finish), 'nothing changed before Apply');
+  assert.equal((await s.call('POST', `/api/chat/messages/${r.message.id}/apply`, {}, u.token)).status, 200);
+  const after = await sched(u, p);
+  assert.equal(after.tasks.find((k) => k.id === t.a).duration, 3); assert.equal(after.tasks.find((k) => k.id === t.b).duration, 8);
+  await s.call('POST', `/api/chat/messages/${r.message.id}/undo`, {}, u.token);
+  const back = await sched(u, p);
+  assert.deepEqual(back.tasks.map((k) => [k.id, k.start, k.finish, k.duration]), before.tasks.map((k) => [k.id, k.start, k.finish, k.duration]));
+});
+
+test('a schedule plan with a bad value, a repeated task or no change never makes a card, and a stale task blocks Apply', async () => {
+  const u = await person(); const p = await s.project(u.token, 'Plan bad'); const t = await chain(u, p);
+  for (const [i, changes] of [[1, [{ task: 'Design', duration: 0 }]], [2, [{ task: 'Design', duration: 4 }, { task: 'Design', duration: 6 }]], [3, [{ task: 'Design', duration: 5 }]]]) {
+    say(use('propose_schedule_plan', { title: 'Bad ' + i, changes }, 'b' + i)); say(text('That plan is not valid.'));
+    const r = await talk(u.token, { project_id: p.id, text: 'Suggest an updated schedule for this project, try ' + i });
+    assert.equal(r.message.card, null, 'case ' + i);
+  }
+  say(use('propose_schedule_plan', { title: 'Stale', changes: [{ task: 'Design', duration: 4 }, { task: 'Test', duration: 4 }] }, 's1')); say(text('Prepared.'));
+  const r = await talk(u.token, { project_id: p.id, text: 'Suggest an updated schedule for this project, stale check' });
+  await s.call('POST', `/api/projects/${p.id}/schedule/apply`, { changes: { [t.c]: { duration: 9 } } }, u.token);
+  assert.equal((await s.call('POST', `/api/chat/messages/${r.message.id}/apply`, {}, u.token)).status, 409);
+  assert.equal((await sched(u, p)).tasks.find((k) => k.id === t.a).duration, 5, 'nothing was applied');
+});

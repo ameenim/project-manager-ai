@@ -192,7 +192,7 @@ function createChat({ db, store, api, auth, ops, model }) {
   function buildCard(proposals, A) {
     if (!proposals.length) return null;
     const projectsTouched = [...new Set(proposals.map((p) => p.op.project_id))];
-    const strong = proposals.some((p) => p.destructive || (p.impact && p.impact.moved > STRONG_OVER)) || proposals.length > STRONG_OVER;
+    const strong = proposals.some((p) => p.destructive || (p.impact && p.impact.moved > STRONG_OVER) || (p.count && p.count > STRONG_OVER)) || proposals.length > STRONG_OVER;
     return {
       status: 'pending', strong, created_at: new Date().toISOString(),
       ops: proposals.map((p) => p.op),
