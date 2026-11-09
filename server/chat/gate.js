@@ -40,7 +40,7 @@ const ADMIN = [
   { pointer: 'settings', re: /\b(?:add|invite|remove|share|give access|grant access|revoke access|kick|change)\b[^.?!]{0,30}\b(?:member|members|user|users|teammate|colleague|collaborator|editor|viewer|role|roles|permissions?|access)\b/i },
   { pointer: 'account', re: /\b(?:change|reset|update|forgot|set|new)\b[^.?!]{0,20}\b(?:password|passcode|email address|my email|my name|my profile|my avatar|profile picture|my language|my theme|two[- ]factor|2fa)\b/i },
   { pointer: 'billing', re: /\b(?:upgrade|downgrade|cancel|change|buy|renew)\b[^.?!]{0,20}\b(?:my )?(?:subscription|plan|billing|pricing plan|payment method|credit card)\b|\bbilling\b|\bcredit card\b|\bmy subscription\b/i },
-  { pointer: 'account', re: /\b(?:connect|disconnect|link|unlink|authorize|reconnect)\b[^.?!]{0,20}\b(?:jira|outlook|microsoft|atlassian)\b/i },
+  { pointer: 'account', re: /\b(?:disconnect|unlink|revoke|remove)\b[^.?!]{0,20}\b(?:jira|outlook|microsoft|atlassian)\b/i },
   { pointer: 'account', re: /\b(?:restore|import|export|back ?up)\b[^.?!]{0,16}\b(?:workspace|whole account|all my projects|everything)\b/i },
   { pointer: 'settings', re: /(احذف|امسح|أرشف|ارشف|احذفوا)[^.؟!]{0,20}(المشروع|مشروعي)/ },
   { pointer: 'account', re: /(غيّر|غير|بدّل|بدل|نسيت)[^.؟!]{0,20}(كلمة المرور|كلمة السر|الباسورد|بريدي|اسمي)/ },

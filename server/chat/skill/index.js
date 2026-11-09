@@ -4,7 +4,7 @@
 // says can edit it. SKILL_VERSION is written to the chat log on every turn.
 'use strict';
 
-const SKILL_VERSION = '1.2.0';
+const SKILL_VERSION = '1.3.0';
 
 // The base part is always loaded. The other parts are added when the question or the mode needs them, to save tokens.
 const BASE = [
@@ -44,7 +44,8 @@ const PARTS = {
   ].join('\n'),
   setup: [
     'SETUP PRACTICE',
-    '- Connecting Jira or Outlook is done on the Account page with the step by step wizard. Explain the steps plainly. Never ask for, accept or repeat a password, token or secret in the chat.',
+    '- Guide Jira or Outlook setup one step at a time. Call get_connection_status, tell the person only the current step in plain words and where to click, and end by asking them to say when it is done. When they do, call it again to confirm and move on. If the app is not set up yet, say that the app owner does the one time setup.',
+    '- The connection itself is made on the Account page. Never ask for, accept or repeat a password, token or secret in the chat, and tell the person not to paste one. Both connections only read this release.',
   ].join('\n'),
 };
 

@@ -30,8 +30,8 @@
     cht_sum_gen: 'Generate the document "{title}"', cht_f_format: 'Format', cht_open_reports: 'Open Reports', cht_sum_sched: 'Change the schedule of task "{title}"', cht_sum_plan: 'Update the schedule: {title}', cht_f_reason: 'Reason', cht_sum_applyupd: 'Apply update "{title}"', cht_sum_dismiss: 'Dismiss update "{title}"', cht_sum_addupd: 'Add a message to the Updates inbox',
     cht_f_progress: 'Progress', cht_f_update: 'Update', cht_f_message: 'Message', cht_impact_h: 'Impact on the schedule', cht_impact_none: 'No other task moves.', cht_impact_n: '{n} other tasks move.', cht_impact_n1: '1 other task moves.', cht_impact_end: 'Project end: {a} to {b}.', cht_impact_same: 'Project end stays {b}.',
     cht_brief_h: 'Today', cht_brief_clear: 'Nothing needs your attention right now.',
-    cht_b_late_tasks: '{n} late tasks', cht_b_late_payments: '{n} late payments', cht_b_updates: '{n} updates waiting', cht_b_at_risk: '{n} projects off track', cht_b_high_risks: '{n} high risks open',
-    cht_q_late_tasks: 'Which tasks are late?', cht_q_late_payments: 'Which payments are late?', cht_q_updates: 'What is waiting in Updates?', cht_q_at_risk: 'Which projects are at risk?', cht_q_high_risks: 'Show the high risks',
+    cht_b_late_tasks: '{n} late tasks', cht_b_connect: 'Connect Jira or Outlook', cht_q_connect: 'Guide me step by step through connecting Jira or Outlook.', cht_b_late_payments: '{n} late payments', cht_b_updates: '{n} updates waiting', cht_b_at_risk: '{n} projects off track', cht_b_high_risks: '{n} high risks open',
+    cht_q_late_tasks: 'Which tasks are late? Suggest an updated schedule to recover.', cht_q_late_payments: 'Which payments are late?', cht_q_updates: 'What is waiting in Updates?', cht_q_at_risk: 'Which projects are at risk?', cht_q_high_risks: 'Show the high risks',
     cht_note_kids: '{n} child tasks move up one level.', cht_note_kids1: '1 child task moves up one level.', cht_note_succ: '{n} tasks lose this predecessor.', cht_note_succ1: '1 task loses this predecessor.',
     cht_v_open: 'Open', cht_v_progress: 'In progress', cht_v_closed: 'Closed', cht_v_mitigated: 'Mitigated', cht_v_transferred: 'Transferred', cht_v_pending: 'Pending', cht_v_invoiced: 'Invoiced', cht_v_paid: 'Paid', cht_v_low: 'Low', cht_v_medium: 'Medium', cht_v_high: 'High',
   });
@@ -57,8 +57,8 @@
     cht_sum_gen: 'إنشاء المستند "{title}"', cht_f_format: 'الصيغة', cht_open_reports: 'افتح التقارير', cht_sum_sched: 'تغيير جدول المهمة "{title}"', cht_sum_plan: 'تحديث الجدول: {title}', cht_f_reason: 'السبب', cht_sum_applyupd: 'تطبيق التحديث "{title}"', cht_sum_dismiss: 'تجاهل التحديث "{title}"', cht_sum_addupd: 'إضافة رسالة إلى صندوق التحديثات',
     cht_f_progress: 'التقدم', cht_f_update: 'التحديث', cht_f_message: 'الرسالة', cht_impact_h: 'الأثر على الجدول', cht_impact_none: 'لا تتحرك مهام أخرى.', cht_impact_n: 'تتحرك {n} مهام أخرى.', cht_impact_n1: 'تتحرك مهمة أخرى واحدة.', cht_impact_end: 'نهاية المشروع: من {a} إلى {b}.', cht_impact_same: 'تبقى نهاية المشروع {b}.',
     cht_brief_h: 'اليوم', cht_brief_clear: 'لا شيء يحتاج إلى انتباهك الآن.',
-    cht_b_late_tasks: '{n} مهام متأخرة', cht_b_late_payments: '{n} دفعات متأخرة', cht_b_updates: '{n} تحديثات بالانتظار', cht_b_at_risk: '{n} مشاريع خارج المسار', cht_b_high_risks: '{n} مخاطر عالية مفتوحة',
-    cht_q_late_tasks: 'ما هي المهام المتأخرة؟', cht_q_late_payments: 'ما هي الدفعات المتأخرة؟', cht_q_updates: 'ما الذي ينتظر في التحديثات؟', cht_q_at_risk: 'أي المشاريع معرضة للخطر؟', cht_q_high_risks: 'اعرض المخاطر العالية',
+    cht_b_late_tasks: '{n} مهام متأخرة', cht_b_connect: 'اربط Jira أو Outlook', cht_q_connect: 'أرشدني خطوة بخطوة لربط Jira أو Outlook.', cht_b_late_payments: '{n} دفعات متأخرة', cht_b_updates: '{n} تحديثات بالانتظار', cht_b_at_risk: '{n} مشاريع خارج المسار', cht_b_high_risks: '{n} مخاطر عالية مفتوحة',
+    cht_q_late_tasks: 'ما هي المهام المتأخرة؟ اقترح جدولا محدثا للتعافي.', cht_q_late_payments: 'ما هي الدفعات المتأخرة؟', cht_q_updates: 'ما الذي ينتظر في التحديثات؟', cht_q_at_risk: 'أي المشاريع معرضة للخطر؟', cht_q_high_risks: 'اعرض المخاطر العالية',
     cht_note_kids: 'تنتقل {n} مهام فرعية مستوى واحدا للأعلى.', cht_note_kids1: 'تنتقل مهمة فرعية واحدة مستوى واحدا للأعلى.', cht_note_succ: 'تفقد {n} مهام هذا السابق.', cht_note_succ1: 'تفقد مهمة واحدة هذا السابق.',
     cht_v_open: 'مفتوح', cht_v_progress: 'قيد التنفيذ', cht_v_closed: 'مغلق', cht_v_mitigated: 'تمت المعالجة', cht_v_transferred: 'تم النقل', cht_v_pending: 'قيد الانتظار', cht_v_invoiced: 'تمت الفوترة', cht_v_paid: 'مدفوعة', cht_v_low: 'منخفض', cht_v_medium: 'متوسط', cht_v_high: 'مرتفع',
   });
@@ -269,7 +269,8 @@
     if (hist) { body.innerHTML = historyHtml(); return; }
     const near = body.scrollHeight - body.scrollTop - body.clientHeight < 80;
     body.innerHTML = S.msgs.length ? S.msgs.map(msgHtml).join('') : emptyHtml();
-    if (toEnd || near) body.scrollTop = body.scrollHeight;
+    // the empty state starts at its title, a conversation starts at its latest message
+    if (!S.msgs.length) body.scrollTop = 0; else if (toEnd || near) body.scrollTop = body.scrollHeight;
     const d = S.data || {};
     const note = d.can_write === false ? t('cht_view_only') : (d.remaining_today != null && d.remaining_today <= 20 ? t('cht_left', { n: d.remaining_today }) : '');
     $q('#chtNote').textContent = note; $q('#chtNote').hidden = !note;

@@ -386,9 +386,12 @@ function createChat({ db, store, api, auth, ops, model }) {
         user,
         async fn(h) {
           const today = h.TODAY();
+          // a gentle nudge until at least one of Jira or Outlook is connected
+          let noConn = false;
+          try { const cv = (await h.call('GET', '/api/connections')).connections || {}; noConn = !(cv.jira && cv.jira.connected) && !(cv.outlook && cv.outlook.connected); } catch (e) { noConn = false; }
           if (!projectId) {
             const g = await h.call('GET', '/api/dashboard');
-            return [['late_tasks', (g.overdue || []).length], ['late_payments', (g.payments || []).filter((p) => p.late).length], ['updates', g.pendingInbox || 0], ['at_risk', (g.counts && g.counts.red) || 0]].filter((x) => x[1] > 0).map(([key, n]) => ({ key, n }));
+            return [['late_tasks', (g.overdue || []).length], ['late_payments', (g.payments || []).filter((p) => p.late).length], ['updates', g.pendingInbox || 0], ['at_risk', (g.counts && g.counts.red) || 0], ['connect', noConn ? 1 : 0]].filter((x) => x[1] > 0).map(([key, n]) => ({ key, n }));
           }
           h.P(projectId);
           const [sc, it, inb] = await Promise.all([h.call('GET', `/api/projects/${projectId}/schedule`), h.call('GET', `/api/projects/${projectId}/items`), h.call('GET', `/api/projects/${projectId}/inbox`)]);
@@ -399,6 +402,7 @@ function createChat({ db, store, api, auth, ops, model }) {
             ['updates', (inb.inbox || []).filter((r) => r.status === 'pending').length],
             ['high_risks', live.filter((i) => i.kind === 'risk' && i.state === 'open' && i.data && i.data.probability === 'High' && i.data.impact === 'High').length],
           ];
+          rows.push(['connect', noConn ? 1 : 0]);
           return rows.filter((x) => x[1] > 0).map(([key, n]) => ({ key, n }));
         },
       });

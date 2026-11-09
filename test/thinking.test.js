@@ -182,3 +182,35 @@ test('a custom document with too few sections is turned back, and a viewer canno
   const r = await talk(u.token, { project_id: p.id, text: 'Create a thin document for anyone on the project' });
   assert.equal(r.message.card, null);
 });
+
+// ---------- connection guide and proactive nudges ----------
+test('asking to connect Jira or Outlook is guided, while disconnecting stays an Account task', async () => {
+  const { u, p } = await setup();
+  say(use('get_connection_status', { service: 'jira' }, 'j1')); say(text('Step one is the Atlassian sign in on the Account page. Tell me when you are done.'));
+  const r = await talk(u.token, { project_id: p.id, text: 'Guide me step by step through connecting Jira for this project' });
+  assert.ok(r.done); assert.ok(!r.message.refusal, 'not refused');
+  const tool = JSON.stringify(sc.seen[1].messages);
+  assert.match(tool, /Sign in at Atlassian/); assert.match(tool, /current_step/); assert.match(tool, /Read only this release/);
+  assert.match(sc.seen[0].system, /SETUP PRACTICE/);
+  assert.match(sc.seen[0].system, /one step at a time/);
+  const d = await talk(u.token, { project_id: p.id, text: 'Please disconnect my Jira connection' });
+  assert.ok(d.done); assert.equal(sc.seen.length, 2, 'the model was not called for the disconnect request');
+});
+
+test('the Outlook guide lists its steps and never returns app secrets', async () => {
+  const { u, p } = await setup();
+  say(use('get_connection_status', { service: 'outlook' }, 'o1')); say(text('First, the app owner finishes a one time setup.'));
+  const r = await talk(u.token, { project_id: p.id, text: 'Help me connect my Outlook email to this project' });
+  assert.ok(r.done);
+  const tool = sc.seen[1].messages.map((m) => JSON.stringify(m.content)).join(' ');
+  assert.match(tool, /Sign in with Microsoft/); assert.match(tool, /Read only access/);
+  assert.ok(!/MICROSOFT_CLIENT_SECRET=|[A-Za-z0-9~_.-]{40,}/.test(tool.replace(/https?:\/\/\S+/g, '')), 'no secret like values');
+});
+
+test('the Thinking Area nudges a person with no connection, and has a connect starter', async () => {
+  const { u, p } = await setup();
+  const v = (await s.call('GET', `/api/chat?project_id=${p.id}&screen=thinking`, null, u.token)).data;
+  assert.ok(v.brief.some((x) => x.key === 'connect'), 'the connect tile shows when nothing is connected');
+  assert.ok(v.starters.some((x) => x.id === 'connect'));
+  const ar = prompt.startersFor('ar').find((x) => x.id === 'connect'); assert.ok(ar && ar.label && ar.q);
+});

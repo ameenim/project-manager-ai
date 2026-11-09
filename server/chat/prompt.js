@@ -122,6 +122,7 @@ const STARTERS = [
   { id: 'risk', ready: true, en: { label: 'Reduce risk', q: 'Which risks need attention? Suggest mitigations for the high risks that have none.' }, ar: { label: 'قلل المخاطر', q: 'ما المخاطر التي تحتاج إلى انتباه؟ اقترح إجراءات معالجة للمخاطر العالية التي ليس لها معالجة.' } },
   { id: 'requirements', ready: true, en: { label: 'Cover requirements', q: 'Which requirements have no task and which deliverables have no requirement?' }, ar: { label: 'غطِّ المتطلبات', q: 'ما المتطلبات التي ليس لها مهمة وما المخرجات التي ليس لها متطلب؟' } },
   { id: 'status', ready: true, en: { label: 'Review status', q: 'Give me a short status of where things stand, what changed, and what needs a decision.' }, ar: { label: 'راجع الحالة', q: 'أعطني حالة مختصرة لما وصلنا إليه وما الذي تغير وما الذي يحتاج إلى قرار.' } },
+  { id: 'connect', ready: true, en: { label: 'Connect Jira or Outlook', q: 'Guide me step by step through connecting Jira or Outlook.' }, ar: { label: 'اربط Jira أو Outlook', q: 'أرشدني خطوة بخطوة لربط Jira أو Outlook.' } },
   { id: 'report', ready: true, en: { label: 'Prepare a report', q: 'Draft a status update for the steering committee.' }, ar: { label: 'جهّز تقريرا', q: 'صغ تحديث حالة للجنة التوجيهية.' } },
 ];
 const startersFor = (lang) => STARTERS.filter((x) => x.ready).map((x) => ({ id: x.id, label: x[lang === 'ar' ? 'ar' : 'en'].label, q: x[lang === 'ar' ? 'ar' : 'en'].q }));
