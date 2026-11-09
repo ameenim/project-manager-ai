@@ -633,6 +633,91 @@
     const hooks = `${location.origin}/api/ingest`;
     const key = S.user.ingest_key;
     const save = async (body, btn) => { const r = await busy(btn, () => api('PUT', `/api/projects/${p.id}`, body)); if (r) { proj = r.project; S.project = r.project; toast(t('saved'), 'ok'); } return r; };
+
+    // ----- Team card: grouped by organization, searchable, edit in a dialog -----
+    const TM_SHOW = 5;
+    const tmOpen = new Set();
+    let tmQ = '';
+    const reloadTeam = async () => { team = (await api('GET', `/api/projects/${p.id}/resources`)).resources; if (!stale(token)) drawTeam(); };
+    const tmFields = (r) => ({ name: r.name, role: r.role || '', organization: r.organization || '', email: r.email || '', teams_name: r.teams_name || '', jira_account: r.jira_account || '' });
+    const tmMatch = (r, q) => !q || [r.name, r.role, r.organization, r.email, r.teams_name, r.jira_account].some((x) => String(x || '').toLowerCase().includes(q));
+    const tmGroups = (list) => {
+      const m = new Map();
+      for (const r of list) { const k = String(r.organization || '').trim(); if (!m.has(k)) m.set(k, []); m.get(k).push(r); }
+      return [...m.entries()].sort((a, b) => (a[0] ? 0 : 1) - (b[0] ? 0 : 1) || a[0].localeCompare(b[0]));
+    };
+    const tmRow = (r) => {
+      const ids = [r.teams_name ? `<span class="tm-id"><span class="faint">Teams</span> ${esc(r.teams_name)}</span>` : '', r.jira_account ? `<span class="tm-id"><span class="faint">Jira</span> ${esc(r.jira_account)}</span>` : ''].join('');
+      return `<div class="tm-row"><div class="avatar" aria-hidden="true">${esc(PM.initials(r.name))}</div>
+        <div class="tm-main"><div class="tm-name" data-tip="${esc(r.name)}">${esc(r.name)}</div><div class="small ${r.role ? 'muted' : 'faint'}">${esc(r.role || t('tm_no_role'))}</div></div>
+        <div class="tm-contact small muted">${r.email ? `<span class="tm-email" data-tip="${esc(r.email)}">${esc(r.email)}</span>` : ''}${ids}</div>
+        <div class="tm-act"><button type="button" class="btn sm ghost icon" data-redit="${r.id}" data-tip="${esc(t('tm_edit_tip', { name: r.name }))}" aria-label="${esc(t('tm_edit_tip', { name: r.name }))}">${icon('edit')}</button><button type="button" class="btn sm ghost icon" data-rdel="${r.id}" data-tip="${esc(t('tm_del_tip', { name: r.name }))}" aria-label="${esc(t('tm_del_tip', { name: r.name }))}">${icon('trash')}</button></div></div>`;
+    };
+    function drawTeam() {
+      const card = $('#teamCard', root); if (!card) return;
+      card.innerHTML = `<div class="card-head"><h3 class="tm-title">${t('team')}</h3><span class="chip" aria-label="${team.length}">${team.length}</span><span class="grow"></span><button type="button" class="btn sm" id="r_extract" data-tip="${esc(t('tx_tip'))}">${icon('spark')}${t('tx_btn')}</button><button type="button" class="btn sm primary" id="r_add">${icon('plus')}${t('tm_add')}</button></div>
+        ${team.length ? `<div class="tm-search"><span class="tm-search-i">${icon('search')}</span><input type="search" id="tmQ" value="${esc(tmQ)}" placeholder="${esc(t('tm_search'))}" aria-label="${esc(t('tm_search'))}"></div><div id="tmList"></div>` : `<div class="empty small">${t('no_team')}</div>`}
+        <div class="small muted mt">${t('team_hint')}</div>`;
+      if (team.length) { drawTeamList(); const q = $('#tmQ', card); q.oninput = () => { tmQ = q.value; drawTeamList(); }; }
+      $('#r_add', card).onclick = () => personDialog(null);
+      $('#r_extract', card).onclick = extractFromSchedule;
+    }
+    function drawTeamList() {
+      const box = $('#tmList', root); if (!box) return;
+      const q = tmQ.trim().toLowerCase();
+      const groups = tmGroups(team.filter((r) => tmMatch(r, q)));
+      box.innerHTML = groups.length ? groups.map(([org, list]) => {
+        const open = !!q || tmOpen.has(org), shown = open ? list : list.slice(0, TM_SHOW);
+        return `<section class="tm-group"><div class="tm-gh"><b>${esc(org || t('tm_no_org'))}</b><span class="chip">${list.length}</span></div><div class="tm-rows">${shown.map(tmRow).join('')}</div>${!q && list.length > TM_SHOW ? `<button type="button" class="btn sm ghost tm-more" data-tmmore="${esc(org)}">${open ? t('dash_show_less') : t('dash_show_more', { n: list.length - TM_SHOW })}</button>` : ''}</section>`;
+      }).join('') : `<div class="empty small">${t('tm_none')}</div>`;
+      $$('[data-tmmore]', box).forEach((b) => (b.onclick = () => { const k = b.dataset.tmmore; if (tmOpen.has(k)) tmOpen.delete(k); else tmOpen.add(k); drawTeamList(); }));
+      $$('[data-redit]', box).forEach((b) => (b.onclick = () => personDialog(team.find((x) => x.id === Number(b.dataset.redit)))));
+      $$('[data-rdel]', box).forEach((b) => (b.onclick = async () => {
+        const r0 = team.find((x) => x.id === Number(b.dataset.rdel)); if (!r0) return;
+        if (!(await busy(null, () => api('DELETE', `/api/projects/${p.id}/resources/${r0.id}`)))) return;
+        await reloadTeam();
+        toast(t('tm_removed', { name: r0.name }), 'ok', { label: t('undo'), fn: async () => { await api('POST', `/api/projects/${p.id}/resources`, tmFields(r0)); await reloadTeam(); } });
+      }));
+    }
+    function personDialog(r) {
+      const isNew = !r, v0 = r || {};
+      const f = (id, label, val) => `<label class="f">${label}<input type="text" id="${id}" value="${esc(val || '')}"></label>`;
+      const orgs = [...new Set(team.map((x) => x.organization).filter(Boolean))].sort();
+      const m = modal({ title: isNew ? t('tm_add_title') : t('tm_edit_title'), size: '', body: `<div class="form-grid">${f('pn_name', t('name'), v0.name)}${f('pn_role', t('role'), v0.role)}<label class="f">${t('tx_org')}<input type="text" id="pn_org" list="pnOrgs" value="${esc(v0.organization || '')}"><datalist id="pnOrgs">${orgs.map((o) => `<option value="${esc(o)}">`).join('')}</datalist></label>${f('pn_email', t('email'), v0.email)}${f('pn_teams', 'Teams', v0.teams_name)}${f('pn_jira', 'Jira', v0.jira_account)}</div><div class="small muted mt">${t('team_hint')}</div><div class="small tm-err" id="pnErr" role="alert" hidden></div>`, footer: `<button class="btn" data-close>${t('cancel')}</button><button class="btn primary" id="pnOk">${isNew ? t('add') : t('save')}</button>` });
+      const g = (id) => m.$('#' + id).value.trim();
+      m.$('#pn_name').focus();
+      const submit = async () => {
+        if (!g('pn_name')) { const e = m.$('#pnErr'); e.textContent = t('tm_name_req'); e.hidden = false; m.$('#pn_name').focus(); return; }
+        const body = { name: g('pn_name'), role: g('pn_role'), organization: g('pn_org'), email: g('pn_email'), teams_name: g('pn_teams'), jira_account: g('pn_jira') };
+        const res = await busy(m.$('#pnOk'), () => isNew ? api('POST', `/api/projects/${p.id}/resources`, body) : api('PUT', `/api/projects/${p.id}/resources/${r.id}`, body));
+        if (!res) return;
+        m.close();
+        await reloadTeam();
+        toast(isNew ? t('tm_added', { name: body.name }) : t('saved'), 'ok');
+      };
+      m.$('#pnOk').onclick = submit;
+      m.el.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && ev.target.tagName === 'INPUT') { ev.preventDefault(); submit(); } });
+    }
+    async function extractFromSchedule(e) {
+      const r = await busy(e.currentTarget, () => api('GET', `/api/projects/${p.id}/team/from-schedule`));
+      if (!r) return;
+      if (!r.people.length) { toast(t('tx_none')); return; }
+      if (r.people.every((x) => x.in_team)) { toast(t('tx_all_in'), 'ok'); return; }
+      const rows = r.people.map((x, i) => `<label class="tx-row${x.in_team ? ' in' : ''}"><input type="checkbox" data-i="${i}" ${x.in_team ? 'disabled' : x.group ? '' : 'checked'} aria-label="${esc(x.name)}"><span class="tx-name"><b>${esc(x.name)}</b>${x.organization ? `<span class="chip">${esc(x.organization)}</span>` : ''}${x.group && !x.in_team ? `<span class="chip amber">${t('tx_group')}</span>` : ''}</span><span class="small muted tx-n">${t('tx_tasks', { n: x.tasks })}</span>${x.in_team ? `<span class="chip green">${t('tx_in_team')}</span>` : ''}</label>`).join('');
+      const m = modal({ title: t('tx_title'), size: '', body: `<p class="small muted">${t('tx_intro', { n: r.people.length })}</p><div class="tx-list">${rows}</div>`, footer: `<button class="btn" data-close>${t('cancel')}</button><button class="btn primary" id="txOk"></button>` });
+      const chosen = () => [...m.el.querySelectorAll('.tx-row input:checked:not(:disabled)')].map((c) => r.people[+c.dataset.i]);
+      const sync = () => { const n = chosen().length; const b = m.$('#txOk'); b.innerHTML = `${icon('plus')}${t('tx_add', { n })}`; b.disabled = !n; };
+      m.el.addEventListener('change', (ev) => { if (ev.target.closest('.tx-row')) sync(); }); sync();
+      m.$('#txOk').onclick = async () => {
+        const people = chosen().map((x) => ({ name: x.name, organization: x.organization }));
+        const res = await busy(m.$('#txOk'), () => api('POST', `/api/projects/${p.id}/team/from-schedule`, { people }));
+        if (!res) return;
+        m.close();
+        await reloadTeam();
+        const ids = res.added.map((x) => x.id);
+        toast(t('tx_added', { n: ids.length }), 'ok', { label: t('undo'), fn: async () => { for (const id of ids) await api('DELETE', `/api/projects/${p.id}/resources/${id}`); await reloadTeam(); } });
+      };
+    }
     function draw() {
       if (stale(token)) return;
       root.innerHTML = `<div class="page" style="max-width:980px"><div class="col gap-lg">
@@ -644,8 +729,7 @@
           <div class="form-grid mt" style="max-width:420px"><label class="f">${t('work_start')}<input type="time" id="s_ws" value="${proj.work_start || '08:00'}"></label><label class="f">${t('work_end')}<input type="time" id="s_we" value="${proj.work_end || '17:00'}"></label></div>
           <div class="mt"><div class="small muted" style="margin-bottom:6px">${t('holidays')}</div><div class="row wrap" id="hols">${proj.holidays.map((h) => `<span class="chip">${h} <a href="#" data-rmh="${h}">${icon('x')}</a></span>`).join('') || `<span class="small faint">${t('no_holidays')}</span>`}<input type="date" id="holNew" style="width:auto"><button class="btn sm" id="holAdd">${t('add')}</button></div></div>
           <div class="small muted mt">${t('calendar_note')}</div><div class="row mt"><button class="btn primary" id="saveCal">${t('save')}</button></div></div>
-        <div class="card"><div class="card-head"><h3 class="grow">${t('team')}</h3><button type="button" class="btn sm" id="r_extract" data-tip="${esc(t('tx_tip'))}">${icon('spark')}${t('tx_btn')}</button></div>${team.length ? `<div class="table-wrap"><table class="t"><thead><tr><th>${t('name')}</th><th>${t('role')}</th><th>${t('tx_org')}</th><th>${t('email')}</th><th>Teams</th><th>Jira</th><th></th></tr></thead><tbody>${team.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.role || '')}</td><td>${esc(r.organization || '')}</td><td>${esc(r.email || '')}</td><td>${esc(r.teams_name || '')}</td><td>${esc(r.jira_account || '')}</td><td class="right"><button class="btn sm ghost icon" data-rdel="${r.id}">${icon('trash')}</button></td></tr>`).join('')}</tbody></table></div>` : `<div class="empty small">${t('no_team')}</div>`}
-          <div class="form-grid mt" style="grid-template-columns:repeat(5,minmax(0,1fr)) auto;align-items:end"><label class="f">${t('name')}<input type="text" id="r_name"></label><label class="f">${t('role')}<input type="text" id="r_role"></label><label class="f">${t('email')}<input type="text" id="r_email"></label><label class="f">Teams<input type="text" id="r_teams"></label><label class="f">Jira<input type="text" id="r_jira"></label><button class="btn" id="r_add">${icon('plus')}${t('add')}</button></div><div class="small muted mt">${t('team_hint')}</div></div>
+        <div class="card" id="teamCard"></div>
         <div class="card"><div class="card-head"><h3>${t('pl_title')}</h3></div><div class="small muted mb">${t('pl_hint')}</div><div class="form-grid"><label class="f">${t('pl_sp')}<input type="url" id="s_sp" value="${esc(proj.sharepoint_url || '')}" placeholder="https://company.sharepoint.com/sites/project"></label><label class="f">${t('pl_jira')}<input type="url" id="s_jiraurl" value="${esc(proj.jira_url || '')}" placeholder="https://company.atlassian.net/browse/PROJ"></label></div>
           <div class="row mt"><button class="btn primary" id="saveLinks">${t('save')}</button><span class="small muted">${t('pl_conn_note')} <a href="#/account">${t('pl_conn_go')}</a></span></div></div>
         <div class="card"><div class="card-head"><h3>${t('integrations')}</h3></div><div class="form-grid"><label class="f">${t('jira_key')}<input type="text" id="s_jira" value="${esc(proj.jira_key || '')}" placeholder="PROJ"></label><label class="f">${t('teams_channel')}<input type="text" id="s_teams" value="${esc(proj.teams_channel || '')}" placeholder="teamId/channelId"></label></div>
@@ -654,6 +738,7 @@
         ${PM.data.projectCards(proj)}
         <div class="card"><div class="card-head"><h3 style="color:var(--danger)">${t('danger_zone')}</h3></div><div class="row"><div class="grow small muted">${proj.can_delete === false ? t('delete_project_pm_only') : t('delete_project_hint')}</div>${proj.can_delete === false ? '' : `<button class="btn danger" id="delProj">${icon('trash')}${t('delete_project')}</button>`}</div></div></div></div>`;
       bind();
+      drawTeam();
       PM.data.bindProject(root, proj);
     }
     function bind() {
@@ -665,28 +750,6 @@
       $('#holAdd', root).onclick = async () => { const d = v('holNew'); if (!d) return; const r = await save({ holidays: [...proj.holidays, d] }); if (r) draw(); };
       $$('[data-rmh]', root).forEach((a) => (a.onclick = async (e) => { e.preventDefault(); const r = await save({ holidays: proj.holidays.filter((h) => h !== a.dataset.rmh) }); if (r) draw(); }));
       $('#saveInt', root).onclick = (e) => save({ jira_key: v('s_jira'), teams_channel: v('s_teams'), auto_apply: $('#s_auto', root).checked, auto_threshold: Number(v('s_thr')) / 100 }, e.currentTarget);
-      $('#r_add', root).onclick = async () => { const name = v('r_name').trim(); if (!name) { $('#r_name', root).focus(); return; } const r = await busy($('#r_add', root), () => api('POST', `/api/projects/${p.id}/resources`, { name, role: v('r_role'), email: v('r_email'), teams_name: v('r_teams'), jira_account: v('r_jira') })); if (r) { team = (await api('GET', `/api/projects/${p.id}/resources`)).resources; draw(); } };
-      $('#r_extract', root).onclick = async (e) => {
-        const r = await busy(e.currentTarget, () => api('GET', `/api/projects/${p.id}/team/from-schedule`));
-        if (!r) return;
-        if (!r.people.length) { toast(t('tx_none')); return; }
-        if (r.people.every((x) => x.in_team)) { toast(t('tx_all_in'), 'ok'); return; }
-        const rows = r.people.map((x, i) => `<label class="tx-row${x.in_team ? ' in' : ''}"><input type="checkbox" data-i="${i}" ${x.in_team ? 'disabled' : x.group ? '' : 'checked'} aria-label="${esc(x.name)}"><span class="tx-name"><b>${esc(x.name)}</b>${x.organization ? `<span class="chip">${esc(x.organization)}</span>` : ''}${x.group && !x.in_team ? `<span class="chip amber">${t('tx_group')}</span>` : ''}</span><span class="small muted tx-n">${t('tx_tasks', { n: x.tasks })}</span>${x.in_team ? `<span class="chip green">${t('tx_in_team')}</span>` : ''}</label>`).join('');
-        const m = modal({ title: t('tx_title'), size: '', body: `<p class="small muted">${t('tx_intro', { n: r.people.length })}</p><div class="tx-list">${rows}</div>`, footer: `<button class="btn" data-close>${t('cancel')}</button><button class="btn primary" id="txOk"></button>` });
-        const chosen = () => [...m.el.querySelectorAll('.tx-row input:checked:not(:disabled)')].map((c) => r.people[+c.dataset.i]);
-        const sync = () => { const n = chosen().length; const b = m.$('#txOk'); b.innerHTML = `${icon('plus')}${t('tx_add', { n })}`; b.disabled = !n; };
-        m.el.addEventListener('change', (ev) => { if (ev.target.closest('.tx-row')) sync(); }); sync();
-        m.$('#txOk').onclick = async () => {
-          const people = chosen().map((x) => ({ name: x.name, organization: x.organization }));
-          const res = await busy(m.$('#txOk'), () => api('POST', `/api/projects/${p.id}/team/from-schedule`, { people }));
-          if (!res) return;
-          m.close();
-          team = (await api('GET', `/api/projects/${p.id}/resources`)).resources; draw();
-          const ids = res.added.map((x) => x.id);
-          toast(t('tx_added', { n: ids.length }), 'ok', { label: t('undo'), fn: async () => { for (const id of ids) await api('DELETE', `/api/projects/${p.id}/resources/${id}`); team = (await api('GET', `/api/projects/${p.id}/resources`)).resources; draw(); } });
-        };
-      };
-      $$('[data-rdel]', root).forEach((b) => (b.onclick = async () => { await busy(null, () => api('DELETE', `/api/projects/${p.id}/resources/${b.dataset.rdel}`)); team = (await api('GET', `/api/projects/${p.id}/resources`)).resources; draw(); }));
       const delBtn = $('#delProj', root);
       if (delBtn) delBtn.onclick = async () => { if (await confirmDlg({ title: t('delete_project'), message: t('confirm_delete_project', { name: esc(proj.name) }), ok: t('delete_project'), danger: true })) { const r = await busy(null, () => api('DELETE', `/api/projects/${p.id}`)); if (r) location.hash = '#/projects'; } };
     }

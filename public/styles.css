@@ -1742,3 +1742,16 @@ body.chat-page .cht-fab { display: none; }
 .cht-deep { flex: none; align-self: flex-end; }
 .cht-deep.on { background: var(--violet-soft); color: var(--violet); }
 @media (max-width: 820px) { .cht-panel.page { grid-template-columns: minmax(0, 1fr); } .cht-panel.page .cht-threads { display: none; } .cht-panel.page .cht-head, .cht-panel.page .cht-body, .cht-panel.page .cht-foot { grid-column: 1; } }
+/* Settings team card: grouped by organization */
+.card-head h3.tm-title { flex: none; } #teamCard .card-head { flex-wrap: wrap; row-gap: 8px; }
+.tm-search { position: relative; margin-bottom: 14px; } .tm-search input { width: 100%; padding-inline-start: 34px; } .tm-search-i { position: absolute; inset-inline-start: 10px; top: 50%; transform: translateY(-50%); color: var(--faint); display: grid; pointer-events: none; }
+.tm-group + .tm-group { margin-top: 18px; }
+.tm-gh { display: flex; align-items: center; gap: 8px; padding: 6px 4px 8px; border-bottom: 1px solid var(--border); } .tm-gh b { font-size: var(--fs-body); font-weight: 600; }
+.tm-row { display: grid; grid-template-columns: 36px minmax(0, 1.2fr) minmax(0, 1.4fr) auto; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--border); transition: background .12s var(--ease); } .tm-row:hover { background: var(--surface-2); }
+.tm-main { min-width: 0; } .tm-name { font-size: var(--fs-body); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; unicode-bidi: plaintext; }
+.tm-main .small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tm-contact { display: flex; flex-wrap: wrap; gap: 2px 14px; min-width: 0; } .tm-email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; } .tm-id { white-space: nowrap; }
+.tm-act { display: flex; gap: 2px; }
+.tm-more { margin-top: 6px; }
+.tm-err { color: var(--danger); margin-top: 10px; }
+@media (max-width: 600px) { .tm-row { grid-template-columns: 36px minmax(0, 1fr) auto; } .tm-contact { grid-column: 2 / 3; grid-row: 2; } .tm-act { grid-row: 1; grid-column: 3; } }

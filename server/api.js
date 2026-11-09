@@ -1241,6 +1241,12 @@ module.exports = function createApi(store, auth, connectors, ops) {
     const r = { id: nid(), project_id: P.id, name: b.name.trim(), email: b.email || null, role: b.role || null, organization: String(b.organization || '').trim().slice(0, 80) || null, jira_account: b.jira_account || null, teams_name: b.teams_name || null };
     P.resources.push(r); return { resource: r };
   });
+  on('PUT', '/api/projects/(\\d+)/resources/(\\d+)', async (m, q, b) => {
+    const P = P_(m[1]); const r = P.resources.find((x) => x.id === Number(m[2])); if (!r) throw err(404, 'Person not found');
+    if ('name' in b) { const n = String(b.name || '').replace(/\s+/g, ' ').trim().slice(0, 120); if (!n) throw err(400, 'Name is required'); r.name = n; }
+    for (const [k, len] of [['role', 80], ['organization', 80], ['email', 120], ['teams_name', 120], ['jira_account', 120]]) if (k in b) r[k] = String(b[k] || '').trim().slice(0, len) || null;
+    return { resource: clone(r) };
+  });
   // The people named in the schedule's Owner column, as suggestions for the team.
   on('GET', '/api/projects/(\\d+)/team/from-schedule', async (m) => {
     const P = P_(m[1]);
