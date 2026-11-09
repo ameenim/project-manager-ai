@@ -181,6 +181,14 @@
         else if (combo && i === n - 1) labels += PMCL.text(px, py, short(gr.value2), 'above');
       });
       g += labels; // value labels are drawn last, on top of the line and the dots
+      // one hover area for each month, as tall as the chart, so the tooltip shows the numbers anywhere in the column
+      groups.forEach((gr, i) => {
+        const rows = `<br>${esc(t('wk_rows_n', { n: fmtNum(gr.count) }))}`;
+        const html = combo
+          ? `<b>${esc(groupName(gr, res))}</b><br>${esc(aggLabel(spec))}: ${esc(fmtValue(gr.value, mfd, cur))}<br>${esc(lineLabel)}: ${esc(fmtValue(gr.value2, mfd2, cur))}${rows}`
+          : `<b>${esc(groupName(gr, res))}</b><br>${esc(val(gr))}${rows}`;
+        g += `<rect class="wk-hit" x="${(L + band * i).toFixed(1)}" y="${T}" width="${band.toFixed(1)}" height="${ph}" data-tip="${esc(html)}"/>`;
+      });
       const legend = combo ? h.legend([['c1', aggLabel(spec)], ['c2 line', lineLabel]]) : '';
       body.innerHTML = `<svg class="viz wk-line" viewBox="0 0 ${Wd} ${Ht}" width="${Wd}" height="${Ht}" role="img" aria-label="${esc(aria)}">${g}</svg>${legend}${note}`;
       return { csv: combo ? () => [[fieldLabel(res.grouped), aggLabel(spec), lineLabel], ...groups.map((gr) => [groupName(gr, res), gr.value, gr.value2])] : csv, chart: true };
