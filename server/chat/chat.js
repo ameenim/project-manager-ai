@@ -6,6 +6,7 @@ const guard = require('./guard');
 const prompt = require('./prompt');
 const tools = require('./tools');
 const claude = require('../claude');
+const skill = require('./skill');
 
 const MINUTE_LIMIT = Number(process.env.CHAT_PER_MINUTE || 20);
 const DAY_LIMIT = Number(process.env.CHAT_PER_DAY || 200);
@@ -111,12 +112,12 @@ function createChat({ db, store, api, auth, ops, model }) {
   }
 
   // ---------- one answer ----------
-  async function runTurn({ user, access: A, thread, text, lang, ui, emit, signal, declined, exclude }) {
+  async function runTurn({ user, access: A, thread, text, lang, ui, emit, signal, declined, exclude, deep, screen }) {
     const canWrite = A.projectId ? RANK[A.role] >= 2 : A.role !== 'viewer';
     const secrets = [];
     const today = api.TODAY();
     const projects = A.order.map((id) => ({ id, name: A.projects[id].p.name, role: A.roles[id] }));
-    const system = prompt.systemPrompt({ today, tz: process.env.APP_TZ || 'Asia/Dubai', ctx: { project: A.project }, lang: ui, role: A.projectId ? A.role : 'varies by project', projects, declined });
+    const system = prompt.systemPrompt({ today, tz: process.env.APP_TZ || 'Asia/Dubai', ctx: { project: A.project }, lang: ui, role: A.projectId ? A.role : 'varies by project', projects, declined, skill: skill.skillText(text, screen), deep: !!deep });
     const catalog = tools.catalog(canWrite);
     const past = await history(thread, HISTORY, exclude);
     const messages = [...(thread.summary ? [{ role: 'user', content: 'Summary of the earlier conversation: ' + thread.summary }, { role: 'assistant', content: 'Understood.' }] : []), ...past, { role: 'user', content: text }];
@@ -127,15 +128,18 @@ function createChat({ db, store, api, auth, ops, model }) {
     const send = (chunk) => { if (chunk) { streamed += chunk; emit({ type: 'text', text: chunk }); } };
 
     for (let round = 0; round < MAX_ROUNDS; round++) {
-      const calls = []; let assistantText = '';
-      for await (const ev of modelFn({ system, messages, tools: catalog, max_tokens: 1500, signal })) {
+      const calls = []; const thinkBlocks = []; let assistantText = '';
+      const callArgs = { system, messages, tools: catalog, max_tokens: claude.MAX_OUTPUT, signal };
+      if (deep) { callArgs.model = claude.DEEP_MODEL; callArgs.thinking = { budget: claude.DEEP_BUDGET }; }
+      for await (const ev of modelFn(callArgs)) {
         if (ev.type === 'text') { assistantText += ev.text; send(og.push(ev.text)); if (og.blocked) break; }
         else if (ev.type === 'tool_use') calls.push(ev);
+        else if (ev.type === 'thinking_block') thinkBlocks.push(ev.block);
         else if (ev.type === 'done' && ev.usage) { usage.input += ev.usage.input_tokens || 0; usage.output += ev.usage.output_tokens || 0; }
       }
       if (og.blocked) { blocked = og.blocked; break; }
       if (!calls.length) break;
-      const content = [];
+      const content = [...thinkBlocks];
       if (assistantText) content.push({ type: 'text', text: assistantText });
       for (const c of calls) content.push({ type: 'tool_use', id: c.id, name: c.name, input: c.input });
       messages.push({ role: 'assistant', content });
@@ -260,7 +264,7 @@ function createChat({ db, store, api, auth, ops, model }) {
     const ctl = new AbortController(); if (signal) signal.addEventListener('abort', () => ctl.abort(), { once: true });
     let r;
     try {
-      r = await runTurn({ user, access: A, thread, text: askText, lang, ui, emit, signal: ctl.signal, declined: gt.decision === 'mixed' ? gt.declined : null, exclude: userMsg && userMsg.id });
+      r = await runTurn({ user, access: A, thread, text: askText, lang, ui, emit, signal: ctl.signal, declined: gt.decision === 'mixed' ? gt.declined : null, exclude: userMsg && userMsg.id, deep: body.deep === true, screen: String(body.screen || '') });
     } catch (e) {
       if (ctl.signal.aborted) { await log(user, projectId, 'stopped', { billable: true }); return null; }
       const code = e.code === 'no_key' ? 'no_key' : (e.status === 401 || e.status === 403) ? 'bad_key' : e.status === 429 ? 'budget' : 'failed';
@@ -292,7 +296,7 @@ function createChat({ db, store, api, auth, ops, model }) {
         if (gt.decision === 'mixed') reply += (reply ? '\n\n' : '') + prompt.declinedPart(gt.declined, lang);
         if (!reply) reply = lang === 'ar' ? 'لم أجد ما أضيفه. جرّب صياغة أخرى.' : 'I have nothing to add. Try asking another way.';
         if (!r.toolCount) { meta.sources = []; }
-        await log(user, projectId, 'answer', { category: r.toolCount ? 'tools' : 'direct', billable: true, input: r.usage.input, output: r.usage.output });
+        await log(user, projectId, 'answer', { category: r.toolCount ? 'tools' : 'direct', tool: 'skill ' + skill.SKILL_VERSION + (body.deep === true ? ' deep' : ''), billable: true, input: r.usage.input, output: r.usage.output });
       }
     }
     const card = r.proposals.length ? buildCard(r.proposals, A) : null;
@@ -373,7 +377,7 @@ function createChat({ db, store, api, auth, ops, model }) {
     const ui = uiLang(user);
     const key = A.projectId ? (prompt.SUGGESTIONS[screen] ? screen : 'overview') : 'portfolio';
     const used = Number((await q("SELECT COUNT(*) AS n FROM chat_log WHERE user_id = $1 AND kind = 'message' AND created_at >= $2", [user.id, dayStart()])).rows[0].n);
-    return { thread: thread ? { id: thread.id } : null, messages: rows.map(msgView), suggestions: prompt.SUGGESTIONS[key][ui], capabilities: prompt.CAPABILITIES[ui], ai: hasModel(), role: A.role, project: A.project, remaining_today: Math.max(0, DAY_LIMIT - used), brief: rows.length ? [] : await brief(user, A.projectId), can_write: A.projectId ? RANK[A.role] >= 2 : A.role !== 'viewer' };
+    return { thread: thread ? { id: thread.id } : null, messages: rows.map(msgView), suggestions: prompt.SUGGESTIONS[key][ui], starters: prompt.startersFor(ui), capabilities: prompt.CAPABILITIES[ui], ai: hasModel(), role: A.role, project: A.project, remaining_today: Math.max(0, DAY_LIMIT - used), brief: rows.length ? [] : await brief(user, A.projectId), can_write: A.projectId ? RANK[A.role] >= 2 : A.role !== 'viewer' };
   }
   // Today at a glance. Plain counts from the same routes as the screens, with no AI, so the numbers always match.
   async function brief(user, projectId) {
@@ -412,10 +416,14 @@ function createChat({ db, store, api, auth, ops, model }) {
   }
   // ---------- history ----------
   // Every chat the person started stays in the list. One chat per context (a project, or all projects) is the open one.
-  async function historyList(user, projectId) {
+  async function historyList(user, projectId, search) {
     await access(user, projectId);
-    const r = await q("SELECT t.id, t.archived, t.updated_at, t.created_at, (SELECT x.text FROM chat_messages x WHERE x.thread_id = t.id AND x.role = 'user' ORDER BY x.id LIMIT 1) AS title, (SELECT COUNT(*) FROM chat_messages x WHERE x.thread_id = t.id AND x.role IN ('user','assistant')) AS n FROM chat_threads t WHERE t.user_id = $1 AND COALESCE(t.project_id, 0) = $2 AND EXISTS (SELECT 1 FROM chat_messages x WHERE x.thread_id = t.id AND x.role = 'user') ORDER BY t.updated_at DESC LIMIT 50", [user.id, projectId || 0]);
-    return { items: r.rows.map((x) => ({ id: x.id, current: !x.archived, title: clip(String(x.title || '').replace(/\s+/g, ' ').trim(), 90), messages: Number(x.n), updated_at: x.updated_at })) };
+    const term = String(search || '').trim().slice(0, 80);
+    const params = [user.id, projectId || 0];
+    let find = '';
+    if (term) { params.push('%' + term.replace(/[%_\\]/g, (c) => '\\' + c) + '%'); find = " AND (t.title ILIKE $3 OR EXISTS (SELECT 1 FROM chat_messages y WHERE y.thread_id = t.id AND y.role IN ('user','assistant') AND y.text ILIKE $3))"; }
+    const r = await q("SELECT t.id, t.archived, t.updated_at, t.created_at, t.title AS custom, t.pinned, (SELECT x.text FROM chat_messages x WHERE x.thread_id = t.id AND x.role = 'user' ORDER BY x.id LIMIT 1) AS title, (SELECT COUNT(*) FROM chat_messages x WHERE x.thread_id = t.id AND x.role IN ('user','assistant')) AS n FROM chat_threads t WHERE t.user_id = $1 AND COALESCE(t.project_id, 0) = $2 AND EXISTS (SELECT 1 FROM chat_messages x WHERE x.thread_id = t.id AND x.role = 'user')" + find + " ORDER BY t.pinned DESC, t.updated_at DESC LIMIT 100", params);
+    return { items: r.rows.map((x) => ({ id: x.id, current: !x.archived, pinned: !!x.pinned, title: clip(String(x.custom || x.title || '').replace(/\s+/g, ' ').trim(), 90), messages: Number(x.n), updated_at: x.updated_at })) };
   }
   async function ownThread(user, id) {
     const t = (await q('SELECT * FROM chat_threads WHERE id = $1 AND user_id = $2', [Number(id), user.id])).rows[0];
@@ -428,6 +436,13 @@ function createChat({ db, store, api, auth, ops, model }) {
     // the open chat of this context is put away first, so only one chat is open at a time
     await q('UPDATE chat_threads SET archived = true WHERE user_id = $1 AND archived = false AND COALESCE(project_id, 0) = $2 AND id <> $3', [user.id, t.project_id || 0, t.id]);
     await q('UPDATE chat_threads SET archived = false WHERE id = $1', [t.id]);
+    return { ok: true };
+  }
+  // Rename or pin a chat. A blank title goes back to the first question.
+  async function updateThread(user, id, body) {
+    const t = await ownThread(user, id);
+    if (body.title !== undefined) await q('UPDATE chat_threads SET title = $2 WHERE id = $1', [t.id, clip(String(body.title || '').replace(/\s+/g, ' ').trim(), 90)]);
+    if (body.pinned !== undefined) await q('UPDATE chat_threads SET pinned = $2 WHERE id = $1', [t.id, body.pinned === true]);
     return { ok: true };
   }
   async function deleteThread(user, id) {
@@ -453,7 +468,8 @@ function createChat({ db, store, api, auth, ops, model }) {
     let m;
     if (method === 'GET' && p === '/api/chat') { io.json(res, 200, await view(user, pid(url.searchParams.get('project_id')), url.searchParams.get('screen'))); return true; }
     if (method === 'GET' && p === '/api/chat/feedback') { io.json(res, 200, await feedbackList(user)); return true; }
-    if (method === 'GET' && p === '/api/chat/history') { io.json(res, 200, await historyList(user, pid(url.searchParams.get('project_id')))); return true; }
+    if (method === 'GET' && p === '/api/chat/history') { io.json(res, 200, await historyList(user, pid(url.searchParams.get('project_id')), url.searchParams.get('q'))); return true; }
+    if (method === 'POST' && (m = p.match(/^\/api\/chat\/threads\/(\d+)\/update$/))) { io.json(res, 200, await updateThread(user, m[1], await read())); return true; }
     if (method === 'POST' && (m = p.match(/^\/api\/chat\/threads\/(\d+)\/open$/))) { io.json(res, 200, await openThread(user, m[1])); return true; }
     if (method === 'DELETE' && (m = p.match(/^\/api\/chat\/threads\/(\d+)$/))) { io.json(res, 200, await deleteThread(user, m[1])); return true; }
     if (method === 'POST' && p === '/api/chat/clear') { const b = await read(); io.json(res, 200, await clear(user, pid(b.project_id))); return true; }
@@ -478,7 +494,7 @@ function createChat({ db, store, api, auth, ops, model }) {
     throw err(404, 'Not found');
   }
 
-  return { route, message, view, brief, feedbackList, historyList, openThread, deleteThread, clear, applyCard, cancelCard, undoCard, feedback, purge };
+  return { route, message, view, brief, feedbackList, historyList, openThread, updateThread, deleteThread, clear, applyCard, cancelCard, undoCard, feedback, purge };
 }
 
 module.exports = { createChat };

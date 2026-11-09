@@ -1,5 +1,6 @@
-/* Project Chat.
-   A button at the bottom corner of every screen opens a side panel. The chat is about the project on screen, or about
+/* Thinking Area (the former Project Chat).
+   A button at the bottom corner of every screen opens a side panel, and Open as a full page shows the same threads in a
+   workspace with a thread list. The project manager thinks with AI here and turns the result into changes. The chat is about the project on screen, or about
    all projects. It answers from the person's own data with sources, and it proposes changes as a card that waits for
    Apply. All rules live on the server: this file only sends a message and shows what comes back. */
 (function () {
@@ -8,18 +9,23 @@
   const { esc, t, icon } = PM;
 
   Object.assign(PM.I18N.en, {
-    cht_history: 'Chat history', cht_hist_back: 'Back to the chat', cht_hist_empty: 'No chats yet. Your chats will be kept here.', cht_hist_msgs: '{n} messages', cht_hist_now: 'Open now', cht_hist_del: 'Delete this chat', cht_hist_sure: 'Delete', cht_hist_deleted: 'Chat deleted', cht_untitled: 'Untitled chat', cht_hist_fail: 'The history could not load. Try again.',
-    cht_wide: 'Make the chat wider', cht_narrow: 'Make the chat narrower', cht_resize: 'Drag to resize. Double click to reset.', cht_grow: 'Drag to make the message box taller. Double click to reset.',
-    cht_title: 'Project chat', cht_all: 'All projects', cht_open: 'Open the project chat', cht_close: 'Close', cht_new: 'Start a new chat',
-    cht_ph: 'Ask about your projects', cht_send: 'Send', cht_stop: 'Stop', cht_thinking: 'Thinking', cht_tool: 'Checking your data',
+    th_expand: 'Open as a full page', th_collapse: 'Back to the side panel', th_deep: 'Think deeper', th_deep_tip: 'Think deeper takes longer and uses more of your tokens. Best for schedules and trade offs.', th_deep_on: 'Think deeper is on',
+    th_sees: 'The AI can see', th_ctx_docs: 'Documents of this project', th_ctx_data: 'Data of this project', th_ctx_portfolio: 'Data of all your projects',
+    th_start: 'Start with', th_quick: 'Quick questions',
+    th_threads: 'Threads', th_search: 'Search threads', th_new: 'New thread', th_pin: 'Pin this thread', th_unpin: 'Unpin this thread', th_rename: 'Rename this thread', th_rename_title: 'Rename thread', th_name_ph: 'Thread name', th_pinned: 'Pinned', th_no_match: 'No threads match.', th_renamed: 'Thread renamed', th_save: 'Save', th_cancel: 'Cancel',
+    nav_thinking: 'Thinking Area', tab_thinking: 'Thinking',
+    cht_history: 'Thinking history', cht_hist_back: 'Back to the conversation', cht_hist_empty: 'No threads yet. Your threads will be kept here.', cht_hist_msgs: '{n} messages', cht_hist_now: 'Open now', cht_hist_del: 'Delete this thread', cht_hist_sure: 'Delete', cht_hist_deleted: 'Thread deleted', cht_untitled: 'Untitled thread', cht_hist_fail: 'The history could not load. Try again.',
+    cht_wide: 'Make the Thinking Area wider', cht_narrow: 'Make the Thinking Area narrower', cht_resize: 'Drag to resize. Double click to reset.', cht_grow: 'Drag to make the message box taller. Double click to reset.',
+    cht_title: 'Thinking Area', cht_all: 'All projects', cht_open: 'Open the Thinking Area', cht_close: 'Close', cht_new: 'Start a new thread',
+    cht_ph: 'Ask or think through your projects', cht_send: 'Send', cht_stop: 'Stop', cht_thinking: 'Thinking', cht_tool: 'Checking your data',
     cht_sources: 'Sources', cht_apply: 'Apply', cht_cancel: 'Cancel', cht_edit: 'Edit', cht_undo: 'Undo', cht_back: 'Back', cht_yes: 'Yes, apply',
     cht_s_pending: 'Waiting for you', cht_s_applied: 'Applied', cht_s_canceled: 'Canceled', cht_s_expired: 'Expired', cht_s_undone: 'Undone', cht_s_failed: 'Not saved', cht_s_applied_final: 'Applied', cht_s_applying: 'Applying', cht_s_undoing: 'Undoing',
     cht_strong: 'Please confirm. This removes records from the project. You can undo it for 7 days.', cht_many: 'This card changes more than 5 records. Please confirm.',
-    cht_copy: 'Copy', cht_copied: 'Copied', cht_good: 'Helpful', cht_bad: 'Not helpful', cht_stopped: 'Stopped', cht_failed: 'The chat could not answer. Try again.',
+    cht_copy: 'Copy', cht_copied: 'Copied', cht_good: 'Helpful', cht_bad: 'Not helpful', cht_stopped: 'Stopped', cht_failed: 'The Thinking Area could not answer. Try again.',
     cht_view_only: 'You have view only access here. I can answer questions but I cannot change anything.', cht_left: '{n} messages left today',
     cht_applied_toast: 'Changes applied', cht_undone_toast: 'Changes undone', cht_edit_prefix: 'Change the proposal: ',
     cht_f_type: 'Type', cht_f_title: 'Title', cht_f_description: 'Description', cht_f_owner: 'Owner', cht_f_due_date: 'Due date', cht_f_probability: 'Probability', cht_f_impact: 'Impact', cht_f_mitigation: 'Mitigation', cht_f_amount: 'Amount', cht_f_percent: 'Percent', cht_f_status: 'Status', cht_f_name: 'Name', cht_f_start: 'Start', cht_f_duration: 'Duration', cht_f_notes: 'Notes', cht_f_task: 'Task', cht_f_deliverable: 'Deliverable', cht_f_requirement: 'Requirement', cht_f_risk: 'Risk', cht_f_payment: 'Payment',
-    cht_empty_title: 'Ask me about your projects', cht_none: 'none', cht_days: '{n} days',
+    cht_empty_title: 'What are you thinking about?', cht_none: 'none', cht_days: '{n} days',
     cht_sum_add: 'Add {kind} "{title}"', cht_sum_upd: 'Update {kind} "{title}"', cht_sum_del: 'Delete {kind} "{title}"', cht_sum_pay: 'Mark payment "{title}" as {state}', cht_sum_addtask: 'Add task "{title}"', cht_sum_updtask: 'Update task "{title}"', cht_sum_deltask: 'Delete task "{title}"',
     cht_sum_gen: 'Generate the document "{title}"', cht_f_format: 'Format', cht_open_reports: 'Open Reports', cht_sum_sched: 'Change the schedule of task "{title}"', cht_sum_applyupd: 'Apply update "{title}"', cht_sum_dismiss: 'Dismiss update "{title}"', cht_sum_addupd: 'Add a message to the Updates inbox',
     cht_f_progress: 'Progress', cht_f_update: 'Update', cht_f_message: 'Message', cht_impact_h: 'Impact on the schedule', cht_impact_none: 'No other task moves.', cht_impact_n: '{n} other tasks move.', cht_impact_n1: '1 other task moves.', cht_impact_end: 'Project end: {a} to {b}.', cht_impact_same: 'Project end stays {b}.',
@@ -30,18 +36,23 @@
     cht_v_open: 'Open', cht_v_progress: 'In progress', cht_v_closed: 'Closed', cht_v_mitigated: 'Mitigated', cht_v_transferred: 'Transferred', cht_v_pending: 'Pending', cht_v_invoiced: 'Invoiced', cht_v_paid: 'Paid', cht_v_low: 'Low', cht_v_medium: 'Medium', cht_v_high: 'High',
   });
   Object.assign(PM.I18N.ar, {
-    cht_history: 'سجل المحادثات', cht_hist_back: 'العودة إلى المحادثة', cht_hist_empty: 'لا توجد محادثات بعد. ستُحفظ محادثاتك هنا.', cht_hist_msgs: '{n} رسائل', cht_hist_now: 'مفتوحة الآن', cht_hist_del: 'حذف هذه المحادثة', cht_hist_sure: 'حذف', cht_hist_deleted: 'تم حذف المحادثة', cht_untitled: 'محادثة بلا عنوان', cht_hist_fail: 'تعذر تحميل السجل. حاول مرة أخرى.',
-    cht_wide: 'وسّع المحادثة', cht_narrow: 'قلّل عرض المحادثة', cht_resize: 'اسحب لتغيير الحجم. انقر مرتين للإعادة.', cht_grow: 'اسحب لتكبير مربع الرسالة. انقر مرتين للإعادة.',
-    cht_title: 'محادثة المشروع', cht_all: 'كل المشاريع', cht_open: 'افتح محادثة المشروع', cht_close: 'إغلاق', cht_new: 'ابدأ محادثة جديدة',
-    cht_ph: 'اسأل عن مشاريعك', cht_send: 'إرسال', cht_stop: 'إيقاف', cht_thinking: 'جار التفكير', cht_tool: 'جار فحص بياناتك',
+    th_expand: 'افتح كصفحة كاملة', th_collapse: 'العودة إلى اللوحة الجانبية', th_deep: 'فكّر بعمق', th_deep_tip: 'التفكير بعمق يستغرق وقتا أطول ويستهلك رموزا أكثر. مناسب للجداول والمفاضلات.', th_deep_on: 'التفكير بعمق مفعّل',
+    th_sees: 'ما يراه الذكاء الاصطناعي', th_ctx_docs: 'مستندات هذا المشروع', th_ctx_data: 'بيانات هذا المشروع', th_ctx_portfolio: 'بيانات كل مشاريعك',
+    th_start: 'ابدأ بـ', th_quick: 'أسئلة سريعة',
+    th_threads: 'المحادثات', th_search: 'ابحث في المحادثات', th_new: 'محادثة جديدة', th_pin: 'تثبيت هذه المحادثة', th_unpin: 'إلغاء تثبيت هذه المحادثة', th_rename: 'إعادة تسمية هذه المحادثة', th_rename_title: 'إعادة تسمية المحادثة', th_name_ph: 'اسم المحادثة', th_pinned: 'مثبتة', th_no_match: 'لا توجد محادثات مطابقة.', th_renamed: 'تمت إعادة تسمية المحادثة', th_save: 'حفظ', th_cancel: 'إلغاء',
+    nav_thinking: 'مساحة التفكير', tab_thinking: 'التفكير',
+    cht_history: 'سجل التفكير', cht_hist_back: 'العودة إلى المحادثة', cht_hist_empty: 'لا توجد محادثات بعد. ستُحفظ محادثاتك هنا.', cht_hist_msgs: '{n} رسائل', cht_hist_now: 'مفتوحة الآن', cht_hist_del: 'حذف هذه المحادثة', cht_hist_sure: 'حذف', cht_hist_deleted: 'تم حذف المحادثة', cht_untitled: 'محادثة بلا عنوان', cht_hist_fail: 'تعذر تحميل السجل. حاول مرة أخرى.',
+    cht_wide: 'وسّع مساحة التفكير', cht_narrow: 'قلّل عرض مساحة التفكير', cht_resize: 'اسحب لتغيير الحجم. انقر مرتين للإعادة.', cht_grow: 'اسحب لتكبير مربع الرسالة. انقر مرتين للإعادة.',
+    cht_title: 'مساحة التفكير', cht_all: 'كل المشاريع', cht_open: 'افتح مساحة التفكير', cht_close: 'إغلاق', cht_new: 'ابدأ محادثة جديدة',
+    cht_ph: 'اسأل أو فكّر في مشاريعك', cht_send: 'إرسال', cht_stop: 'إيقاف', cht_thinking: 'جار التفكير', cht_tool: 'جار فحص بياناتك',
     cht_sources: 'المصادر', cht_apply: 'تطبيق', cht_cancel: 'إلغاء', cht_edit: 'تعديل', cht_undo: 'تراجع', cht_back: 'رجوع', cht_yes: 'نعم، طبّق',
     cht_s_pending: 'بانتظارك', cht_s_applied: 'تم التطبيق', cht_s_canceled: 'تم الإلغاء', cht_s_expired: 'انتهت الصلاحية', cht_s_undone: 'تم التراجع', cht_s_failed: 'لم يُحفظ', cht_s_applied_final: 'تم التطبيق', cht_s_applying: 'جار التطبيق', cht_s_undoing: 'جار التراجع',
     cht_strong: 'يرجى التأكيد. هذا يحذف سجلات من المشروع. يمكنك التراجع خلال 7 أيام.', cht_many: 'تغير هذه البطاقة أكثر من 5 سجلات. يرجى التأكيد.',
-    cht_copy: 'نسخ', cht_copied: 'تم النسخ', cht_good: 'مفيد', cht_bad: 'غير مفيد', cht_stopped: 'تم الإيقاف', cht_failed: 'تعذر على المحادثة الرد. حاول مرة أخرى.',
+    cht_copy: 'نسخ', cht_copied: 'تم النسخ', cht_good: 'مفيد', cht_bad: 'غير مفيد', cht_stopped: 'تم الإيقاف', cht_failed: 'تعذر على مساحة التفكير الرد. حاول مرة أخرى.',
     cht_view_only: 'لديك صلاحية العرض فقط هنا. أستطيع الإجابة عن الأسئلة لكن لا أستطيع تغيير أي شيء.', cht_left: 'تبقّت {n} رسالة اليوم',
     cht_applied_toast: 'تم تطبيق التغييرات', cht_undone_toast: 'تم التراجع عن التغييرات', cht_edit_prefix: 'عدّل الاقتراح: ',
     cht_f_type: 'النوع', cht_f_title: 'العنوان', cht_f_description: 'الوصف', cht_f_owner: 'المسؤول', cht_f_due_date: 'تاريخ الاستحقاق', cht_f_probability: 'الاحتمال', cht_f_impact: 'الأثر', cht_f_mitigation: 'المعالجة', cht_f_amount: 'المبلغ', cht_f_percent: 'النسبة', cht_f_status: 'الحالة', cht_f_name: 'الاسم', cht_f_start: 'البداية', cht_f_duration: 'المدة', cht_f_notes: 'ملاحظات', cht_f_task: 'المهمة', cht_f_deliverable: 'مخرج', cht_f_requirement: 'متطلب', cht_f_risk: 'خطر', cht_f_payment: 'دفعة',
-    cht_empty_title: 'اسألني عن مشاريعك', cht_none: 'لا شيء', cht_days: '{n} أيام',
+    cht_empty_title: 'فيمَ تفكر اليوم؟', cht_none: 'لا شيء', cht_days: '{n} أيام',
     cht_sum_add: 'إضافة {kind} "{title}"', cht_sum_upd: 'تحديث {kind} "{title}"', cht_sum_del: 'حذف {kind} "{title}"', cht_sum_pay: 'تحديد الدفعة "{title}" على أنها {state}', cht_sum_addtask: 'إضافة المهمة "{title}"', cht_sum_updtask: 'تحديث المهمة "{title}"', cht_sum_deltask: 'حذف المهمة "{title}"',
     cht_sum_gen: 'إنشاء المستند "{title}"', cht_f_format: 'الصيغة', cht_open_reports: 'افتح التقارير', cht_sum_sched: 'تغيير جدول المهمة "{title}"', cht_sum_applyupd: 'تطبيق التحديث "{title}"', cht_sum_dismiss: 'تجاهل التحديث "{title}"', cht_sum_addupd: 'إضافة رسالة إلى صندوق التحديثات',
     cht_f_progress: 'التقدم', cht_f_update: 'التحديث', cht_f_message: 'الرسالة', cht_impact_h: 'الأثر على الجدول', cht_impact_none: 'لا تتحرك مهام أخرى.', cht_impact_n: 'تتحرك {n} مهام أخرى.', cht_impact_n1: 'تتحرك مهمة أخرى واحدة.', cht_impact_end: 'نهاية المشروع: من {a} إلى {b}.', cht_impact_same: 'تبقى نهاية المشروع {b}.',
@@ -54,7 +65,7 @@
 
   const pref = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* storage blocked */ } return null; };
   const DEF_W = 420, MIN_W = 340, WIDE_W = 760, MIN_IN = 38;
-  const S = { open: false, busy: false, ctl: null, ctx: { projectId: null, screen: 'portfolio' }, data: null, msgs: [], confirming: null, raf: 0, mode: 'chat', hist: null, w: Number(pref('pm_chat_w')) || DEF_W, inH: Number(pref('pm_chat_inh')) || 0, dragging: false };
+  const S = { open: false, busy: false, ctl: null, ctx: { projectId: null, screen: 'portfolio' }, data: null, msgs: [], confirming: null, raf: 0, mode: 'chat', hist: null, w: Number(pref('pm_chat_w')) || DEF_W, inH: Number(pref('pm_chat_inh')) || 0, dragging: false, page: false, deep: pref('pm_think_deep') === '1', th: { items: null, q: '', confirm: null } };
   let root = null;
   const $q = (sel) => (root ? root.querySelector(sel) : null);
   const ctxFromHash = () => {
@@ -95,10 +106,12 @@
     root.innerHTML = `
       <button class="cht-fab" id="chtFab" type="button" aria-haspopup="dialog" aria-expanded="false" aria-label="${esc(t('cht_open'))}" data-tip="${esc(t('cht_open'))}">${icon('chat')}</button>
       <section class="cht-panel" id="chtPanel" role="dialog" aria-modal="false" aria-labelledby="chtHead" hidden>
+        <aside class="cht-threads" id="chtThreads" aria-label="${esc(t('th_threads'))}" hidden></aside>
         <div class="cht-resize" id="chtResize" role="separator" aria-orientation="vertical" aria-label="${esc(t('cht_resize'))}" data-tip="${esc(t('cht_resize'))}"></div>
         <header class="cht-head">
           <div class="grow"><h2 id="chtHead">${esc(t('cht_title'))}</h2><div class="small muted cht-ctx" id="chtCtx"></div></div>
           <button class="btn ghost icon" type="button" data-act="hist" id="chtHistBtn" aria-label="${esc(t('cht_history'))}" data-tip="${esc(t('cht_history'))}">${icon('clock')}</button>
+          <button class="btn ghost icon" type="button" data-act="expand" id="chtExpandBtn" aria-label="${esc(t('th_expand'))}" data-tip="${esc(t('th_expand'))}">${icon('cols')}</button>
           <button class="btn ghost icon cht-wide-btn" type="button" data-act="wide" id="chtWideBtn" aria-label="${esc(t('cht_wide'))}" data-tip="${esc(t('cht_wide'))}">${icon('expand')}</button>
           <button class="btn ghost icon" type="button" data-act="new" aria-label="${esc(t('cht_new'))}" data-tip="${esc(t('cht_new'))}">${icon('plus')}</button>
           <button class="btn ghost icon" type="button" data-act="close" aria-label="${esc(t('cht_close'))}" data-tip="${esc(t('cht_close'))}">${icon('x')}</button>
@@ -106,8 +119,10 @@
         <div class="cht-body" id="chtBody" role="log" aria-live="polite" tabindex="0"></div>
         <footer class="cht-foot">
           <div class="cht-grip" id="chtGrip" role="separator" aria-orientation="horizontal" aria-label="${esc(t('cht_grow'))}" data-tip="${esc(t('cht_grow'))}"></div>
+          <div class="cht-ctxbar small" id="chtCtxBar"></div>
           <div class="small muted cht-note" id="chtNote"></div>
           <div class="cht-composer">
+            <button class="btn ghost icon cht-deep" id="chtDeep" type="button" data-act="deep" aria-pressed="false" aria-label="${esc(t('th_deep'))}" data-tip="${esc(t('th_deep_tip'))}">${icon('spark')}</button>
             <textarea id="chtIn" rows="1" maxlength="4000" placeholder="${esc(t('cht_ph'))}" aria-label="${esc(t('cht_ph'))}"></textarea>
             <button class="btn primary icon" id="chtSend" type="button" data-act="send" aria-label="${esc(t('cht_send'))}" data-tip="${esc(t('cht_send'))}">${icon('up')}</button>
           </div>
@@ -120,7 +135,8 @@
     inp.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); submit(); } });
     inp.addEventListener('input', grow);
     applyWidth(); applyInputHeight(); bindResize();
-    root.addEventListener('keydown', (e) => { if (e.key === 'Escape' && S.open) { e.stopPropagation(); close(); } else if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('cht-h-item')) { e.preventDefault(); openChat(e.target.dataset.id); } });
+    root.addEventListener('input', (e) => { if (e.target && e.target.id === 'thSearch') onSearch(e); });
+    root.addEventListener('keydown', (e) => { if (e.key === 'Escape' && S.open && !S.page) { e.stopPropagation(); close(); } else if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('cht-h-item')) { e.preventDefault(); openChat(e.target.dataset.id); } else if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('th-item')) { e.preventDefault(); openThread(e.target.dataset.id); } });
   }
   // the message box grows with the text up to a cap. A person can raise the base height by dragging its top line.
   function grow() { const i = $q('#chtIn'); if (!i) return; const base = S.inH || 0; i.style.height = 'auto'; i.style.height = Math.max(base, Math.min(i.scrollHeight, Math.max(base, 120))) + 'px'; }
@@ -216,10 +232,11 @@
   }
   function emptyHtml() {
     const d = S.data || {};
+    const starters = (d.starters || []).length ? `<div class="cht-starters"><div class="small muted">${esc(t('th_start'))}</div><div class="cht-starter-grid">${d.starters.map((x) => `<button class="cht-starter" type="button" data-act="sug" data-q="${esc(x.q)}"><span class="cht-starter-ic">${icon('spark')}</span><span>${esc(x.label)}</span></button>`).join('')}</div></div>` : '';
     const sug = (d.suggestions || []).map((s) => `<button class="btn sm cht-sug" type="button" data-act="sug" data-q="${esc(s)}">${esc(s)}</button>`).join('');
     const b = d.brief || [];
     const brief = d.brief ? `<div class="cht-brief"><div class="small muted">${esc(t('cht_brief_h'))}</div>${b.length ? b.map((x) => `<button class="cht-tile" type="button" data-act="sug" data-q="${esc(t('cht_q_' + x.key))}"><b>${esc(String(x.n))}</b><span>${esc(t('cht_b_' + x.key, { n: '' }).trim())}</span></button>`).join('') : `<div class="small muted">${esc(t('cht_brief_clear'))}</div>`}</div>` : '';
-    return `<div class="cht-empty"><div class="cht-empty-ic">${icon('spark')}</div><h3>${esc(t('cht_empty_title'))}</h3><p class="muted">${esc(d.capabilities || '')}</p>${S.loadError ? `<p class="cht-err small" role="alert">${esc(S.loadError)}</p>` : ''}${brief}<div class="cht-sugs">${sug}</div></div>`;
+    return `<div class="cht-empty"><div class="cht-empty-ic">${icon('spark')}</div><h3>${esc(t('cht_empty_title'))}</h3><p class="muted">${esc(d.capabilities || '')}</p>${S.loadError ? `<p class="cht-err small" role="alert">${esc(S.loadError)}</p>` : ''}${brief}${starters}${sug ? `<div class="small muted cht-quick">${esc(t('th_quick'))}</div>` : ''}<div class="cht-sugs">${sug}</div></div>`;
   }
   const when = (x) => { try { return new Date(x).toLocaleString(PM.state.lang === 'ar' ? 'ar' : 'en', { dateStyle: 'medium', timeStyle: 'short' }); } catch (e) { return ''; } };
   function historyHtml() {
@@ -238,7 +255,8 @@
   function paint(toEnd) {
     if (!root) return;
     $q('#chtCtx').textContent = ctxName();
-    const hist = S.mode === 'history';
+    paintShell();
+    const hist = S.mode === 'history' && (!S.page || window.matchMedia('(max-width: 820px)').matches);
     root.classList.toggle('hist', hist);
     $q('#chtHead').textContent = t(hist ? 'cht_history' : 'cht_title');
     const hb = $q('#chtHistBtn'); const hl = t(hist ? 'cht_hist_back' : 'cht_history');
@@ -255,6 +273,116 @@
     send.innerHTML = icon(S.busy ? 'x' : 'up'); send.dataset.act = S.busy ? 'stop' : 'send';
     const lab = S.busy ? t('cht_stop') : t('cht_send'); send.setAttribute('aria-label', lab); send.dataset.tip = lab;
   }
+
+  // the parts of the panel that depend on the page mode, the context and the Think deeper switch
+  function paintShell() {
+    root.classList.toggle('page', S.page);
+    const pnl = $q('#chtPanel'); if (pnl) pnl.classList.toggle('page', S.page);
+    const ex = $q('#chtExpandBtn');
+    if (ex) { const lab = t(S.page ? 'th_collapse' : 'th_expand'); ex.dataset.act = S.page ? 'collapse' : 'expand'; ex.innerHTML = icon(S.page ? 'shrink' : 'cols'); ex.setAttribute('aria-label', lab); ex.dataset.tip = lab; }
+    const narrow = window.matchMedia('(max-width: 820px)').matches;
+    const hb = $q('#chtHistBtn'); if (hb) hb.hidden = S.page && !narrow;
+    const wb = $q('#chtWideBtn'); if (wb) wb.hidden = S.page;
+    const cl = root.querySelector('[data-act="close"]'); if (cl) cl.hidden = S.page;
+    const th = $q('#chtThreads'); if (th) { th.hidden = !S.page; if (S.page) th.innerHTML = threadsHtml(); }
+    const cb = $q('#chtCtxBar');
+    if (cb) {
+      const chips = S.ctx.projectId ? [ctxName(), t('th_ctx_data'), t('th_ctx_docs')] : [t('th_ctx_portfolio')];
+      cb.innerHTML = `<span class="muted">${esc(t('th_sees'))}</span>${chips.map((c) => `<span class="chip gray">${esc(c)}</span>`).join('')}`;
+    }
+    const dp = $q('#chtDeep'); if (dp) { dp.classList.toggle('on', S.deep); dp.setAttribute('aria-pressed', String(S.deep)); dp.dataset.tip = t(S.deep ? 'th_deep_on' : 'th_deep') + '. ' + t('th_deep_tip'); }
+  }
+
+  // ---------- the full page workspace ----------
+  const isPage = () => /^#\/(thinking|p\/\d+\/thinking)(\/|\?|$)/.test(String(location.hash || ''));
+  let hostObs = null;
+  // The panel is drawn over the page's own empty host, so it fills the space beside the side menu and the project header.
+  function place() {
+    if (!root || !S.page) return;
+    const host = document.getElementById('thHost'); if (!host) return;
+    const r = host.getBoundingClientRect();
+    const h = Math.max(360, window.innerHeight - r.top - 16);
+    host.style.height = h + 'px';
+    const p = $q('#chtPanel');
+    p.style.top = r.top + 'px'; p.style.left = r.left + 'px'; p.style.width = r.width + 'px'; p.style.height = h + 'px';
+  }
+  async function mountPage() {
+    if (!root) { build(); bindFab(); }
+    if (!root.isConnected) document.body.appendChild(root);
+    const c = ctxFromHash();
+    const again = S.page && S.data && c.projectId === S.ctx.projectId;
+    S.page = true; S.open = true; S.ctx = c; S.mode = 'chat'; S.hist = null;
+    document.body.classList.add('chat-page'); document.body.classList.remove('chat-open');
+    const p = $q('#chtPanel'); p.hidden = false; p.classList.add('on');
+    place();
+    if (hostObs) hostObs.disconnect();
+    const host = document.getElementById('thHost');
+    if (host && window.ResizeObserver) { hostObs = new ResizeObserver(() => place()); hostObs.observe(host.parentElement || host); }
+    if (again) { paint(); } else { await Promise.all([load(), loadThreads()]); }
+    place();
+  }
+  function unmountPage() {
+    if (!S.page || !root) return;
+    S.page = false; S.open = false;
+    if (hostObs) { hostObs.disconnect(); hostObs = null; }
+    document.body.classList.remove('chat-page');
+    const p = $q('#chtPanel'); p.classList.remove('on', 'page'); p.hidden = true;
+    ['top', 'left', 'width', 'height'].forEach((k) => { p.style[k] = ''; });
+    paint();
+  }
+  // ---------- the thread list of the workspace ----------
+  async function loadThreads() {
+    try {
+      const q = new URLSearchParams(); if (S.ctx.projectId) q.set('project_id', S.ctx.projectId); if (S.th.q) q.set('q', S.th.q);
+      S.th.items = (await PM.api('GET', '/api/chat/history?' + q)).items;
+    } catch (e) { S.th.items = S.th.items || []; S.th.error = t('cht_hist_fail'); }
+    if (S.page) { const th = $q('#chtThreads'); if (th && !th.contains(document.activeElement)) th.innerHTML = threadsHtml(); else if (th) { const l = th.querySelector('.th-list'); if (l) l.innerHTML = threadRows(); } }
+  }
+  function threadRows() {
+    const T = S.th; const items = T.items || [];
+    if (T.items == null) return `<div class="cht-h-wait">${PM.loader.html({ size: 'md' })}</div>`;
+    if (!items.length) return `<div class="small muted th-none">${esc(T.q ? t('th_no_match') : t('cht_hist_empty'))}</div>`;
+    return items.map((x) => {
+      const sure = T.confirm === x.id;
+      const end = sure
+        ? `<button class="btn danger sm" type="button" data-act="tdel2" data-id="${x.id}">${esc(t('cht_hist_sure'))}</button><button class="btn ghost sm" type="button" data-act="tkeep">${esc(t('cht_back'))}</button>`
+        : `<button class="btn ghost icon sm ${x.pinned ? 'on' : ''}" type="button" data-act="tpin" data-id="${x.id}" aria-pressed="${!!x.pinned}" aria-label="${esc(t(x.pinned ? 'th_unpin' : 'th_pin'))}" data-tip="${esc(t(x.pinned ? 'th_unpin' : 'th_pin'))}">${icon('pin')}</button><button class="btn ghost icon sm" type="button" data-act="tren" data-id="${x.id}" aria-label="${esc(t('th_rename'))}" data-tip="${esc(t('th_rename'))}">${icon('edit')}</button><button class="btn ghost icon sm" type="button" data-act="tdel" data-id="${x.id}" aria-label="${esc(t('cht_hist_del'))}" data-tip="${esc(t('cht_hist_del'))}">${icon('trash')}</button>`;
+      return `<div class="th-item ${x.current ? 'cur' : ''}" role="button" tabindex="0" data-act="topen" data-id="${x.id}"><div class="th-body"><div class="th-t" dir="auto">${esc(x.title || t('cht_untitled'))}</div><div class="small muted">${esc(when(x.updated_at))} · ${esc(t('cht_hist_msgs', { n: x.messages }))}${x.pinned ? ` <span class="chip blue">${esc(t('th_pinned'))}</span>` : ''}</div></div><div class="th-end">${end}</div></div>`;
+    }).join('');
+  }
+  function threadsHtml() {
+    return `<div class="th-head"><h3>${esc(t('th_threads'))}</h3><button class="btn primary sm" type="button" data-act="tnew">${icon('plus')}${esc(t('th_new'))}</button></div><label class="th-search">${icon('search')}<input type="search" id="thSearch" value="${esc(S.th.q || '')}" placeholder="${esc(t('th_search'))}" aria-label="${esc(t('th_search'))}"></label><div class="th-list">${threadRows()}</div>`;
+  }
+  let searchTimer = 0;
+  function onSearch(e) { S.th.q = e.target.value.trim(); clearTimeout(searchTimer); searchTimer = setTimeout(loadThreads, 250); }
+  async function openThread(id) {
+    const it = (S.th.items || []).find((x) => String(x.id) === String(id)); if (!it || S.busy) return;
+    if (it.current) return;
+    try { await PM.api('POST', `/api/chat/threads/${id}/open`, {}); await Promise.all([load(), loadThreads()]); }
+    catch (e) { PM.toast(e.message, 'err'); }
+  }
+  async function pinThread(id) {
+    const it = (S.th.items || []).find((x) => String(x.id) === String(id)); if (!it) return;
+    try { await PM.api('POST', `/api/chat/threads/${id}/update`, { pinned: !it.pinned }); await loadThreads(); }
+    catch (e) { PM.toast(e.message, 'err'); }
+  }
+  function renameThread(id) {
+    const it = (S.th.items || []).find((x) => String(x.id) === String(id)); if (!it) return;
+    const m = PM.modal({ title: t('th_rename_title'), size: 'sm', body: `<label class="f">${esc(t('th_name_ph'))}<input type="text" id="thName" maxlength="90" value="${esc(it.title || '')}" placeholder="${esc(t('th_name_ph'))}"></label>`, footer: `<button class="btn" data-close>${esc(t('th_cancel'))}</button><button class="btn primary" id="thSave">${esc(t('th_save'))}</button>` });
+    const inp = m.$('#thName'); inp.focus(); inp.select();
+    const go = async () => { try { await PM.api('POST', `/api/chat/threads/${id}/update`, { title: inp.value }); m.close(); PM.toast(t('th_renamed'), 'ok'); await loadThreads(); } catch (e) { PM.toast(e.message, 'err'); } };
+    m.$('#thSave').onclick = go; inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+  }
+  async function deleteThread(id) {
+    const it = (S.th.items || []).find((x) => String(x.id) === String(id));
+    try {
+      await PM.api('DELETE', `/api/chat/threads/${id}`);
+      S.th.confirm = null; PM.toast(t('cht_hist_deleted'), 'ok');
+      if (it && it.current) { S.msgs = []; await load(); }
+      await loadThreads();
+    } catch (e) { PM.toast(e.message, 'err'); }
+  }
+
   const soon = () => { if (S.raf) return; S.raf = requestAnimationFrame(() => { S.raf = 0; paint(); }); };
 
   // ---------- sending ----------
@@ -271,7 +399,7 @@
     S.msgs.push(user, bot); paint(true);
     const ctl = new AbortController(); S.ctl = ctl;
     try {
-      const r = await fetch('/api/chat/message', { method: 'POST', headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + PM.state.token }, body: JSON.stringify({ project_id: S.ctx.projectId, text, screen: S.ctx.screen }), signal: ctl.signal });
+      const r = await fetch('/api/chat/message', { method: 'POST', headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + PM.state.token }, body: JSON.stringify({ project_id: S.ctx.projectId, text, screen: S.ctx.screen, deep: S.deep }), signal: ctl.signal });
       if (!r.ok || !r.body) { let msg = t('cht_failed'); try { const j = await r.json(); msg = j.error || msg; } catch (e) { /* not json */ } if (r.status === 401) msg = t('err_session'); throw new Error(msg); }
       const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = '';
       for (;;) {
@@ -287,6 +415,7 @@
       if (!bot.text && !bot.error && !bot.stopped && !bot.card) bot.error = t('cht_failed');
       paint(true);
       if (S.data && S.data.remaining_today != null) S.data.remaining_today = Math.max(0, S.data.remaining_today - 1);
+      if (S.page) loadThreads();
     }
   }
   function onEvent(user, bot, ev) {
@@ -358,6 +487,16 @@
     if (act === 'nav') { if (window.matchMedia('(max-width: 600px)').matches) close(); return; }
     if (act === 'close') return close();
     if (act === 'hist') return S.mode === 'history' ? (S.needReload ? (S.needReload = false, S.mode = 'chat', load()) : backToChat()) : showHistory();
+    if (act === 'expand') { location.hash = S.ctx.projectId ? `#/p/${S.ctx.projectId}/thinking` : '#/thinking'; return; }
+    if (act === 'collapse') { const to = S.ctx.projectId ? `#/p/${S.ctx.projectId}/overview` : '#/'; location.hash = to; setTimeout(() => { if (!S.page) open(); }, 80); return; }
+    if (act === 'deep') { S.deep = !S.deep; pref('pm_think_deep', S.deep ? '1' : null); paintShell(); return; }
+    if (act === 'topen') return openThread(id);
+    if (act === 'tpin') return pinThread(id);
+    if (act === 'tren') return renameThread(id);
+    if (act === 'tdel') { S.th.confirm = Number(id); return paintShell(); }
+    if (act === 'tkeep') { S.th.confirm = null; return paintShell(); }
+    if (act === 'tdel2') return deleteThread(id);
+    if (act === 'tnew') { if (S.busy) return; S.mode = 'chat'; PM.api('POST', '/api/chat/clear', { project_id: S.ctx.projectId }).then(() => Promise.all([load(), loadThreads()])).catch((x) => PM.toast(x.message, 'err')); return; }
     if (act === 'wide') { S.w = S.w > DEF_W + 40 ? DEF_W : WIDE_W; applyWidth(); pref('pm_chat_w', String(S.w)); return; }
     if (act === 'hopen') return openChat(id);
     if (act === 'hdel') { S.hist.confirm = Number(id); return paint(); }
@@ -366,7 +505,7 @@
     if (act === 'send') return submit();
     if (act === 'stop') { if (S.ctl) S.ctl.abort(); return; }
     if (act === 'sug') { return send(el.dataset.q); }
-    if (act === 'new') { if (S.busy) return; S.mode = 'chat'; S.hist = null; S.needReload = false; PM.api('POST', '/api/chat/clear', { project_id: S.ctx.projectId }).then(load).catch((x) => PM.toast(x.message, 'err')); return; }
+    if (act === 'new') { if (S.busy) return; S.mode = 'chat'; S.hist = null; S.needReload = false; PM.api('POST', '/api/chat/clear', { project_id: S.ctx.projectId }).then(() => { load(); if (S.page) loadThreads(); }).catch((x) => PM.toast(x.message, 'err')); return; }
     if (act === 'copy') { const m = find(id); if (m && navigator.clipboard) navigator.clipboard.writeText(m.text).then(() => PM.toast(t('cht_copied'), 'ok')).catch(() => {}); return; }
     if (act === 'up' || act === 'down') {
       const m = find(id); if (!m) return; const want = act === 'up' ? 1 : -1; const v = m.feedback === want ? 0 : want;
@@ -384,15 +523,17 @@
   function onHash() {
     const c = ctxFromHash();
     if (!root) return;
+    if (S.page && !isPage()) unmountPage();
+    if (isPage()) return;
     if (c.projectId !== S.ctx.projectId) { if (S.busy && S.ctl) S.ctl.abort(); S.mode = 'chat'; S.hist = null; S.needReload = false; if (S.open) load(); else S.ctx = c; }
     else S.ctx = c;
   }
   // a language change rebuilds the shell so every label follows
   function rebuild() {
     if (!root) return;
-    const was = S.open; S.mode = 'chat'; S.hist = null; root.remove(); root = null; document.body.classList.remove('chat-open');
+    const was = S.open; const pg = S.page; S.mode = 'chat'; S.hist = null; root.remove(); root = null; document.body.classList.remove('chat-open');
     build(); bindFab();
-    if (was) { S.open = false; open(); } else paint();
+    if (pg) { S.page = false; mountPage(); } else if (was) { S.open = false; open(); } else paint();
   }
   function bindFab() { $q('#chtFab').addEventListener('click', () => (S.open ? close() : open())); }
   function init() {
@@ -400,15 +541,18 @@
     build(); bindFab();
     new MutationObserver(() => rebuild()).observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
     window.addEventListener('hashchange', onHash);
-    window.addEventListener('resize', () => { if (root) applyWidth(); });
+    window.addEventListener('resize', () => { if (root) { applyWidth(); place(); } });
     // a click anywhere outside the chat closes it. Dialogs, toasts, tooltips and the loading screen are not "outside".
     document.addEventListener('pointerdown', (e) => {
-      if (!S.open || !root || S.dragging || root.contains(e.target)) return;
+      if (!S.open || S.page || !root || S.dragging || root.contains(e.target)) return;
       if (e.target.closest && e.target.closest('.pmld-screen, #toasts, .overlay, .modal, .gt-tip, .viz-tip, .g-tip, .dw-menu, [data-keep-chat]')) return;
       close(true);
     }, true);
-    if (keep('pm_chat_open') === '1' && !window.matchMedia('(max-width: 820px)').matches) open();
+    if (!isPage() && keep('pm_chat_open') === '1' && !window.matchMedia('(max-width: 820px)').matches) open();
   }
-  PM.chat = { init, open, close };
+  PM.chat = { init, open, close, mountPage };
+  const pageHtml = '<div class="page th-page"><div id="thHost" class="th-host" aria-hidden="true"></div></div>';
+  PM.views.thinking = async function () { PM.shell('thinking', pageHtml); await mountPage(); };
+  PM.views.tab_thinking = async function (root) { root.innerHTML = pageHtml; await mountPage(); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(init, 0)); else setTimeout(init, 0);
 })();

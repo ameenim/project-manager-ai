@@ -54,28 +54,37 @@ async function callClaude(payload) {
 // Used by the Project Chat. It yields { type: 'text', text }, { type: 'tool_use', id, name, input } and finally
 // { type: 'done', stop_reason, usage }. The key never leaves the server. There is no tool here that reaches the web
 // or runs code: the caller decides which tools exist.
-const CHAT_MODEL = process.env.CHAT_MODEL || MODEL;
-async function* streamClaude({ system, messages, tools, max_tokens = 1500, signal, model }) {
+// The Thinking Area model: THINK_MODEL, then CHAT_MODEL (kept for older setups), then ANTHROPIC_MODEL.
+const CHAT_MODEL = process.env.THINK_MODEL || process.env.CHAT_MODEL || MODEL;
+// Think deeper may use a larger model. THINK_DEEP_MODEL is optional and falls back to the everyday model.
+const DEEP_MODEL = process.env.THINK_DEEP_MODEL || CHAT_MODEL;
+const DEEP_BUDGET = Math.max(1024, Number(process.env.THINK_DEEP_BUDGET || 4000));
+const MAX_OUTPUT = Math.max(500, Number(process.env.THINK_MAX_OUTPUT || 4000));
+async function* streamClaude({ system, messages, tools, max_tokens = 1500, signal, model, thinking }) {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) throw Object.assign(new Error('ANTHROPIC_API_KEY is not set on the server'), { status: 503, code: 'no_key' });
   const payload = { model: model || CHAT_MODEL, max_tokens, stream: true, system, messages };
   if (tools && tools.length) payload.tools = tools;
+  // extended thinking: the model reasons before it answers. max_tokens must be larger than the budget.
+  if (thinking && thinking.budget) { payload.thinking = { type: 'enabled', budget_tokens: thinking.budget }; payload.max_tokens = Math.max(max_tokens, thinking.budget + 1000); }
   // no temperature: newer models reject the setting
   const ctl = new AbortController();
   const onAbort = () => ctl.abort();
   if (signal) { if (signal.aborted) ctl.abort(); else signal.addEventListener('abort', onAbort, { once: true }); }
-  let idle = setTimeout(() => ctl.abort(), 60000);
-  const total = setTimeout(() => ctl.abort(), 120000);
+  let idle = setTimeout(() => ctl.abort(), 90000);
+  const total = setTimeout(() => ctl.abort(), 300000);
   try {
     const r = await fetch(API_URL, { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' }, body: JSON.stringify(payload), signal: ctl.signal });
     if (!r.ok) {
       const t = await r.text();
+      // a model that does not accept extended thinking is asked again without it, so Think deeper never breaks an answer
+      if (thinking && r.status === 400 && /thinking/i.test(t)) { yield* streamClaude({ system, messages, tools, max_tokens, signal, model, thinking: null }); return; }
       throw Object.assign(new Error(`Claude API ${r.status}: ${t.slice(0, 300)}`), { status: r.status });
     }
     const blocks = new Map(); let stop = null; const usage = { input_tokens: 0, output_tokens: 0 };
     let buf = ''; const dec = new TextDecoder();
     for await (const chunk of r.body) {
-      clearTimeout(idle); idle = setTimeout(() => ctl.abort(), 60000);
+      clearTimeout(idle); idle = setTimeout(() => ctl.abort(), 90000);
       buf += dec.decode(chunk, { stream: true });
       let nl;
       while ((nl = buf.indexOf('\n')) >= 0) {
@@ -84,11 +93,17 @@ async function* streamClaude({ system, messages, tools, max_tokens = 1500, signa
         let ev; try { ev = JSON.parse(line.slice(5)); } catch (e) { continue; }
         if (ev.type === 'message_start' && ev.message && ev.message.usage) { usage.input_tokens = ev.message.usage.input_tokens || 0; usage.output_tokens = ev.message.usage.output_tokens || 0; }
         else if (ev.type === 'content_block_start' && ev.content_block && ev.content_block.type === 'tool_use') blocks.set(ev.index, { id: ev.content_block.id, name: ev.content_block.name, json: '' });
+        else if (ev.type === 'content_block_start' && ev.content_block && ev.content_block.type === 'thinking') blocks.set(ev.index, { think: { type: 'thinking', thinking: '', signature: '' } });
+        else if (ev.type === 'content_block_start' && ev.content_block && ev.content_block.type === 'redacted_thinking') blocks.set(ev.index, { think: ev.content_block });
         else if (ev.type === 'content_block_delta' && ev.delta) {
           if (ev.delta.type === 'text_delta') yield { type: 'text', text: ev.delta.text };
           else if (ev.delta.type === 'input_json_delta' && blocks.has(ev.index)) blocks.get(ev.index).json += ev.delta.partial_json || '';
+          else if (ev.delta.type === 'thinking_delta' && blocks.has(ev.index) && blocks.get(ev.index).think) blocks.get(ev.index).think.thinking += ev.delta.thinking || '';
+          else if (ev.delta.type === 'signature_delta' && blocks.has(ev.index) && blocks.get(ev.index).think) blocks.get(ev.index).think.signature += ev.delta.signature || '';
         } else if (ev.type === 'content_block_stop' && blocks.has(ev.index)) {
           const b = blocks.get(ev.index); blocks.delete(ev.index);
+          // a thinking block must be sent back with the tool results of the same turn, so it is handed to the caller
+          if (b.think) { yield { type: 'thinking_block', block: b.think }; continue; }
           let input = {}; try { input = b.json ? JSON.parse(b.json) : {}; } catch (e) { input = { __invalid: true }; }
           yield { type: 'tool_use', id: b.id, name: b.name, input };
         } else if (ev.type === 'message_delta') { if (ev.delta && ev.delta.stop_reason) stop = ev.delta.stop_reason; if (ev.usage && ev.usage.output_tokens != null) usage.output_tokens = ev.usage.output_tokens; }
@@ -99,4 +114,4 @@ async function* streamClaude({ system, messages, tools, max_tokens = 1500, signa
   } finally { clearTimeout(idle); clearTimeout(total); if (signal) signal.removeEventListener('abort', onAbort); }
 }
 
-module.exports = { callClaude, streamClaude, MODEL, CHAT_MODEL };
+module.exports = { callClaude, streamClaude, MODEL, CHAT_MODEL, DEEP_MODEL, DEEP_BUDGET, MAX_OUTPUT };

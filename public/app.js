@@ -225,7 +225,7 @@
   }
   function shell(active, content, projHead) {
     $('#app').innerHTML = `${PM.billing ? PM.billing.ribbon() : ''}<div class="shell"><aside class="sidebar"><div class="brand"><div class="logo">${PM.logo.mark()}</div><span class="grow">${t('app_name')}</span><button class="btn ghost icon sm" id="navHide" type="button" aria-label="${t('nav_hide')}" title="${t('nav_hide')}">${icon('chev_l')}</button></div>
-      <nav class="nav"><a href="#/" class="${active === 'dash' ? 'active' : ''}">${icon('home')}${t('nav_dashboard')}</a><div class="nav-fly" id="navFly"><a href="#/projects" class="${active === 'projects' ? 'active' : ''}" aria-haspopup="true" aria-expanded="false">${icon('folder')}<span class="grow">${t('nav_projects')}</span><span class="nav-caret">${icon('chev_r')}</span></a></div><a href="#/calendar" class="${active === 'calendar' ? 'active' : ''}">${icon('cal')}${t('nav_calendar')}</a><a href="#/widgets" class="${active === 'widgets' ? 'active' : ''}">${icon('grid')}${t('nav_widgets')}</a><a href="#/billing" class="${active === 'billing' ? 'active' : ''}">${icon('coin')}${t('nav_billing')}</a><a href="#/support" id="navSupport" class="${active === 'support' ? 'active' : ''}">${icon('life')}${t('nav_support')}</a>${S.user && S.user.is_super ? `<a href="/admin">${icon('gear')}${t('nav_admin')}</a>` : ''}</nav>
+      <nav class="nav"><a href="#/" class="${active === 'dash' ? 'active' : ''}">${icon('home')}${t('nav_dashboard')}</a><div class="nav-fly" id="navFly"><a href="#/projects" class="${active === 'projects' ? 'active' : ''}" aria-haspopup="true" aria-expanded="false">${icon('folder')}<span class="grow">${t('nav_projects')}</span><span class="nav-caret">${icon('chev_r')}</span></a></div><a href="#/thinking" class="${active === 'thinking' ? 'active' : ''}">${icon('spark')}${t('nav_thinking')}</a><a href="#/calendar" class="${active === 'calendar' ? 'active' : ''}">${icon('cal')}${t('nav_calendar')}</a><a href="#/widgets" class="${active === 'widgets' ? 'active' : ''}">${icon('grid')}${t('nav_widgets')}</a><a href="#/billing" class="${active === 'billing' ? 'active' : ''}">${icon('coin')}${t('nav_billing')}</a><a href="#/support" id="navSupport" class="${active === 'support' ? 'active' : ''}">${icon('life')}${t('nav_support')}</a>${S.user && S.user.is_super ? `<a href="/admin">${icon('gear')}${t('nav_admin')}</a>` : ''}</nav>
       <div class="spacer"></div>
       <div class="side-prefs">
         <div class="pref"><span class="pref-ic">${icon(S.theme === 'dark' ? 'moon' : 'sun')}</span><span class="grow">${t('dark_mode')}</span><button type="button" class="tgl ${S.theme === 'dark' ? 'on' : ''}" id="themeBtn" role="switch" aria-checked="${S.theme === 'dark'}" aria-label="${t('dark_mode')}" data-tip="${t('dark_mode')}"><i>${icon(S.theme === 'dark' ? 'moon' : 'sun')}</i></button></div>
@@ -383,7 +383,7 @@
   };
 
   // ---------- project shell ----------
-  const TABS = [['overview', 'chart'], ['review', 'check'], ['schedule', 'cal'], ['logs', 'list'], ['meetings', 'mic'], ['inbox', 'inbox'], ['documents', 'file'], ['reports', 'spark'], ['settings', 'gear']];
+  const TABS = [['overview', 'chart'], ['review', 'check'], ['schedule', 'cal'], ['logs', 'list'], ['meetings', 'mic'], ['inbox', 'inbox'], ['documents', 'file'], ['reports', 'spark'], ['thinking', 'chat'], ['settings', 'gear']];
   // Project shortcuts in the header: icon only buttons, each with a tooltip and an accessible name.
   const projLinks = (p) => {
     const items = [['sharepoint_url', 'folder', 'pl_open_sp'], ['jira_url', 'jira', 'pl_open_jira']].filter(([k]) => p[k]);
@@ -441,6 +441,7 @@
     if (parts[0] === 'brand') { S.project = null; return PM.views.brand(); }
     if (parts[0] === 'projects') { S.project = null; return PM.views.projects(); }
     if (parts[0] === 'trends') { location.hash = '#/'; return; }
+    if (parts[0] === 'thinking') { S.project = null; return PM.views.thinking(); }
     if (parts[0] === 'calendar') { S.project = null; return PM.views.calendar(); }
     if (parts[0] === 'widgets') {
       S.project = null;

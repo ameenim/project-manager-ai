@@ -268,7 +268,7 @@ module.exports = function createAdmin({ db, store, auth, ops, usage, tickets }) 
     const a = (await q("SELECT source, COALESCE(SUM(input_tokens),0) AS i, COALESCE(SUM(output_tokens),0) AS o, count(*) AS calls FROM ai_usage WHERE created_at >= now() - ($1 || ' days')::interval GROUP BY 1", [String(days)])).rows;
     for (const r of a) bySource.push({ source: r.source, input: num(r.i), output: num(r.o), calls: num(r.calls) });
     const c = (await q("SELECT COALESCE(SUM(input_tokens),0) AS i, COALESCE(SUM(output_tokens),0) AS o, count(*) AS calls FROM chat_log WHERE billable AND (input_tokens > 0 OR output_tokens > 0) AND created_at >= now() - ($1 || ' days')::interval", [String(days)])).rows[0];
-    if (num(c.calls)) bySource.push({ source: 'project chat', input: num(c.i), output: num(c.o), calls: num(c.calls) });
+    if (num(c.calls)) bySource.push({ source: 'thinking area', input: num(c.i), output: num(c.o), calls: num(c.calls) });
     for (const s of bySource) s.cost = await ops.cost(s.input, s.output);
     const perUser = (await q(`SELECT u.id, u.email, u.name, SUM(t.i) AS i, SUM(t.o) AS o, SUM(t.calls) AS calls FROM (
       SELECT user_id, input_tokens AS i, output_tokens AS o, 1 AS calls FROM ai_usage WHERE created_at >= now() - ($1 || ' days')::interval

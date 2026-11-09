@@ -364,6 +364,11 @@ const MIGRATIONS = [
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
   );
   `,
+  // 10: the Thinking Area. A chat can be renamed and pinned. Everything else keeps the chat tables, so no history is lost.
+  `
+  ALTER TABLE chat_threads ADD COLUMN IF NOT EXISTS title TEXT NOT NULL DEFAULT '';
+  ALTER TABLE chat_threads ADD COLUMN IF NOT EXISTS pinned BOOLEAN NOT NULL DEFAULT false;
+  `,
 ];
 
 async function openPg(url) {

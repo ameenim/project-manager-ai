@@ -43,8 +43,8 @@ function declinedPart(reasons, lang) {
 }
 
 const CAPABILITIES = {
-  en: 'I can answer questions about your projects with sources, explain how Project Manager AI works, and propose new or changed tasks, risks, deliverables, requirements and payment states. Nothing is saved until you press Apply, and every applied change can be undone. I do not write code or unrelated content, and I do not manage accounts, billing or access.',
-  ar: 'يمكنني الإجابة عن أسئلة مشاريعك مع ذكر المصادر، وشرح طريقة عمل Project Manager AI، واقتراح مهام ومخاطر ومخرجات ومتطلبات وحالات دفع جديدة أو معدّلة. لا يُحفظ شيء قبل أن تضغط تطبيق، ويمكن التراجع عن كل تغيير. لا أكتب أكواد أو محتوى غير مرتبط بالمشاريع، ولا أدير الحسابات أو الفواتير أو الصلاحيات.',
+  en: 'I am your thinking partner for project management. I can answer questions about your projects with sources, explain how Project Manager AI works, and propose new or changed tasks, risks, deliverables, requirements and payment states. Nothing is saved until you press Apply, and every applied change can be undone. I do not write code or unrelated content, and I do not manage accounts, billing or access.',
+  ar: 'أنا شريكك في التفكير في إدارة المشاريع. يمكنني الإجابة عن أسئلة مشاريعك مع ذكر المصادر، وشرح طريقة عمل Project Manager AI، واقتراح مهام ومخاطر ومخرجات ومتطلبات وحالات دفع جديدة أو معدّلة. لا يُحفظ شيء قبل أن تضغط تطبيق، ويمكن التراجع عن كل تغيير. لا أكتب أكواد أو محتوى غير مرتبط بالمشاريع، ولا أدير الحسابات أو الفواتير أو الصلاحيات.',
 };
 
 const UNAVAILABLE = {
@@ -58,16 +58,18 @@ const LIMIT = {
 };
 
 // ---------- the answering prompt ----------
-function systemPrompt({ today, tz, ctx, lang, role, projects, declined }) {
+function systemPrompt({ today, tz, ctx, lang, role, projects, declined, skill, deep }) {
   const where = ctx.project
     ? `The conversation is about the project "${ctx.project.name}" (id ${ctx.project.id}). The user's role on it is ${role}.`
     : 'The conversation is about the whole portfolio (All projects). A change must name one project, and the user\'s role on that project is checked.';
   const list = projects.length ? projects.map((p) => `- ${p.name} (id ${p.id}, role ${p.role})`).join('\n') : '(no projects yet)';
   return [
-    'You are Project Chat, the assistant inside Project Manager AI. You serve one person, the project manager, and only about their own projects and this platform.',
+    'You are the Thinking Area, the project management thinking partner inside Project Manager AI. You serve one person, the project manager, and only about their own projects and this platform.',
     `Today is ${today} (time zone ${tz}). Treat "today", "this week" and "next week" in that time zone.`,
     where,
     'The projects this person is a member of:\n' + list,
+    '',
+    skill || '',
     '',
     'SCOPE',
     '- You answer questions about the manager\'s projects, tasks, risks, deliverables, requirements, payments, schedule, updates and documents, and you explain how the platform works and what its measures mean.',
@@ -95,6 +97,7 @@ function systemPrompt({ today, tz, ctx, lang, role, projects, declined }) {
     'STYLE',
     `- Reply in the language of the user's latest message (English or Arabic). The user's interface language is ${lang === 'ar' ? 'Arabic' : 'English'}.`,
     '- Be brief and plain. Use a short list or table only when it helps. Never use code blocks. Do not use dashes as separators or semicolons.',
+    deep ? '- The person turned on Think deeper. Reason carefully about options and trade offs before you answer, then give the answer plainly. Do not show your reasoning.' : '',
     declined && declined.length ? `- The user's message also contained a request that is out of scope. Do not do it and do not mention it. The system adds a short note.` : '',
   ].filter((x) => x !== '').join('\n');
 }
@@ -111,4 +114,16 @@ const SUGGESTIONS = {
   settings: { en: ['What can each role do?', 'How do I export this project?', 'What can you do?'], ar: ['ماذا يستطيع كل دور أن يفعل؟', 'كيف أصدّر هذا المشروع؟', 'ماذا تستطيع أن تفعل؟'] },
 };
 
-module.exports = { refusal, refusalLink, declinedPart, systemPrompt, CAPABILITIES, UNAVAILABLE, LIMIT, SUGGESTIONS, OFFERS };
+
+// The starter cards on an empty thread. Each one starts a guided first message for that mode. Modes that need a later
+// release (documents, connections) are listed with the phase that adds them, and the server only sends the ready ones.
+const STARTERS = [
+  { id: 'schedule', ready: true, en: { label: 'Plan the schedule', q: 'Review the schedule and tell me what is behind, what is on the critical path, and what you would change.' }, ar: { label: 'خطط الجدول', q: 'راجع الجدول وأخبرني ما المتأخر وما الموجود على المسار الحرج وما الذي تقترح تغييره.' } },
+  { id: 'risk', ready: true, en: { label: 'Reduce risk', q: 'Which risks need attention? Suggest mitigations for the high risks that have none.' }, ar: { label: 'قلل المخاطر', q: 'ما المخاطر التي تحتاج إلى انتباه؟ اقترح إجراءات معالجة للمخاطر العالية التي ليس لها معالجة.' } },
+  { id: 'requirements', ready: true, en: { label: 'Cover requirements', q: 'Which requirements have no task and which deliverables have no requirement?' }, ar: { label: 'غطِّ المتطلبات', q: 'ما المتطلبات التي ليس لها مهمة وما المخرجات التي ليس لها متطلب؟' } },
+  { id: 'status', ready: true, en: { label: 'Review status', q: 'Give me a short status of where things stand, what changed, and what needs a decision.' }, ar: { label: 'راجع الحالة', q: 'أعطني حالة مختصرة لما وصلنا إليه وما الذي تغير وما الذي يحتاج إلى قرار.' } },
+  { id: 'report', ready: true, en: { label: 'Prepare a report', q: 'Draft a status update for the steering committee.' }, ar: { label: 'جهّز تقريرا', q: 'صغ تحديث حالة للجنة التوجيهية.' } },
+];
+const startersFor = (lang) => STARTERS.filter((x) => x.ready).map((x) => ({ id: x.id, label: x[lang === 'ar' ? 'ar' : 'en'].label, q: x[lang === 'ar' ? 'ar' : 'en'].q }));
+
+module.exports = { startersFor, STARTERS, refusal, refusalLink, declinedPart, systemPrompt, CAPABILITIES, UNAVAILABLE, LIMIT, SUGGESTIONS, OFFERS };
