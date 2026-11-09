@@ -25,20 +25,20 @@
 
     const view = () => {
       const q = Q.q.trim().toLowerCase();
-      let list = all.filter((p) => (Q.health === 'all' || p.stats.health === Q.health) && (Q.cur === 'all' || p.currency === Q.cur) && (!q || [p.name, p.client, p.code].some((x) => (x || '').toLowerCase().includes(q))));
-      const key = { name: (p) => p.name.toLowerCase(), progress: (p) => p.stats.progress, status: (p) => HEALTH[p.stats.health] ?? 0, value: (p) => p.value || 0, start: (p) => p.start_date || '9999', end: (p) => p.end_date || '9999' }[Q.sort];
+      let list = all.filter((p) => (Q.health === 'all' || (Q.health === 'closed' ? p.status === 'closed' : p.status !== 'closed' && p.stats.health === Q.health)) && (Q.cur === 'all' || p.currency === Q.cur) && (!q || [p.name, p.client, p.code].some((x) => (x || '').toLowerCase().includes(q))));
+      const key = { name: (p) => p.name.toLowerCase(), progress: (p) => p.stats.progress, status: (p) => (p.status === 'closed' ? 3 : HEALTH[p.stats.health] ?? 0), value: (p) => p.value || 0, start: (p) => p.start_date || '9999', end: (p) => p.end_date || '9999' }[Q.sort];
       list = [...list].sort((a, b) => (key(a) > key(b) ? 1 : key(a) < key(b) ? -1 : 0) * Q.dir);
       return list;
     };
 
-    const card = (p) => `<a class="card pj-card" href="#/p/${p.id}/overview"><div class="row">${p.client_logo ? `<img src="${esc(p.client_logo)}" alt="" style="height:30px;max-width:90px;object-fit:contain">` : ''}<div class="grow" style="min-width:0"><h3>${esc(p.name)}</h3><div class="small muted">${esc(p.client || '')}</div></div>${PM.healthChip(p.stats.health)}</div>
+    const card = (p) => `<a class="card pj-card" href="#/p/${p.id}/overview"><div class="row">${p.client_logo ? `<img src="${esc(p.client_logo)}" alt="" style="height:30px;max-width:90px;object-fit:contain">` : ''}<div class="grow" style="min-width:0"><h3>${esc(p.name)}</h3><div class="small muted">${esc(p.client || '')}</div></div>${PM.statusChip(p)}</div>
       <div class="mt"><div class="row small"><span class="grow">${t('progress')} ${p.stats.progress}%</span><span class="muted">${p.value ? money(p.value, p.currency) : ''}</span></div><div class="progress" style="margin-top:6px"><i style="width:${p.stats.progress}%"></i></div></div>
       <div class="row small muted mt wrap"><span>${p.start_date || '?'} ${t('to')} ${p.end_date || '?'}</span>${p.stats.pendingItems + p.stats.pendingInbox ? `<span class="chip blue">${p.stats.pendingItems + p.stats.pendingInbox} ${t('to_review')}</span>` : ''}</div></a>`;
 
     const th = (k, label) => `<th class="sortable ${Q.sort === k ? 'on' : ''}" data-sort="${k}" tabindex="0" role="columnheader" aria-sort="${Q.sort === k ? (Q.dir > 0 ? 'ascending' : 'descending') : 'none'}">${label}<span class="sort-ar">${Q.sort === k ? (Q.dir > 0 ? '▲' : '▼') : ''}</span></th>`;
     const grid = (list) => `<div class="card flush"><div class="table-wrap"><table class="t pj-grid"><thead><tr>${th('name', t('pf_project'))}${th('progress', t('pf_progress'))}${th('status', t('pf_status'))}${th('value', t('pf_value'))}${th('start', t('pf_start'))}${th('end', t('pf_end'))}</tr></thead><tbody>${list.map((p) => `<tr data-go="#/p/${p.id}/overview"><td><div style="font-weight:600">${esc(p.name)}</div><div class="small muted">${esc(p.client || '')}</div></td>
       <td style="min-width:150px"><div class="row" style="gap:8px"><div class="progress grow"><i style="width:${p.stats.progress}%"></i></div><span class="small" style="width:36px;text-align:end">${p.stats.progress}%</span></div></td>
-      <td>${PM.healthChip(p.stats.health)}</td><td class="nowrap">${p.value ? money(p.value, p.currency) : '<span class="muted">-</span>'}</td><td class="nowrap">${p.start_date || '<span class="muted">-</span>'}</td><td class="nowrap">${p.end_date || '<span class="muted">-</span>'}</td></tr>`).join('')}</tbody></table></div></div>`;
+      <td>${PM.statusChip(p)}</td><td class="nowrap">${p.value ? money(p.value, p.currency) : '<span class="muted">-</span>'}</td><td class="nowrap">${p.start_date || '<span class="muted">-</span>'}</td><td class="nowrap">${p.end_date || '<span class="muted">-</span>'}</td></tr>`).join('')}</tbody></table></div></div>`;
 
     function draw(keepFocus) {
       const list = view();
@@ -53,7 +53,7 @@
 
     $('#content').innerHTML = `<div class="page"><div class="page-head"><h1>${t('nav_projects')}</h1><div class="row"><button class="btn" id="impProj">${icon('upload')}${t('dt_import_btn')}</button><button class="btn primary" id="newProj">${icon('plus')}${t('new_project')}</button></div></div>
       <div class="pj-bar"><label class="sf">${icon('search')}<input type="search" id="pjQ" placeholder="${t('pf_search')}" value="${esc(Q.q)}" aria-label="${t('pf_search')}"></label>
-        <select id="pjHealth" aria-label="${t('pf_status')}"><option value="all">${t('pf_all_status')}</option><option value="green">${t('health_green')}</option><option value="amber">${t('health_amber')}</option><option value="red">${t('health_red')}</option></select>
+        <select id="pjHealth" aria-label="${t('pf_status')}"><option value="all">${t('pf_all_status')}</option><option value="green">${t('health_green')}</option><option value="amber">${t('health_amber')}</option><option value="red">${t('health_red')}</option><option value="closed">${t('pf_closed')}</option></select>
         <select id="pjCur" aria-label="${t('currency')}"><option value="all">${t('pf_all_cur')}</option>${currencies.map((c) => `<option>${esc(c)}</option>`).join('')}</select>
         <span class="small muted grow" id="pjCount"></span>
         <div class="seg" id="pjMode" role="group"><button data-mode="cards" aria-label="${t('pf_cards')}" title="${t('pf_cards')}">${icon('grid')}${t('pf_cards')}</button><button data-mode="grid" aria-label="${t('pf_grid')}" title="${t('pf_grid')}">${icon('list')}${t('pf_grid')}</button></div></div>

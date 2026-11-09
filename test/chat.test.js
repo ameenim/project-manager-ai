@@ -442,8 +442,8 @@ test('a report is generated only after Apply, shows in Reports, and undo removes
 
 test('an unknown document type is rejected and a failed card leaves no generated document behind', async () => {
   const { u, p, risk } = await setup();
-  say(use('generate_report', { type: 'lessons_learned' }, 't1')); say(text('That type is not available.'));
-  const r = await talk(u.token, { project_id: p.id, text: 'Generate a lessons learned report for the project' });
+  say(use('generate_report', { type: 'annual_report' }, 't1')); say(text('That type is not available.'));
+  const r = await talk(u.token, { project_id: p.id, text: 'Generate an annual report for the project' });
   assert.equal(r.message.card, null);
   say(use('generate_report', { type: 'charter' }, 't2')); say(use('update_item', { item: 'Vendor delay', mitigation: 'Dual source' }, 't3')); say(text('Prepared both.'));
   const c = await talk(u.token, { project_id: p.id, text: 'Generate the charter and set a mitigation on the vendor delay risk' });

@@ -296,6 +296,8 @@
 
   const healthChip = (h) => `<span class="chip ${h === 'red' ? 'red' : h === 'amber' ? 'amber' : 'green'}"><span class="dotc ${h}"></span>${t('health_' + h)}</span>`;
   PM.healthChip = healthChip;
+  // A closed project shows Closed in place of its health, which no longer means anything.
+  PM.statusChip = (p) => (p.status === 'closed' ? `<span class="chip">${icon('check')}${t('pc_closed')}</span>` : healthChip(p.stats.health));
 
   // ---------- dashboard ----------
   PM.views.dashboard = async function () {
@@ -383,7 +385,7 @@
   };
 
   // ---------- project shell ----------
-  const TABS = [['overview', 'chart'], ['review', 'check'], ['schedule', 'cal'], ['logs', 'list'], ['meetings', 'mic'], ['inbox', 'inbox'], ['documents', 'file'], ['reports', 'spark'], ['thinking', 'chat'], ['settings', 'gear']];
+  const TABS = [['overview', 'chart'], ['review', 'check'], ['schedule', 'cal'], ['logs', 'list'], ['meetings', 'mic'], ['inbox', 'inbox'], ['documents', 'file'], ['reports', 'spark'], ['closure', 'flag'], ['thinking', 'chat'], ['settings', 'gear']];
   // Project shortcuts in the header: icon only buttons, each with a tooltip and an accessible name.
   const projLinks = (p) => {
     const items = [['sharepoint_url', 'folder', 'pl_open_sp'], ['jira_url', 'jira', 'pl_open_jira']].filter(([k]) => p[k]);
@@ -400,6 +402,7 @@
     S.project = p;
     const badge = (k) => (k === 'review' && p.stats.pendingItems ? `<span class="badge-count">${p.stats.pendingItems}</span>` : k === 'inbox' && p.stats.pendingInbox ? `<span class="badge-count">${p.stats.pendingInbox}</span>` : '');
     const endCounter = (pr) => {
+      if (pr.status === 'closed') return `<div class="endctr" role="status"><b>${t('pc_closed')}</b><span>${esc(String(pr.closed_at || '').slice(0, 10))}</span></div>`;
       const end = pr.end_date || pr.stats.forecast_end; if (!end) return '';
       const U = (x) => Date.UTC(+x.slice(0, 4), +x.slice(5, 7) - 1, +x.slice(8, 10)) / 86400000;
       const d = U(end) - U(pr.stats.today || today());
@@ -409,8 +412,8 @@
       const big = d === 0 ? t('end_counter_today') : String(Math.abs(d));
       return `<div class="endctr ${cls}" data-tip="${esc(tip)}" role="status" aria-label="${esc(tip)}"><b>${big}</b><span>${d === 0 ? '' : d < 0 ? t('end_counter_past') : t('end_counter_left')}</span></div>`;
     };
-    const head = `<div class="proj-head"><div class="proj-title">${p.client_logo ? `<img class="logo" src="${esc(p.client_logo)}" alt="">` : ''}<h1>${esc(p.name)}</h1>${healthChip(p.stats.health)}<span class="muted small">${esc(p.client || '')}</span><span class="grow"></span>${projLinks(p)}${endCounter(p)}${p.analyzing ? `<span class="chip blue">${PM.loader.html({ size: 'sm' })}${t('analyzing')}</span>` : ''}</div>
-      <div class="tabs">${TABS.map(([k, ic]) => `<a class="tab ${k === tab ? 'active' : ''}" href="#/p/${id}/${k}">${icon(ic)}${t('tab_' + k)}${badge(k)}</a>`).join('')}</div></div>`;
+    const head = `<div class="proj-head"><div class="proj-title">${p.client_logo ? `<img class="logo" src="${esc(p.client_logo)}" alt="">` : ''}<h1>${esc(p.name)}</h1>${PM.statusChip(p)}<span class="muted small">${esc(p.client || '')}</span><span class="grow"></span>${projLinks(p)}${endCounter(p)}${p.analyzing ? `<span class="chip blue">${PM.loader.html({ size: 'sm' })}${t('analyzing')}</span>` : ''}</div>
+      <div class="tabs">${TABS.map(([k, ic]) => `<a class="tab ${k === tab ? 'active' : ''}" href="#/p/${id}/${k}">${icon(ic)}${t('tab_' + k)}${badge(k)}</a>`).join('')}</div>${p.status === 'closed' && tab !== 'closure' ? `<div class="banner cl-head-note" role="status"><span class="grow">${t('cl_banner_head')}</span><a class="btn sm" href="#/p/${id}/closure">${t('cl_banner_go')}</a></div>` : ''}</div>`;
     if (soft) $('#main > .proj-head').outerHTML = head; else shell('', spot(), head);
     const view = PM.views['tab_' + tab];
     if (!view) { $('#content').innerHTML = ''; return; }

@@ -6,6 +6,7 @@
 const vm = require('vm');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { AsyncLocalStorage } = require('async_hooks');
 const { extractText } = require('./extract');
 const { callClaude, MODEL } = require('./claude');
@@ -88,7 +89,11 @@ module.exports = function createApi(store, auth, connectors, ops) {
     const role = ctx().roles[P.id];
     if (!role) throw err(404, 'Project not found');
     if (RANK[role] < RANK[level]) throw err(403, level === 'manager' ? 'Only the project manager can do this' : 'You have view only access to this project');
+    // A closed project is read only. Routes that need the project manager (reopen, closure, delete, access) are not blocked.
+    if (level === 'editor' && P.p.status === 'closed') throw err(409, 'This project is closed. Reopen it from the Closure tab to make changes.');
   };
+  // A project that is archived or closed is out of the dashboards, the calendar, the trends and the alerts.
+  const isLive = (P) => P.p.status !== 'archived' && P.p.status !== 'closed';
   const touch = (P) => ctx().touched.add(P);
   const roleOf = (P) => ctx().roles[P.id] || null;
   const canDelete = (P) => roleOf(P) === 'manager';
@@ -835,12 +840,13 @@ module.exports = function createApi(store, auth, connectors, ops) {
       project: rawProject(P), user: DB.user, tasks: P.tasks, items: P.items.map((i) => ({ ...i, data: JSON.stringify(i.data) })), resources: P.resources,
       docs: P.documents.map((d) => ({ id: d.id, filename: d.filename, kind: d.kind, summary: d.summary, text: P.texts[d.id] || '' })),
       audit: P.audit.map((a) => ({ ...a, detail: JSON.stringify(a.detail) })), inbox: P.inbox.map((r) => ({ status: r.status })), today, periodDays, lastWeek: lastWeek || null,
+      closure: P.closure ? { accepted_by: P.closure.accepted_by || '', accepted_on: P.closure.accepted_on || '', closed_at: P.closure.closed_at || null } : {},
     };
   }
 
   // ---------- dashboard ----------
   function dashboard() {
-    const projects = DB.order.map((id) => DB.projects[id]).filter((P) => P.p.status !== 'archived').reverse();
+    const projects = DB.order.map((id) => DB.projects[id]).filter(isLive).reverse();
     const cards = [], payments = [], overdue = [], radarEntries = [];
     const next60 = S.addDays(TODAY(), 60);
     let pendingInbox = 0, pendingItems = 0;
@@ -903,7 +909,7 @@ module.exports = function createApi(store, auth, connectors, ops) {
     const date = TODAY();
     let saved = 0;
     for (const P of list) {
-      if (!P || !P.p || P.p.status === 'archived') continue;
+      if (!P || !P.p || !isLive(P)) continue;
       const c = store.cache.get(P.id), stamp = c ? `${c.version}|${date}` : null;
       if (!force && stamp && lastCapture.get(P.id) === stamp) continue;
       try { await snapshots.save(P.id, date, snapshotFigures(P)); saved++; if (stamp) lastCapture.set(P.id, stamp); } catch (e) { lastCapture.delete(P.id); console.error('snapshot failed for project', P.id, e.message); }
@@ -931,7 +937,7 @@ module.exports = function createApi(store, auth, connectors, ops) {
     let rows = await snapshots.range(list.map((P) => P.id), dstr(dnum(today) - days), today);
     // a skipped capture must never leave today without a row (for example after the rows were removed): record those now
     const have = new Set(rows.filter((r) => r.date === today).map((r) => r.project_id));
-    const missing = list.filter((P) => P && P.p && P.p.status !== 'archived' && !have.has(Number(P.id)));
+    const missing = list.filter((P) => P && P.p && isLive(P) && !have.has(Number(P.id)));
     if (missing.length) { await capture(missing, true); rows = await snapshots.range(list.map((P) => P.id), dstr(dnum(today) - days), today); }
     return buildTrends(rows, { today, days, projects: list.map((P) => ({ id: P.id, name: P.p.name, currency: P.p.currency })) });
   }
@@ -1060,7 +1066,7 @@ module.exports = function createApi(store, auth, connectors, ops) {
 
 
   on('GET', '/api/calendar', async () => {
-    const tasks = [], payments = [], list = DB.order.map((id) => DB.projects[id]).filter((P) => P.p.status !== 'archived');
+    const tasks = [], payments = [], list = DB.order.map((id) => DB.projects[id]).filter(isLive);
     for (const P of list) {
       for (const t of S.schedule(P.tasks, rawProject(P))) {
         tasks.push({ id: t.id, project_id: P.id, summary: !!t.summary, name: t.name, start: t.start, finish: t.finish, progress: t.progress || 0, milestone: !!t.is_milestone, assignee: t.assignee || null, late: (t.progress || 0) < 100 && t.finish < TODAY() });
@@ -1070,7 +1076,7 @@ module.exports = function createApi(store, auth, connectors, ops) {
     return { today: TODAY(), projects: list.map((P) => ({ id: P.id, name: P.p.name, currency: P.p.currency })), tasks, payments };
   });
   // the overview carries a 30 day trend so its trend widgets draw from the same response
-  const activeList = () => DB.order.map((id) => DB.projects[id]).filter((P) => P.p.status !== 'archived');
+  const activeList = () => DB.order.map((id) => DB.projects[id]).filter(isLive);
   // the widget marketplace. The overviews also carry the custom widgets the person added and the data those read.
   const WIDGETS = require('./widgets')({ on, ctx, err, store, WS: win.__WidgetSpec, S, rawProject, stats, TODAY, P_, activeList });
   on('GET', '/api/dashboard', async () => ({ ...dashboard(), trends: await trendsFor(activeList(), 30), ...(await WIDGETS.extras('portfolio', activeList())) }));
@@ -1085,7 +1091,7 @@ module.exports = function createApi(store, auth, connectors, ops) {
       ...win.__ProjDash.buildProjectDash({ project: raw, tasks: sched, items, inbox: P.inbox, audit, today: TODAY() }), trends: await trendsFor([P], 30), ...(await WIDGETS.extras('project', [P])) };
   });
   // trends over time, drawn only from the daily snapshots. days is one of 7, 14, 30, 90, 180, 365.
-  on('GET', '/api/trends', async (m, q) => trendsFor(DB.order.map((id) => DB.projects[id]).filter((P) => P.p.status !== 'archived'), periodOf(q.days)));
+  on('GET', '/api/trends', async (m, q) => trendsFor(DB.order.map((id) => DB.projects[id]).filter(isLive), periodOf(q.days)));
   on('GET', '/api/projects/(\\d+)/trends', async (m, q) => trendsFor([P_(m[1])], periodOf(q.days)));
   on('GET', '/api/projects', async () => ({ projects: DB.order.map((id) => DB.projects[id]).reverse().map(projectView) }));
   on('POST', '/api/projects', async (m, q, fd) => {
@@ -1110,6 +1116,8 @@ module.exports = function createApi(store, auth, connectors, ops) {
   on('GET', '/api/projects/(\\d+)', async (m) => ({ project: projectView(P_(m[1])) }));
   on('PUT', '/api/projects/(\\d+)', async (m, q, b) => {
     const P = P_(m[1]);
+    // Closing and reopening go through the closure routes, which check that the project is ready.
+    if ('status' in b && (b.status === 'closed' || P.p.status === 'closed') && b.status !== P.p.status) throw err(400, 'Close or reopen a project from the Closure tab');
     for (const k of ['name', 'code', 'client', 'currency', 'start_date', 'end_date', 'work_start', 'work_end', 'jira_key', 'teams_channel', 'status', 'sharepoint_url', 'jira_url']) if (k in b) P.p[k] = b[k] === '' ? null : b[k];
     for (const k of ['sharepoint_url', 'jira_url']) if (b[k] && !/^https?:\/\/\S+$/i.test(String(b[k]).trim())) throw err(400, 'Enter a full link that starts with http or https');
     if ('name' in b && !String(b.name).trim()) throw err(400, 'The project needs a name');
@@ -1130,6 +1138,100 @@ module.exports = function createApi(store, auth, connectors, ops) {
     delete DB.projects[id]; DB.order = DB.order.filter((x) => x !== id); delete ctx().roles[id];
     ctx().touched.clear();
     return { ok: true };
+  });
+
+
+  // ---------- project closure ----------
+  // A project can be closed when every approved deliverable and requirement is closed (delivered, or not delivered with a
+  // reason), a lessons learned report and a certificate of completion were written after that, and the client acceptance
+  // is recorded. The two documents carry a stamp of the outcomes they were written from, so a later change makes them stale.
+  const CLOSE_DOCS = ['lessons_learned', 'completion_certificate'];
+  function closureScope(P) {
+    const rows = []; let pending = 0;
+    for (const i of P.items) {
+      if (!['deliverable', 'requirement'].includes(i.kind) || i.status === 'ignored') continue;
+      if (i.status === 'proposed') { pending++; continue; }
+      const d = i.data || {};
+      const outcome = i.state === 'closed' ? (d.outcome === 'not_delivered' ? 'not_delivered' : 'delivered') : 'open';
+      rows.push({ id: i.id, kind: i.kind, title: i.kind === 'requirement' ? (i.description || i.title) : i.title, state: i.state || 'open', outcome, reason: outcome === 'not_delivered' ? String(d.not_delivered_reason || '') : '', due: d.due_date || null, priority: d.priority || null, evidence: i.evidence_doc_id || null });
+    }
+    const counts = { delivered: 0, not_delivered: 0, open: 0, total: rows.length };
+    for (const r of rows) counts[r.outcome]++;
+    return { rows, counts, pending };
+  }
+  // The stamp does not use record ids, so a project keeps its closure documents when it is exported and imported again.
+  function stampOf(P, type) {
+    const sc = closureScope(P), cl = P.closure || {};
+    const base = sc.rows.map((r) => `${r.kind}|${r.title}|${r.outcome}|${r.reason}`).sort().join('\n');
+    return crypto.createHash('md5').update(base + (type === 'completion_certificate' ? `\n${cl.accepted_by || ''}|${cl.accepted_on || ''}` : '')).digest('hex');
+  }
+  function closureState(P) {
+    const sc = closureScope(P), cl = P.closure || {};
+    const docs = {};
+    for (const type of CLOSE_DOCS) {
+      const g = (P.generated || []).find((x) => x.doc_type === type);
+      docs[type] = g ? { id: g.id, title: g.title, created_at: g.created_at, current: g.closure_stamp === stampOf(P, type) } : null;
+    }
+    const noReason = sc.rows.filter((r) => r.outcome === 'not_delivered' && r.reason.trim().length < 3).length;
+    const checks = [
+      { code: 'items_open', ok: sc.counts.open === 0, n: sc.counts.open },
+      { code: 'items_review', ok: sc.pending === 0, n: sc.pending },
+      { code: 'reasons', ok: noReason === 0, n: noReason },
+      { code: 'll', ok: !!(docs.lessons_learned && docs.lessons_learned.current), n: 0, missing: !docs.lessons_learned },
+      { code: 'cert', ok: !!(docs.completion_certificate && docs.completion_certificate.current), n: 0, missing: !docs.completion_certificate },
+      { code: 'acceptance', ok: !!(cl.accepted_by && cl.accepted_on), n: 0 },
+    ];
+    const live = (k) => P.items.filter((i) => i.kind === k && i.status === 'confirmed');
+    const leaf = S.schedule(P.tasks, rawProject(P)).filter((t) => !t.summary);
+    return {
+      status: P.p.status === 'closed' ? 'closed' : P.p.status === 'archived' ? 'archived' : 'active',
+      closed_at: P.p.closed_at || null, closed_by: P.p.closed_by || null,
+      accepted_by: cl.accepted_by || '', accepted_on: cl.accepted_on || '', note: cl.note || '',
+      scope: sc, documents: docs, checks, ready: checks.every((c) => c.ok),
+      heads_up: { unpaid: live('milestone').filter((i) => i.state !== 'paid').length, open_risks: live('risk').filter((i) => i.state === 'open').length, open_tasks: leaf.filter((t) => (t.progress || 0) < 100).length },
+      history: (cl.history || []).slice(-20).reverse(),
+      can_manage: roleOf(P) === 'manager',
+    };
+  }
+  on('GET', '/api/projects/(\\d+)/closure', async (m) => closureState(P_(m[1])));
+  on('PUT', '/api/projects/(\\d+)/closure', async (m, q, b) => {
+    const P = P_(m[1], 'manager');
+    if (P.p.status === 'closed') throw err(409, 'This project is closed. Reopen it to change the acceptance details.');
+    const cl = P.closure = P.closure || {};
+    if ('accepted_by' in b) cl.accepted_by = cleanName(b.accepted_by, 120);
+    if ('accepted_on' in b) {
+      if (b.accepted_on && !/^\d{4}-\d{2}-\d{2}$/.test(b.accepted_on)) throw err(400, 'Enter the acceptance date as a valid date');
+      cl.accepted_on = b.accepted_on || '';
+    }
+    if ('note' in b) cl.note = cleanName(b.note, 600);
+    audit(P, ACTOR(), 'closure_details', { summary: 'Closure acceptance details updated' });
+    return closureState(P);
+  });
+  on('POST', '/api/projects/(\\d+)/close', async (m) => {
+    const P = P_(m[1], 'manager');
+    if (P.p.status === 'closed') throw err(409, 'This project is already closed');
+    if (P.p.status === 'archived') throw err(409, 'This project is archived. Restore it before closing it.');
+    const st = closureState(P);
+    if (!st.ready) {
+      const say = { items_open: (n) => `${n} deliverable${n === 1 ? '' : 's'} or requirement${n === 1 ? '' : 's'} still open`, items_review: (n) => `${n} item${n === 1 ? '' : 's'} waiting for review`, reasons: (n) => `${n} not delivered item${n === 1 ? '' : 's'} without a reason`, ll: () => 'the lessons learned report is missing or out of date', cert: () => 'the certificate of completion is missing or out of date', acceptance: () => 'the client acceptance details are missing' };
+      throw err(400, `The project is not ready to close: ${st.checks.filter((c) => !c.ok).map((c) => say[c.code](c.n)).join(', ')}.`);
+    }
+    const cl = P.closure = P.closure || {};
+    P.p.status = 'closed'; P.p.closed_at = nowTs(); P.p.closed_by = ACTOR();
+    cl.history = [...(cl.history || []), { action: 'closed', at: P.p.closed_at, by: ACTOR(), delivered: st.scope.counts.delivered, not_delivered: st.scope.counts.not_delivered }];
+    audit(P, ACTOR(), 'project_closed', { summary: `Project closed with ${st.scope.counts.delivered} delivered and ${st.scope.counts.not_delivered} not delivered` });
+    return { project: projectView(P), closure: closureState(P) };
+  });
+  on('POST', '/api/projects/(\\d+)/reopen', async (m, q, b) => {
+    const P = P_(m[1], 'manager');
+    if (P.p.status !== 'closed') throw err(409, 'This project is not closed');
+    const reason = cleanName(b && b.reason, 400);
+    if (reason.length < 3) throw err(400, 'Say why you are reopening the project');
+    const cl = P.closure = P.closure || {};
+    P.p.status = 'active'; delete P.p.closed_at; delete P.p.closed_by;
+    cl.history = [...(cl.history || []), { action: 'reopened', at: nowTs(), by: ACTOR(), reason }];
+    audit(P, ACTOR(), 'project_reopened', { summary: `Project reopened: ${reason.slice(0, 120)}` });
+    return { project: projectView(P), closure: closureState(P) };
   });
 
   on('GET', '/api/projects/(\\d+)/documents', async (m) => ({ documents: P_(m[1]).documents.map(clone) }));
@@ -1209,12 +1311,34 @@ module.exports = function createApi(store, auth, connectors, ops) {
     for (const id of b.ids) { const it = P.items.find((x) => x.id === Number(id)); if (!it) continue; if (b.action === 'confirm') confirmItem(P, it, ACTOR()); else it.status = 'ignored'; n++; }
     return { changed: n };
   });
+  // A deliverable or requirement is closed as delivered or as not delivered. Not delivered needs a reason, and a reopened
+  // item loses its outcome, so the lessons learned report never carries a stale reason.
+  const outcomeKinds = ['deliverable', 'requirement'];
+  const cleanReason = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, 600);
+  function checkOutcome(it, b) {
+    if (!(b.data && b.data.outcome === 'not_delivered')) return;
+    if (!outcomeKinds.includes(it.kind)) throw err(400, 'Only a deliverable or a requirement can be closed as not delivered');
+    if (cleanReason(b.data.not_delivered_reason != null ? b.data.not_delivered_reason : (it.data || {}).not_delivered_reason).length < 3) throw err(400, 'Say why it was not delivered');
+  }
+  function applyOutcome(P, it, b, prevState) {
+    const d = it.data = it.data || {};
+    if (outcomeKinds.includes(it.kind) && b.data && b.data.outcome === 'not_delivered') {
+      d.outcome = 'not_delivered'; d.not_delivered_reason = cleanReason(d.not_delivered_reason); it.state = 'closed';
+      audit(P, ACTOR(), 'item_not_delivered', { summary: `${it.kind} "${it.title}" closed as not delivered: ${d.not_delivered_reason.slice(0, 120)}` });
+      return;
+    }
+    const keep = outcomeKinds.includes(it.kind) && it.state === 'closed' && prevState === it.state && d.outcome === 'not_delivered' && !(b.data && b.data.outcome === 'delivered');
+    if (!keep) { delete d.outcome; delete d.not_delivered_reason; }
+  }
   const findItem = (id) => { for (const k of DB.order) { const P = DB.projects[k]; const it = P && P.items.find((x) => x.id === Number(id)); if (it) { need(P, ctx().level); touch(P); return [P, it]; } } throw err(404, 'Not found'); };
   on('PUT', '/api/items/(\\d+)', async (m, q, b) => {
     const [P, it] = findItem(m[1]);
+    checkOutcome(it, b);
+    const prevState = it.state;
     if (b.title != null) it.title = b.title; if (b.description != null) it.description = b.description;
     it.data = { ...it.data, ...(b.data || {}) };
     if (b.state && b.state !== it.state) { it.state = b.state; audit(P, ACTOR(), 'item_state', { summary: `${it.kind} "${it.title}" set to ${b.state}` }); }
+    applyOutcome(P, it, b, prevState);
     return { item: itemView(P, it) };
   });
   on('POST', '/api/items/(\\d+)/(confirm|ignore|reopen)', async (m) => {
@@ -1882,6 +2006,11 @@ Rules:
       if (!cu.sections.length) throw err(400, 'Choose at least one section');
     }
     const def = R.DEFAULTS[b.type]; if (!def) throw err(400, 'Choose a document type');
+    if (def.closure) {
+      const sc = closureScope(P);
+      if (sc.counts.open) throw err(400, `Close or mark as not delivered the ${sc.counts.open} deliverable${sc.counts.open === 1 ? '' : 's'} and requirement${sc.counts.open === 1 ? '' : 's'} still open before writing this document`);
+      if (sc.pending) throw err(400, `Confirm or ignore the ${sc.pending} item${sc.pending === 1 ? '' : 's'} waiting for review before writing this document`);
+    }
     // The one slide status report is a single PowerPoint slide, so it has no other format.
     const format = def.oneSlide && !cu ? 'pptx' : FORMATS.includes(b.format) ? b.format : 'docx';
     const tpl = !cu && b.template_id ? DB.templates.find((t) => t.id === Number(b.template_id) && (modeOf(t) === 'design' || t.doc_type === '*' || t.doc_type === b.type)) : null;
@@ -1895,6 +2024,7 @@ Rules:
       : { type: b.type, templateBody: tpl && usesStructure(tpl) && R.parseTemplate(tpl.body || '').length ? tpl.body : null, templateName: tpl ? tpl.name : null, ctx: snap.ctx, useAI: false });
     const g = { id: nid(), project_id: P.id, doc_type: b.type, title: cleanName(b.title, 120) || out.title, template: out.template, content: out.markdown, created_at: nowTs(), format, folder_id: b.folder_id ? Number(b.folder_id) : null, meta: { ...docMeta(P, today), ...(cu ? { audience: cu.audience } : {}) }, ...(tpl && usesDesign(tpl) && tpl.layout ? { layout: tpl.layout } : {}), ...(tpl && usesDesign(tpl) && tpl.brand ? { brand: clone(tpl.brand) } : {}), visuals: snap.visuals };
     if (cu) g.custom = { audience: cu.audience, description: cu.description };
+    if (def.closure && !cu) g.closure_stamp = stampOf(P, b.type);
     P.generated.unshift(g);
     audit(P, ACTOR(), 'document_generated', { summary: `Generated ${g.title}${tpl ? ` from template "${tpl.name}"` : cu ? ' as a custom document' : ''}` });
     return { generated: clone(g), engine: out.engine, unconfirmed: snap.ctx.unconfirmed };
@@ -1999,7 +2129,7 @@ Rules:
     const P = checked.P;
     const clash = DB.order.some((id) => DB.projects[id].p.name === P.p.name);
     if (clash) P.p.name = `${P.p.name} (imported)`;
-    P.p.owner_id = DB.user.id; P.p.status = P.p.status === 'archived' ? 'archived' : 'active'; P.p.analyzing = 0; P.analysis = null;
+    P.p.owner_id = DB.user.id; P.p.status = P.p.status === 'archived' || P.p.status === 'closed' ? P.p.status : 'active'; P.p.analyzing = 0; P.analysis = null;
     await store.create(P, DB.user.id);
     await snapshots.restore(P.id, checked.snapshots);
     for (const f of checked.files) { const d = P.documents.find((x) => x.id === f.doc_id); if (d) await store.putFile(P.id, d.id, { name: f.filename, type: f.mime, buffer: f.buffer }); }

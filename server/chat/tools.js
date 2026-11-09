@@ -87,6 +87,8 @@ const dueOf = (it) => { const d = it.data || {}; return d.due_date || (it.kind =
 const itemRow = (it, today) => {
   const d = it.data || {};
   const r = { id: it.id, kind: it.kind, title: it.title, state: it.state, status: it.status, owner: d.owner || null, due: dueOf(it), source_doc: it.doc_name || null, quote: clip(it.quote, 200) || null };
+  if (['deliverable', 'requirement'].includes(it.kind) && it.state === 'closed') r.outcome = d.outcome === 'not_delivered' ? 'not_delivered' : 'delivered';
+  if (r.outcome === 'not_delivered') r.not_delivered_reason = clip(d.not_delivered_reason, 300) || null;
   if (it.kind === 'risk') Object.assign(r, { probability: d.probability || null, impact: d.impact || null, mitigation: clip(d.mitigation, 200) || null });
   if (it.kind === 'milestone') Object.assign(r, { amount: d.amount != null ? d.amount : null, percent: d.percent != null ? d.percent : null, late: it.state === 'pending' && !!dueOf(it) && dueOf(it) < today });
   return r;

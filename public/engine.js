@@ -447,7 +447,7 @@ function checkSchedule(tasks, project, ctx = {}) {
     const ts = (tasksOfItem.get(i.id) || []).map((t) => by.get(t.id)).filter(Boolean).filter((t) => !t.summary);
     if (!ts.length) continue;
     const done = ts.every((t) => (t.progress || 0) >= 100);
-    if (i.state === 'closed' && !done) add('warn', null, 'closed_open_tasks', { title: i.title }, { item_id: i.id, item_title: i.title, kind: 'deliverable' });
+    if (i.state === 'closed' && !done && dataOf(i).outcome !== 'not_delivered') add('warn', null, 'closed_open_tasks', { title: i.title }, { item_id: i.id, item_title: i.title, kind: 'deliverable' });
     if (i.state !== 'closed' && done) add('info', null, 'ready_to_close', { title: i.title }, { item_id: i.id, item_title: i.title, kind: 'deliverable' });
   }
 
@@ -875,7 +875,7 @@ function buildProjectDash({ project, tasks, items, inbox, audit, today }) {
   }
 
   // deliverables
-  const deliverables = live.filter((i) => i.kind === 'deliverable').map((i) => ({ id: i.id, title: i.title, due: (i.data || {}).due_date || null, state: i.state, late: i.state !== 'closed' && !!(i.data || {}).due_date && i.data.due_date < today }))
+  const deliverables = live.filter((i) => i.kind === 'deliverable').map((i) => ({ id: i.id, title: i.title, due: (i.data || {}).due_date || null, state: i.state, nd: i.state === 'closed' && (i.data || {}).outcome === 'not_delivered', late: i.state !== 'closed' && !!(i.data || {}).due_date && i.data.due_date < today }))
     .sort((a, b) => ((a.state === 'closed') - (b.state === 'closed')) || String(a.due || '9999').localeCompare(String(b.due || '9999')));
 
   // payments and cash flow
@@ -2076,6 +2076,21 @@ const DEFAULTS = {
       ['Payment Milestones', 'p_payments'], ['Risks and Issues', 'p_risks'], ['Decisions and Support Needed', 'p_actions'],
     ],
   },
+  // The two documents a project needs before it can be closed. Both list what was and was not delivered.
+  lessons_learned: {
+    title: 'Lessons Learned Report', closure: true,
+    sections: [
+      ['Executive Summary', 'll_summary'], ['Delivery Outcome', 'll_delivery'], ['Scope Not Delivered and Reasons', 'll_not_delivered'],
+      ['Schedule and Payment Performance', 'll_schedule'], ['Risks and Issues', 'll_risks'], ['What Went Well', 'll_well'],
+      ['What Did Not Go Well', 'll_improve'], ['Recommendations for Future Projects', 'll_reco'], ['Approval', 'approval'],
+    ],
+  },
+  completion_certificate: {
+    title: 'Certificate of Completion', closure: true,
+    sections: [
+      ['Certificate Statement', 'cert_statement'], ['Scope Delivered', 'cert_scope'], ['Exceptions', 'cert_exceptions'], ['Acceptance', 'cert_acceptance'],
+    ],
+  },
   // One slide in PowerPoint. The slide is drawn from the data in visuals.js. These sections are the text behind it.
   progress_onepager: {
     title: 'One Slide Status Report', period: 7, oneSlide: true,
@@ -2086,7 +2101,7 @@ const DEFAULTS = {
   },
 };
 
-const DOC_TYPES = Object.entries(DEFAULTS).map(([id, d]) => ({ id, title: d.title, progress: id.startsWith('progress'), oneSlide: !!d.oneSlide, sections: d.sections.map((s) => s[0]) }));
+const DOC_TYPES = Object.entries(DEFAULTS).map(([id, d]) => ({ id, title: d.title, progress: id.startsWith('progress'), oneSlide: !!d.oneSlide, closure: !!d.closure, sections: d.sections.map((s) => s[0]) }));
 
 const SYN = [
   ['p_summary', /executive summary|summary|overview of progress/], ['p_metrics', /progress|baseline|performance|status/],
@@ -2101,7 +2116,7 @@ const SYN = [
 ];
 
 // ---------- context ----------
-function buildContext({ project, user, tasks, items, resources, docs, audit, inbox, today, periodDays, lastWeek }) {
+function buildContext({ project, user, tasks, items, resources, docs, audit, inbox, today, periodDays, lastWeek, closure }) {
   const live = items.filter((i) => i.status !== 'ignored').map((i) => ({ ...i, d: safe(i.data) }));
   const by = (k) => live.filter((i) => i.kind === k);
   const sched = S.schedule(tasks, project);
@@ -2110,7 +2125,7 @@ function buildContext({ project, user, tasks, items, resources, docs, audit, inb
   const start = S.addDays(today, -(periodDays || 7) + 1);
   const next = S.addDays(today, periodDays || 7);
   return {
-    project, user, today, tasks: sched, metrics, hasBaseline, resources, docs, inbox, lastWeek: lastWeek || null,
+    project, user, today, tasks: sched, metrics, hasBaseline, resources, docs, inbox, lastWeek: lastWeek || null, closure: closure || {},
     deliverables: by('deliverable'), requirements: by('requirement'), risks: by('risk'), milestones: by('milestone'),
     audit: audit.filter((a) => a.ts.slice(0, 10) >= start && a.ts.slice(0, 10) <= today),
     unconfirmed: live.filter((i) => i.status === 'proposed').length,
@@ -2118,6 +2133,20 @@ function buildContext({ project, user, tasks, items, resources, docs, audit, inb
   };
 }
 const safe = (s) => { try { return JSON.parse(s || '{}'); } catch { return {}; } };
+
+// What happened to a deliverable or requirement at closure. A closed item is delivered unless the project manager recorded
+// that it was not delivered, with a reason. Anything else is still open.
+const dataOf = (i) => (i && i.d) || (i && typeof i.data === 'string' ? safe(i.data) : (i && i.data) || {});
+const outcomeOf = (i) => (i.state === 'closed' ? (dataOf(i).outcome === 'not_delivered' ? 'not_delivered' : 'delivered') : 'open');
+const reasonOf = (i) => String(dataOf(i).not_delivered_reason || '').trim();
+const OUTCOME_LABEL = { delivered: 'Delivered', not_delivered: 'Not delivered', open: 'Open' };
+// The items that count at closure are the approved ones. Items still waiting for review are listed separately.
+const scopeOf = (c) => [...c.deliverables.map((i) => ({ kind: 'Deliverable', i })), ...c.requirements.map((i) => ({ kind: 'Requirement', i }))].filter((x) => x.i.status !== 'proposed');
+const countOutcomes = (c) => {
+  const out = { delivered: 0, not_delivered: 0, open: 0, total: 0 };
+  for (const x of scopeOf(c)) { out[outcomeOf(x.i)]++; out.total++; }
+  return out;
+};
 
 // ---------- generators ----------
 // Lines shared by the progress reports and the one slide status report.
@@ -2153,7 +2182,7 @@ const G = {
     `Satisfy the ${c.requirements.length} documented requirements and obtain client acceptance for each deliverable.`,
     'Keep risks visible and managed through a regular review cycle.',
   ]),
-  deliverables: (c) => md.table(['Deliverable', 'Description', 'Due Date', 'Status'], c.deliverables.map((d) => [d.title, (d.description || '').slice(0, 140), d.d.due_date || 'TBC', d.state === 'closed' ? 'Closed' : 'Open'])),
+  deliverables: (c) => md.table(['Deliverable', 'Description', 'Due Date', 'Status'], c.deliverables.map((d) => [d.title, (d.description || '').slice(0, 140), d.d.due_date || 'TBC', outcomeOf(d) === 'not_delivered' ? 'Not delivered' : d.state === 'closed' ? 'Closed' : 'Open'])),
   outofscope: () => 'Any work that is not listed under deliverables or requirements is out of scope and is handled through the change control process. Exclusions stated in the contract take precedence over this summary and should be added here during review.',
   requirements: (c) => md.table(['Ref', 'Requirement', 'Priority'], c.requirements.map((r, i) => [`R${String(i + 1).padStart(2, '0')}`, r.description || r.title, r.d.priority || 'Should'])),
   timeline: (c) => {
@@ -2180,6 +2209,69 @@ const G = {
     'Monthly executive summary for senior stakeholders.',
     `Progress is measured against the approved baseline. Current baseline: ${c.hasBaseline ? 'set' : 'not yet set'}.`,
   ]),
+  // ----- lessons learned report -----
+  ll_summary: (c) => {
+    const p = c.project, n = countOutcomes(c);
+    const dl = c.deliverables.filter((i) => i.status !== 'proposed'), rq = c.requirements.filter((i) => i.status !== 'proposed');
+    const part = (list, word) => `${list.filter((i) => outcomeOf(i) === 'delivered').length} of ${list.length} ${word}${list.length === 1 ? '' : 's'}`;
+    return [
+      `${p.name} was delivered for ${p.client || 'the client'}${p.value ? ` under a contract value of ${money(p.value, p.currency)}` : ''}. The planned period was ${p.start_date || 'not recorded'} to ${p.end_date || 'not recorded'}. This report was prepared on ${c.today}.`,
+      n.total ? `At closure ${part(dl, 'deliverable')} and ${part(rq, 'requirement')} were delivered.${n.not_delivered ? ` ${n.not_delivered} item${n.not_delivered === 1 ? ' was' : 's were'} not delivered. The reasons are recorded in the section on scope not delivered.` : ' Everything in scope was delivered.'}` : 'No deliverables or requirements were recorded for this project.',
+    ].join('\n\n');
+  },
+  ll_delivery: (c) => {
+    const dl = c.deliverables.filter((i) => i.status !== 'proposed'), rq = c.requirements.filter((i) => i.status !== 'proposed');
+    return `**Deliverables**\n\n${md.table(['Deliverable', 'Due', 'Outcome'], dl.map((d) => [d.title, d.d.due_date || 'TBC', OUTCOME_LABEL[outcomeOf(d)]]))}\n\n**Requirements**\n\n${md.table(['Ref', 'Requirement', 'Priority', 'Outcome'], rq.map((r, k) => [`R${String(k + 1).padStart(2, '0')}`, r.description || r.title, r.d.priority || 'Should', OUTCOME_LABEL[outcomeOf(r)]]))}`;
+  },
+  ll_not_delivered: (c) => {
+    const rows = scopeOf(c).filter((x) => outcomeOf(x.i) === 'not_delivered');
+    if (!rows.length) return 'All deliverables and requirements in scope were delivered.';
+    return md.table(['Type', 'Item', 'Priority', 'Reason it was not delivered'], rows.map((x) => [x.kind, x.i.title || x.i.description, x.kind === 'Requirement' ? (x.i.d.priority || 'Should') : '', reasonOf(x.i) || 'No reason recorded']));
+  },
+  ll_schedule: (c) => {
+    const p = c.project, m = c.metrics;
+    const last = c.tasks.filter((t) => !t.summary && t.finish).reduce((mx, t) => (t.finish > mx ? t.finish : mx), '');
+    const ms = c.milestones.filter((i) => i.status !== 'proposed');
+    const paid = ms.filter((i) => i.state === 'paid').length, inv = ms.filter((i) => i.state === 'invoiced').length, pend = ms.length - paid - inv;
+    return md.bullets([
+      `Planned end date: ${p.end_date || 'not recorded'}. Last task in the schedule finishes on ${last || 'not recorded'}.`,
+      `Schedule completion at closure: ${m.actualPct}%${m.plannedPct != null ? ` against ${m.plannedPct}% planned` : ''}.`,
+      `${m.overdue} task${m.overdue === 1 ? ' is' : 's are'} still overdue.`,
+      ms.length ? `Payment milestones: ${paid} paid, ${inv} invoiced, ${pend} not yet invoiced.` : 'No payment milestones were recorded.',
+    ]);
+  },
+  ll_risks: (c) => {
+    const rows = c.risks.filter((r) => r.status !== 'proposed');
+    return md.table(['Risk or Issue', 'Probability', 'Impact', 'Final status'], rows.map((r) => [r.title, r.d.probability || 'Medium', r.d.impact || 'Medium', r.state || 'open']));
+  },
+  ll_well: (c) => {
+    const n = countOutcomes(c), rk = c.risks.filter((r) => r.status !== 'proposed' && ['closed', 'mitigated'].includes(r.state)).length;
+    return [md.bullets([n.delivered ? `${n.delivered} of ${n.total} deliverables and requirements were delivered.` : null, rk ? `${rk} risk${rk === 1 ? ' was' : 's were'} closed or mitigated.` : null].filter(Boolean)), '_Add what the team should keep doing. Think about people, planning, tools, client engagement and quality._'].join('\n\n');
+  },
+  ll_improve: (c) => {
+    const nd = scopeOf(c).filter((x) => outcomeOf(x.i) === 'not_delivered');
+    const open = c.risks.filter((r) => r.status !== 'proposed' && r.state === 'open').length;
+    const lines = [...nd.map((x) => `${x.kind} "${x.i.title || x.i.description}" was not delivered. Reason: ${reasonOf(x.i) || 'not recorded'}.`), c.metrics.overdue ? `${c.metrics.overdue} task${c.metrics.overdue === 1 ? ' was' : 's were'} still overdue at closure.` : null, open ? `${open} risk${open === 1 ? ' was' : 's were'} still open at closure.` : null].filter(Boolean);
+    return [lines.length ? md.bullets(lines) : '', '_Add what caused delays, rework or friction and what should change next time._'].filter(Boolean).join('\n\n');
+  },
+  ll_reco: () => '_List the specific actions future projects should take. Name an owner for each one where possible._',
+  // ----- certificate of completion -----
+  cert_statement: (c) => {
+    const p = c.project, n = countOutcomes(c), cl = c.closure || {};
+    return `This certifies that **${p.name}**${p.client ? ` for ${p.client}` : ''} has reached completion${cl.accepted_on ? ` and was accepted on ${cl.accepted_on}` : ''}. ${n.not_delivered ? `The project is completed with exceptions. ${n.not_delivered} item${n.not_delivered === 1 ? ' was' : 's were'} not delivered and ${n.not_delivered === 1 ? 'is' : 'are'} listed under Exceptions.` : 'All deliverables and requirements in scope were delivered.'}`;
+  },
+  cert_scope: (c) => {
+    const dl = c.deliverables.filter((i) => i.status !== 'proposed' && outcomeOf(i) === 'delivered'), rq = c.requirements.filter((i) => i.status !== 'proposed' && outcomeOf(i) === 'delivered');
+    return `${md.table(['Deliverable', 'Due'], dl.map((d) => [d.title, d.d.due_date || 'TBC']))}\n\n${rq.length} requirement${rq.length === 1 ? '' : 's'} delivered.`;
+  },
+  cert_exceptions: (c) => {
+    const rows = scopeOf(c).filter((x) => outcomeOf(x.i) === 'not_delivered');
+    return rows.length ? md.table(['Type', 'Item', 'Reason'], rows.map((x) => [x.kind, x.i.title || x.i.description, reasonOf(x.i) || 'No reason recorded'])) : 'None. Everything in scope was delivered.';
+  },
+  cert_acceptance: (c) => {
+    const cl = c.closure || {};
+    return md.table(['Role', 'Name', 'Signature', 'Date'], [['Client representative', cl.accepted_by || c.project.client || '', '', cl.accepted_on || ''], ['Project Manager', c.user?.name || '', '', c.today]]);
+  },
   approval: (c) => md.table(['Role', 'Name', 'Signature', 'Date'], [['Project Manager', c.user?.name || '', '', ''], ['Client Sponsor', c.project.client || '', '', ''], ['Executive Sponsor', '', '', '']]),
   scope_mgmt: (c) => `Scope is defined by ${c.deliverables.length} deliverables and ${c.requirements.length} requirements extracted from the contract documents. Each deliverable is closed only with documented evidence of delivery or acceptance. Any addition or removal follows change control.`,
   schedule_mgmt: (c) => `The schedule contains ${c.tasks.filter((t) => !t.summary).length} tasks on a ${workDaysLabel(c.project)} calendar. Progress is updated from team reports and uploaded evidence and measured against the approved baseline.\n\n${G.timeline(c)}`,
@@ -2227,7 +2319,7 @@ const G = {
     const rows = nextRows(c, 20);
     return md.table(['Task', 'Start', 'Finish', 'Owner', 'Progress'], rows.map((t) => [t.name, t.start, t.finish, t.assignee || '', `${t.progress || 0}%`]));
   },
-  p_deliverables: (c) => md.table(['Deliverable', 'Due', 'Status', 'Evidence'], c.deliverables.map((d) => [d.title, d.d.due_date || 'TBC', d.state === 'closed' ? 'Closed' : (d.d.due_date && d.d.due_date < c.today ? 'Overdue' : 'Open'), d.evidence_doc_id ? `Document ${d.evidence_doc_id}` : ''])),
+  p_deliverables: (c) => md.table(['Deliverable', 'Due', 'Status', 'Evidence'], c.deliverables.map((d) => [d.title, d.d.due_date || 'TBC', outcomeOf(d) === 'not_delivered' ? 'Not delivered' : d.state === 'closed' ? 'Closed' : (d.d.due_date && d.d.due_date < c.today ? 'Overdue' : 'Open'), d.evidence_doc_id ? `Document ${d.evidence_doc_id}` : ''])),
   p_payments: (c) => md.table(['Milestone', 'Amount', 'Due', 'Status'], c.milestones.map((m) => [m.title, m.d.amount != null ? money(m.d.amount, c.project.currency) : (m.d.percent != null && c.project.value ? money(c.project.value * m.d.percent / 100, c.project.currency) : 'TBC'), m.d.due_date || 'TBC', m.state === 'paid' ? 'Paid' : m.state === 'invoiced' ? 'Invoiced' : 'Pending'])),
   p_risks: (c) => md.table(['Risk or Issue', 'Probability', 'Impact', 'Status'], c.risks.filter((r) => r.state !== 'closed').map((r) => [r.title, r.d.probability || 'Medium', r.d.impact || 'Medium', r.state || 'open'])),
   p_actions: (c) => {
@@ -2507,5 +2599,5 @@ async function toDocx({ title, markdown, project, user, today, logoPath }) {
   return Packer.toBuffer(doc);
 }
 
-module.exports = { DEFAULTS, DOC_TYPES, LIBRARY, GENERATOR_KEYS: Object.keys(G), activityLines, nextRows, decisionLines, buildContext, generate, suggestPlan, toDocx, parseTemplate, replaceVars, matchGenerator };
+module.exports = { DEFAULTS, DOC_TYPES, LIBRARY, outcomeOf, reasonOf, dataOf, GENERATOR_KEYS: Object.keys(G), activityLines, nextRows, decisionLines, buildContext, generate, suggestPlan, toDocx, parseTemplate, replaceVars, matchGenerator };
 ;return module.exports})();

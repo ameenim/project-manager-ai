@@ -61,6 +61,9 @@
   });
 
   const label = (kind, s) => t(`lg_s_${kind}_${s}`);
+  // A deliverable or requirement can be closed as not delivered. It stays closed, with a reason, and it reads as Not delivered.
+  const isND = (it) => ['deliverable', 'requirement'].includes(it.kind) && it.state === 'closed' && (it.data || {}).outcome === 'not_delivered';
+  const stLabel = (it) => (isND(it) ? t('cl_not_delivered') : label(it.kind, stOf(it)));
   PM.logLabel = label;
   const lvl = (v) => (v ? t('lv_' + v) : '');
   const amountOf = (it, p) => { const d = it.data || {}; if (d.amount != null && d.amount !== '') return Number(d.amount); if (d.percent != null && d.percent !== '' && p.value) return (p.value * Number(d.percent)) / 100; return null; };
@@ -165,10 +168,10 @@
     const COLS = [
       { id: 'type', lab: 'lg_type', sort: (i) => KINDS.indexOf(i.kind), cell: (i) => `<td><span class="chip">${t('lg_kind_' + i.kind)}</span></td>`, csv: (i) => t('lg_kind_' + i.kind) },
       { id: 'item', lab: 'lg_item', req: true, sort: (i) => lower(i.title),
-        cell: (i) => `<td class="lg-item"><div class="lg-title" data-edit="${i.id}" tabindex="0" role="button">${esc(i.title)}</div>${!F.cols.includes('description') && i.description && i.description !== i.title ? `<div class="small muted lg-desc">${esc(i.description.slice(0, 140))}</div>` : ''}${i.status === 'proposed' ? `<span class="chip amber">${t('lg_review_chip')}</span>` : i.status === 'ignored' ? `<span class="chip">${t('lg_ignored_chip')}</span>` : ''}</td>`, csv: (i) => i.title },
+        cell: (i) => `<td class="lg-item"><div class="lg-title" data-edit="${i.id}" tabindex="0" role="button">${esc(i.title)}</div>${!F.cols.includes('description') && i.description && i.description !== i.title ? `<div class="small muted lg-desc">${esc(i.description.slice(0, 140))}</div>` : ''}${isND(i) ? `<div class="small muted lg-desc">${esc(t('cl_not_delivered'))}: ${esc((i.data || {}).not_delivered_reason || '')}</div>` : ''}${i.status === 'proposed' ? `<span class="chip amber">${t('lg_review_chip')}</span>` : i.status === 'ignored' ? `<span class="chip">${t('lg_ignored_chip')}</span>` : ''}</td>`, csv: (i) => i.title },
       { id: 'description', lab: 'lg_f_desc', sort: (i) => lower(i.description), cell: (i) => `<td class="lg-wide">${txt(i.description)}</td>`, csv: (i) => i.description },
       { id: 'status', lab: 'lg_status', sort: (i) => STATES[i.kind].indexOf(stOf(i)),
-        cell: (i) => `<td><select class="lg-sel st ${stClass(i)}" data-f="state" data-id="${i.id}" aria-label="${esc(t('lg_status'))}">${STATES[i.kind].map((x) => `<option value="${x}" ${x === stOf(i) ? 'selected' : ''}>${esc(label(i.kind, x))}</option>`).join('')}</select></td>`, csv: (i) => label(i.kind, stOf(i)) },
+        cell: (i) => `<td><select class="lg-sel st ${isND(i) ? 'prog' : stClass(i)}" data-f="state" data-id="${i.id}" aria-label="${esc(t('lg_status'))}">${STATES[i.kind].map((x) => `<option value="${x}" ${x === stOf(i) && !isND(i) ? 'selected' : ''}>${esc(label(i.kind, x))}</option>`).join('')}${['deliverable', 'requirement'].includes(i.kind) ? `<option value="nd" ${isND(i) ? 'selected' : ''}>${esc(t('cl_not_delivered'))}</option>` : ''}</select></td>`, csv: (i) => stLabel(i) },
       { id: 'review', lab: 'lg_c_review', sort: (i) => reviewOf(i), cell: (i) => `<td class="nowrap">${t('lg_rv_' + reviewOf(i))}</td>`, csv: (i) => t('lg_rv_' + reviewOf(i)) },
       { id: 'owner', lab: 'lg_owner', sort: (i) => lower((i.data || {}).owner), cell: (i) => `<td class="nowrap">${(i.data || {}).owner ? esc(i.data.owner) : dash}</td>`, csv: (i) => (i.data || {}).owner },
       { id: 'due', lab: 'lg_due', sort: (i) => dueOf(i) || '9999',
@@ -310,6 +313,7 @@
       const it = items.find((x) => x.id === Number(id)); if (!it) return;
       const before = { state: it.state, data: {} };
       for (const k of Object.keys(patch.data || {})) before.data[k] = (it.data || {})[k] ?? null;
+      if (['deliverable', 'requirement'].includes(it.kind)) { before.data.outcome = (it.data || {}).outcome ?? null; before.data.not_delivered_reason = (it.data || {}).not_delivered_reason ?? null; }
       let r;
       try { r = await api('PUT', `/api/items/${id}`, patch); } catch (e) { toast(e.message, 'err'); return drawTable(); }
       Object.assign(it, r.item);
@@ -366,7 +370,12 @@
     };
     root.addEventListener('change', (e) => {
       const s = e.target.closest('select[data-f]');
-      if (s) { const f = s.dataset.f; return change(s.dataset.id, f === 'state' ? { state: s.value } : { data: { [f]: s.value } }); }
+      if (s) {
+        const f = s.dataset.f, it = items.find((x) => x.id === Number(s.dataset.id));
+        if (f === 'state' && s.value === 'nd') { s.value = isND(it) ? 'nd' : stOf(it); return PM.askNotDelivered({ id: it.id, title: it.title, reason: (it.data || {}).not_delivered_reason || '' }, async () => { const b = (await api('GET', `/api/projects/${p.id}/items`)).items.find((x) => x.id === it.id); if (b) Object.assign(it, b); toast(t('lg_updated'), 'ok'); drawTable(); }); }
+        const delivered = f === 'state' && s.value === 'closed' && ['deliverable', 'requirement'].includes(it.kind);
+        return change(s.dataset.id, f === 'state' ? { state: s.value, ...(delivered ? { data: { outcome: 'delivered' } } : {}) } : { data: { [f]: s.value } });
+      }
       if (e.target.id === 'lgSize') { F.size = Number(e.target.value); F.page = 1; drawTable(); }
     });
     root.addEventListener('click', async (e) => {

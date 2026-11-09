@@ -30,7 +30,7 @@ function prepare(backup, nid, opts = {}) {
     p: JSON.parse(JSON.stringify(src.p)),
     items: arr(src.items), tasks: arr(src.tasks), resources: arr(src.resources), inbox: arr(src.inbox),
     documents: arr(src.documents), folders: arr(src.folders), texts: isObj(src.texts) ? src.texts : {}, generated: arr(src.generated), audit: arr(src.audit),
-    versions: arr(src.versions), analysis: isObj(src.analysis) ? src.analysis : null,
+    versions: arr(src.versions), analysis: isObj(src.analysis) ? src.analysis : null, closure: isObj(src.closure) ? src.closure : null,
   };
   for (const [k, max] of Object.entries(LIMITS)) if (P[k].length > max) throw bad(`The backup has too many ${k} (more than ${max}).`);
   for (const k of ['items', 'tasks', 'resources', 'inbox', 'documents', 'folders', 'generated', 'audit', 'versions']) if (!P[k].every(isObj)) throw bad(`The ${k} in this backup are damaged.`);
@@ -73,6 +73,7 @@ function prepare(backup, nid, opts = {}) {
   const rebuilt = {};
   for (const k of ['items', 'tasks', 'resources', 'inbox', 'documents', 'folders', 'generated', 'audit', 'versions']) rebuilt[k] = walk(P[k], null);
   rebuilt.p = walk(P.p, null); rebuilt.analysis = P.analysis ? walk(P.analysis, null) : null;
+  if (P.closure) rebuilt.closure = walk(P.closure, null);
   rebuilt.texts = {};
   for (const k of Object.keys(P.texts)) { const nk = map.get(Number(k)); if (nk != null && typeof P.texts[k] === 'string') rebuilt.texts[nk] = P.texts[k]; }
   const out = { id: newId, ...rebuilt };
