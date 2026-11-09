@@ -290,3 +290,14 @@ test('a trend leaves out rows that have no date', () => {
   const r = W.run(W.normalize({ dataset: 'payments', viz: 'line', agg: 'sum', measure: 'amount', groupBy: 'due' }), rows, { today: '2026-03-01' });
   assert.deepEqual(r.groups.map((g) => g.key), ['2026-01', '2026-02']);
 });
+
+test('one far away date does not push the real months out of a monthly trend', () => {
+  const mk = (amount, due) => ({ title: 't', amount, due, state: 'pending', project: 'A' });
+  const rows = [mk(100, '2026-01-10'), mk(200, '2026-02-10'), mk(300, '2026-04-10'), mk(400, '2026-06-10'), mk(500, '2026-09-10'), mk(39700, '2028-07-10')];
+  const r = W.run(W.normalize({ dataset: 'payments', viz: 'combo', agg: 'sum', measure: 'amount', groupBy: 'due', line: 'cumulative', limit: 8 }), rows, { today: '2026-11-01' });
+  assert.deepEqual(r.groups.map((g) => g.key), ['2026-01', '2026-02', '2026-04', '2026-06', '2026-09', '2028-07'], 'the real months stay, nothing is filled across a gap of two years');
+  assert.deepEqual(r.groups.map((g) => g.value), [100, 200, 300, 400, 500, 39700]);
+  const near = W.run(W.normalize({ dataset: 'payments', viz: 'combo', agg: 'sum', measure: 'amount', groupBy: 'due', line: 'cumulative', limit: 8 }), rows.slice(0, 5), { today: '2026-11-01' });
+  assert.equal(near.groups.length, 9, 'January to September 2026 are all shown');
+  assert.deepEqual(near.groups.map((g) => g.value), [100, 200, 0, 300, 0, 400, 0, 0, 500]);
+});

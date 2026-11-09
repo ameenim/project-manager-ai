@@ -147,8 +147,8 @@
       const cl = PMCL.get(combo ? 'column' : 'line', { percent: false });
       const labelOn = cl.on && n <= 14;
       // quarter bands: every other quarter gets a darker background so the quarters can be read at a glance
-      const nd = groups.findIndex((q) => !/^\d{4}-\d{2}$/.test(q.key)), nm = nd < 0 ? n : nd; // a group with no date sits last and is left out
-      if (res.dateBuckets && nm > 1) {
+      const mi = (q) => Number(q.key.slice(0, 4)) * 12 + Number(q.key.slice(5, 7)), even = res.dateBuckets && groups.every((q, i) => /^\d{4}-\d{2}$/.test(q.key) && (!i || mi(q) === mi(groups[i - 1]) + 1)), nm = n; // bands need an even run of months
+      if (even && nm > 1) {
         const qOf = (key) => key.slice(0, 4) + 'Q' + (Math.floor((Number(key.slice(5, 7)) - 1) / 3) + 1);
         let bands = '', i0 = 0, seq = 0;
         for (let i = 1; i <= nm; i++) {
