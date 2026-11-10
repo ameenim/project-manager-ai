@@ -59,7 +59,7 @@
 .sa-cfg-row .d { font-size: var(--fs-small); color: var(--faint); }
 @media (max-width: 600px) { .sa-cfg-row { grid-template-columns: 1fr; } }
 .sa-dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; font-size: var(--fs-body); } .sa-dl dt { color: var(--muted); } .sa-dl dd { margin: 0; font-weight: 600; word-break: break-word; }
-.sa-pre { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-s); padding: 10px 12px; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: var(--fs-small); white-space: pre-wrap; word-break: break-word; max-height: 260px; overflow: auto; margin: 0; }
+.sa-pre { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-s); padding: 10px 12px; font-family: var(--mono); font-size: var(--fs-small); white-space: pre-wrap; word-break: break-word; max-height: 260px; overflow: auto; margin: 0; }
 .sa-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
 .sa-modal-form { display: grid; gap: 12px; } .sa-modal-form .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 @media (max-width: 600px) { .sa-modal-form .two { grid-template-columns: 1fr; } }

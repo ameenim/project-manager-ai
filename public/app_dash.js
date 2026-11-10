@@ -453,7 +453,7 @@
       const cv = document.createElement('canvas'); cv.width = (w + pad * 2) * scale; cv.height = (h + pad * 2 + head) * scale;
       const c = cv.getContext('2d'); c.scale(scale, scale);
       c.fillStyle = surface; c.fillRect(0, 0, cv.width, cv.height);
-      c.fillStyle = ink; c.font = '600 20px sans-serif'; c.fillText(wlabel(cfg.widgets[id]), pad, pad + 16);
+      c.fillStyle = ink; c.font = '700 20px Tajawal, sans-serif'; c.fillText(wlabel(cfg.widgets[id]), pad, pad + 16);
       c.drawImage(img, pad, pad + head, w, h);
       cv.toBlob((b) => fileOut(`${slug(wlabel(cfg.widgets[id]))}.png`, b), 'image/png');
     };

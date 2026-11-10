@@ -525,7 +525,6 @@ form { display: flex; flex-direction: column; gap: 14px; }
 .lang-btn:hover .ico { transform: none; }
 
 /* ===== Right to left ===== */
-[dir="rtl"] { --font: 'IBM Plex Sans Arabic', 'IBM Plex Sans', -apple-system, 'Segoe UI', Tahoma, sans-serif; }
 [dir="rtl"] body { line-height: 1.75; }
 [dir="rtl"] svg:has(> use[href="#i-arrow"]), [dir="rtl"] svg:has(> use[href="#i-undo"]) { transform: scaleX(-1); }
 [dir="rtl"] .btn:hover svg:has(> use[href="#i-arrow"]) { transform: scaleX(-1) translateX(4px); }
