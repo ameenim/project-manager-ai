@@ -27,7 +27,7 @@ const STARTED = new Date().toISOString();
 const MAX_UPLOAD = 40 * 1024 * 1024;       // one file
 const MAX_JSON = 8 * 1024 * 1024;          // a normal JSON request
 const MAX_IMPORT = 64 * 1024 * 1024;       // a backup file, which can carry original documents
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.json': 'application/json; charset=utf-8', '.ico': 'image/x-icon', '.mp4': 'video/mp4', '.txt': 'text/plain; charset=utf-8' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.jpg': 'image/jpeg', '.json': 'application/json; charset=utf-8', '.ico': 'image/x-icon', '.mp4': 'video/mp4', '.txt': 'text/plain; charset=utf-8' };
 
 // The Content Security Policy tells the browser which sources a page may load from, so an injected script cannot run
 // or send data anywhere else. Styles allow inline because the screens set colors with style attributes. Fonts come from

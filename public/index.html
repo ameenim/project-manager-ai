@@ -22,6 +22,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="site.css">
+<link rel="stylesheet" href="landing.css">
 <script src="boot.js"></script>
 <script type="application/ld+json">
 {
@@ -107,8 +108,8 @@
   <div class="wrap bar">
     <a class="brand" href="#top" aria-label="Project Manager AI home"><img src="brand/mark.svg" alt="" width="34" height="34"><span>Project Manager <b>AI</b></span></a>
     <nav class="nav" id="nav" aria-label="Main">
-      <a href="#features">Features</a>
       <a href="#how">How it works</a>
+      <a href="#features">What's new</a>
       <a href="#product">Product</a>
       <a href="#reports">Reports</a>
       <a href="#faq">FAQ</a>
@@ -127,280 +128,101 @@
 </header>
 
 <main>
-<!-- HERO -->
-<section class="hero" aria-labelledby="h1">
-  <span class="shape s1" data-p="0.16" aria-hidden="true"></span><span class="shape s2" data-p="-0.14" aria-hidden="true"></span><span class="shape s3" data-p="0.12" aria-hidden="true"></span>
-  <div class="wrap hero-grid">
-    <div class="hero-copy">
-      <span class="eyebrow hero-in" style="--i:0">AI project management software</span>
-      <h1 id="h1" data-p="-0.03" class="hero-in" style="--i:1">The project management tool that turns your contract into a <span class="grad-text">live plan</span></h1>
-      <p class="lead hero-in" data-p="-0.06" style="--i:2">Stop retyping contracts into spreadsheets. Upload one and get the schedule, risks and payment milestones, then keep them current from Teams, Outlook and Jira.</p>
-      <div class="cta-row hero-in" style="--i:3">
-        <a class="btn primary lg" href="login.html#create">Start free trial <svg class="ico sm"><use href="#i-arrow"/></svg></a>
-        <a class="btn lg" href="#how">See how it works</a>
-      </div>
-      <p class="fine hero-in" style="--i:4"><svg class="ico sm"><use href="#i-check"/></svg>15 day free trial. No card needed.</p>
-      <ul class="hero-points hero-in" style="--i:5">
-        <li><svg class="ico sm"><use href="#i-gantt"/></svg>Gantt scheduling</li>
-        <li><svg class="ico sm"><use href="#i-radar"/></svg>Risk radar</li>
-        <li><svg class="ico sm"><use href="#i-coin"/></svg>Payment tracking</li>
-        <li><svg class="ico sm"><use href="#i-doc"/></svg>Automatic reports</li>
-      </ul>
+<!-- STORY -->
+<section class="ls-story" id="how" aria-labelledby="h1">
+  <div class="ls-stage" id="lsStage">
+    <div class="ls-blob" id="lsB1" aria-hidden="true"></div><div class="ls-blob" id="lsB2" aria-hidden="true"></div>
+    <div class="ls-shape" id="lsS1" aria-hidden="true"></div><div class="ls-shape" id="lsS2" aria-hidden="true"></div><div class="ls-shape" id="lsS3" aria-hidden="true"></div>
+    <div class="ls-frame" id="lsFrame" aria-hidden="true"><div class="ls-bar"><i></i><i></i><i></i></div><div class="ls-shots" id="lsShots"></div></div>
+    <div id="lsSats" aria-hidden="true"></div>
+    <div class="ls-ch" data-img="hero" data-acc="36,87,214">
+      <span class="ls-k"><span>AI project management software</span></span>
+      <h1 id="h1">Your contract, turned into a live plan.</h1>
+      <p>Upload it. Review what the AI found. Run the project from one place.</p>
+      <div class="ls-row"><a class="btn primary lg" href="login.html#create">Start free trial <svg class="ico sm"><use href="#i-arrow"/></svg></a><button class="btn lg" type="button" data-go="1">See how it works</button></div>
     </div>
-
-    <div class="hero-visual hero-in" style="--i:3" data-reveal-now>
-      <div class="dash" data-p="0.04" role="img" aria-label="Illustrative portfolio dashboard showing 12 active projects, 68 percent progress, a schedule index of 0.94 and 7 late tasks, with a project Gantt chart below.">
-        <div class="dash-top"><i></i><i></i><i></i><strong>Portfolio overview</strong><span class="chip">Illustrative data</span></div>
-        <div class="kpis">
-          <div class="kpi"><span class="k-l">Active projects</span><span class="k-v" data-count="12">12</span><span class="k-h ok">9 on track</span></div>
-          <div class="kpi ring-kpi"><span class="k-l">Progress</span><span class="k-v"><span data-count="68">68</span>%</span><span class="k-h">Portfolio</span>
-            <svg class="ring" viewBox="0 0 36 36" style="--off:32" aria-hidden="true"><circle class="bg" cx="18" cy="18" r="15.9155" pathLength="100"/><circle class="fg" cx="18" cy="18" r="15.9155" pathLength="100"/></svg></div>
-          <div class="kpi"><span class="k-l">Schedule index</span><span class="k-v" data-count="0.94" data-dec="2">0.94</span><span class="k-h warn">Behind plan</span></div>
-          <div class="kpi"><span class="k-l">Late tasks</span><span class="k-v" data-count="7">7</span><span class="k-h bad">Past finish date</span></div>
-        </div>
-        <div class="g-scroll">
-        <div class="gantt" style="--gl:112px">
-          <div class="g-head"><span>Task</span><div class="g-weeks"><span>W1</span><span>W2</span><span>W3</span><span>W4</span><span>W5</span><span>W6</span><span>W7</span><span>W8</span><span>W9</span><span>W10</span><span>W11</span><span>W12</span></div></div>
-          <div class="g-row"><span class="g-name sum">Discovery</span><div class="g-track"><span class="g-bar sum" style="--s:0;--w:3;--i:0"></span></div></div>
-          <div class="g-row"><span class="g-name">Design</span><div class="g-track"><span class="g-bar done" style="--s:2;--w:4;--p:100%;--i:1"></span></div></div>
-          <div class="g-row"><span class="g-name">Build</span><div class="g-track"><span class="g-bar crit" style="--s:5;--w:5;--p:60%;--i:2"></span></div></div>
-          <div class="g-row"><span class="g-name">Integration</span><div class="g-track"><span class="g-bar late" style="--s:6;--w:4;--p:30%;--i:3"></span></div></div>
-          <div class="g-row"><span class="g-name">Go live</span><div class="g-track"><span class="g-ms" style="--s:11.4;--i:4"></span></div></div>
-        </div>
-        </div>
-      </div>
-      <div class="float f1" data-p="0.14">
-        <div class="row"><span class="chip ai"><svg class="ico sm"><use href="#i-spark"/></svg>AI suggestion</span><span>Teams, just now</span></div>
-        <strong>Close deliverable "Design package"</strong>
-        <div class="row"><div class="meter" style="flex:1;--v:92%"><i></i></div><span>92% sure</span></div>
-      </div>
-      <div class="float f2" data-p="-0.1">
-        <div class="row"><span class="chip bad">2 high signals</span></div>
-        <strong>Risk radar needs a look</strong>
-        <div class="row">Integration is 4 days late</div>
-      </div>
+    <div class="ls-ch" data-img="review" data-acc="124,58,237">
+      <span class="ls-k"><i>01</i><span>Read</span></span>
+      <h2>Drop in the contract. Get the project.</h2>
+      <p>Dates, deliverables, payments and risks arrive ready to confirm.</p>
     </div>
+    <div class="ls-ch" data-img="gantt" data-acc="14,165,233">
+      <span class="ls-k"><i>02</i><span>Plan</span></span>
+      <h2>A schedule you can drag.</h2>
+      <p>Linked tasks move together and the critical path stays in view.</p>
+    </div>
+    <div class="ls-ch" data-img="inbox" data-acc="16,185,129">
+      <span class="ls-k"><i>03</i><span>Update</span></span>
+      <h2>Status arrives as suggestions.</h2>
+      <p>Teams, Outlook and Jira messages become changes you apply with one click.</p>
+    </div>
+    <div class="ls-ch" data-img="meeting" data-acc="236,72,153">
+      <span class="ls-k"><i>04</i><span>Capture</span><span class="ls-new">New</span></span>
+      <h2>Record the meeting. Keep the minutes.</h2>
+      <p>A transcript per speaker, editable minutes, and actions that can go to your log and schedule.</p>
+    </div>
+    <div class="ls-ch" data-img="thinking" data-acc="99,102,241">
+      <span class="ls-k"><i>05</i><span>Think</span><span class="ls-new">New</span></span>
+      <h2>Think it through with AI.</h2>
+      <p>Ask, plan and draft in the Thinking Area. Nothing changes until you press Apply.</p>
+    </div>
+    <div class="ls-ch" data-img="risk" data-acc="245,158,11">
+      <span class="ls-k"><i>06</i><span>Watch</span><span class="ls-new">New</span></span>
+      <h2>Risks, late tasks and payments in one radar.</h2>
+      <p>The notification bell tells you what slipped before the client does.</p>
+    </div>
+    <div class="ls-ch" data-img="reports" data-acc="20,184,166">
+      <span class="ls-k"><i>07</i><span>Report</span></span>
+      <h2>Send the report, not the spreadsheet.</h2>
+      <p>Word, Excel and PowerPoint, with your own template and logo.</p>
+    </div>
+    <div class="ls-ch" data-img="closure" data-acc="34,170,94">
+      <span class="ls-k"><i>08</i><span>Close</span><span class="ls-new">New</span></span>
+      <h2>Close with lessons learned.</h2>
+      <p>A closure checklist, a lessons learned report and a certificate of completion.</p>
+    </div>
+    <div class="ls-ch center" data-img="hero" data-acc="36,87,214">
+      <span class="ls-k"><span>Your workspace</span></span>
+      <h2>One place for every project.</h2>
+      <p>15 day free trial. No card needed.</p>
+      <div class="ls-row"><a class="btn primary lg" href="login.html#create">Start free trial <svg class="ico sm"><use href="#i-arrow"/></svg></a></div>
+    </div>
+    <div class="ls-rail" id="lsRail" role="group" aria-label="Story chapters"><button type="button" data-i="0" aria-label="Intro"></button><button type="button" data-i="1" aria-label="Read"></button><button type="button" data-i="2" aria-label="Plan"></button><button type="button" data-i="3" aria-label="Update"></button><button type="button" data-i="4" aria-label="Capture"></button><button type="button" data-i="5" aria-label="Think"></button><button type="button" data-i="6" aria-label="Watch"></button><button type="button" data-i="7" aria-label="Report"></button><button type="button" data-i="8" aria-label="Close"></button><button type="button" data-i="9" aria-label="Workspace"></button><span class="ls-lbls" aria-hidden="true"><span>Intro</span><span>Read</span><span>Plan</span><span>Update</span><span>Capture</span><span>Think</span><span>Watch</span><span>Report</span><span>Close</span><span>Workspace</span></span></div>
+    <div class="ls-hint" id="lsHint">Scroll to explore</div>
   </div>
 </section>
 
-<!-- FACTS -->
-<section class="band" aria-label="Product facts">
-  <div class="wrap facts">
-    <div class="fact rv" data-rv="b" style="--i:0"><b data-count="4">4</b><span>Dependency types</span></div>
-    <div class="fact rv" data-rv="b" style="--i:1"><b data-count="6">6</b><span>Risk dimensions</span></div>
-    <div class="fact rv" data-rv="b" style="--i:2"><b data-count="5">5</b><span>Report formats</span></div>
-    <div class="fact rv" data-rv="b" style="--i:3"><b data-count="15">15</b><span>Day free trial</span></div>
-  </div>
-</section>
-
-<!-- HOW IT WORKS -->
-<section class="section" id="how" aria-labelledby="how-h">
+<!-- WHAT IS NEW -->
+<section class="section" id="features" aria-labelledby="new-h">
   <div class="wrap">
-    <div class="section-head rv" data-p="-0.04"><span class="eyebrow">How it works</span><h2 id="how-h">From signed contract to running plan in three steps</h2><p class="lead">The AI proposes. You confirm.</p></div>
-    <div class="steps">
-      <div class="step rv" data-rv="z" style="--i:0"><div class="step-top"><span class="step-ico" data-n="1"><svg class="ico lg"><use href="#i-doc"/></svg></span><span class="step-line"></span></div><div><h3>Upload your documents</h3><p>Contracts, proposals and purchase orders. PDF, Word, Excel or text.</p></div></div>
-      <div class="step rv" data-rv="z" style="--i:1"><div class="step-top"><span class="step-ico" data-n="2"><svg class="ico lg"><use href="#i-spark"/></svg></span><span class="step-line"></span></div><div><h3>Review what the AI found</h3><p>Confirm, edit or ignore each item. Conflicts are flagged.</p></div></div>
-      <div class="step rv" data-rv="z" style="--i:2"><div class="step-top"><span class="step-ico" data-n="3"><svg class="ico lg"><use href="#i-gantt"/></svg></span><span class="step-line"></span></div><div><h3>Run the project</h3><p>Track progress, risks and payments, then send reports.</p></div></div>
-    </div>
+    <div class="section-head rv" data-p="-0.04"><span class="eyebrow">What's new</span><h2 id="new-h">Fresh in this release</h2><p class="lead">The newest parts of the product, all built into the same workspace.</p></div>
+    <div class="ls-chips rv" data-rv="b"><span>Thinking Area</span><span>Meeting capture</span><span>Notification center</span><span>Widget marketplace</span><span>Your own templates</span><span>Project closure</span><span>Trends over time</span></div>
   </div>
 </section>
 
-<!-- FEATURES -->
-<section class="section band" id="features" aria-labelledby="feat-h">
+<!-- GALLERY -->
+<section class="section band" id="product" aria-labelledby="prod-h">
   <div class="wrap">
-    <div class="section-head rv" data-p="-0.04"><span class="eyebrow">Features</span><h2 id="feat-h">Everything a project manager needs, in one workspace</h2><p class="lead">Plan, track and report without switching tools.</p></div>
-    <div class="grid4">
-      <article class="card feat rv" data-rv="z" style="--i:0"><span class="tile"><svg class="ico lg"><use href="#i-spark"/></svg></span><h3>AI document reading</h3><p>No retyping. Dates, value, deliverables and risks are ready to confirm.</p></article>
-      <article class="card feat rv" data-rv="z" style="--i:1"><span class="tile v"><svg class="ico lg"><use href="#i-gantt"/></svg></span><h3>Gantt chart scheduling</h3><p>Drag, link and baseline every task.</p></article>
-      <article class="card feat rv" data-rv="z" style="--i:2"><span class="tile"><svg class="ico lg"><use href="#i-kanban"/></svg></span><h3>Board view</h3><p>The same tasks as To do, In progress and Done.</p></article>
-      <article class="card feat rv" data-rv="z" style="--i:3"><span class="tile v"><svg class="ico lg"><use href="#i-inbox"/></svg></span><h3>Updates inbox</h3><p>Teams, Outlook and Jira messages become suggested changes.</p></article>
-      <article class="card feat rv" data-rv="z" style="--i:0"><span class="tile"><svg class="ico lg"><use href="#i-radar"/></svg></span><h3>Risk radar</h3><p>Rank risks by probability, impact and exposure.</p></article>
-      <article class="card feat rv" data-rv="z" style="--i:1"><span class="tile v"><svg class="ico lg"><use href="#i-dash"/></svg></span><h3>Portfolio dashboard</h3><p>Health, progress and value across every project.</p></article>
-      <article class="card feat rv" data-rv="z" style="--i:2"><span class="tile"><svg class="ico lg"><use href="#i-coin"/></svg></span><h3>Payment milestones</h3><p>Never miss an invoice. Track pending, invoiced and paid.</p></article>
-      <article class="card feat rv" data-rv="z" style="--i:3"><span class="tile v"><svg class="ico lg"><use href="#i-lang"/></svg></span><h3>English and Arabic</h3><p>Right to left layout, dark mode, USD, AED and SAR.</p></article>
-    </div>
+    <div class="section-head rv" data-p="-0.04"><span class="eyebrow">Product</span><h2 id="prod-h">See the real screens</h2><p class="lead">Captured from the running app with sample project data.</p></div>
+    <div class="ls-tabs rv" id="lsTabs" role="tablist" aria-label="Screens"><button type="button" role="tab" data-t="0" aria-selected="true">Overview</button><button type="button" role="tab" data-t="1" aria-selected="false">Risk radar</button><button type="button" role="tab" data-t="2" aria-selected="false">Widgets</button></div>
+    <div class="ls-gal rv" id="lsGal" role="img" aria-label="Screens from the product"><img data-shot="hero" alt="" loading="lazy" decoding="async"><img data-shot="risk" alt="" loading="lazy" decoding="async"><img data-shot="widgets" alt="" loading="lazy" decoding="async"></div>
+    <p class="ls-cap">Light and dark themes. English and Arabic with right to left layout.</p>
   </div>
 </section>
 
-<!-- PRODUCT SHOWCASE -->
-<section class="section" id="product" aria-labelledby="prod-h">
+<!-- BEFORE AND AFTER -->
+<section class="section" aria-labelledby="cmp-h">
   <div class="wrap">
-    <div class="section-head rv" data-p="-0.04"><span class="eyebrow">Product</span><h2 id="prod-h">See the project management software at work</h2><p class="lead">Example data shown.</p></div>
-
-    <!-- 1. extraction -->
-    <div class="show">
-      <div class="show-copy rv" data-rv="l" data-p="-0.05">
-        <span class="tile"><svg class="ico lg"><use href="#i-doc"/></svg></span>
-        <h2>Your contract becomes structured project data</h2>
-        <p>Skip the data entry. The AI fills in the project from your documents.</p>
-        <ul class="ticks">
-          <li><svg class="ico sm"><use href="#i-check"/></svg>Confirm, edit or ignore every extracted item</li>
-          <li><svg class="ico sm"><use href="#i-check"/></svg>Conflicts are flagged for you</li>
-        </ul>
-      </div>
-      <div class="vis rv" data-rv="r" data-p="0.05" style="--i:1">
-        <div class="vis-h"><h3><svg class="ico"><use href="#i-doc"/></svg>Extracted from Contract.pdf</h3><span class="chip ai"><svg class="ico sm"><use href="#i-spark"/></svg>AI reading</span></div>
-        <div class="ex-list">
-          <div class="ex-row"><span class="ex-l">Project value</span><span class="chips"><span class="chip ok">96% sure</span></span><span class="ex-v">AED 4,200,000</span></div>
-          <div class="ex-row"><span class="ex-l">Start date</span><span class="chips"><span class="chip ok">93% sure</span></span><span class="ex-v">15 Jan 2027</span></div>
-          <div class="ex-row"><span class="ex-l">End date</span><span class="chips"><span class="chip warn">Conflict</span></span><span class="ex-v">30 Sep 2027 or 31 Oct 2027</span></div>
-          <div class="ex-row"><span class="ex-l">Client</span><span class="chips"><span class="chip ok">88% sure</span></span><span class="ex-v">Example Client Authority</span></div>
-        </div>
-        <div class="sum-row"><span class="chip info">9 deliverables</span><span class="chip info">4 payment milestones</span><span class="chip info">6 risks</span><span class="chip info">12 requirements</span></div>
-        <div class="vis-h"><span class="note">Illustrative data</span><span class="btn primary" style="min-height:36px;padding:8px 14px;font-size:14px;pointer-events:none">Confirm all 4</span></div>
-      </div>
-    </div>
-
-    <!-- 2. gantt -->
-    <div class="show rev" id="gantt">
-      <div class="show-copy rv" data-rv="l" data-p="-0.05">
-        <span class="tile v"><svg class="ico lg"><use href="#i-gantt"/></svg></span>
-        <h2>A Gantt chart that behaves like one</h2>
-        <p>Drag to move, resize or set progress. Linked tasks reschedule for you.</p>
-        <ul class="ticks">
-          <li><svg class="ico sm"><use href="#i-check"/></svg>Four link types with lag</li>
-          <li><svg class="ico sm"><use href="#i-check"/></svg>Baseline and critical path</li>
-          <li><svg class="ico sm"><use href="#i-check"/></svg>Import and export Microsoft Project XML</li>
-        </ul>
-      </div>
-      <div class="vis rv" data-rv="r" data-p="0.05" style="--i:1">
-        <div class="vis-h"><h3><svg class="ico"><use href="#i-gantt"/></svg>Smart Portal Rollout</h3><span class="chip warn">At risk</span></div>
-        <div class="g-scroll">
-        <div class="gantt g-area" style="--gl:150px;--t:7.3;padding-bottom:26px">
-          <div class="g-head"><span>Task</span><div class="g-weeks"><span>W1</span><span>W2</span><span>W3</span><span>W4</span><span>W5</span><span>W6</span><span>W7</span><span>W8</span><span>W9</span><span>W10</span><span>W11</span><span>W12</span></div></div>
-          <div class="g-row"><span class="g-name sum">Discovery phase</span><div class="g-track"><span class="g-bar sum" style="--s:0;--w:3;--i:0"></span></div></div>
-          <div class="g-row"><span class="g-name">Requirements signed off</span><div class="g-track"><span class="g-ms" style="--s:3;--i:1"></span></div></div>
-          <div class="g-row"><span class="g-name">Solution design</span><div class="g-track"><span class="g-base" style="--s:2;--w:3.5"></span><span class="g-bar done" style="--s:2;--w:4;--p:100%;--i:2"></span></div></div>
-          <div class="g-row"><span class="g-name">Build core features</span><div class="g-track"><span class="g-bar crit" style="--s:5;--w:5;--p:60%;--i:3"></span></div></div>
-          <div class="g-row"><span class="g-name">Integrations</span><div class="g-track"><span class="g-base" style="--s:5;--w:3.5"></span><span class="g-bar late" style="--s:5.5;--w:4;--p:30%;--i:4"></span></div></div>
-          <div class="g-row"><span class="g-name">User acceptance testing</span><div class="g-track"><span class="g-bar crit" style="--s:9;--w:2.5;--p:0%;--i:5"></span></div></div>
-          <div class="g-row"><span class="g-name">Training</span><div class="g-track"><span class="g-bar" style="--s:9.5;--w:2;--p:0%;--i:6"></span></div></div>
-          <div class="g-row"><span class="g-name">Go live</span><div class="g-track"><span class="g-ms" style="--s:11.6;--i:7"></span></div></div>
-          <span class="g-today" aria-hidden="true" style="top:24px;bottom:26px"></span>
-        </div>
-        </div>
-        <div class="legend"><span><i style="background:var(--g-done)"></i>Done</span><span><i style="background:var(--g-prog)"></i>In progress</span><span><i style="background:var(--g-late)"></i>Late</span><span><i style="background:var(--g-crit)"></i>Critical path</span><span><i class="dia" style="background:var(--g-ms)"></i>Milestone</span><span><i class="ln" style="background:var(--faint)"></i>Baseline</span></div>
-        <span class="note">Illustrative data</span>
-      </div>
-    </div>
-
-    <!-- 3. updates -->
-    <div class="show" id="updates">
-      <div class="show-copy rv" data-rv="l" data-p="-0.05">
-        <span class="tile"><svg class="ico lg"><use href="#i-inbox"/></svg></span>
-        <h2>Status updates arrive as suggestions you can apply</h2>
-        <p>Stop chasing status. Messages arrive as suggestions and you decide.</p>
-        <ul class="ticks">
-          <li><svg class="ico sm"><use href="#i-check"/></svg>Every change can be undone</li>
-        </ul>
-      </div>
-      <div class="vis rv" data-rv="r" data-p="0.05" style="--i:1" id="updDemo">
-        <div class="vis-h"><h3><svg class="ico"><use href="#i-inbox"/></svg>Updates</h3><span class="chip info" id="updCount">3 waiting</span></div>
-        <div class="upd" data-upd>
-          <div class="top"><span class="src"><svg class="ico sm"><use href="#i-msg"/></svg>Teams</span><span>from Ahmed</span></div>
-          <p>Design is done and signed off by the client.</p>
-          <div class="sug"><span class="chip ai">Close a deliverable</span><span>Design package</span></div>
-          <div class="acts"><div class="conf"><div class="meter" style="--v:92%"><i></i></div>92%</div><button class="mini-btn d" type="button" data-dismiss>Dismiss</button><button class="mini-btn p" type="button" data-apply>Apply</button><span class="done"><svg class="ico sm"><use href="#i-check"/></svg>Applied <button class="mini-btn" type="button" data-undo style="margin-inline-start:8px"><svg class="ico sm" style="vertical-align:-3px"><use href="#i-undo"/></svg> Undo</button></span></div>
-        </div>
-        <div class="upd" data-upd>
-          <div class="top"><span class="src"><svg class="ico sm"><use href="#i-mail"/></svg>Outlook</span><span>from Finance</span></div>
-          <p>Invoice for milestone 2 was sent on Monday.</p>
-          <div class="sug"><span class="chip ai">Mark a payment as invoiced</span><span>Milestone 2</span></div>
-          <div class="acts"><div class="conf"><div class="meter" style="--v:88%"><i></i></div>88%</div><button class="mini-btn d" type="button" data-dismiss>Dismiss</button><button class="mini-btn p" type="button" data-apply>Apply</button><span class="done"><svg class="ico sm"><use href="#i-check"/></svg>Applied <button class="mini-btn" type="button" data-undo style="margin-inline-start:8px"><svg class="ico sm" style="vertical-align:-3px"><use href="#i-undo"/></svg> Undo</button></span></div>
-        </div>
-        <div class="upd" data-upd>
-          <div class="top"><span class="src"><svg class="ico sm"><use href="#i-link"/></svg>Jira</span><span>comment on API-214</span></div>
-          <p>The API integration is built and tested. We are at 40 percent overall.</p>
-          <div class="sug"><span class="chip ai">Update a task</span><span>Integrations to 40%</span></div>
-          <div class="acts"><div class="conf"><div class="meter" style="--v:81%"><i></i></div>81%</div><button class="mini-btn d" type="button" data-dismiss>Dismiss</button><button class="mini-btn p" type="button" data-apply>Apply</button><span class="done"><svg class="ico sm"><use href="#i-check"/></svg>Applied <button class="mini-btn" type="button" data-undo style="margin-inline-start:8px"><svg class="ico sm" style="vertical-align:-3px"><use href="#i-undo"/></svg> Undo</button></span></div>
-        </div>
-        <span class="note">Example updates. Try Apply.</span>
-      </div>
-    </div>
-
-    <!-- 4. risk -->
-    <div class="show rev" id="risk">
-      <div class="show-copy rv" data-rv="l" data-p="-0.05">
-        <span class="tile v"><svg class="ico lg"><use href="#i-radar"/></svg></span>
-        <h2>Spot the risks before they reach the client</h2>
-        <p>Logged risks, late tasks and payments in one place.</p>
-        <ul class="ticks">
-          <li><svg class="ico sm"><use href="#i-check"/></svg>Probability and impact matrix</li>
-          <li><svg class="ico sm"><use href="#i-check"/></svg>Six exposure dimensions</li>
-        </ul>
-      </div>
-      <div class="vis rv" data-rv="r" data-p="0.05" style="--i:1">
-        <div class="vis-h"><h3><svg class="ico"><use href="#i-radar"/></svg>Risk radar</h3><span class="chip bad">2 high signals</span></div>
-        <div class="risk-grid">
-          <div>
-            <h3 style="font-size:14px;margin-bottom:10px">Probability and impact</h3>
-            <div class="matrix" role="img" aria-label="Risk matrix. High probability: 1 low impact risk, 2 medium and 2 high. Medium probability: 1, 3 and 1. Low probability: 2, 1 and 0.">
-              <span class="m-axis y">High</span>
-              <div class="m-cell md"><span class="lab">Medium</span><span class="m-dot" style="--i:0">1</span></div>
-              <div class="m-cell hi"><span class="lab">High</span><span class="m-dot" style="--i:1">2</span></div>
-              <div class="m-cell hi"><span class="lab">High</span><span class="m-dot" style="--i:2">2</span></div>
-              <span class="m-axis y">Medium</span>
-              <div class="m-cell lo"><span class="lab">Low</span><span class="m-dot" style="--i:3">1</span></div>
-              <div class="m-cell md"><span class="lab">Medium</span><span class="m-dot" style="--i:4">3</span></div>
-              <div class="m-cell hi"><span class="lab">High</span><span class="m-dot" style="--i:5">1</span></div>
-              <span class="m-axis y">Low</span>
-              <div class="m-cell lo"><span class="lab">Low</span><span class="m-dot" style="--i:6">2</span></div>
-              <div class="m-cell lo"><span class="lab">Low</span><span class="m-dot" style="--i:7">1</span></div>
-              <div class="m-cell md"><span class="lab">Medium</span></div>
-              <span></span><span class="m-axis">Low</span><span class="m-axis">Medium</span><span class="m-axis">High</span>
-            </div>
-            <p class="note" style="text-align:center;margin-top:6px">Impact</p>
-          </div>
-          <div>
-            <h3 style="font-size:14px;margin-bottom:14px">Exposure by dimension</h3>
-            <div class="hbars">
-              <div class="hb hi" style="--i:0"><span>Schedule</span><span class="t"><i style="--v:78%"></i></span><b>78</b></div>
-              <div class="hb md" style="--i:1"><span>Resources</span><span class="t"><i style="--v:61%"></i></span><b>61</b></div>
-              <div class="hb md" style="--i:2"><span>Scope</span><span class="t"><i style="--v:52%"></i></span><b>52</b></div>
-              <div class="hb" style="--i:3"><span>Financial</span><span class="t"><i style="--v:45%"></i></span><b>45</b></div>
-              <div class="hb" style="--i:4"><span>Technical</span><span class="t"><i style="--v:38%"></i></span><b>38</b></div>
-              <div class="hb" style="--i:5"><span>Governance</span><span class="t"><i style="--v:30%"></i></span><b>30</b></div>
-            </div>
-            <p class="note" style="margin-top:12px">Score from 0 to 100.</p>
-          </div>
-        </div>
-        <span class="note">Illustrative data</span>
-      </div>
-    </div>
-
-    <!-- 5. portfolio -->
-    <div class="show" id="portfolio" style="grid-template-columns:minmax(0,1fr)">
-      <div class="show-copy rv" data-rv="l" data-p="-0.05" style="align-items:center;text-align:center;margin:0 auto;max-width:720px">
-        <span class="tile"><svg class="ico lg"><use href="#i-dash"/></svg></span>
-        <h2>One portfolio view for leadership and the PMO</h2>
-        <p>Progress, schedule index and payments for every project.</p>
-      </div>
-      <div>
-        <div class="port-kpis">
-          <div class="kpi rv" data-rv="z" style="--i:0"><span class="k-l">Active projects</span><span class="k-v">12</span><span class="k-h ok">9 on track</span></div>
-          <div class="kpi rv" data-rv="z" style="--i:1"><span class="k-l">Portfolio value</span><span class="k-v">$18.4M</span><span class="k-h">Across 12 projects</span></div>
-          <div class="kpi rv" data-rv="z" style="--i:2"><span class="k-l">Schedule index</span><span class="k-v">0.94</span><span class="k-h warn">1.00 means on plan</span></div>
-          <div class="kpi rv" data-rv="z" style="--i:3"><span class="k-l">Late tasks</span><span class="k-v">7</span><span class="k-h bad">Past their finish date</span></div>
-        </div>
-        <div class="port-grid">
-          <div class="vis chart rv" data-rv="b" data-p="0.04" style="--i:0">
-            <div class="vis-h"><h3><svg class="ico"><use href="#i-chart"/></svg>Progress against plan</h3></div>
-            <div id="lineChart" role="img" aria-label="Line chart. Planned progress reaches 72 percent in month 6. Actual progress reaches 68 percent."></div>
-            <div class="legend"><span><i class="ln" style="background:var(--primary);height:3px"></i>Actual</span><span><i class="ln" style="background:var(--faint)"></i>Plan</span></div>
-          </div>
-          <div class="vis chart rv" data-rv="b" data-p="-0.04" style="--i:1">
-            <div class="vis-h"><h3><svg class="ico"><use href="#i-coin"/></svg>Payment pipeline</h3></div>
-            <div id="barChart" role="img" aria-label="Stacked bar chart of payments in thousands of dollars by quarter. Paid and invoiced amounts shrink while pending amounts grow toward the fourth quarter."></div>
-            <div class="legend"><span><i style="background:var(--c3)"></i>Paid</span><span><i style="background:var(--c1)"></i>Invoiced</span><span><i style="background:var(--track);border:1px solid var(--border-strong)"></i>Pending</span></div>
-          </div>
-        </div>
-        <p class="note" style="text-align:center;margin-top:14px">Illustrative data. Amounts in thousands of US dollars.</p>
-      </div>
-    </div>
+    <div class="section-head rv" data-p="-0.04"><h2 id="cmp-h">Less typing. More steering.</h2></div>
+    <table class="ls-cmp rv" data-rv="b"><thead><tr><th scope="col">Before</th><th scope="col">With Project Manager AI</th></tr></thead><tbody>
+      <tr><td>Retype the contract into a sheet</td><td>Upload and confirm</td></tr>
+      <tr><td>Chase status by email</td><td>Apply suggestions</td></tr>
+      <tr><td>Build the weekly report by hand</td><td>Download Word, Excel or PowerPoint</td></tr>
+      <tr><td>Lose the lessons at the end</td><td>Close with a report and a certificate</td></tr>
+    </tbody></table>
   </div>
 </section>
 
-<!-- REPORTS -->
 <section class="section band" id="reports" aria-labelledby="rep-h">
   <div class="wrap">
     <div class="section-head rv" data-p="-0.04"><span class="eyebrow">Reports and exports</span><h2 id="rep-h">Send the report, not the spreadsheet</h2><p class="lead">Progress reports built from live data and compared with your baseline.</p></div>
@@ -421,20 +243,8 @@
   </div>
 </section>
 
-<!-- AUDIENCE -->
-<section class="section" aria-labelledby="who-h">
-  <div class="wrap">
-    <div class="section-head rv" data-p="-0.04"><span class="eyebrow">Who it is for</span><h2 id="who-h">Built for teams that deliver against contracts</h2></div>
-    <div class="grid3">
-      <article class="card who rv" data-rv="t" style="--i:0"><span class="tile"><svg class="ico lg"><use href="#i-brief"/></svg></span><h3>Project managers</h3><p>Spend less time on paperwork and more time delivering.</p></article>
-      <article class="card who rv" data-rv="t" style="--i:1"><span class="tile v"><svg class="ico lg"><use href="#i-users"/></svg></span><h3>PMOs and delivery leads</h3><p>One structure across every project.</p></article>
-      <article class="card who rv" data-rv="t" style="--i:2"><span class="tile"><svg class="ico lg"><use href="#i-land"/></svg></span><h3>Executives and sponsors</h3><p>See what needs a decision.</p></article>
-    </div>
-  </div>
-</section>
-
 <!-- FAQ -->
-<section class="section band" id="faq" aria-labelledby="faq-h">
+<section class="section" id="faq" aria-labelledby="faq-h">
   <div class="wrap">
     <div class="section-head rv" data-p="-0.04"><span class="eyebrow">FAQ</span><h2 id="faq-h">Questions about this project management tool</h2></div>
     <div class="faq">
@@ -466,9 +276,9 @@
   <div class="wrap">
     <div class="foot">
       <a class="brand" href="#top"><img src="brand/mark.svg" alt="" width="34" height="34"><span>Project Manager <b>AI</b></span></a>
-      <nav aria-label="Footer"><a href="#features">Features</a><a href="#how">How it works</a><a href="#product">Product</a><a href="#reports">Reports</a><a href="#faq">FAQ</a><a href="login.html">Sign in</a></nav>
+      <nav aria-label="Footer"><a href="#how">How it works</a><a href="#features">What's new</a><a href="#product">Product</a><a href="#reports">Reports</a><a href="#faq">FAQ</a><a href="login.html">Sign in</a></nav>
     </div>
-    <div class="legal"><span>&copy; 2026 Project Manager AI</span><span>Charts and figures on this page are illustrative examples.</span></div>
+    <div class="legal"><span>&copy; 2026 Project Manager AI</span><span>Screens on this page show sample project data.</span></div>
   </div>
 </footer>
 
@@ -479,5 +289,7 @@
 
 <script src="site.js"></script>
 <script src="lang.js"></script>
+<script src="shots.js"></script>
+<script src="landing.js"></script>
 </body>
 </html>
