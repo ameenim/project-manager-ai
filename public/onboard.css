@@ -13,7 +13,7 @@
 .ribbon.paid .rb-status svg { color: var(--success); }
 .ribbon.warn .rb-status svg { color: var(--warning); }
 .ribbon.bad .rb-status svg { color: var(--danger); }
-.rb-tokens { display: flex; align-items: center; gap: 8px; font-size: var(--fs-small); color: var(--muted); border-radius: 8px; padding: 2px 4px; }
+.rb-tokens { display: flex; align-items: center; gap: 8px; font-size: var(--fs-small); color: var(--muted); border-radius: var(--r-s); padding: 2px 4px; }
 .rb-tokens b { color: var(--text); font-size: var(--fs-body); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .rb-tokens:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .rb-meter { width: 110px; flex: none; }
@@ -60,7 +60,7 @@ input[aria-invalid="true"] { border-color: var(--danger); }
 .ob-tour { position: fixed; inset: 0; z-index: 140; }
 .ob-shield { position: absolute; inset: 0; }
 .ob-spot { position: fixed; border-radius: var(--radius); box-shadow: 0 0 0 2px var(--primary), 0 0 0 100vmax rgba(10, 16, 32, .6); transition: left .26s var(--ease), top .26s var(--ease), width .26s var(--ease), height .26s var(--ease); pointer-events: none; }
-.ob-pop { position: fixed; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-lg); padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; animation: modal-in .22s var(--ease); outline: none; }
+.ob-pop { position: fixed; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: var(--r-l); box-shadow: var(--shadow-lg); padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; animation: modal-in .22s var(--ease); outline: none; }
 .ob-pop h3 { font-size: var(--fs-heading); }
 .ob-pop p { margin: 0; color: var(--muted); line-height: 1.5; }
 .ob-actions { display: flex; align-items: center; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
@@ -88,5 +88,5 @@ input[aria-invalid="true"] { border-color: var(--danger); }
 .bl-uses { margin: 0; padding-inline-start: 18px; line-height: 1.7; color: var(--muted); }
 
 /* phone fields follow the same input style as the rest of the app */
-input[type=tel] { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); outline: none; }
+input[type=tel] { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: var(--r-s); background: var(--surface); outline: none; }
 input[type=tel]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }

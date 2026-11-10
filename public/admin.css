@@ -8,7 +8,7 @@
 .sa-main .page { max-width: 1280px; margin-inline: auto; }
 .sa-side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--border); font-size: var(--fs-small); color: var(--muted); }
 .sa-side-foot b { color: var(--text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sa-tag { font-size: var(--fs-micro); font-weight: 600; color: var(--primary); background: var(--primary-soft); border-radius: 20px; padding: 1px 8px; margin-inline-start: 6px; }
+.sa-tag { font-size: var(--fs-micro); font-weight: 600; color: var(--primary); background: var(--primary-soft); border-radius: var(--r-pill); padding: 1px 8px; margin-inline-start: 6px; }
 .sa-ic { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 .sa-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
 .sa-kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; border-inline-start: 3px solid var(--border); box-shadow: var(--shadow); min-width: 0; }
@@ -31,7 +31,7 @@
 .sa-bars.lab-above i .cl-t { bottom: 100%; margin-bottom: 3px; } .sa-bars.lab-below i .cl-t { top: 100%; margin-top: 3px; } .sa-bars.lab-center i .cl-t { top: 50%; transform: translate(-50%, -50%); text-shadow: 0 0 3px var(--surface), 0 0 3px var(--surface); }
 .sa-bars.dense i .cl-t { writing-mode: vertical-rl; transform: translateX(-50%) rotate(180deg); } .sa-bars.dense.lab-center i .cl-t { transform: translate(-50%, -50%) rotate(180deg); }
 .sa-bars.dense.lab-above { padding-top: 56px; }
-.sa-bars i { flex: 1 1 0; min-width: 1px; max-width: 56px; background: var(--c1); border-radius: 4px 4px 0 0; min-height: 2px; opacity: .9; transition: opacity .15s; }
+.sa-bars i { flex: 1 1 0; min-width: 1px; max-width: 56px; background: var(--c1); border-radius: var(--r-xs) var(--r-xs) 0 0; min-height: 2px; opacity: .9; transition: opacity .15s; }
 .sa-bars i:hover, .sa-bars i:focus { opacity: 1; outline: 2px solid var(--primary); outline-offset: 1px; }
 .sa-bars.green i { background: var(--c3); } .sa-bars.orange i { background: var(--c2); } .sa-bars i.zero { background: var(--track); }
 .sa-axis { display: flex; justify-content: space-between; font-size: var(--fs-micro); color: var(--faint); margin-top: 4px; }
@@ -41,7 +41,7 @@
 .sa-bar-row .progress { height: 8px; }
 .sa-bar-row span.n { font-variant-numeric: tabular-nums; font-weight: 600; }
 .sa-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
-.sa-toolbar input[type=text], .sa-toolbar input[type=date], .sa-toolbar select { padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; min-height: 36px; }
+.sa-toolbar input[type=text], .sa-toolbar input[type=date], .sa-toolbar select { padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: var(--r-s); background: var(--surface); color: var(--text); font: inherit; min-height: 36px; }
 .sa-toolbar input:not([type=search]), .sa-toolbar select { width: auto; flex: 0 0 auto; } .sa-toolbar .sf { flex: 1 1 220px; min-width: 220px; max-width: 360px; }
 .sa-tbl td, .sa-tbl th { white-space: nowrap; }
 .sa-tbl td.wrap { white-space: normal; min-width: 200px; max-width: 420px; word-break: break-word; }
@@ -49,17 +49,17 @@
 .sa-tbl td.num { text-align: end; font-variant-numeric: tabular-nums; }
 .sa-acts { display: flex; gap: 6px; justify-content: flex-end; }
 .sa-pager { display: flex; align-items: center; gap: 10px; justify-content: flex-end; margin-top: 12px; font-size: var(--fs-small); color: var(--muted); }
-.sa-note { display: flex; gap: 10px; align-items: flex-start; padding: 10px 14px; border-radius: 10px; background: var(--warning-soft); color: var(--text); border: 1px solid var(--border); font-size: var(--fs-small); margin-bottom: 14px; }
+.sa-note { display: flex; gap: 10px; align-items: flex-start; padding: 10px 14px; border-radius: var(--r-m); background: var(--warning-soft); color: var(--text); border: 1px solid var(--border); font-size: var(--fs-small); margin-bottom: 14px; }
 .sa-note.ok { background: var(--success-soft); } .sa-note.bad { background: var(--danger-soft); }
 .sa-status { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
 .sa-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--faint); } .sa-dot.good { background: var(--success); } .sa-dot.warn { background: var(--warning); } .sa-dot.bad { background: var(--danger); }
 .sa-cfg { display: grid; gap: 12px; }
 .sa-cfg-row { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(140px, 220px); gap: 14px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
-.sa-cfg-row:last-child { border-bottom: 0; } .sa-cfg-row input[type=number], .sa-cfg-row input[type=text] { padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; width: 100%; }
+.sa-cfg-row:last-child { border-bottom: 0; } .sa-cfg-row input[type=number], .sa-cfg-row input[type=text] { padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: var(--r-s); background: var(--surface); color: var(--text); font: inherit; width: 100%; }
 .sa-cfg-row .d { font-size: var(--fs-small); color: var(--faint); }
 @media (max-width: 600px) { .sa-cfg-row { grid-template-columns: 1fr; } }
 .sa-dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; font-size: var(--fs-body); } .sa-dl dt { color: var(--muted); } .sa-dl dd { margin: 0; font-weight: 600; word-break: break-word; }
-.sa-pre { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: var(--fs-small); white-space: pre-wrap; word-break: break-word; max-height: 260px; overflow: auto; margin: 0; }
+.sa-pre { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-s); padding: 10px 12px; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: var(--fs-small); white-space: pre-wrap; word-break: break-word; max-height: 260px; overflow: auto; margin: 0; }
 .sa-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
 .sa-modal-form { display: grid; gap: 12px; } .sa-modal-form .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 @media (max-width: 600px) { .sa-modal-form .two { grid-template-columns: 1fr; } }
@@ -83,13 +83,13 @@
 .sa-sug-i h4 { margin: 0 0 6px; font-size: var(--fs-body); overflow-wrap: anywhere; }
 .sa-sug-i p { margin: 0 0 6px; overflow-wrap: anywhere; }
 .sa-sub { margin: 0 0 8px; font-size: var(--fs-small); color: var(--muted); font-weight: 600; }
-.sa-meter { display: inline-block; width: 90px; height: 8px; border-radius: 4px; background: var(--track, var(--border)); overflow: hidden; vertical-align: middle; }
-.sa-meter i { display: block; height: 100%; background: var(--primary); border-radius: 4px; }
+.sa-meter { display: inline-block; width: 90px; height: 8px; border-radius: var(--r-xs); background: var(--track, var(--border)); overflow: hidden; vertical-align: middle; }
+.sa-meter i { display: block; height: 100%; background: var(--primary); border-radius: var(--r-xs); }
 .sa-warn { background: var(--warning-soft); color: var(--warning); }
-.sa-pre { max-height: 260px; overflow: auto; font-size: 12px; white-space: pre-wrap; background: var(--surface-2); padding: 10px; border-radius: 8px; }
+.sa-pre { max-height: 260px; overflow: auto; font-size: 12px; white-space: pre-wrap; background: var(--surface-2); padding: 10px; border-radius: var(--r-s); }
 .sa-ul { margin: 0; padding-inline-start: 18px; }
 .sa-tl { list-style: none; padding: 0; display: grid; gap: 8px; margin: 0; }
-.sa-tl li { padding: 8px 12px; border-radius: 8px; background: var(--surface-2); }
+.sa-tl li { padding: 8px 12px; border-radius: var(--r-s); background: var(--surface-2); }
 .sa-tl li.internal { opacity: .75; border-inline-start: 3px solid var(--border); }
 .sa-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 @media (max-width: 900px) { .sa-grid2 { grid-template-columns: 1fr; } }

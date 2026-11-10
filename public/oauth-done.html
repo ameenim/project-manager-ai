@@ -2,13 +2,15 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex, nofollow"><title>Project Manager AI</title>
 <link rel="icon" href="brand/mark.svg" type="image/svg+xml">
+<link rel="stylesheet" href="tokens.css">
 <style>
-  body { margin: 0; min-height: 100vh; display: grid; place-items: center; font-family: system-ui, sans-serif; background: #f5f7fb; color: #1b2438; }
-  .box { max-width: 380px; padding: 32px 28px; background: #fff; border-radius: 16px; box-shadow: 0 8px 30px rgba(20,30,60,.12); text-align: center; }
-  .ic { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; margin: 0 auto 14px; font-size: 28px; color: #fff; }
-  .ok { background: #1a9d6a; } .bad { background: #d64545; }
-  h1 { font-size: 20px; margin: 0 0 8px; } p { margin: 0 0 18px; color: #5a6682; line-height: 1.5; }
-  a, button { font: inherit; padding: 9px 18px; border-radius: 9px; border: 0; background: #2358d6; color: #fff; cursor: pointer; text-decoration: none; display: inline-block; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; font-family: var(--font); background: var(--bg); color: var(--text); }
+  .box { max-width: 380px; padding: 32px 28px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-l); box-shadow: var(--shadow-3); text-align: center; }
+  .ic { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; margin: 0 auto 14px; font-size: 28px; color: var(--surface); }
+  .ok { background: var(--success); } .bad { background: var(--danger); }
+  h1 { font-size: var(--fs-title); margin: 0 0 8px; } p { margin: 0 0 18px; color: var(--muted); line-height: 1.5; font-size: var(--fs-body); }
+  a, button { font: inherit; padding: 8px 18px; border-radius: var(--r-s); border: 0; background: var(--primary); color: var(--on-primary); cursor: pointer; text-decoration: none; display: inline-block; transition: background var(--t-fast) var(--ease), transform var(--t-fast) var(--ease); }
+  a:hover, button:hover { background: var(--primary-600); transform: translateY(-1px); }
 </style></head>
 <body><main class="box"><div class="ic" id="ic">&#10003;</div><h1 id="h"></h1><p id="p"></p><a id="go" href="app.html" hidden>Back to the app</a></main>
 <script src="oauth_done.js"></script></body></html>

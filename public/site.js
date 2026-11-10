@@ -16,8 +16,9 @@
     var cur = root.getAttribute('data-theme');
     if (!cur) cur = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     var next = cur === 'dark' ? 'light' : 'dark';
-    root.setAttribute('data-theme', next);
-    store('pmai_theme', next);
+    var apply = function () { root.setAttribute('data-theme', next); store('pmai_theme', next); };
+    var r = themeBtn.getBoundingClientRect(); root.style.setProperty('--vx', (r.left + r.width / 2) + 'px'); root.style.setProperty('--vy', (r.top + r.height / 2) + 'px');
+    if (window.PMUI && document.startViewTransition) { root.classList.add('vt-theme'); try { var tr = document.startViewTransition(apply); tr.finished.then(function () { root.classList.remove('vt-theme'); }, function () { root.classList.remove('vt-theme'); }); } catch (e) { root.classList.remove('vt-theme'); apply(); } } else apply();
   });
 
   /* ---------- header, progress, back to top, active nav ---------- */

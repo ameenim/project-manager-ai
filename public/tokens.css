@@ -1,0 +1,74 @@
+/* Project Manager AI design tokens. The ONLY place where colors, type sizes, radii, shadows and motion timing are defined.
+   Loaded first by every page (site, login, app, admin, onboarding, support, OAuth). Other stylesheets use var(--token) and never hex values.
+   Theme: light by default, dark through data-theme="dark" or the system setting when no choice is saved. */
+:root {
+  /* type scale: the only font sizes in the system */
+  --fs-micro: 11px; --fs-small: 12px; --fs-body: 14px; --fs-heading: 16px; --fs-title: 24px; --fs-metric: 28px;
+  --font: "IBM Plex Sans", "IBM Plex Sans Arabic", system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Arabic", "Helvetica Neue", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+
+  /* neutrals, with a slight blue bias */
+  --bg: #f4f5fa; --surface: #ffffff; --surface-2: #f8f9fc; --border: #e6e9f1; --border-strong: #d0d6e4;
+  --text: #14192d; --muted: #525c75; --faint: #5d6882;
+  /* action */
+  --primary: #2f55e4; --primary-600: #2444c4; --primary-soft: #e9eeff; --on-primary: #ffffff;
+  /* status: green is good, amber is watch, red is late or destructive, violet is AI */
+  --success: #0b7a4b; --success-soft: #e3f5ec; --warning: #955300; --warning-soft: #fdf1db; --danger: #c0303b; --danger-soft: #fde8ea;
+  --violet: #6a45d8; --violet-soft: #efeafd;
+  --ai-grad: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  --logo-ai: #7c3aed;
+  --on-solid: #ffffff; /* text on a solid status fill */
+  /* fixed colors that never change with the theme: brand panels, paper previews and dark hero surfaces */
+  --white: #ffffff; --ink: #10172b; --night: #0b1020; --night-2: #151b2c; --night-muted: #a5afc8; --night-ink: #e8ecf8; --logo-ai-light: #7c3aed; --logo-ai-dark: #a78bfa; --on-dark-accent: #d8ccff; --doc-head: #1f3a5f;
+  --paper: #ffffff; --paper-2: #f4f5fa; --paper-ink: #222a3b; --paper-muted: #525c75; --paper-line: #dde1ea;
+  --glass: rgba(255, 255, 255, .78);
+  --grad: var(--primary); --cta-grad: #1f2f55;
+  --scrim: rgba(15, 22, 45, .45);
+
+  /* charts */
+  --track: #e6eaf3; --c1: #2a78d6; --c2: #eb6834; --c3: #1baf7a; --c4: #eda100;
+  /* gantt */
+  --g-todo: #5f6d8c; --g-prog: #2f62d0; --g-done: #17825a; --g-late: #c23a2e; --g-sum: #1f2f55; --g-crit: #b9620a; --g-ms: #6a45c8;
+  --g-weekend: rgba(100, 116, 150, .09); --g-holiday: rgba(214, 69, 69, .1); --g-today: #e0453a;
+
+  /* shape: four radii only (tiny parts, controls, list items, cards) plus the pill */
+  --r-xs: 4px; --r-s: 8px; --r-m: 12px; --r-l: 16px; --r-pill: 999px; --radius: var(--r-m);
+  /* elevation: 1 at rest, 2 on hover and menus, 3 for dialogs and drawers */
+  --shadow-1: 0 1px 2px rgba(20, 25, 45, .05), 0 1px 1px rgba(20, 25, 45, .03);
+  --shadow-2: 0 2px 4px rgba(20, 25, 45, .05), 0 12px 28px -12px rgba(20, 25, 45, .16);
+  --shadow-3: 0 8px 16px rgba(20, 25, 45, .08), 0 28px 60px -20px rgba(20, 25, 45, .28);
+  --shadow: var(--shadow-2); --shadow-lg: var(--shadow-3); --card-shadow: var(--shadow-1);
+
+  /* motion */
+  --ease: cubic-bezier(.2, .8, .2, 1); --ease-pop: cubic-bezier(.2, 1.2, .3, 1);
+  --t-fast: .15s; --t-quick: .25s; --t-page: .34s; --t-reveal: .5s; --t-draw: .9s;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1220; --surface: #151b2c; --surface-2: #1a2236; --border: #252e47; --border-strong: #34405e;
+    --text: #e8ecf8; --muted: #a5afc8; --faint: #929dba;
+    --primary: #86a2ff; --primary-600: #a3b9ff; --primary-soft: #1b2850; --on-primary: #0b1020;
+    --success: #4fd196; --success-soft: #12301f; --warning: #f4b95a; --warning-soft: #35270f; --danger: #ff8187; --danger-soft: #3a1519;
+    --violet: #b9a3ff; --violet-soft: #251a4a; --logo-ai: #a78bfa;
+    --glass: rgba(21, 27, 44, .78); --scrim: rgba(3, 6, 15, .6); --on-solid: #0b1020;
+    --track: #26304a; --c1: #3987e5; --c2: #d95926; --c3: #199e70; --c4: #c98500;
+    --g-todo: #8c98b6; --g-prog: #5b8cff; --g-done: #38b27f; --g-late: #ef6a5d; --g-sum: #8fa6dd; --g-crit: #f5a04a; --g-ms: #a08cf5;
+    --g-weekend: rgba(150, 165, 200, .07); --g-holiday: rgba(242, 112, 107, .12);
+    --shadow-1: 0 1px 0 rgba(0, 0, 0, .35); --shadow-2: 0 1px 0 rgba(0, 0, 0, .35), 0 14px 30px -14px rgba(0, 0, 0, .7); --shadow-3: 0 30px 70px -20px rgba(0, 0, 0, .8);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1220; --surface: #151b2c; --surface-2: #1a2236; --border: #252e47; --border-strong: #34405e;
+  --text: #e8ecf8; --muted: #a5afc8; --faint: #929dba;
+  --primary: #86a2ff; --primary-600: #a3b9ff; --primary-soft: #1b2850; --on-primary: #0b1020;
+  --success: #4fd196; --success-soft: #12301f; --warning: #f4b95a; --warning-soft: #35270f; --danger: #ff8187; --danger-soft: #3a1519;
+  --violet: #b9a3ff; --violet-soft: #251a4a; --logo-ai: #a78bfa;
+  --glass: rgba(21, 27, 44, .78); --scrim: rgba(3, 6, 15, .6); --on-solid: #0b1020;
+  --track: #26304a; --c1: #3987e5; --c2: #d95926; --c3: #199e70; --c4: #c98500;
+  --g-todo: #8c98b6; --g-prog: #5b8cff; --g-done: #38b27f; --g-late: #ef6a5d; --g-sum: #8fa6dd; --g-crit: #f5a04a; --g-ms: #a08cf5;
+  --g-weekend: rgba(150, 165, 200, .07); --g-holiday: rgba(242, 112, 107, .12);
+  --shadow-1: 0 1px 0 rgba(0, 0, 0, .35); --shadow-2: 0 1px 0 rgba(0, 0, 0, .35), 0 14px 30px -14px rgba(0, 0, 0, .7); --shadow-3: 0 30px 70px -20px rgba(0, 0, 0, .8);
+  color-scheme: dark;
+}

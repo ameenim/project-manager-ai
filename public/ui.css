@@ -1,0 +1,7 @@
+/* Shared motion styles for every page (see ui.js). Timing and easing come from tokens.css. */
+.ui-in { animation: ui-rise var(--t-reveal) var(--ease) both; animation-delay: calc(var(--k, 0) * 55ms); }
+@keyframes ui-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+:root.vt-theme::view-transition-old(root) { animation: none; }
+:root.vt-theme::view-transition-new(root) { animation: theme-reveal .55s var(--ease) both; clip-path: circle(0 at var(--vx, 50%) var(--vy, 0)); mix-blend-mode: normal; }
+@keyframes theme-reveal { to { clip-path: circle(150% at var(--vx, 50%) var(--vy, 0)); } }
+@media (prefers-reduced-motion: reduce) { .ui-in { animation: none; } :root.vt-theme::view-transition-new(root) { animation: none; clip-path: none; } }
