@@ -189,6 +189,7 @@
     'Screens': 'الشاشات',
     'Screens from the product': 'شاشات من المنتج',
     'Overview': 'نظرة عامة',
+    'Review': 'المراجعة', 'Closure': 'الإغلاق',
     'Widgets': 'الأدوات',
     'Light and dark themes. English and Arabic with right to left layout.': 'مظهر فاتح وداكن. الإنجليزية والعربية بتخطيط من اليمين إلى اليسار.',
     'Less typing. More steering.': 'كتابة أقل. وقيادة أكثر.',

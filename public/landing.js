@@ -21,7 +21,7 @@
   var blobs = [document.getElementById('lsB1'), document.getElementById('lsB2')];
 
   /* size of each screen image, so the window keeps the right shape before the files arrive */
-  var META = { hero: [1300, 812], review: [1100, 725], gantt: [1300, 520], inbox: [1000, 831], thinking: [1000, 786], reports: [1100, 483], closure: [1100, 752], meeting: [640, 1046], risk: [1100, 570],
+  var META = { hero: [1300, 812], review: [1100, 725], gantt: [1300, 520], inbox: [1000, 831], thinking: [1000, 786], reports: [1100, 483], closure: [1100, 752], meeting: [640, 1046], risk: [1100, 570], widgets: [1100, 752],
     s_sugg: [760, 211], s_stats: [760, 83], s_matrix: [420, 451], s_keys: [760, 90], s_think: [520, 172], notif: [480, 638] };
   /* window position (center x, center y), tilt and turn for each chapter, as fractions of the stage */
   var W = [.6, .54, .62, .4, .25, .45, .58, .55, .42, .88];
