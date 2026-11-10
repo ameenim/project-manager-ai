@@ -1908,15 +1908,56 @@ function similarity(a, b) {
   return Math.max(overlapOfTask, sub);
 }
 
+// A Jira issue that is still being approved, reviewed or tested is not finished. Whatever the reader suggests, the
+// progress follows the Jira workflow status: done states allow 100, review states give 90, other active states stop
+// at 90 and waiting states suggest no progress at all. A deliverable is never closed from an unfinished status.
+function jiraStage(text) {
+  const m = /(?:^|\n)\s*Status:\s*([^\n(]+?)\s*(?:\(category:\s*([^)]*)\))?\s*(?:\n|$)/i.exec(String(text || ''));
+  if (!m) return null;
+  const name = m[1].trim(), cat = (m[2] || '').trim().toLowerCase();
+  if (!name || /^unknown$/i.test(name)) return null;
+  let kind = 'active';
+  if (cat === 'done' || /^(done|completed?|closed|resolved|delivered|released|accepted|finished)$/i.test(name)) kind = 'done';
+  else if (/approv|review|test|\bqa\b|\buat\b|validat|verif|sign.?off|awaiting|ready for|pending/i.test(name)) kind = 'review';
+  else if (/^(to ?do|open|backlog|new|created|selected.*|reopened|on.?hold|blocked)$/i.test(name) || cat === 'to do') kind = 'todo';
+  return { name, kind };
+}
+const REVIEW_PROGRESS = 90;
+function applyJiraStatus(result, text, tasks) {
+  const st = jiraStage(text);
+  if (!st || st.kind === 'done' || !result || !Array.isArray(result.updates)) return result;
+  const byId = new Map((tasks || []).map((t) => [t.id, t]));
+  const out = [];
+  for (const u of result.updates) {
+    if (u.type === 'close_deliverable') continue;
+    if (u.type === 'update_task' && u.progress != null) {
+      const cur = Number((byId.get(u.task_id) || {}).progress) || 0;
+      const want = st.kind === 'review' ? REVIEW_PROGRESS : st.kind === 'active' ? Math.min(Number(u.progress), REVIEW_PROGRESS) : null;
+      const keep = want != null && want > cur && want < 100 ? want : null;
+      const note = `Jira status is ${st.name}, so the task is not finished`;
+      const rest = { ...u, progress: keep, note: u.note ? `${note}. ${u.note}`.slice(0, 200) : note };
+      if (keep == null && u.delay_days == null && !u.assignee) continue;
+      out.push(rest);
+      continue;
+    }
+    out.push(u);
+  }
+  return { ...result, updates: out };
+}
+
 // Interpret an incoming message (Teams, email, Jira) against project data.
-async function interpretMessage({ text, sender, tasks, resources, deliverables }) {
+async function interpretMessage(args) {
+  return applyJiraStatus(await interpretRaw(args), args.text, args.tasks);
+}
+async function interpretRaw({ text, sender, tasks, resources, deliverables }) {
   await aiReady;
   if (hasKey()) {
     try {
       const j = await claudeJSON(
         `You read project communications and decide which project records they update.
 Return {"updates":[{"type":"update_task|close_deliverable|flag_issue","task_id":number|null,"deliverable_id":number|null,"progress":0-100|null,"delay_days":number|null,"assignee":string|null,"note":"short","confidence":0.0-1.0}],"resource":"name of the person reporting or null"}.
-Use only ids from the lists. Do not invent updates. If the message contains no project status information return {"updates":[]}.`,
+Use only ids from the lists. Do not invent updates. If the message contains no project status information return {"updates":[]}.
+For Jira issues the Status line decides the progress. Only a status such as Done, Completed, Closed or Resolved means 100. A status such as Approval, Review, Testing or UAT means about 90 and the task stays in progress. Never suggest 100 or close a deliverable while the status is not a finished one.`,
         `Sender: ${sender}\nMessage: ${text}\n\nTasks: ${JSON.stringify(tasks.map((t) => ({ id: t.id, name: t.name, progress: t.progress, assignee: t.assignee })))}\nDeliverables: ${JSON.stringify(deliverables.map((d) => ({ id: d.id, title: d.title })))}\nResources: ${JSON.stringify(resources.map((r) => r.name))}`,
         2000
       );
@@ -2022,7 +2063,7 @@ Use only ids from the lists. A BOQ, delivery note, handover or acceptance record
   return { updates, engine: 'rules' };
 }
 
-module.exports = { aiStats, hasKey, claude, claudeJSON, splitParts, quoteFound, normQuote, ready: () => aiReady, extractText, classify, analyzeDocument, runChecks, synthesizeSchedule, weeksToDates, interpretMessage, interpretEvidence, similarity, tokens, parseDate, parseAmount, findCurrency, MODEL };
+module.exports = { jiraStage, applyJiraStatus, aiStats, hasKey, claude, claudeJSON, splitParts, quoteFound, normQuote, ready: () => aiReady, extractText, classify, analyzeDocument, runChecks, synthesizeSchedule, weeksToDates, interpretMessage, interpretEvidence, similarity, tokens, parseDate, parseAmount, findCurrency, MODEL };
 ;return module.exports})();
 window.__Reports=(function(){var module={exports:{}};var exports=module.exports;var process={env:{}};var require=function(n){if(n==='./schedule')return window.__Sched;if(n==='./ai')return window.__AI;if(n==='docx')return new Proxy({},{get:function(){return function(){}}});return {}};
 // Report and document generation: default and custom templates, progress reports

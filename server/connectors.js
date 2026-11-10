@@ -226,7 +226,7 @@ class Connectors {
     return (data.issues || []).map((i) => {
       const f = i.fields || {}, cs = (f.comment && f.comment.comments) || [], last = cs[cs.length - 1];
       return { ext_id: `${i.key}:${f.updated}`, subject: `${i.key} ${f.summary || ''}`.trim(), sender: (last && last.author && last.author.displayName) || (f.assignee && f.assignee.displayName) || (f.reporter && f.reporter.displayName) || null,
-        body: `Status: ${(f.status && f.status.name) || 'unknown'}${last ? `\nLatest comment: ${adf(last.body).trim()}` : ''}`, at: f.updated };
+        body: `Status: ${(f.status && f.status.name) || 'unknown'}${f.status && f.status.statusCategory && f.status.statusCategory.name ? ` (category: ${f.status.statusCategory.name})` : ''}${last ? `\nLatest comment: ${adf(last.body).trim()}` : ''}`, at: f.updated };
     });
   }
 
