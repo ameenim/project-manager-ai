@@ -11,7 +11,7 @@
   Object.assign(PM.I18N.en, {
     th_expand: 'Open as a full page', th_collapse: 'Back to the side panel', th_deep: 'Think deeper', th_deep_tip: 'Think deeper takes longer and uses more of your tokens. Best for schedules and trade offs.', th_deep_on: 'Think deeper is on', th_attach: 'Attach a file', th_attach_tip: 'Attach a file to this project. I can read it and create related documents. Nothing changes until you press Apply.', th_attach_need: 'Open a project first, then attach a file to it.', th_attach_fail: 'The file could not be attached.', th_att_rm: 'Remove from this message', th_uploading: 'Uploading',
     th_sees: 'The AI can see', th_ctx_docs: 'Documents of this project', th_ctx_data: 'Data of this project', th_ctx_portfolio: 'Data of all your projects',
-    th_sug_h: 'Suggestions', th_sug_count: '{n} suggestions', th_sug_one: '1 suggestion', cht_todo: 'What to do', th_sug_more: 'Show all {n}', th_sug_less: 'Show less', th_sug_discuss: 'Discuss', th_sug_snooze: 'Snooze 7 days', th_sug_dismiss: 'Dismiss', th_sug_dismissed: 'Suggestion dismissed', th_sug_snoozed: 'Snoozed for 7 days', th_sug_none: 'No suggestions right now.',
+    th_sug_h: 'Suggestions', th_sug_count: '{n} suggestions', th_sug_one: '1 suggestion', cht_todo: 'What to do', th_img: 'Add an image', th_img_tip: 'Add an image to analyze. You can also paste or drop one.', th_img_max: 'You can add up to 3 images.', th_img_fail: 'That image could not be read.', th_img_rm: 'Remove image', th_img_only: 'Images only for now. Send to analyze.', th_sug_more: 'Show all {n}', th_sug_less: 'Show less', th_sug_discuss: 'Discuss', th_sug_snooze: 'Snooze 7 days', th_sug_dismiss: 'Dismiss', th_sug_dismissed: 'Suggestion dismissed', th_sug_snoozed: 'Snoozed for 7 days', th_sug_none: 'No suggestions right now.',
     cht_s_late_tasks: 'Late tasks: {n}', cht_s_low_spi: 'The schedule index is {n}', cht_s_forecast_late: 'The forecast end {n} is after the contract end', cht_s_no_baseline: 'Tasks without a baseline: {n}', cht_s_deliverable_no_task: 'Deliverables due within 7 days with no task: {n}', cht_s_late_payments: 'Late payments: {n}', cht_s_waiting_updates: 'Updates waiting for review: {n}', cht_s_weekly: 'Your weekly summary is ready to write',
     cht_qs_low_spi: 'The schedule index is below 0.95. Why is the project behind plan and what should I do to recover?', cht_qs_forecast_late: 'The forecast end of the project is after the contract end. Suggest an updated schedule to recover.', cht_qs_no_baseline: 'This project has no baseline. Explain what a baseline would lock in and when to set it.', cht_qs_deliverable_no_task: 'Which deliverables due within 7 days have no task in the schedule? Propose tasks for them.', cht_qs_weekly: 'Write my weekly summary across my projects with progress, risks, late items and next steps.',
     th_start: 'Start with', th_quick: 'Quick questions',
@@ -43,7 +43,7 @@
   Object.assign(PM.I18N.ar, {
     th_expand: 'افتح كصفحة كاملة', th_collapse: 'العودة إلى اللوحة الجانبية', th_deep: 'فكّر بعمق', th_deep_tip: 'التفكير بعمق يستغرق وقتا أطول ويستهلك رموزا أكثر. مناسب للجداول والمفاضلات.', th_deep_on: 'التفكير بعمق مفعّل', th_attach: 'أرفق ملفا', th_attach_tip: 'أرفق ملفا بهذا المشروع. يمكنني قراءته وإنشاء مستندات مرتبطة به. لا يتغير شيء حتى تضغط تطبيق.', th_attach_need: 'افتح مشروعا أولا ثم أرفق الملف به.', th_attach_fail: 'تعذر إرفاق الملف.', th_att_rm: 'أزل من هذه الرسالة', th_uploading: 'جار الرفع',
     th_sees: 'ما يراه الذكاء الاصطناعي', th_ctx_docs: 'مستندات هذا المشروع', th_ctx_data: 'بيانات هذا المشروع', th_ctx_portfolio: 'بيانات كل مشاريعك',
-    th_sug_h: 'اقتراحات', th_sug_count: '{n} اقتراحات', th_sug_one: 'اقتراح واحد', cht_todo: 'ما يجب فعله', th_sug_more: 'عرض الكل ({n})', th_sug_less: 'عرض أقل', th_sug_discuss: 'ناقش', th_sug_snooze: 'تأجيل 7 أيام', th_sug_dismiss: 'تجاهل', th_sug_dismissed: 'تم تجاهل الاقتراح', th_sug_snoozed: 'تم التأجيل 7 أيام', th_sug_none: 'لا توجد اقتراحات الآن.',
+    th_sug_h: 'اقتراحات', th_sug_count: '{n} اقتراحات', th_sug_one: 'اقتراح واحد', cht_todo: 'ما يجب فعله', th_img: 'أضف صورة', th_img_tip: 'أضف صورة لتحليلها. يمكنك أيضا لصقها أو إفلاتها هنا.', th_img_max: 'يمكنك إضافة 3 صور كحد أقصى.', th_img_fail: 'تعذرت قراءة هذه الصورة.', th_img_rm: 'إزالة الصورة', th_img_only: 'صور فقط حاليا. أرسل للتحليل.', th_sug_more: 'عرض الكل ({n})', th_sug_less: 'عرض أقل', th_sug_discuss: 'ناقش', th_sug_snooze: 'تأجيل 7 أيام', th_sug_dismiss: 'تجاهل', th_sug_dismissed: 'تم تجاهل الاقتراح', th_sug_snoozed: 'تم التأجيل 7 أيام', th_sug_none: 'لا توجد اقتراحات الآن.',
     cht_s_late_tasks: 'مهام متأخرة: {n}', cht_s_low_spi: 'مؤشر الجدول {n}', cht_s_forecast_late: 'نهاية المشروع المتوقعة {n} بعد نهاية العقد', cht_s_no_baseline: 'مهام بلا خط أساس: {n}', cht_s_deliverable_no_task: 'مخرجات مستحقة خلال 7 أيام بلا مهمة: {n}', cht_s_late_payments: 'دفعات متأخرة: {n}', cht_s_waiting_updates: 'تحديثات بانتظار المراجعة: {n}', cht_s_weekly: 'ملخصك الأسبوعي جاهز للكتابة',
     cht_qs_low_spi: 'مؤشر الجدول أقل من 0.95. لماذا المشروع متأخر عن الخطة وماذا أفعل للتعافي؟', cht_qs_forecast_late: 'نهاية المشروع المتوقعة بعد نهاية العقد. اقترح جدولا محدثا للتعافي.', cht_qs_no_baseline: 'هذا المشروع بلا خط أساس. اشرح ما الذي يثبته خط الأساس ومتى أحدده.', cht_qs_deliverable_no_task: 'ما المخرجات المستحقة خلال 7 أيام وليس لها مهمة في الجدول؟ اقترح مهاما لها.', cht_qs_weekly: 'اكتب ملخصي الأسبوعي لمشاريعي مع التقدم والمخاطر والبنود المتأخرة والخطوات القادمة.',
     th_start: 'ابدأ بـ', th_quick: 'أسئلة سريعة',
@@ -135,6 +135,8 @@
           <div class="cht-composer">
             <button class="btn ghost icon cht-attach" id="chtAttach" type="button" data-act="attach" aria-label="${esc(t('th_attach'))}" data-tip="${esc(t('th_attach_tip'))}">${icon('file')}</button>
             <input type="file" id="chtFile" multiple hidden accept=".pdf,.docx,.xlsx,.pptx,.txt,.md,.csv">
+            <button class="btn ghost icon cht-imgbtn" id="chtImgBtn" type="button" data-act="img" aria-label="${esc(t('th_img'))}" data-tip="${esc(t('th_img_tip'))}">${icon('image')}</button>
+            <input type="file" id="chtImg" multiple hidden accept="image/png,image/jpeg,image/webp,image/gif">
             <button class="btn ghost icon cht-deep" id="chtDeep" type="button" data-act="deep" aria-pressed="false" aria-label="${esc(t('th_deep'))}" data-tip="${esc(t('th_deep_tip'))}">${icon('spark')}</button>
             <textarea id="chtIn" rows="1" maxlength="4000" placeholder="${esc(t('cht_ph'))}" aria-label="${esc(t('cht_ph'))}"></textarea>
             <button class="btn primary icon" id="chtSend" type="button" data-act="send" aria-label="${esc(t('cht_send'))}" data-tip="${esc(t('cht_send'))}">${icon('up')}</button>
@@ -149,7 +151,10 @@
     inp.addEventListener('input', grow);
     applyWidth(); applyInputHeight(); bindResize();
     root.addEventListener('input', (e) => { if (e.target && e.target.id === 'thSearch') onSearch(e); });
-    root.addEventListener('change', (e) => { if (e.target && e.target.id === 'chtFile') onFiles(e); });
+    root.addEventListener('change', (e) => { if (e.target && e.target.id === 'chtFile') onFiles(e); if (e.target && e.target.id === 'chtImg') { const fl = [...(e.target.files || [])]; e.target.value = ''; addImages(fl); } });
+    root.addEventListener('paste', (e) => { if (e.target && e.target.id === 'chtIn') onPaste(e); });
+    root.addEventListener('dragover', (e) => { if (e.dataTransfer && [...(e.dataTransfer.types || [])].includes('Files')) e.preventDefault(); });
+    root.addEventListener('drop', onDrop);
     root.addEventListener('keydown', (e) => { if (e.key === 'Escape' && S.open && !S.page) { e.stopPropagation(); close(); } else if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('cht-h-item')) { e.preventDefault(); openChat(e.target.dataset.id); } else if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('th-item')) { e.preventDefault(); openThread(e.target.dataset.id); } });
   }
   // the message box grows with the text up to a cap. A person can raise the base height by dragging its top line.
@@ -229,7 +234,7 @@
     return `${before ? `<div class="md">${PM.mdToHtml(before)}</div>` : ''}<div class="cht-todo" role="note"><div class="cht-todo-h">${icon('check')}<span>${esc(label)}</span></div><div class="md">${PM.mdToHtml(rest)}</div></div>`;
   }
   function msgHtml(m) {
-    if (m.role === 'user') return `<div class="cht-msg user"><div class="cht-bub">${esc(m.text)}</div></div>`;
+    if (m.role === 'user') return `<div class="cht-msg user"><div class="cht-bub">${(m.thumbs || []).length ? `<div class="cht-thumbs">${m.thumbs.map((u) => `<img src="${u}" alt="">`).join('')}</div>` : ''}${esc(m.text)}</div></div>`;
     const body = m.pending && !m.text ? `<span class="cht-typing" aria-label="${esc(m.status || t('cht_thinking'))}"><i></i><i></i><i></i></span><span class="small muted">${esc(m.status || t('cht_thinking'))}</span>` : mdBody(m.text || '');
     const err = m.error ? `<div class="cht-err small" role="alert">${esc(m.error)}</div>` : '';
     const stop = m.stopped ? `<div class="small muted">${esc(t('cht_stopped'))}</div>` : '';
@@ -415,7 +420,8 @@
   function paintAtts() {
     const box = $q('#chtAtts'); if (!box) return;
     if (S.att.length && S.attPid !== S.ctx.projectId) S.att = [];
-    box.innerHTML = S.att.map((a) => `<span class="cht-att"><span class="cht-att-n">${esc(a.filename)}</span><button class="btn ghost icon" type="button" data-act="attrm" data-id="${a.id}" aria-label="${esc(t('th_att_rm'))}" data-tip="${esc(t('th_att_rm'))}">${icon('x')}</button></span>`).join('') + (S.upl ? `<span class="muted">${esc(t('th_uploading'))}</span>` : '');
+    const imgs = (S.imgs || []).map((a, i) => `<span class="cht-att img"><img src="${a.thumb}" alt=""><button class="btn ghost icon" type="button" data-act="imgrm" data-i="${i}" aria-label="${esc(t('th_img_rm'))}" data-tip="${esc(t('th_img_rm'))}">${icon('x')}</button></span>`).join('');
+    box.innerHTML = imgs + S.att.map((a) => `<span class="cht-att"><span class="cht-att-n">${esc(a.filename)}</span><button class="btn ghost icon" type="button" data-act="attrm" data-id="${a.id}" aria-label="${esc(t('th_att_rm'))}" data-tip="${esc(t('th_att_rm'))}">${icon('x')}</button></span>`).join('') + (S.upl ? `<span class="muted">${esc(t('th_uploading'))}</span>` : '');
     const b = $q('#chtAttach'); if (b) b.disabled = S.upl || S.busy;
   }
   async function onFiles(e) {
@@ -433,22 +439,65 @@
     const i = $q('#chtIn'); if (i) i.focus();
   }
 
+  // ---------- pasted images ----------
+  // An image is shrunk in the browser first (long side at most 1568 px) so it is small, fast and cheap to analyze.
+  function readImage(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file); const img = new Image();
+      img.onload = () => {
+        try {
+          const k = Math.min(1, 1568 / Math.max(img.naturalWidth, img.naturalHeight));
+          const w = Math.max(1, Math.round(img.naturalWidth * k)); const h = Math.max(1, Math.round(img.naturalHeight * k));
+          const c = document.createElement('canvas'); c.width = w; c.height = h;
+          const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.drawImage(img, 0, 0, w, h);
+          let q = 0.86; let out = c.toDataURL('image/jpeg', q);
+          while (out.length > 2.2 * 1024 * 1024 && q > 0.4) { q -= 0.15; out = c.toDataURL('image/jpeg', q); }
+          const t2 = document.createElement('canvas'); const tk = Math.min(1, 96 / Math.max(w, h)); t2.width = Math.round(w * tk) || 1; t2.height = Math.round(h * tk) || 1;
+          t2.getContext('2d').drawImage(c, 0, 0, t2.width, t2.height);
+          resolve({ media_type: 'image/jpeg', data: out.split(',')[1], thumb: t2.toDataURL('image/jpeg', 0.7) });
+        } catch (e) { reject(e); } finally { URL.revokeObjectURL(url); }
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('bad image')); };
+      img.src = url;
+    });
+  }
+  async function addImages(files) {
+    const list = files.filter((f) => /^image\/(png|jpe?g|webp|gif)$/i.test(f.type));
+    if (!list.length) return false;
+    S.imgs = S.imgs || [];
+    for (const f of list) {
+      if (S.imgs.length >= 3) { PM.toast(t('th_img_max'), 'err'); break; }
+      try { S.imgs.push(await readImage(f)); } catch (e) { PM.toast(t('th_img_fail'), 'err'); }
+    }
+    paintAtts(); const i = $q('#chtIn'); if (i) i.focus();
+    return true;
+  }
+  function onPaste(e) {
+    const files = [...((e.clipboardData && e.clipboardData.items) || [])].filter((it) => it.kind === 'file' && /^image\//.test(it.type)).map((it) => it.getAsFile()).filter(Boolean);
+    if (files.length) { e.preventDefault(); addImages(files); }
+  }
+  function onDrop(e) {
+    const files = [...((e.dataTransfer && e.dataTransfer.files) || [])].filter((f) => /^image\//.test(f.type));
+    if (files.length) { e.preventDefault(); addImages(files); }
+  }
+
   // ---------- sending ----------
   function submit() {
-    const i = $q('#chtIn'); let text = i.value.trim();
-    if (!text || S.busy || S.upl) return;
-    if (S.att.length && S.attPid === S.ctx.projectId) { text += '\n[Attached: ' + S.att.map((a) => a.filename).join(', ') + ']'; S.att = []; paintAtts(); }
-    i.value = ''; grow(); send(text);
+    const i = $q('#chtIn'); let text = i.value.trim(); const images = S.imgs || [];
+    if ((!text && !images.length) || S.busy || S.upl) return;
+    if (text && S.att.length && S.attPid === S.ctx.projectId) { text += '\n[Attached: ' + S.att.map((a) => a.filename).join(', ') + ']'; S.att = []; }
+    S.imgs = []; paintAtts();
+    i.value = ''; grow(); send(text, images);
   }
-  async function send(text) {
+  async function send(text, images) {
     if (S.busy) return;
     S.busy = true;
-    const user = { id: 'u' + Date.now(), role: 'user', text };
+    const user = { id: 'u' + Date.now(), role: 'user', text: text || '', thumbs: (images || []).map((a) => a.thumb) };
     const bot = { id: 'b' + Date.now(), role: 'assistant', text: '', pending: true, status: t('cht_thinking'), sources: [], links: [] };
     S.msgs.push(user, bot); paint(true);
     const ctl = new AbortController(); S.ctl = ctl;
     try {
-      const r = await fetch('/api/chat/message', { method: 'POST', headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + PM.state.token }, body: JSON.stringify({ project_id: S.ctx.projectId, text, screen: S.ctx.screen, deep: S.deep }), signal: ctl.signal });
+      const r = await fetch('/api/chat/message', { method: 'POST', headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + PM.state.token }, body: JSON.stringify({ project_id: S.ctx.projectId, text, screen: S.ctx.screen, deep: S.deep, ...(images && images.length ? { images: images.map((a) => ({ media_type: a.media_type, data: a.data })) } : {}) }), signal: ctl.signal });
       if (!r.ok || !r.body) { let msg = t('cht_failed'); try { const j = await r.json(); msg = j.error || msg; } catch (e) { /* not json */ } if (r.status === 401) msg = t('err_session'); throw new Error(msg); }
       const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = '';
       for (;;) {
@@ -551,6 +600,8 @@
     if (act === 'hdel') { S.hist.confirm = Number(id); return paint(); }
     if (act === 'hkeep') { S.hist.confirm = null; return paint(); }
     if (act === 'hdel2') return deleteChat(id);
+    if (act === 'img') { const f = $q('#chtImg'); if (f) f.click(); return; }
+    if (act === 'imgrm') { (S.imgs || []).splice(Number(el.dataset.i), 1); return paintAtts(); }
     if (act === 'attach') { const f = $q('#chtFile'); if (f) f.click(); return; }
     if (act === 'attrm') { S.att = S.att.filter((a) => String(a.id) !== String(id)); return paintAtts(); }
     if (act === 'send') return submit();

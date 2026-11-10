@@ -435,3 +435,31 @@ test('the skill asks for a closing What to do line', () => {
   assert.match(skill.BASE, /What to do:/);
   assert.match(skill.BASE, /ما يجب فعله/);
 });
+
+test('pasted images reach the model for that turn only, are checked by their bytes, and leave only a note in the chat', async () => {
+  const u = await s.user('Imager'); const p = await s.project(u.token, 'Image project');
+  const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  say(text('I see a small chart. What to do: confirm the dates.'));
+  const r = await talk(u.token, { project_id: p.id, text: 'What does this schedule image say about my project?', images: [{ media_type: 'image/png', data: PNG }] });
+  assert.ok(r.done);
+  const last = sc.seen[0].messages[sc.seen[0].messages.length - 1];
+  assert.equal(last.content[0].type, 'image');
+  assert.equal(last.content[0].source.media_type, 'image/png');
+  assert.equal(last.content[1].type, 'text');
+  const hist = (await s.call('GET', `/api/chat?project_id=${p.id}`, null, u.token)).data.messages.find((m) => m.role === 'user');
+  assert.match(hist.text, /\[Image pasted\]/);
+  assert.ok(!JSON.stringify(hist).includes(PNG.slice(0, 20)), 'the picture itself is never stored');
+  // an image alone still gets a project manager question
+  const u2 = await s.user('Imager Two'); const p2 = await s.project(u2.token, 'Image project two');
+  sc.seen.length = 0; say(text('Nothing project related here.'));
+  await talk(u2.token, { project_id: p2.id, text: '', images: [{ media_type: 'image/png', data: PNG }] });
+  assert.match(sc.seen[0].messages.slice(-1)[0].content[1].text, /Analyze this image for my project/);
+  // the real bytes must match the stated type, and the count is capped
+  sc.seen.length = 0; const u3 = await s.user('Imager Three'); const p3 = await s.project(u3.token, 'Image project three');
+  const bad = await talk(u3.token, { project_id: p3.id, text: 'Check this plan image for my project', images: [{ media_type: 'image/jpeg', data: PNG }] });
+  assert.equal(bad.events.find((e) => e.type === 'error').status, 400);
+  const many = await talk(u3.token, { project_id: p3.id, text: 'Check these plan images for my project', images: [1, 2, 3, 4].map(() => ({ media_type: 'image/png', data: PNG })) });
+  assert.equal(many.events.find((e) => e.type === 'error').status, 400);
+  assert.equal(sc.seen.length, 0, 'the model was never called for rejected images');
+  assert.match(skill.BASE, /paste up to 3 images/);
+});

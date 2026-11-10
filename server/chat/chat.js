@@ -92,6 +92,26 @@ function createChat({ db, store, api, auth, ops, model }) {
   const langOf = (user, text) => (gate.isArabic(text) ? 'ar' : ((user.prefs && user.prefs.language) === 'ar' ? 'ar' : 'en'));
   const uiLang = (user) => ((user.prefs && user.prefs.language) === 'ar' ? 'ar' : 'en');
 
+
+  // ---------- pasted images ----------
+  // At most 3 images a message, already shrunk by the browser. They are checked here by their real bytes and are sent to the
+  // model for this turn only. The bytes are never stored, the chat keeps a short note that an image was pasted.
+  const IMG_TYPES = { 'image/png': [0x89, 0x50, 0x4e, 0x47], 'image/jpeg': [0xff, 0xd8, 0xff], 'image/gif': [0x47, 0x49, 0x46], 'image/webp': [0x52, 0x49, 0x46, 0x46] };
+  function cleanImages(list) {
+    if (list == null) return [];
+    if (!Array.isArray(list) || list.length > 3) throw err(400, 'You can add up to 3 images to one message.');
+    let total = 0;
+    return list.map((x) => {
+      const type = x && String(x.media_type || '').toLowerCase(); const data = x && typeof x.data === 'string' ? x.data : '';
+      if (!IMG_TYPES[type] || !/^[A-Za-z0-9+/]+={0,2}$/.test(data) || data.length < 16) throw err(400, 'That image could not be read. Use a PNG, JPEG, WebP or GIF picture.');
+      const buf = Buffer.from(data, 'base64');
+      if (buf.length > 3 * 1024 * 1024) throw err(400, 'An image is larger than 3 MB after it was shrunk. Try a smaller one.');
+      total += buf.length; if (total > 6 * 1024 * 1024) throw err(400, 'The images are too large together. Try fewer or smaller ones.');
+      const magic = IMG_TYPES[type]; if (!magic.every((b, i) => buf[i] === b) || (type === 'image/webp' && buf.slice(8, 12).toString('latin1') !== 'WEBP')) throw err(400, 'That file is not a real picture of the type it says.');
+      return { type: 'image', source: { type: 'base64', media_type: type, data } };
+    });
+  }
+
   // ---------- history sent to the model ----------
   async function history(thread, limit, exclude) {
     const r = await q("SELECT role, text, meta FROM chat_messages WHERE thread_id = $1 AND id <> $3 AND role IN ('user','assistant') AND COALESCE(meta->>'s','') <> '1' ORDER BY id DESC LIMIT $2", [thread.id, limit, exclude || 0]);
@@ -114,7 +134,7 @@ function createChat({ db, store, api, auth, ops, model }) {
   }
 
   // ---------- one answer ----------
-  async function runTurn({ user, access: A, thread, text, lang, ui, emit, signal, declined, exclude, deep, screen }) {
+  async function runTurn({ user, access: A, thread, text, lang, ui, emit, signal, declined, exclude, deep, screen, images }) {
     const canWrite = A.projectId ? RANK[A.role] >= 2 : A.role !== 'viewer';
     const secrets = [];
     const today = api.TODAY();
@@ -122,7 +142,7 @@ function createChat({ db, store, api, auth, ops, model }) {
     const system = prompt.systemPrompt({ today, tz: process.env.APP_TZ || 'Asia/Dubai', ctx: { project: A.project }, lang: ui, role: A.projectId ? A.role : 'varies by project', projects, declined, skill: skill.skillText(text, screen), deep: !!deep });
     const catalog = tools.catalog(canWrite);
     const past = await history(thread, HISTORY, exclude);
-    const messages = [...(thread.summary ? [{ role: 'user', content: 'Summary of the earlier conversation: ' + thread.summary }, { role: 'assistant', content: 'Understood.' }] : []), ...past, { role: 'user', content: text }];
+    const messages = [...(thread.summary ? [{ role: 'user', content: 'Summary of the earlier conversation: ' + thread.summary }, { role: 'assistant', content: 'Understood.' }] : []), ...past, { role: 'user', content: images && images.length ? [...images, { type: 'text', text }] : text }];
     const og = new guard.OutputGuard(secrets);
     const scope = { projectId: A.projectId };
     const sources = []; const links = []; const proposals = []; const notes = [];
@@ -205,10 +225,13 @@ function createChat({ db, store, api, auth, ops, model }) {
 
   // ---------- the message endpoint ----------
   async function message(user, body, emit, signal) {
-    const text = String(body.text == null ? '' : body.text).trim();
+    const images = cleanImages(body.images);
+    let text = String(body.text == null ? '' : body.text).trim();
     const projectId = body.project_id == null || body.project_id === '' ? null : Number(body.project_id);
     const A = await access(user, projectId);
-    const ui = uiLang(user); const lang = langOf(user, text);
+    const ui = uiLang(user);
+    if (images.length && !text) text = ui === 'ar' ? 'حلل هذه الصورة لمشروعي وأخبرني ماذا أفعل.' : 'Analyze this image for my project and tell me what to do.';
+    const lang = langOf(user, text);
     const thread = await activeThread(user.id, projectId, true);
 
     // limits first, so a flood costs nothing
@@ -219,7 +242,7 @@ function createChat({ db, store, api, auth, ops, model }) {
     hits.push(now); perMinute.set(user.id, hits);
 
     const gt = gate.decide(text);
-    const userMsg = gt.decision === 'decline' && gt.reason === 'empty' ? null : await addMessage(thread.id, 'user', clip(text, 4000), gt.decision === 'mixed' ? { meta: { model: gt.rest } } : undefined);
+    const userMsg = gt.decision === 'decline' && gt.reason === 'empty' ? null : await addMessage(thread.id, 'user', clip(text, 4000) + (images.length ? `\n[${images.length === 1 ? 'Image' : images.length + ' images'} pasted]` : ''), { meta: { ...(gt.decision === 'mixed' ? { model: gt.rest } : {}), ...(images.length ? { images: images.length } : {}) } });
     if (userMsg) emit({ type: 'user', id: userMsg.id });
 
     const finishWith = async (reply, meta, extra) => {
@@ -248,7 +271,7 @@ function createChat({ db, store, api, auth, ops, model }) {
 
     let askText = gt.decision === 'mixed' ? gt.rest : text;
     // a message with no sign of a project topic gets a separate, cheap AI check before anything is answered
-    if (gt.decision === 'pass' && !PROJECTISH.test(text) && text.length > 20) {
+    if (gt.decision === 'pass' && !images.length && !PROJECTISH.test(text) && text.length > 20) {
       try {
         let out = '';
         for await (const ev of modelFn({ system: gate.CLASSIFY_SYSTEM, messages: [{ role: 'user', content: text }], max_tokens: 120, signal })) if (ev.type === 'text') out += ev.text;
@@ -266,7 +289,7 @@ function createChat({ db, store, api, auth, ops, model }) {
     const ctl = new AbortController(); if (signal) signal.addEventListener('abort', () => ctl.abort(), { once: true });
     let r;
     try {
-      r = await runTurn({ user, access: A, thread, text: askText, lang, ui, emit, signal: ctl.signal, declined: gt.decision === 'mixed' ? gt.declined : null, exclude: userMsg && userMsg.id, deep: body.deep === true, screen: String(body.screen || '') });
+      r = await runTurn({ user, access: A, thread, text: askText, lang, ui, emit, signal: ctl.signal, declined: gt.decision === 'mixed' ? gt.declined : null, exclude: userMsg && userMsg.id, deep: body.deep === true, screen: String(body.screen || ''), images });
     } catch (e) {
       if (ctl.signal.aborted) { await log(user, projectId, 'stopped', { billable: true }); return null; }
       const code = e.code === 'no_key' ? 'no_key' : (e.status === 401 || e.status === 403) ? 'bad_key' : e.status === 429 ? 'budget' : 'failed';
@@ -498,7 +521,7 @@ function createChat({ db, store, api, auth, ops, model }) {
       io.json(res, 200, out); return true;
     }
     if (method === 'POST' && p === '/api/chat/message') {
-      const b = await read();
+      const raw = await io.readBody(req, 9 * 1024 * 1024); let b = {}; if (raw.length) { try { b = JSON.parse(raw.toString('utf8')); } catch (e) { throw err(400, 'The request body is not valid JSON'); } }
       if (String(b.text == null ? '' : b.text).length > 4000) { b.text = String(b.text).slice(0, 4001); }
       res.writeHead(200, { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no', ...io.SECURITY });
       const emit = (ev) => { if (!res.writableEnded) res.write(JSON.stringify(ev) + '\n'); };
