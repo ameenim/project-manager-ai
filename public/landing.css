@@ -49,7 +49,7 @@ html:not(.js) .ls-frame, html:not(.js) .ls-blob, html:not(.js) .ls-shape, html:n
 .ls-tabs { display: flex; justify-content: center; gap: 8px; margin: 28px 0 22px; flex-wrap: wrap; }
 .ls-tabs button { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: var(--r-pill); padding: 9px 20px; font: inherit; font-weight: 500; cursor: pointer; transition: background .3s, color .3s, border-color .3s; }
 .ls-tabs button.a { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
-.ls-gal { position: relative; width: min(1060px, 100%); margin-inline: auto; aspect-ratio: var(--ar, 1.6); border-radius: var(--r-pill); border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow-lg); overflow: hidden; transition: aspect-ratio .6s var(--ease); direction: ltr; }
+.ls-gal { position: relative; width: min(1060px, 100%); margin-inline: auto; aspect-ratio: var(--ar, 1.6); border-radius: var(--r-l); border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow-lg); overflow: hidden; transition: aspect-ratio .6s var(--ease); direction: ltr; }
 .ls-gal img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: left top; opacity: 0; transform: scale(1.03); transition: opacity .7s, transform 1.1s var(--ease); }
 .ls-gal img.a { opacity: 1; transform: none; }
 .ls-cap { text-align: center; font-size: var(--fs-small); color: var(--faint); margin-top: 14px; }
