@@ -32,7 +32,7 @@
     cht_sum_add: 'Add {kind} "{title}"', cht_sum_upd: 'Update {kind} "{title}"', cht_sum_del: 'Delete {kind} "{title}"', cht_sum_pay: 'Mark payment "{title}" as {state}', cht_sum_addtask: 'Add task "{title}"', cht_sum_updtask: 'Update task "{title}"', cht_sum_deltask: 'Delete task "{title}"',
     cht_sum_saveversion: 'Save the schedule version "{title}"', cht_sum_baseline: 'Set the baseline for "{title}"', cht_sum_restore: 'Restore the schedule to version {title}', cht_f_version: 'Version', cht_f_predecessors: 'Predecessors', cht_f_end_then: 'Project end', cht_f_tasks: 'Tasks', cht_f_replaces: 'Replaces',
     cht_sum_layout: 'Save the layout "{title}"', cht_f_show: 'Shown', cht_f_hide: 'Hidden',
-    cht_sum_gen: 'Generate the document "{title}"', cht_f_format: 'Format', cht_open_reports: 'Open Reports', cht_sum_sched: 'Change the schedule of task "{title}"', cht_sum_plan: 'Update the schedule: {title}', cht_f_reason: 'Reason', cht_sum_widget: 'Create the widget "{title}"', cht_sum_meeting: 'Send items from the meeting "{title}"', cht_sum_project: 'Change the settings of project "{title}"', cht_sum_template: 'Save the template "{title}"', cht_f_meeting: 'Meeting', cht_f_takes: 'Takes', cht_f_client: 'Client', cht_f_start_date: 'Start date', cht_f_end_date: 'End date', cht_f_value: 'Value', cht_f_action: 'Action', cht_f_decision: 'Decision', cht_f_group: 'Group', cht_f_data: 'Data', cht_f_display: 'Display', cht_f_added_to: 'Added to', cht_f_template: 'Template', cht_sum_applyupd: 'Apply update "{title}"', cht_sum_dismiss: 'Dismiss update "{title}"', cht_sum_addupd: 'Add a message to the Updates inbox',
+    cht_sum_gen: 'Generate the document "{title}"', cht_f_format: 'Format', cht_open_reports: 'Open Reports', cht_doc_open: 'Open', cht_doc_dl: 'Download', cht_doc_ready: 'Download ready', cht_doc_fail: 'The document could not be opened.', cht_sum_sched: 'Change the schedule of task "{title}"', cht_sum_plan: 'Update the schedule: {title}', cht_f_reason: 'Reason', cht_sum_widget: 'Create the widget "{title}"', cht_sum_meeting: 'Send items from the meeting "{title}"', cht_sum_project: 'Change the settings of project "{title}"', cht_sum_template: 'Save the template "{title}"', cht_f_meeting: 'Meeting', cht_f_takes: 'Takes', cht_f_client: 'Client', cht_f_start_date: 'Start date', cht_f_end_date: 'End date', cht_f_value: 'Value', cht_f_action: 'Action', cht_f_decision: 'Decision', cht_f_group: 'Group', cht_f_data: 'Data', cht_f_display: 'Display', cht_f_added_to: 'Added to', cht_f_template: 'Template', cht_sum_applyupd: 'Apply update "{title}"', cht_sum_dismiss: 'Dismiss update "{title}"', cht_sum_addupd: 'Add a message to the Updates inbox',
     cht_f_progress: 'Progress', cht_f_update: 'Update', cht_f_message: 'Message', cht_impact_h: 'Impact on the schedule', cht_impact_none: 'No other task moves.', cht_impact_n: '{n} other tasks move.', cht_impact_n1: '1 other task moves.', cht_impact_end: 'Project end: {a} to {b}.', cht_impact_same: 'Project end stays {b}.',
     cht_brief_h: 'Today', cht_brief_clear: 'Nothing needs your attention right now.',
     cht_b_late_tasks: '{n} late tasks', cht_b_connect: 'Connect Jira or Outlook', cht_q_connect: 'Guide me step by step through connecting Jira or Outlook.', cht_b_late_payments: '{n} late payments', cht_b_updates: '{n} updates waiting', cht_b_at_risk: '{n} projects off track', cht_b_high_risks: '{n} high risks open',
@@ -64,7 +64,7 @@
     cht_sum_add: 'إضافة {kind} "{title}"', cht_sum_upd: 'تحديث {kind} "{title}"', cht_sum_del: 'حذف {kind} "{title}"', cht_sum_pay: 'تحديد الدفعة "{title}" على أنها {state}', cht_sum_addtask: 'إضافة المهمة "{title}"', cht_sum_updtask: 'تحديث المهمة "{title}"', cht_sum_deltask: 'حذف المهمة "{title}"',
     cht_sum_saveversion: 'حفظ نسخة الجدول "{title}"', cht_sum_baseline: 'تحديد خط الأساس لـ "{title}"', cht_sum_restore: 'استعادة الجدول إلى النسخة {title}', cht_f_version: 'النسخة', cht_f_predecessors: 'المهام السابقة', cht_f_end_then: 'نهاية المشروع', cht_f_tasks: 'المهام', cht_f_replaces: 'يستبدل',
     cht_sum_layout: 'حفظ التخطيط "{title}"', cht_f_show: 'الظاهر', cht_f_hide: 'المخفي',
-    cht_sum_gen: 'إنشاء المستند "{title}"', cht_f_format: 'الصيغة', cht_open_reports: 'افتح التقارير', cht_sum_sched: 'تغيير جدول المهمة "{title}"', cht_sum_plan: 'تحديث الجدول: {title}', cht_f_reason: 'السبب', cht_sum_widget: 'إنشاء الأداة "{title}"', cht_sum_meeting: 'إرسال بنود من الاجتماع "{title}"', cht_sum_project: 'تغيير إعدادات المشروع "{title}"', cht_sum_template: 'حفظ القالب "{title}"', cht_f_meeting: 'الاجتماع', cht_f_takes: 'يأخذ', cht_f_client: 'العميل', cht_f_start_date: 'تاريخ البدء', cht_f_end_date: 'تاريخ الانتهاء', cht_f_value: 'القيمة', cht_f_action: 'إجراء', cht_f_decision: 'قرار', cht_f_group: 'المجموعة', cht_f_data: 'البيانات', cht_f_display: 'العرض', cht_f_added_to: 'أضيفت إلى', cht_f_template: 'القالب', cht_sum_applyupd: 'تطبيق التحديث "{title}"', cht_sum_dismiss: 'تجاهل التحديث "{title}"', cht_sum_addupd: 'إضافة رسالة إلى صندوق التحديثات',
+    cht_sum_gen: 'إنشاء المستند "{title}"', cht_f_format: 'الصيغة', cht_open_reports: 'افتح التقارير', cht_doc_open: 'فتح', cht_doc_dl: 'تنزيل', cht_doc_ready: 'التنزيل جاهز', cht_doc_fail: 'تعذر فتح المستند.', cht_sum_sched: 'تغيير جدول المهمة "{title}"', cht_sum_plan: 'تحديث الجدول: {title}', cht_f_reason: 'السبب', cht_sum_widget: 'إنشاء الأداة "{title}"', cht_sum_meeting: 'إرسال بنود من الاجتماع "{title}"', cht_sum_project: 'تغيير إعدادات المشروع "{title}"', cht_sum_template: 'حفظ القالب "{title}"', cht_f_meeting: 'الاجتماع', cht_f_takes: 'يأخذ', cht_f_client: 'العميل', cht_f_start_date: 'تاريخ البدء', cht_f_end_date: 'تاريخ الانتهاء', cht_f_value: 'القيمة', cht_f_action: 'إجراء', cht_f_decision: 'قرار', cht_f_group: 'المجموعة', cht_f_data: 'البيانات', cht_f_display: 'العرض', cht_f_added_to: 'أضيفت إلى', cht_f_template: 'القالب', cht_sum_applyupd: 'تطبيق التحديث "{title}"', cht_sum_dismiss: 'تجاهل التحديث "{title}"', cht_sum_addupd: 'إضافة رسالة إلى صندوق التحديثات',
     cht_f_progress: 'التقدم', cht_f_update: 'التحديث', cht_f_message: 'الرسالة', cht_impact_h: 'الأثر على الجدول', cht_impact_none: 'لا تتحرك مهام أخرى.', cht_impact_n: 'تتحرك {n} مهام أخرى.', cht_impact_n1: 'تتحرك مهمة أخرى واحدة.', cht_impact_end: 'نهاية المشروع: من {a} إلى {b}.', cht_impact_same: 'تبقى نهاية المشروع {b}.',
     cht_brief_h: 'اليوم', cht_brief_clear: 'لا شيء يحتاج إلى انتباهك الآن.',
     cht_b_late_tasks: '{n} مهام متأخرة', cht_b_connect: 'اربط Jira أو Outlook', cht_q_connect: 'أرشدني خطوة بخطوة لربط Jira أو Outlook.', cht_b_late_payments: '{n} دفعات متأخرة', cht_b_updates: '{n} تحديثات بالانتظار', cht_b_at_risk: '{n} مشاريع خارج المسار', cht_b_high_risks: '{n} مخاطر عالية مفتوحة',
@@ -256,7 +256,7 @@
     if (c.busy === 'apply' || c.busy === 'undo') foot = `<div class="cht-card-foot cht-busy small" role="status">${PM.loader.html({ size: 'sm', label: t(c.busy === 'undo' ? 'cht_s_undoing' : 'cht_s_applying') })}<span>${esc(t(c.busy === 'undo' ? 'cht_s_undoing' : 'cht_s_applying'))}</span></div>`;
     else if (live && !confirming) foot = `<div class="cht-card-foot"><button class="btn primary sm" type="button" data-act="apply" data-id="${id}">${esc(t('cht_apply'))}</button><button class="btn sm" type="button" data-act="edit" data-id="${id}">${esc(t('cht_edit'))}</button><button class="btn ghost sm" type="button" data-act="cancel" data-id="${id}">${esc(t('cht_cancel'))}</button></div>`;
     else if (confirming) foot = `<div class="cht-warn small" role="alert">${esc(c.items.some((x) => x.destructive) ? t('cht_strong') : t('cht_many'))}</div><div class="cht-card-foot"><button class="btn danger sm" type="button" data-act="confirm" data-id="${id}">${esc(t('cht_yes'))}</button><button class="btn ghost sm" type="button" data-act="back" data-id="${id}">${esc(t('cht_back'))}</button></div>`;
-    else if (c.status === 'applied') foot = `<div class="cht-card-foot">${c.items.some((x) => x.sum && x.sum.op === 'generate') ? `<a class="btn primary sm" href="#/p/${(c.projects[0] || {}).id}/reports" data-act="nav">${esc(t('cht_open_reports'))}</a>` : ''}<button class="btn sm" type="button" data-act="undo" data-id="${id}">${icon('undo')}${esc(t('cht_undo'))}</button></div>`;
+    else if (c.status === 'applied') foot = `<div class="cht-card-foot">${(c.docs || []).map((d) => `<button class="btn primary sm" type="button" data-act="docopen" data-id="${d.id}">${icon('eye')}${esc(t('cht_doc_open'))}</button><button class="btn sm" type="button" data-act="docdl" data-id="${d.id}">${icon('dl')}${esc(t('cht_doc_dl'))}</button>`).join('')}${!(c.docs || []).length && c.items.some((x) => x.sum && x.sum.op === 'generate') ? `<a class="btn primary sm" href="#/p/${(c.projects[0] || {}).id}/reports" data-act="nav">${esc(t('cht_open_reports'))}</a>` : ''}<button class="btn sm" type="button" data-act="undo" data-id="${id}">${icon('undo')}${esc(t('cht_undo'))}</button></div>`;
     return `<div class="cht-card ${live ? 'live' : ''}" data-card="${id}"><div class="cht-card-h"><span class="small muted">${icon('spark')}${esc((c.projects || []).map((p) => p.name).join(', '))}</span>${state}</div><ul class="cht-items">${items}</ul>${msg}${foot}</div>`;
   }
   function emptyHtml() {
@@ -481,6 +481,20 @@
     if (files.length) { e.preventDefault(); addImages(files); }
   }
 
+  // A document made from a card can be opened or downloaded right there, no trip to Reports.
+  async function docAct(act, id, el) {
+    if (el.disabled) return; el.disabled = true;
+    try {
+      const g = (await PM.api('GET', `/api/generated/${id}`)).generated;
+      if (act === 'docdl') { await PM.exporter.download(g); PM.toast(t('cht_doc_ready'), 'ok'); }
+      else {
+        const R = window.__Reports; const slide = !!(R && R.DEFAULTS && R.DEFAULTS[g.doc_type] && R.DEFAULTS[g.doc_type].oneSlide && !g.custom);
+        if (slide || !PM.docEditor) { location.hash = `#/p/${g.project_id || S.ctx.projectId || ''}/reports`; if (S.page === false) close(); }
+        else PM.docEditor.open(g, {});
+      }
+    } catch (e) { PM.toast(e.message || t('cht_doc_fail'), 'err'); }
+    finally { el.disabled = false; }
+  }
   // ---------- sending ----------
   function submit() {
     const i = $q('#chtIn'); let text = i.value.trim(); const images = S.imgs || [];
@@ -600,6 +614,7 @@
     if (act === 'hdel') { S.hist.confirm = Number(id); return paint(); }
     if (act === 'hkeep') { S.hist.confirm = null; return paint(); }
     if (act === 'hdel2') return deleteChat(id);
+    if (act === 'docopen' || act === 'docdl') return docAct(act, id, el);
     if (act === 'img') { const f = $q('#chtImg'); if (f) f.click(); return; }
     if (act === 'imgrm') { (S.imgs || []).splice(Number(el.dataset.i), 1); return paintAtts(); }
     if (act === 'attach') { const f = $q('#chtFile'); if (f) f.click(); return; }

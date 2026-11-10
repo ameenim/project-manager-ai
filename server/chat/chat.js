@@ -45,7 +45,7 @@ function createChat({ db, store, api, auth, ops, model }) {
     let status = c.status;
     if (status === 'pending' && Date.now() - Date.parse(c.created_at) > CARD_HOURS * 3600e3) status = 'expired';
     if (status === 'applied' && Date.now() - Date.parse(c.applied_at) > UNDO_DAYS * 86400e3) status = 'applied_final';
-    return { id, status, strong: !!c.strong, items: c.items, note: c.note || '', message: c.message || '', created_at: c.created_at, applied_at: c.applied_at || null, projects: c.projects || [] };
+    return { id, status, strong: !!c.strong, items: c.items, note: c.note || '', message: c.message || '', created_at: c.created_at, applied_at: c.applied_at || null, projects: c.projects || [], docs: status === 'applied' || status === 'applied_final' ? (c.results || []).map((r, i) => (r && r.generated_id ? { id: r.generated_id, title: (c.items[i] && c.items[i].sum && c.items[i].sum.title) || '' } : null)).filter(Boolean) : [] };
   }
   async function activeThread(userId, projectId, create) {
     const pid = projectId || null;

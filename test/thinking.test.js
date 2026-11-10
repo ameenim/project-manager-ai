@@ -172,6 +172,10 @@ test('a custom document is planned in the chat, created only after Apply, and un
   assert.equal(ap.status, 200, JSON.stringify(ap.data));
   const list = (await s.call('GET', `/api/projects/${p.id}/generated`, null, u.token)).data.generated;
   assert.equal(list.length, 1); assert.equal(list[0].title, 'Vendor onboarding brief');
+  // the applied card points at the new document so the chat can offer Open and Download
+  const card = (await s.call('GET', `/api/chat?project_id=${p.id}`, null, u.token)).data.messages.find((m) => m.id === r.message.id).card;
+  assert.equal(card.docs.length, 1); assert.equal(card.docs[0].id, list[0].id);
+  assert.equal((await s.call('GET', `/api/generated/${card.docs[0].id}`, null, u.token)).status, 200);
   await s.call('POST', `/api/chat/messages/${r.message.id}/undo`, {}, u.token);
   assert.equal((await s.call('GET', `/api/projects/${p.id}/generated`, null, u.token)).data.generated.length, 0);
 });
