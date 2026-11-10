@@ -113,10 +113,22 @@ function createChat({ db, store, api, auth, ops, model }) {
   }
 
   // ---------- history sent to the model ----------
+  // A card the assistant prepared is part of the conversation. The model sees what it proposed and what became of it, so
+  // "I do not like it" or "change the widget" is understood as feedback on that card.
+  function cardNote(card) {
+    if (!card || !Array.isArray(card.items) || !card.items.length) return '';
+    const state = { pending: 'waiting for the person to press Apply', applied: 'applied', applied_final: 'applied', canceled: 'canceled by the person', expired: 'expired unused', undone: 'applied and then undone', failed: 'could not be saved' }[card.status] || card.status;
+    const parts = card.items.slice(0, 4).map((it) => {
+      const rows = (it.changes || []).slice(0, 8).map((c) => `${c.field}: ${clip(String(c.after == null ? '' : c.after), 60)}`).join('; ');
+      const w = it.widget ? ` Definition: ${clip(JSON.stringify(it.widget.spec), 500)}` : '';
+      return `${it.summary}${rows ? ' (' + rows + ')' : ''}.${w}`;
+    });
+    return `\n[Card you prepared, ${state}: ${parts.join(' | ')}]`;
+  }
   async function history(thread, limit, exclude) {
-    const r = await q("SELECT role, text, meta FROM chat_messages WHERE thread_id = $1 AND id <> $3 AND role IN ('user','assistant') AND COALESCE(meta->>'s','') <> '1' ORDER BY id DESC LIMIT $2", [thread.id, limit, exclude || 0]);
+    const r = await q("SELECT role, text, meta, card FROM chat_messages WHERE thread_id = $1 AND id <> $3 AND role IN ('user','assistant') AND COALESCE(meta->>'s','') <> '1' ORDER BY id DESC LIMIT $2", [thread.id, limit, exclude || 0]);
     // a declined part of an earlier message is never sent to the model again
-    return r.rows.reverse().map((m) => ({ role: m.role, content: (m.meta && m.meta.model) || m.text })).filter((m) => m.content);
+    return r.rows.reverse().map((m) => ({ role: m.role, content: clip(((m.meta && m.meta.model) || m.text || '') + (m.role === 'assistant' ? cardNote(m.card) : ''), 6000) })).filter((m) => m.content);
   }
   // Older messages are folded into a short running summary so a long chat stays cheap and accurate.
   async function summarize(thread) {
@@ -274,7 +286,10 @@ function createChat({ db, store, api, auth, ops, model }) {
     if (gt.decision === 'pass' && !images.length && !PROJECTISH.test(text) && text.length > 20) {
       try {
         let out = '';
-        for await (const ev of modelFn({ system: gate.CLASSIFY_SYSTEM, messages: [{ role: 'user', content: text }], max_tokens: 120, signal })) if (ev.type === 'text') out += ev.text;
+        const prior = (await history(thread, 4, userMsg && userMsg.id)).map((m) => `${m.role}: ${clip(m.content, 300)}`).join('\n');
+        const lastCard = prior.includes('[Card you prepared');
+        if (lastCard && text.length <= 200) throw Object.assign(new Error('follow up on a card'), { skipCheck: true });
+        for await (const ev of modelFn({ system: gate.CLASSIFY_SYSTEM, messages: [{ role: 'user', content: prior ? `Earlier in this project management chat:\n${prior}\n\nNew message to classify (a short reply or feedback about the earlier messages is in scope):\n${text}` : text }], max_tokens: 120, signal })) if (ev.type === 'text') out += ev.text;
         const c = gate.parseClassification(out);
         if (c && c.label === 'out_of_scope') {
           const reply = prompt.refusal(c.reason === 'none' || c.reason === 'bypass' ? 'general' : c.reason, lang);

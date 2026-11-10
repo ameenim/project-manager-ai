@@ -470,3 +470,21 @@ test('pasted images reach the model for that turn only, are checked by their byt
   assert.equal(sc.seen.length, 0, 'the model was never called for rejected images');
   assert.match(skill.BASE, /paste up to 3 images/);
 });
+
+test('feedback on a card keeps its context: the model sees the card and its state, and no scope check interrupts it', async () => {
+  const u = await s.user('Feedbacker'); const p = await s.project(u.token, 'Feedback project');
+  const spec = { dataset: 'tasks', viz: 'column', groupBy: 'status', agg: 'count', filters: [] };
+  say(use('create_widget', { title: 'Tasks per status', description: 'Counts', group: 'delivery', spec }, 'w1')); say(text('Prepared the widget.'));
+  const r1 = await talk(u.token, { project_id: p.id, text: 'Create a widget for this project showing tasks by status' });
+  assert.equal(r1.message.card.status, 'pending');
+  sc.seen.length = 0;
+  say(text('Here are two other ways to show it. I prepared the second.'));
+  const r2 = await talk(u.token, { project_id: p.id, text: 'I dont like it, suggest another one' });
+  assert.equal(sc.seen.length, 1, 'one model call, no separate scope check ');
+  const past = JSON.stringify(sc.seen[0].messages);
+  assert.match(past, /Card you prepared, waiting for the person to press Apply/);
+  assert.match(past, /Tasks per status/);
+  assert.match(past, /column/);
+  assert.match(sc.seen[0].system, /Keep the thread in mind/);
+  assert.ok(r2.message.text.length > 0);
+});
