@@ -430,3 +430,8 @@ test('task links are proposed with a type and lag, refuse loops, and undo restor
   await s.call('POST', `/api/chat/messages/${r.message.id}/undo`, {}, u.token);
   assert.equal((await deps(ids[1])).length, 0, 'undo removes the link');
 });
+
+test('the skill asks for a closing What to do line', () => {
+  assert.match(skill.BASE, /What to do:/);
+  assert.match(skill.BASE, /ما يجب فعله/);
+});

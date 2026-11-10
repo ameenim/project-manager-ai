@@ -11,7 +11,7 @@
   Object.assign(PM.I18N.en, {
     th_expand: 'Open as a full page', th_collapse: 'Back to the side panel', th_deep: 'Think deeper', th_deep_tip: 'Think deeper takes longer and uses more of your tokens. Best for schedules and trade offs.', th_deep_on: 'Think deeper is on', th_attach: 'Attach a file', th_attach_tip: 'Attach a file to this project. I can read it and create related documents. Nothing changes until you press Apply.', th_attach_need: 'Open a project first, then attach a file to it.', th_attach_fail: 'The file could not be attached.', th_att_rm: 'Remove from this message', th_uploading: 'Uploading',
     th_sees: 'The AI can see', th_ctx_docs: 'Documents of this project', th_ctx_data: 'Data of this project', th_ctx_portfolio: 'Data of all your projects',
-    th_sug_h: 'Suggestions', th_sug_count: '{n} suggestions', th_sug_one: '1 suggestion', th_sug_more: 'Show all {n}', th_sug_less: 'Show less', th_sug_discuss: 'Discuss', th_sug_snooze: 'Snooze 7 days', th_sug_dismiss: 'Dismiss', th_sug_dismissed: 'Suggestion dismissed', th_sug_snoozed: 'Snoozed for 7 days', th_sug_none: 'No suggestions right now.',
+    th_sug_h: 'Suggestions', th_sug_count: '{n} suggestions', th_sug_one: '1 suggestion', cht_todo: 'What to do', th_sug_more: 'Show all {n}', th_sug_less: 'Show less', th_sug_discuss: 'Discuss', th_sug_snooze: 'Snooze 7 days', th_sug_dismiss: 'Dismiss', th_sug_dismissed: 'Suggestion dismissed', th_sug_snoozed: 'Snoozed for 7 days', th_sug_none: 'No suggestions right now.',
     cht_s_late_tasks: 'Late tasks: {n}', cht_s_low_spi: 'The schedule index is {n}', cht_s_forecast_late: 'The forecast end {n} is after the contract end', cht_s_no_baseline: 'Tasks without a baseline: {n}', cht_s_deliverable_no_task: 'Deliverables due within 7 days with no task: {n}', cht_s_late_payments: 'Late payments: {n}', cht_s_waiting_updates: 'Updates waiting for review: {n}', cht_s_weekly: 'Your weekly summary is ready to write',
     cht_qs_low_spi: 'The schedule index is below 0.95. Why is the project behind plan and what should I do to recover?', cht_qs_forecast_late: 'The forecast end of the project is after the contract end. Suggest an updated schedule to recover.', cht_qs_no_baseline: 'This project has no baseline. Explain what a baseline would lock in and when to set it.', cht_qs_deliverable_no_task: 'Which deliverables due within 7 days have no task in the schedule? Propose tasks for them.', cht_qs_weekly: 'Write my weekly summary across my projects with progress, risks, late items and next steps.',
     th_start: 'Start with', th_quick: 'Quick questions',
@@ -43,7 +43,7 @@
   Object.assign(PM.I18N.ar, {
     th_expand: 'افتح كصفحة كاملة', th_collapse: 'العودة إلى اللوحة الجانبية', th_deep: 'فكّر بعمق', th_deep_tip: 'التفكير بعمق يستغرق وقتا أطول ويستهلك رموزا أكثر. مناسب للجداول والمفاضلات.', th_deep_on: 'التفكير بعمق مفعّل', th_attach: 'أرفق ملفا', th_attach_tip: 'أرفق ملفا بهذا المشروع. يمكنني قراءته وإنشاء مستندات مرتبطة به. لا يتغير شيء حتى تضغط تطبيق.', th_attach_need: 'افتح مشروعا أولا ثم أرفق الملف به.', th_attach_fail: 'تعذر إرفاق الملف.', th_att_rm: 'أزل من هذه الرسالة', th_uploading: 'جار الرفع',
     th_sees: 'ما يراه الذكاء الاصطناعي', th_ctx_docs: 'مستندات هذا المشروع', th_ctx_data: 'بيانات هذا المشروع', th_ctx_portfolio: 'بيانات كل مشاريعك',
-    th_sug_h: 'اقتراحات', th_sug_count: '{n} اقتراحات', th_sug_one: 'اقتراح واحد', th_sug_more: 'عرض الكل ({n})', th_sug_less: 'عرض أقل', th_sug_discuss: 'ناقش', th_sug_snooze: 'تأجيل 7 أيام', th_sug_dismiss: 'تجاهل', th_sug_dismissed: 'تم تجاهل الاقتراح', th_sug_snoozed: 'تم التأجيل 7 أيام', th_sug_none: 'لا توجد اقتراحات الآن.',
+    th_sug_h: 'اقتراحات', th_sug_count: '{n} اقتراحات', th_sug_one: 'اقتراح واحد', cht_todo: 'ما يجب فعله', th_sug_more: 'عرض الكل ({n})', th_sug_less: 'عرض أقل', th_sug_discuss: 'ناقش', th_sug_snooze: 'تأجيل 7 أيام', th_sug_dismiss: 'تجاهل', th_sug_dismissed: 'تم تجاهل الاقتراح', th_sug_snoozed: 'تم التأجيل 7 أيام', th_sug_none: 'لا توجد اقتراحات الآن.',
     cht_s_late_tasks: 'مهام متأخرة: {n}', cht_s_low_spi: 'مؤشر الجدول {n}', cht_s_forecast_late: 'نهاية المشروع المتوقعة {n} بعد نهاية العقد', cht_s_no_baseline: 'مهام بلا خط أساس: {n}', cht_s_deliverable_no_task: 'مخرجات مستحقة خلال 7 أيام بلا مهمة: {n}', cht_s_late_payments: 'دفعات متأخرة: {n}', cht_s_waiting_updates: 'تحديثات بانتظار المراجعة: {n}', cht_s_weekly: 'ملخصك الأسبوعي جاهز للكتابة',
     cht_qs_low_spi: 'مؤشر الجدول أقل من 0.95. لماذا المشروع متأخر عن الخطة وماذا أفعل للتعافي؟', cht_qs_forecast_late: 'نهاية المشروع المتوقعة بعد نهاية العقد. اقترح جدولا محدثا للتعافي.', cht_qs_no_baseline: 'هذا المشروع بلا خط أساس. اشرح ما الذي يثبته خط الأساس ومتى أحدده.', cht_qs_deliverable_no_task: 'ما المخرجات المستحقة خلال 7 أيام وليس لها مهمة في الجدول؟ اقترح مهاما لها.', cht_qs_weekly: 'اكتب ملخصي الأسبوعي لمشاريعي مع التقدم والمخاطر والبنود المتأخرة والخطوات القادمة.',
     th_start: 'ابدأ بـ', th_quick: 'أسئلة سريعة',
@@ -219,9 +219,18 @@
     const p = (S.data && S.data.project) || (PM.state.projects || []).find((x) => x.id === S.ctx.projectId);
     return p ? p.name : t('cht_all');
   }
+  // The closing "What to do" section is shown as a highlighted line so the project manager sees the action first.
+  const TODO_RE = /(^|\n)\s*(?:\*\*|__)?\s*(What to do|ما يجب فعله)\s*:?\s*(?:\*\*|__)?\s*:?[ \t]*/i;
+  function mdBody(text) {
+    const m = TODO_RE.exec(text);
+    if (!m) return `<div class="md">${PM.mdToHtml(text)}</div>`;
+    const before = text.slice(0, m.index).trim(); const rest = text.slice(m.index + m[0].length).trim();
+    const label = /[\u0600-\u06FF]/.test(m[2]) ? m[2] : t('cht_todo');
+    return `${before ? `<div class="md">${PM.mdToHtml(before)}</div>` : ''}<div class="cht-todo" role="note"><div class="cht-todo-h">${icon('check')}<span>${esc(label)}</span></div><div class="md">${PM.mdToHtml(rest)}</div></div>`;
+  }
   function msgHtml(m) {
     if (m.role === 'user') return `<div class="cht-msg user"><div class="cht-bub">${esc(m.text)}</div></div>`;
-    const body = m.pending && !m.text ? `<span class="cht-typing" aria-label="${esc(m.status || t('cht_thinking'))}"><i></i><i></i><i></i></span><span class="small muted">${esc(m.status || t('cht_thinking'))}</span>` : `<div class="md">${PM.mdToHtml(m.text || '')}</div>`;
+    const body = m.pending && !m.text ? `<span class="cht-typing" aria-label="${esc(m.status || t('cht_thinking'))}"><i></i><i></i><i></i></span><span class="small muted">${esc(m.status || t('cht_thinking'))}</span>` : mdBody(m.text || '');
     const err = m.error ? `<div class="cht-err small" role="alert">${esc(m.error)}</div>` : '';
     const stop = m.stopped ? `<div class="small muted">${esc(t('cht_stopped'))}</div>` : '';
     const status = m.pending && m.text && m.status ? `<div class="small muted">${esc(m.status)}</div>` : '';

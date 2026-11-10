@@ -1904,3 +1904,8 @@ input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 4px color-mix(in s
 .kpi-t.good::before { content: "\2713"; background: var(--success-soft); color: var(--success); } .kpi-t.warn::before { content: "!"; background: var(--warning-soft); color: var(--warning); } .kpi-t.bad::before { content: "\25B2"; background: var(--danger-soft); color: var(--danger); }
 .rd-cell.high { background: color-mix(in srgb, var(--danger) 10%, var(--danger-soft)); } .rd-cell.med { background: color-mix(in srgb, var(--warning) 10%, var(--warning-soft)); } .rd-cell.low { background: color-mix(in srgb, var(--success) 10%, var(--success-soft)); }
 .rd-cell.has.high { background: color-mix(in srgb, var(--danger) 30%, var(--danger-soft)); } .rd-cell.has.med { background: color-mix(in srgb, var(--warning) 32%, var(--warning-soft)); } .rd-cell.has.low { background: color-mix(in srgb, var(--success) 28%, var(--success-soft)); }
+/* The closing action line of an AI answer */
+.cht-todo { margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: var(--primary-soft); border-inline-start: 3px solid var(--primary); }
+.cht-todo-h { display: flex; align-items: center; gap: 6px; font-size: var(--fs-small); font-weight: 650; color: var(--primary); margin-bottom: 4px; }
+.cht-todo-h svg { width: 14px; height: 14px; }
+.cht-todo .md > :last-child { margin-bottom: 0; } .cht-todo .md > :first-child { margin-top: 0; }
