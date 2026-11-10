@@ -9,15 +9,19 @@
   Object.assign(PM.I18N.en, {
     tab_closure: 'Closure', pc_closed: 'Closed', pf_closed: 'Closed',
     cl_title: 'Project closure',
-    cl_lead: 'Close the project when everything in scope is delivered or explained. Closing needs the lessons learned report and the certificate of completion.',
-    cl_progress: '{a} of {b} steps complete', cl_ready: 'Ready to close', cl_checklist: 'Before you can close',
+    cl_lead: 'Close the project when everything in scope is delivered or explained. The lessons learned report and the certificate of completion are recommended, not required.',
+    cl_progress: '{a} of {b} required steps complete', cl_ready: 'Ready to close', cl_checklist: 'Close this project',
     cl_c_items: 'Deliverables and requirements are resolved', cl_c_items_ok: '{n} resolved', cl_c_items_todo: '{n} still open', cl_c_items_none: 'Nothing to resolve',
     cl_c_reasons: '{n} not delivered without a reason',
     cl_c_review: 'Extracted items are reviewed', cl_c_review_ok: 'Nothing is waiting', cl_c_review_todo: '{n} waiting for review',
     cl_c_ll: 'Lessons learned report is written', cl_c_cert: 'Certificate of completion is written',
     cl_c_missing: 'Not written yet', cl_c_stale: 'Out of date, write it again', cl_c_current: 'Up to date',
     cl_c_accept: 'Client acceptance is recorded', cl_c_accept_todo: 'Add who accepted and when',
-    cl_close: 'Close project', cl_close_tip: 'Finish every step in the list to close the project',
+    cl_close: 'Close project', cl_close_tip: 'Resolve every deliverable and requirement to close the project',
+    cl_req_h: 'Required to close', cl_opt_h: 'Recommended, you can skip these', cl_opt_p: 'They give you a better record of the project, but they do not block closing.',
+    cl_write_both: 'Write both documents', cl_both_done: 'Both documents written',
+    cl_n_review: 'Review of extracted items', cl_n_ll: 'Lessons learned report', cl_n_cert: 'Certificate of completion', cl_n_acceptance: 'Client acceptance',
+    cl_skip_msg: 'Not done yet: {list}. You can still close the project.', cl_hist_skipped: ' Skipped: {s}.',
     cl_close_q: 'Close this project?',
     cl_close_msg: 'The project becomes read only and leaves the dashboards. Delivered: {d}. Not delivered: {n}. You can reopen it later with a reason.',
     cl_closed_toast: 'Project closed', cl_undo: 'Undo',
@@ -53,15 +57,19 @@
   Object.assign(PM.I18N.ar, {
     tab_closure: 'الإغلاق', pc_closed: 'مغلق', pf_closed: 'مغلق',
     cl_title: 'إغلاق المشروع',
-    cl_lead: 'أغلق المشروع عندما يتم تسليم كل ما في النطاق أو توضيح سبب عدم تسليمه. يتطلب الإغلاق تقرير الدروس المستفادة وشهادة الإنجاز.',
-    cl_progress: 'اكتملت {a} من {b} خطوات', cl_ready: 'جاهز للإغلاق', cl_checklist: 'قبل أن تتمكن من الإغلاق',
+    cl_lead: 'أغلق المشروع عندما يتم تسليم كل ما في النطاق أو توضيح سبب عدم تسليمه. تقرير الدروس المستفادة وشهادة الإنجاز موصى بهما وليسا إلزاميين.',
+    cl_progress: 'اكتملت {a} من {b} خطوات مطلوبة', cl_ready: 'جاهز للإغلاق', cl_checklist: 'قبل أن تتمكن من الإغلاق',
     cl_c_items: 'تمت معالجة كل المخرجات والمتطلبات', cl_c_items_ok: 'تمت معالجة {n}', cl_c_items_todo: 'ما زال {n} مفتوحا', cl_c_items_none: 'لا يوجد ما يحتاج معالجة',
     cl_c_reasons: '{n} لم يسلم وبدون سبب',
     cl_c_review: 'تمت مراجعة العناصر المستخرجة', cl_c_review_ok: 'لا شيء بانتظار المراجعة', cl_c_review_todo: '{n} بانتظار المراجعة',
     cl_c_ll: 'تم إعداد تقرير الدروس المستفادة', cl_c_cert: 'تم إعداد شهادة الإنجاز',
     cl_c_missing: 'لم يعد بعد', cl_c_stale: 'قديم، أعد إعداده', cl_c_current: 'محدث',
     cl_c_accept: 'تم تسجيل قبول العميل', cl_c_accept_todo: 'أضف من وافق ومتى',
-    cl_close: 'إغلاق المشروع', cl_close_tip: 'أكمل كل خطوات القائمة لإغلاق المشروع',
+    cl_close: 'إغلاق المشروع', cl_close_tip: 'عالج كل المخرجات والمتطلبات لإغلاق المشروع',
+    cl_req_h: 'مطلوب للإغلاق', cl_opt_h: 'موصى به، يمكنك تخطيه', cl_opt_p: 'تعطيك سجلا أفضل للمشروع لكنها لا تمنع الإغلاق.',
+    cl_write_both: 'إعداد المستندين', cl_both_done: 'تم إعداد المستندين',
+    cl_n_review: 'مراجعة العناصر المستخرجة', cl_n_ll: 'تقرير الدروس المستفادة', cl_n_cert: 'شهادة الإنجاز', cl_n_acceptance: 'قبول العميل',
+    cl_skip_msg: 'لم يتم بعد: {list}. يمكنك إغلاق المشروع رغم ذلك.', cl_hist_skipped: ' تم تخطي: {s}.',
     cl_close_q: 'هل تريد إغلاق هذا المشروع؟',
     cl_close_msg: 'يصبح المشروع للقراءة فقط ويخرج من لوحات المتابعة. المسلم: {d}. غير المسلم: {n}. يمكنك إعادة فتحه لاحقا مع ذكر السبب.',
     cl_closed_toast: 'تم إغلاق المشروع', cl_undo: 'تراجع',
@@ -131,7 +139,7 @@
       const ll = c.documents.lessons_learned, ce = c.documents.completion_certificate;
       const itemsMeta = sc.counts.total === 0 ? t('cl_c_items_none') : byCode.items_open.ok ? t('cl_c_items_ok', { n: sc.counts.total }) : t('cl_c_items_todo', { n: sc.counts.open });
       return [
-        { ok: byCode.items_open.ok && byCode.reasons.ok, title: t('cl_c_items'), meta: itemsMeta + (byCode.reasons.ok ? '' : `. ${t('cl_c_reasons', { n: byCode.reasons.n })}`), go: 'clItems' },
+        { req: true, ok: byCode.items_open.ok && byCode.reasons.ok, title: t('cl_c_items'), meta: itemsMeta + (byCode.reasons.ok ? '' : `. ${t('cl_c_reasons', { n: byCode.reasons.n })}`), go: 'clItems' },
         { ok: byCode.items_review.ok, title: t('cl_c_review'), meta: byCode.items_review.ok ? t('cl_c_review_ok') : t('cl_c_review_todo', { n: byCode.items_review.n }), go: 'clItems' },
         { ok: byCode.ll.ok, title: t('cl_c_ll'), meta: t('cl_c_' + docState('ll', ll)), go: 'clLL' },
         { ok: byCode.acceptance.ok, title: t('cl_c_accept'), meta: byCode.acceptance.ok ? `${esc(c.accepted_by)}, ${esc(c.accepted_on)}` : t('cl_c_accept_todo'), go: 'clCert' },
@@ -141,7 +149,9 @@
 
     // ---------- rendering ----------
     function checklist() {
-      const list = steps(), done = list.filter((s) => s.ok).length;
+      const all = steps(), list = all.filter((s) => s.req), opt = all.filter((s) => !s.req), done = list.filter((s) => s.ok).length;
+      const docsTodo = !closed() && c.can_manage && c.scope.counts.open === 0 && ['lessons_learned', 'completion_certificate'].some((k) => !c.documents[k] || !c.documents[k].current);
+      const li = (s) => `<li class="cl-check ${s.ok ? 'ok' : 'todo'}"><span class="cl-ico" aria-hidden="true">${icon(s.ok ? 'check' : 'clock')}</span><div class="grow" style="min-width:0"><div class="cl-t">${s.title}</div><div class="small muted">${s.meta}</div></div></li>`;
       const heads = [[c.heads_up.unpaid, 'cl_h_unpaid'], [c.heads_up.open_risks, 'cl_h_risks'], [c.heads_up.open_tasks, 'cl_h_tasks']].filter(([n]) => n > 0);
       const btn = closed() ? '' : c.can_manage
         ? `<button class="btn primary" id="clClose" ${c.ready ? '' : 'disabled'} ${c.ready ? '' : `data-tip="${esc(t('cl_close_tip'))}"`}>${icon('check')}${t('cl_close')}</button>`
@@ -149,7 +159,10 @@
       return `<div class="card" id="clCheck"><div class="card-head"><h3>${t('cl_checklist')}</h3>${btn}</div>
         <div class="row small" style="margin-bottom:8px"><span class="grow">${c.ready || closed() ? t('cl_ready') : t('cl_progress', { a: done, b: list.length })}</span></div>
         <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="${list.length}" aria-valuenow="${done}"><i style="width:${Math.round((done / list.length) * 100)}%"></i></div>
-        <ul class="cl-checks">${list.map((s) => `<li class="cl-check ${s.ok ? 'ok' : 'todo'}"><span class="cl-ico" aria-hidden="true">${icon(s.ok ? 'check' : 'clock')}</span><div class="grow" style="min-width:0"><div class="cl-t">${s.title}</div><div class="small muted">${s.meta}</div></div></li>`).join('')}</ul>
+        <ul class="cl-checks">${list.map(li).join('')}</ul>
+        <div class="row cl-opt-head"><h4 class="sub grow" style="margin:0">${t('cl_opt_h')}</h4>${docsTodo ? `<button class="btn sm" id="clBoth">${icon('spark')}${t('cl_write_both')}</button>` : ''}</div>
+        <p class="small muted" style="margin:4px 0 0">${t('cl_opt_p')}</p>
+        <ul class="cl-checks">${opt.map(li).join('')}</ul>
         ${heads.length && !closed() ? `<div class="cl-heads"><span class="small muted">${t('cl_heads')}</span><div class="row wrap" style="gap:6px;margin-top:6px">${heads.map(([n, k]) => `<span class="chip amber">${t(k, { n })}</span>`).join('')}</div></div>` : ''}</div>`;
     }
 
@@ -181,7 +194,7 @@
 
     function docCard(type, id, titleKey, textKey, writeKey) {
       const d = c.documents[type];
-      const blocked = c.scope.counts.open > 0 || c.scope.pending > 0;
+      const blocked = c.scope.counts.open > 0;
       const state = !d ? 'none' : d.current ? 'ok' : 'stale';
       const chip = `<span class="chip ${state === 'ok' ? 'green' : state === 'stale' ? 'amber' : ''}">${t('cl_doc_' + state)}</span>`;
       const can = !closed();
@@ -205,7 +218,7 @@
 
     function history() {
       if (!c.history.length) return '';
-      return `<div class="card"><div class="card-head"><h3>${t('cl_hist_h')}</h3></div><ul class="cl-hist">${c.history.map((h) => `<li><span class="small muted nowrap">${esc(dayOf(h.at))}</span><span>${h.action === 'closed' ? t('cl_hist_closed', { u: esc(h.by), a: h.delivered, b: h.not_delivered }) : t('cl_hist_reopened', { u: esc(h.by), r: esc(h.reason) })}</span></li>`).join('')}</ul></div>`;
+      return `<div class="card"><div class="card-head"><h3>${t('cl_hist_h')}</h3></div><ul class="cl-hist">${c.history.map((h) => `<li><span class="small muted nowrap">${esc(dayOf(h.at))}</span><span>${h.action === 'closed' ? t('cl_hist_closed', { u: esc(h.by), a: h.delivered, b: h.not_delivered }) + ((h.skipped || []).length ? t('cl_hist_skipped', { s: h.skipped.map((k) => t('cl_n_' + (k === 'items_review' ? 'review' : k === 'll' ? 'll' : k))).join(', ') }) : '') : t('cl_hist_reopened', { u: esc(h.by), r: esc(h.reason) })}</span></li>`).join('')}</ul></div>`;
     }
 
     function draw() {
@@ -273,9 +286,15 @@
           if (ok) { draw(); toast(t('cl_acc_saved'), 'ok'); }
         };
       }
+      const both = $('#clBoth', root);
+      if (both) both.onclick = async () => {
+        const ok = await busy(both, async () => { for (const type of ['lessons_learned', 'completion_certificate']) { const d = c.documents[type]; if (!d || !d.current) await api('POST', `/api/projects/${p.id}/generate`, { type, format: 'docx' }); } return true; });
+        if (ok) { await reload(); toast(t('cl_both_done'), 'ok'); }
+      };
       const close = $('#clClose', root);
       if (close) close.onclick = async () => {
-        if (!await confirmDlg({ title: t('cl_close_q'), message: t('cl_close_msg', { d: c.scope.counts.delivered, n: c.scope.counts.not_delivered }), ok: t('cl_close') })) return;
+        const skip = (c.skipped || []).map((k) => t('cl_n_' + (k === 'items_review' ? 'review' : k))).join(', ');
+        if (!await confirmDlg({ title: t('cl_close_q'), message: t('cl_close_msg', { d: c.scope.counts.delivered, n: c.scope.counts.not_delivered }) + (skip ? ' ' + t('cl_skip_msg', { list: skip }) : ''), ok: t('cl_close') })) return;
         const ok = await busy(close, async () => { await api('POST', `/api/projects/${p.id}/close`); return true; });
         if (!ok) { await reload(); return; }
         await refreshHead();

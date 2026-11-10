@@ -1851,3 +1851,5 @@ body.chat-page .main { overflow: hidden; }
 .chk-tabs .filter-chip:hover { border-color: var(--primary); background: var(--primary-soft); }
 .chk-tabs .filter-chip.on { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
 .chk-tabs .filter-chip:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+.cl-opt-head { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); align-items: center; }

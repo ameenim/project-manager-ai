@@ -66,8 +66,10 @@ test('the closure documents wait for every item and list the reasons', async () 
   assert.match(cert.data.generated.content, /completed with exceptions/);
   let c = await x.closure();
   assert.equal(c.documents.lessons_learned.current, true);
-  assert.equal(c.ready, false, 'the acceptance details are still missing');
+  assert.equal(c.ready, true, 'the acceptance details are optional');
   assert.equal(c.checks.find((k) => k.code === 'acceptance').ok, false);
+  assert.equal(c.checks.find((k) => k.code === 'acceptance').required, false);
+  assert.deepEqual(c.skipped, ['acceptance']);
   // recording the acceptance makes the certificate out of date until it is written again
   const put = await s.call('PUT', `/api/projects/${x.p.id}/closure`, { accepted_by: 'Sam Client', accepted_on: '2027-10-01' }, x.u.token);
   assert.equal(put.status, 200);
@@ -87,13 +89,26 @@ test('a change after the report was written makes it out of date', async () => {
   assert.equal((await x.closure()).ready, true);
   await x.put(x.d2.id, { state: 'closed', data: { outcome: 'not_delivered', not_delivered_reason: 'Dropped late' } });
   const c = await x.closure();
-  assert.equal(c.ready, false);
+  assert.equal(c.ready, true, 'stale documents only warn');
   assert.equal(c.documents.lessons_learned.current, false);
   assert.equal(c.documents.completion_certificate.current, false);
-  assert.match((await s.call('POST', `/api/projects/${x.p.id}/close`, {}, x.u.token)).data.error, /lessons learned report is missing or out of date/);
+  assert.deepEqual(c.skipped.sort(), ['cert', 'll']);
 });
 
-test('items waiting for review block the closure', async () => {
+test('only the scope is mandatory, the other steps can be skipped and are recorded', async () => {
+  const x = await setup('Skip');
+  for (const id of [x.d1.id, x.d2.id, x.r1.id]) await x.put(id, { state: 'closed' });
+  const c = await x.closure();
+  assert.deepEqual(c.checks.filter((k) => k.required).map((k) => k.code).sort(), ['items_open', 'reasons']);
+  assert.equal(c.ready, true);
+  const r = await s.call('POST', `/api/projects/${x.p.id}/close`, {}, x.u.token);
+  assert.equal(r.status, 200);
+  const h = (await x.closure()).history[0];
+  assert.equal(h.action, 'closed');
+  assert.deepEqual(h.skipped.sort(), ['acceptance', 'cert', 'll']);
+});
+
+test('items waiting for review are flagged but do not block the closure', async () => {
   const x = await setup();
   const P = (await s.call('GET', `/api/projects/${x.p.id}/items`, null, x.u.token)).data.items;
   assert.equal(P.length, 3);

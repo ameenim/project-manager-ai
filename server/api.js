@@ -1192,12 +1192,12 @@ module.exports = function createApi(store, auth, connectors, ops) {
     }
     const noReason = sc.rows.filter((r) => r.outcome === 'not_delivered' && r.reason.trim().length < 3).length;
     const checks = [
-      { code: 'items_open', ok: sc.counts.open === 0, n: sc.counts.open },
-      { code: 'items_review', ok: sc.pending === 0, n: sc.pending },
-      { code: 'reasons', ok: noReason === 0, n: noReason },
-      { code: 'll', ok: !!(docs.lessons_learned && docs.lessons_learned.current), n: 0, missing: !docs.lessons_learned },
-      { code: 'cert', ok: !!(docs.completion_certificate && docs.completion_certificate.current), n: 0, missing: !docs.completion_certificate },
-      { code: 'acceptance', ok: !!(cl.accepted_by && cl.accepted_on), n: 0 },
+      { code: 'items_open', required: true, ok: sc.counts.open === 0, n: sc.counts.open },
+      { code: 'reasons', required: true, ok: noReason === 0, n: noReason },
+      { code: 'items_review', required: false, ok: sc.pending === 0, n: sc.pending },
+      { code: 'll', required: false, ok: !!(docs.lessons_learned && docs.lessons_learned.current), n: 0, missing: !docs.lessons_learned },
+      { code: 'cert', required: false, ok: !!(docs.completion_certificate && docs.completion_certificate.current), n: 0, missing: !docs.completion_certificate },
+      { code: 'acceptance', required: false, ok: !!(cl.accepted_by && cl.accepted_on), n: 0 },
     ];
     const live = (k) => P.items.filter((i) => i.kind === k && i.status === 'confirmed');
     const leaf = S.schedule(P.tasks, rawProject(P)).filter((t) => !t.summary);
@@ -1205,7 +1205,7 @@ module.exports = function createApi(store, auth, connectors, ops) {
       status: P.p.status === 'closed' ? 'closed' : P.p.status === 'archived' ? 'archived' : 'active',
       closed_at: P.p.closed_at || null, closed_by: P.p.closed_by || null,
       accepted_by: cl.accepted_by || '', accepted_on: cl.accepted_on || '', note: cl.note || '',
-      scope: sc, documents: docs, checks, ready: checks.every((c) => c.ok),
+      scope: sc, documents: docs, checks, ready: checks.every((c) => c.ok || !c.required), skipped: checks.filter((c) => !c.required && !c.ok).map((c) => c.code),
       heads_up: { unpaid: live('milestone').filter((i) => i.state !== 'paid').length, open_risks: live('risk').filter((i) => i.state === 'open').length, open_tasks: leaf.filter((t) => (t.progress || 0) < 100).length },
       history: (cl.history || []).slice(-20).reverse(),
       can_manage: roleOf(P) === 'manager',
@@ -1232,11 +1232,11 @@ module.exports = function createApi(store, auth, connectors, ops) {
     const st = closureState(P);
     if (!st.ready) {
       const say = { items_open: (n) => `${n} deliverable${n === 1 ? '' : 's'} or requirement${n === 1 ? '' : 's'} still open`, items_review: (n) => `${n} item${n === 1 ? '' : 's'} waiting for review`, reasons: (n) => `${n} not delivered item${n === 1 ? '' : 's'} without a reason`, ll: () => 'the lessons learned report is missing or out of date', cert: () => 'the certificate of completion is missing or out of date', acceptance: () => 'the client acceptance details are missing' };
-      throw err(400, `The project is not ready to close: ${st.checks.filter((c) => !c.ok).map((c) => say[c.code](c.n)).join(', ')}.`);
+      throw err(400, `The project is not ready to close: ${st.checks.filter((c) => c.required && !c.ok).map((c) => say[c.code](c.n)).join(', ')}.`);
     }
     const cl = P.closure = P.closure || {};
     P.p.status = 'closed'; P.p.closed_at = nowTs(); P.p.closed_by = ACTOR();
-    cl.history = [...(cl.history || []), { action: 'closed', at: P.p.closed_at, by: ACTOR(), delivered: st.scope.counts.delivered, not_delivered: st.scope.counts.not_delivered }];
+    cl.history = [...(cl.history || []), { action: 'closed', at: P.p.closed_at, by: ACTOR(), delivered: st.scope.counts.delivered, not_delivered: st.scope.counts.not_delivered, skipped: st.skipped }];
     audit(P, ACTOR(), 'project_closed', { summary: `Project closed with ${st.scope.counts.delivered} delivered and ${st.scope.counts.not_delivered} not delivered` });
     return { project: projectView(P), closure: closureState(P) };
   });
@@ -2041,7 +2041,6 @@ Rules:
     if (def.closure) {
       const sc = closureScope(P);
       if (sc.counts.open) throw err(400, `Close or mark as not delivered the ${sc.counts.open} deliverable${sc.counts.open === 1 ? '' : 's'} and requirement${sc.counts.open === 1 ? '' : 's'} still open before writing this document`);
-      if (sc.pending) throw err(400, `Confirm or ignore the ${sc.pending} item${sc.pending === 1 ? '' : 's'} waiting for review before writing this document`);
     }
     // The one slide status report is a single PowerPoint slide, so it has no other format.
     const format = def.oneSlide && !cu ? 'pptx' : FORMATS.includes(b.format) ? b.format : 'docx';
