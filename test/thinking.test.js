@@ -246,11 +246,14 @@ test('a custom widget is created as a private draft only after Apply, added to t
   say(use('create_widget', { title: 'Task status split', description: 'Share of tasks by status', group: 'delivery', add_to: 'project', spec }, 'w1')); say(text('Prepared the widget.'));
   const r = await talk(u.token, { project_id: p.id, text: 'Create a widget for this project showing tasks by status' });
   assert.equal(r.message.card.items[0].sum.op, 'create_widget');
+  assert.equal(r.message.card.items[0].widget.spec.viz, 'donut', 'the card carries the definition so the chat can draw it');
   assert.equal((await s.call('GET', '/api/widgets/mine', null, u.token)).data.widgets.length, 0, 'nothing before Apply');
   assert.equal((await s.call('POST', `/api/chat/messages/${r.message.id}/apply`, {}, u.token)).status, 200);
   const mine = (await s.call('GET', '/api/widgets/mine', null, u.token)).data.widgets;
   assert.equal(mine.length, 1); assert.equal(mine[0].title, 'Task status split'); assert.equal(mine[0].status, 'draft');
   assert.equal(mine[0].added.project, true);
+  const wc = (await s.call('GET', `/api/chat?project_id=${p.id}`, null, u.token)).data.messages.find((m) => m.id === r.message.id).card;
+  assert.equal(wc.widgets.length, 1); assert.equal(wc.widgets[0].id, mine[0].id, 'the applied card points at the draft for Edit and Publish');
   await s.call('POST', `/api/chat/messages/${r.message.id}/undo`, {}, u.token);
   assert.equal((await s.call('GET', '/api/widgets/mine', null, u.token)).data.widgets.length, 0);
 });

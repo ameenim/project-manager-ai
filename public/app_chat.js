@@ -32,7 +32,7 @@
     cht_sum_add: 'Add {kind} "{title}"', cht_sum_upd: 'Update {kind} "{title}"', cht_sum_del: 'Delete {kind} "{title}"', cht_sum_pay: 'Mark payment "{title}" as {state}', cht_sum_addtask: 'Add task "{title}"', cht_sum_updtask: 'Update task "{title}"', cht_sum_deltask: 'Delete task "{title}"',
     cht_sum_saveversion: 'Save the schedule version "{title}"', cht_sum_baseline: 'Set the baseline for "{title}"', cht_sum_restore: 'Restore the schedule to version {title}', cht_f_version: 'Version', cht_f_predecessors: 'Predecessors', cht_f_end_then: 'Project end', cht_f_tasks: 'Tasks', cht_f_replaces: 'Replaces',
     cht_sum_layout: 'Save the layout "{title}"', cht_f_show: 'Shown', cht_f_hide: 'Hidden',
-    cht_sum_gen: 'Generate the document "{title}"', cht_f_format: 'Format', cht_open_reports: 'Open Reports', cht_doc_open: 'Open', cht_doc_dl: 'Download', cht_doc_ready: 'Download ready', cht_doc_fail: 'The document could not be opened.', cht_sum_sched: 'Change the schedule of task "{title}"', cht_sum_plan: 'Update the schedule: {title}', cht_f_reason: 'Reason', cht_sum_widget: 'Create the widget "{title}"', cht_sum_meeting: 'Send items from the meeting "{title}"', cht_sum_project: 'Change the settings of project "{title}"', cht_sum_template: 'Save the template "{title}"', cht_f_meeting: 'Meeting', cht_f_takes: 'Takes', cht_f_client: 'Client', cht_f_start_date: 'Start date', cht_f_end_date: 'End date', cht_f_value: 'Value', cht_f_action: 'Action', cht_f_decision: 'Decision', cht_f_group: 'Group', cht_f_data: 'Data', cht_f_display: 'Display', cht_f_added_to: 'Added to', cht_f_template: 'Template', cht_sum_applyupd: 'Apply update "{title}"', cht_sum_dismiss: 'Dismiss update "{title}"', cht_sum_addupd: 'Add a message to the Updates inbox',
+    cht_sum_gen: 'Generate the document "{title}"', cht_f_format: 'Format', cht_open_reports: 'Open Reports', cht_wp_edit: 'Edit', cht_wp_pub: 'Publish', cht_wp_upd: 'Publish update', cht_wp_done: 'Published', cht_wp_draft: 'Private draft', cht_wp_loading: 'Loading the preview', cht_wp_fail: 'The preview could not be drawn.', cht_wp_ok: '"{title}" is published', cht_doc_open: 'Open', cht_doc_dl: 'Download', cht_doc_ready: 'Download ready', cht_doc_fail: 'The document could not be opened.', cht_sum_sched: 'Change the schedule of task "{title}"', cht_sum_plan: 'Update the schedule: {title}', cht_f_reason: 'Reason', cht_sum_widget: 'Create the widget "{title}"', cht_sum_meeting: 'Send items from the meeting "{title}"', cht_sum_project: 'Change the settings of project "{title}"', cht_sum_template: 'Save the template "{title}"', cht_f_meeting: 'Meeting', cht_f_takes: 'Takes', cht_f_client: 'Client', cht_f_start_date: 'Start date', cht_f_end_date: 'End date', cht_f_value: 'Value', cht_f_action: 'Action', cht_f_decision: 'Decision', cht_f_group: 'Group', cht_f_data: 'Data', cht_f_display: 'Display', cht_f_added_to: 'Added to', cht_f_template: 'Template', cht_sum_applyupd: 'Apply update "{title}"', cht_sum_dismiss: 'Dismiss update "{title}"', cht_sum_addupd: 'Add a message to the Updates inbox',
     cht_f_progress: 'Progress', cht_f_update: 'Update', cht_f_message: 'Message', cht_impact_h: 'Impact on the schedule', cht_impact_none: 'No other task moves.', cht_impact_n: '{n} other tasks move.', cht_impact_n1: '1 other task moves.', cht_impact_end: 'Project end: {a} to {b}.', cht_impact_same: 'Project end stays {b}.',
     cht_brief_h: 'Today', cht_brief_clear: 'Nothing needs your attention right now.',
     cht_b_late_tasks: '{n} late tasks', cht_b_connect: 'Connect Jira or Outlook', cht_q_connect: 'Guide me step by step through connecting Jira or Outlook.', cht_b_late_payments: '{n} late payments', cht_b_updates: '{n} updates waiting', cht_b_at_risk: '{n} projects off track', cht_b_high_risks: '{n} high risks open',
@@ -64,7 +64,7 @@
     cht_sum_add: 'إضافة {kind} "{title}"', cht_sum_upd: 'تحديث {kind} "{title}"', cht_sum_del: 'حذف {kind} "{title}"', cht_sum_pay: 'تحديد الدفعة "{title}" على أنها {state}', cht_sum_addtask: 'إضافة المهمة "{title}"', cht_sum_updtask: 'تحديث المهمة "{title}"', cht_sum_deltask: 'حذف المهمة "{title}"',
     cht_sum_saveversion: 'حفظ نسخة الجدول "{title}"', cht_sum_baseline: 'تحديد خط الأساس لـ "{title}"', cht_sum_restore: 'استعادة الجدول إلى النسخة {title}', cht_f_version: 'النسخة', cht_f_predecessors: 'المهام السابقة', cht_f_end_then: 'نهاية المشروع', cht_f_tasks: 'المهام', cht_f_replaces: 'يستبدل',
     cht_sum_layout: 'حفظ التخطيط "{title}"', cht_f_show: 'الظاهر', cht_f_hide: 'المخفي',
-    cht_sum_gen: 'إنشاء المستند "{title}"', cht_f_format: 'الصيغة', cht_open_reports: 'افتح التقارير', cht_doc_open: 'فتح', cht_doc_dl: 'تنزيل', cht_doc_ready: 'التنزيل جاهز', cht_doc_fail: 'تعذر فتح المستند.', cht_sum_sched: 'تغيير جدول المهمة "{title}"', cht_sum_plan: 'تحديث الجدول: {title}', cht_f_reason: 'السبب', cht_sum_widget: 'إنشاء الأداة "{title}"', cht_sum_meeting: 'إرسال بنود من الاجتماع "{title}"', cht_sum_project: 'تغيير إعدادات المشروع "{title}"', cht_sum_template: 'حفظ القالب "{title}"', cht_f_meeting: 'الاجتماع', cht_f_takes: 'يأخذ', cht_f_client: 'العميل', cht_f_start_date: 'تاريخ البدء', cht_f_end_date: 'تاريخ الانتهاء', cht_f_value: 'القيمة', cht_f_action: 'إجراء', cht_f_decision: 'قرار', cht_f_group: 'المجموعة', cht_f_data: 'البيانات', cht_f_display: 'العرض', cht_f_added_to: 'أضيفت إلى', cht_f_template: 'القالب', cht_sum_applyupd: 'تطبيق التحديث "{title}"', cht_sum_dismiss: 'تجاهل التحديث "{title}"', cht_sum_addupd: 'إضافة رسالة إلى صندوق التحديثات',
+    cht_sum_gen: 'إنشاء المستند "{title}"', cht_f_format: 'الصيغة', cht_open_reports: 'افتح التقارير', cht_wp_edit: 'تعديل', cht_wp_pub: 'نشر', cht_wp_upd: 'نشر التحديث', cht_wp_done: 'منشورة', cht_wp_draft: 'مسودة خاصة', cht_wp_loading: 'جار تحميل المعاينة', cht_wp_fail: 'تعذر رسم المعاينة.', cht_wp_ok: 'تم نشر "{title}"', cht_doc_open: 'فتح', cht_doc_dl: 'تنزيل', cht_doc_ready: 'التنزيل جاهز', cht_doc_fail: 'تعذر فتح المستند.', cht_sum_sched: 'تغيير جدول المهمة "{title}"', cht_sum_plan: 'تحديث الجدول: {title}', cht_f_reason: 'السبب', cht_sum_widget: 'إنشاء الأداة "{title}"', cht_sum_meeting: 'إرسال بنود من الاجتماع "{title}"', cht_sum_project: 'تغيير إعدادات المشروع "{title}"', cht_sum_template: 'حفظ القالب "{title}"', cht_f_meeting: 'الاجتماع', cht_f_takes: 'يأخذ', cht_f_client: 'العميل', cht_f_start_date: 'تاريخ البدء', cht_f_end_date: 'تاريخ الانتهاء', cht_f_value: 'القيمة', cht_f_action: 'إجراء', cht_f_decision: 'قرار', cht_f_group: 'المجموعة', cht_f_data: 'البيانات', cht_f_display: 'العرض', cht_f_added_to: 'أضيفت إلى', cht_f_template: 'القالب', cht_sum_applyupd: 'تطبيق التحديث "{title}"', cht_sum_dismiss: 'تجاهل التحديث "{title}"', cht_sum_addupd: 'إضافة رسالة إلى صندوق التحديثات',
     cht_f_progress: 'التقدم', cht_f_update: 'التحديث', cht_f_message: 'الرسالة', cht_impact_h: 'الأثر على الجدول', cht_impact_none: 'لا تتحرك مهام أخرى.', cht_impact_n: 'تتحرك {n} مهام أخرى.', cht_impact_n1: 'تتحرك مهمة أخرى واحدة.', cht_impact_end: 'نهاية المشروع: من {a} إلى {b}.', cht_impact_same: 'تبقى نهاية المشروع {b}.',
     cht_brief_h: 'اليوم', cht_brief_clear: 'لا شيء يحتاج إلى انتباهك الآن.',
     cht_b_late_tasks: '{n} مهام متأخرة', cht_b_connect: 'اربط Jira أو Outlook', cht_q_connect: 'أرشدني خطوة بخطوة لربط Jira أو Outlook.', cht_b_late_payments: '{n} دفعات متأخرة', cht_b_updates: '{n} تحديثات بالانتظار', cht_b_at_risk: '{n} مشاريع خارج المسار', cht_b_high_risks: '{n} مخاطر عالية مفتوحة',
@@ -245,18 +245,59 @@
     const acts = !m.pending && m.id && !String(m.id).startsWith('b') && m.text ? `<div class="cht-acts"><button class="btn ghost icon sm" type="button" data-act="copy" data-id="${esc(m.id)}" aria-label="${esc(t('cht_copy'))}" data-tip="${esc(t('cht_copy'))}">${icon('copy')}</button><button class="btn ghost icon sm ${m.feedback === 1 ? 'on' : ''}" type="button" data-act="up" data-id="${esc(m.id)}" aria-pressed="${m.feedback === 1}" aria-label="${esc(t('cht_good'))}" data-tip="${esc(t('cht_good'))}">${icon('check')}</button><button class="btn ghost icon sm ${m.feedback === -1 ? 'on' : ''}" type="button" data-act="down" data-id="${esc(m.id)}" aria-pressed="${m.feedback === -1}" aria-label="${esc(t('cht_bad'))}" data-tip="${esc(t('cht_bad'))}">${icon('flag')}</button></div>` : '';
     return `<div class="cht-msg bot" data-mid="${esc(m.id)}"><div class="cht-bub">${body}${status}${err}${stop}${src}${links}</div>${card}${acts}</div>`;
   }
+  // ---------- a widget made from a card is drawn right in the chat ----------
+  S.wprev = S.wprev || {}; S.wstat = S.wstat || {}; S.wpack = S.wpack || {};
+  const wkey = (m, ix, c) => { const w = (c.widgets || [])[0]; return w && c.status !== 'pending' ? 'w' + w.id : m.id + ':' + ix; };
+  function wprevHtml(m, c, ix, it) {
+    const key = wkey(m, ix, c); const done = S.wprev[key];
+    const g = it.widget; const st = (c.widgets || [])[0] && c.status !== 'pending' ? S.wstat[(c.widgets[0] || {}).id] : null;
+    const tag = c.status === 'pending' ? '' : `<span class="chip ${st && st.status === 'published' ? 'green' : ''}">${esc(t(st && st.status === 'published' ? 'cht_wp_done' : 'cht_wp_draft'))}</span>`;
+    if (!done) queueMicrotask(() => fillWidget(m.id, ix));
+    return `<div class="cht-wprev" data-wkey="${esc(key)}" data-m="${esc(m.id)}" data-ix="${ix}"><div class="cht-wp-h"><b>${esc(g.title)}</b>${tag}</div><div class="cht-wp-b">${done || `<div class="small muted">${esc(t('cht_wp_loading'))}</div>`}</div></div>`;
+  }
+  function wfootHtml(w) {
+    const st = S.wstat[w.id]; const pub = st && st.status === 'published';
+    const btn = pub && !st.dirty ? `<span class="chip green">${esc(t('cht_wp_done'))}</span>` : `<button class="btn sm" type="button" data-act="wpub" data-id="${w.id}">${esc(t(pub ? 'cht_wp_upd' : 'cht_wp_pub'))}</button>`;
+    return `<a class="btn primary sm" href="#/widgets/${w.id}/edit" data-act="nav">${icon('edit')}${esc(t('cht_wp_edit'))}</a>${btn}`;
+  }
+  async function fillWidget(mid, ix) {
+    const msg = S.msgs.find((x) => String(x.id) === String(mid)); const c = msg && msg.card; const it = c && c.items[ix]; if (!it || !it.widget) return;
+    const key = wkey(msg, ix, c); if (S.wprev[key] || S.wbusy === key) return; S.wbusy = key;
+    try {
+      let g = it.widget; const w = c.status !== 'pending' ? (c.widgets || [])[0] : null;
+      if (w) { const r = (await PM.api('GET', `/api/widgets/${w.id}`)).widget; g = { title: r.title, spec: r.spec }; S.wstat[w.id] = { status: r.status, dirty: !!r.dirty }; }
+      const pid = (c.projects[0] || {}).id || S.ctx.projectId || '';
+      if (!S.wpack[pid]) { const r = await PM.api('GET', `/api/widgets/datasets${pid ? `?project_id=${pid}` : ''}`); S.wpack[pid] = { datasets: r.datasets, today: r.today, truncated: r.truncated || {} }; }
+      const holder = document.createElement('div');
+      PM.widgets.renderSpec(holder, { title: g.title, spec: g.spec }, S.wpack[pid], {}, { limit: true });
+      S.wprev[key] = holder.innerHTML;
+    } catch (e) { S.wprev[key] = `<div class="small muted">${esc(t('cht_wp_fail'))}</div>`; }
+    finally { S.wbusy = null; }
+    soon();
+  }
+  async function wPublish(id, el) {
+    if (el.disabled) return; el.disabled = true;
+    try {
+      const r = (await PM.api('GET', `/api/widgets/${id}`)).widget; const upd = r.status === 'published';
+      const ok = await PM.confirmDlg({ title: t(upd ? 'wm_publish_update' : 'wm_publish'), message: esc(t('wm_publish_msg', { title: r.title })), ok: t(upd ? 'wm_publish_update' : 'wm_publish') });
+      if (!ok) return;
+      await PM.api('POST', `/api/widgets/${id}/publish`);
+      S.wstat[id] = { status: 'published', dirty: false }; PM.toast(t('cht_wp_ok', { title: r.title }), 'ok'); soon();
+    } catch (e) { PM.toast(e.message || t('cht_wp_fail'), 'err'); }
+    finally { el.disabled = false; }
+  }
   function cardHtml(m) {
     const c = m.card; const id = esc(m.id);
     const live = c.status === 'pending';
     const confirming = S.confirming === m.id && live;
-    const items = c.items.map((it) => `<li class="cht-item ${it.destructive ? 'bad' : ''}"><div class="cht-it-h">${esc(sumText(it))}</div>${it.project && (c.projects || []).length > 1 ? `<div class="small muted">${esc(it.project)}</div>` : ''}${(it.changes || []).map((ch) => `<div class="cht-chg small"><span class="muted">${esc(fieldLabel(ch.field))}</span> ${ch.before != null ? `<span class="cht-old">${esc(valText(ch.before, ch.field))}</span><span class="muted">${icon('down', 'flip cht-arrow')}</span>` : ''}${ch.after != null ? `<b class="cht-new">${esc(valText(ch.after, ch.field))}</b>` : `<b class="cht-new">${esc(t('cht_none'))}</b>`}</div>`).join('')}${impactHtml(it)}${noteText(it) ? `<div class="small muted">${esc(noteText(it))}</div>` : ''}</li>`).join('');
+    const items = c.items.map((it, ix) => `<li class="cht-item ${it.destructive ? 'bad' : ''}"><div class="cht-it-h">${esc(sumText(it))}</div>${it.widget ? wprevHtml(m, c, ix, it) : ''}${it.project && (c.projects || []).length > 1 ? `<div class="small muted">${esc(it.project)}</div>` : ''}${(it.changes || []).map((ch) => `<div class="cht-chg small"><span class="muted">${esc(fieldLabel(ch.field))}</span> ${ch.before != null ? `<span class="cht-old">${esc(valText(ch.before, ch.field))}</span><span class="muted">${icon('down', 'flip cht-arrow')}</span>` : ''}${ch.after != null ? `<b class="cht-new">${esc(valText(ch.after, ch.field))}</b>` : `<b class="cht-new">${esc(t('cht_none'))}</b>`}</div>`).join('')}${impactHtml(it)}${noteText(it) ? `<div class="small muted">${esc(noteText(it))}</div>` : ''}</li>`).join('');
     const state = live ? '' : `<span class="chip ${c.status === 'applied' || c.status === 'applied_final' ? 'green' : c.status === 'failed' ? 'red' : c.status === 'undone' ? 'blue' : ''}">${esc(t('cht_s_' + c.status))}</span>`;
     const msg = c.message ? `<div class="small ${c.status === 'failed' ? 'cht-err' : 'muted'}" role="${c.status === 'failed' ? 'alert' : 'status'}">${esc(c.message)}</div>` : '';
     let foot = '';
     if (c.busy === 'apply' || c.busy === 'undo') foot = `<div class="cht-card-foot cht-busy small" role="status">${PM.loader.html({ size: 'sm', label: t(c.busy === 'undo' ? 'cht_s_undoing' : 'cht_s_applying') })}<span>${esc(t(c.busy === 'undo' ? 'cht_s_undoing' : 'cht_s_applying'))}</span></div>`;
     else if (live && !confirming) foot = `<div class="cht-card-foot"><button class="btn primary sm" type="button" data-act="apply" data-id="${id}">${esc(t('cht_apply'))}</button><button class="btn sm" type="button" data-act="edit" data-id="${id}">${esc(t('cht_edit'))}</button><button class="btn ghost sm" type="button" data-act="cancel" data-id="${id}">${esc(t('cht_cancel'))}</button></div>`;
     else if (confirming) foot = `<div class="cht-warn small" role="alert">${esc(c.items.some((x) => x.destructive) ? t('cht_strong') : t('cht_many'))}</div><div class="cht-card-foot"><button class="btn danger sm" type="button" data-act="confirm" data-id="${id}">${esc(t('cht_yes'))}</button><button class="btn ghost sm" type="button" data-act="back" data-id="${id}">${esc(t('cht_back'))}</button></div>`;
-    else if (c.status === 'applied') foot = `<div class="cht-card-foot">${(c.docs || []).map((d) => `<button class="btn primary sm" type="button" data-act="docopen" data-id="${d.id}">${icon('eye')}${esc(t('cht_doc_open'))}</button><button class="btn sm" type="button" data-act="docdl" data-id="${d.id}">${icon('dl')}${esc(t('cht_doc_dl'))}</button>`).join('')}${!(c.docs || []).length && c.items.some((x) => x.sum && x.sum.op === 'generate') ? `<a class="btn primary sm" href="#/p/${(c.projects[0] || {}).id}/reports" data-act="nav">${esc(t('cht_open_reports'))}</a>` : ''}<button class="btn sm" type="button" data-act="undo" data-id="${id}">${icon('undo')}${esc(t('cht_undo'))}</button></div>`;
+    else if (c.status === 'applied') foot = `<div class="cht-card-foot">${(c.widgets || []).map(wfootHtml).join('')}${(c.docs || []).map((d) => `<button class="btn primary sm" type="button" data-act="docopen" data-id="${d.id}">${icon('eye')}${esc(t('cht_doc_open'))}</button><button class="btn sm" type="button" data-act="docdl" data-id="${d.id}">${icon('dl')}${esc(t('cht_doc_dl'))}</button>`).join('')}${!(c.docs || []).length && c.items.some((x) => x.sum && x.sum.op === 'generate') ? `<a class="btn primary sm" href="#/p/${(c.projects[0] || {}).id}/reports" data-act="nav">${esc(t('cht_open_reports'))}</a>` : ''}<button class="btn sm" type="button" data-act="undo" data-id="${id}">${icon('undo')}${esc(t('cht_undo'))}</button></div>`;
     return `<div class="cht-card ${live ? 'live' : ''}" data-card="${id}"><div class="cht-card-h"><span class="small muted">${icon('spark')}${esc((c.projects || []).map((p) => p.name).join(', '))}</span>${state}</div><ul class="cht-items">${items}</ul>${msg}${foot}</div>`;
   }
   function emptyHtml() {
@@ -614,6 +655,7 @@
     if (act === 'hdel') { S.hist.confirm = Number(id); return paint(); }
     if (act === 'hkeep') { S.hist.confirm = null; return paint(); }
     if (act === 'hdel2') return deleteChat(id);
+    if (act === 'wpub') return wPublish(id, el);
     if (act === 'docopen' || act === 'docdl') return docAct(act, id, el);
     if (act === 'img') { const f = $q('#chtImg'); if (f) f.click(); return; }
     if (act === 'imgrm') { (S.imgs || []).splice(Number(el.dataset.i), 1); return paintAtts(); }

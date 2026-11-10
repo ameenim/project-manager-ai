@@ -1915,3 +1915,10 @@ input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 4px color-mix(in s
 .cht-att.img img { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; display: block; }
 .cht-thumbs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
 .cht-thumbs img { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }
+
+/* a widget drawn inside a chat card */
+.cht-wprev { margin: 8px 0 4px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); padding: 10px 12px; }
+.cht-wp-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-size: var(--fs-body); }
+.cht-wp-b { min-height: 120px; }
+.cht-wp-b .wk-kpi { padding: 4px 0; }
+.cht-card-foot a.btn { text-decoration: none; }

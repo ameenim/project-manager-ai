@@ -45,7 +45,7 @@ function createChat({ db, store, api, auth, ops, model }) {
     let status = c.status;
     if (status === 'pending' && Date.now() - Date.parse(c.created_at) > CARD_HOURS * 3600e3) status = 'expired';
     if (status === 'applied' && Date.now() - Date.parse(c.applied_at) > UNDO_DAYS * 86400e3) status = 'applied_final';
-    return { id, status, strong: !!c.strong, items: c.items, note: c.note || '', message: c.message || '', created_at: c.created_at, applied_at: c.applied_at || null, projects: c.projects || [], docs: status === 'applied' || status === 'applied_final' ? (c.results || []).map((r, i) => (r && r.generated_id ? { id: r.generated_id, title: (c.items[i] && c.items[i].sum && c.items[i].sum.title) || '' } : null)).filter(Boolean) : [] };
+    return { id, status, strong: !!c.strong, items: c.items, note: c.note || '', message: c.message || '', created_at: c.created_at, applied_at: c.applied_at || null, projects: c.projects || [], docs: status === 'applied' || status === 'applied_final' ? (c.results || []).map((r, i) => (r && r.generated_id ? { id: r.generated_id, title: (c.items[i] && c.items[i].sum && c.items[i].sum.title) || '' } : null)).filter(Boolean) : [], widgets: status === 'applied' || status === 'applied_final' ? (c.results || []).map((r, i) => (r && r.widget_id ? { id: r.widget_id, title: (c.items[i] && c.items[i].sum && c.items[i].sum.title) || '' } : null)).filter(Boolean) : [] };
   }
   async function activeThread(userId, projectId, create) {
     const pid = projectId || null;
@@ -218,7 +218,7 @@ function createChat({ db, store, api, auth, ops, model }) {
     return {
       status: 'pending', strong, created_at: new Date().toISOString(),
       ops: proposals.map((p) => p.op),
-      items: proposals.map((p) => ({ summary: p.summary, sum: p.sum || null, project: p.project, destructive: !!p.destructive, noteData: p.noteData || null, impact: p.impact || null, changes: p.changes.map(([field, before, after]) => ({ field, before, after })) })),
+      items: proposals.map((p) => ({ widget: p.op && p.op.op === 'create_widget' ? { title: p.op.meta.title, group: p.op.meta.group, spec: p.op.spec } : undefined, summary: p.summary, sum: p.sum || null, project: p.project, destructive: !!p.destructive, noteData: p.noteData || null, impact: p.impact || null, changes: p.changes.map(([field, before, after]) => ({ field, before, after })) })),
       projects: projectsTouched.map((id) => ({ id, name: A.projects[id].p.name })),
     };
   }
