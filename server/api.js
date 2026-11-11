@@ -2431,7 +2431,7 @@ Rules:
     store.saveSoon(P);
   }
 
-  const userView = (u) => ({ id: u.id, name: u.name, email: u.email, language: (u.prefs && u.prefs.language) || 'en', theme: (u.prefs && u.prefs.theme) || 'light', avatar: u.avatar || null, ingest_key: (u.prefs && u.prefs.ingest_key) || null, dash_layout: (u.prefs && u.prefs.dash_layout) || null, sample_loaded: !!(u.prefs && u.prefs.sample_loaded), is_super: !!u.is_super });
+  const userView = (u) => ({ id: u.id, name: u.name, email: u.email, language: (u.prefs && u.prefs.language) || 'en', theme: (u.prefs && u.prefs.theme) || 'light', avatar: u.avatar || null, ingest_key: (u.prefs && u.prefs.ingest_key) || null, dash_layout: (u.prefs && u.prefs.dash_layout) || null, sample_loaded: !!(u.prefs && u.prefs.sample_loaded), is_super: !!u.is_super, session_expires_at: u.session_expires_at || null });
   async function saveUser() {
     const c = ctx(), u = c.DB.user;
     const prefs = { ...(c.user.prefs || {}), language: u.language, theme: u.theme, dash_layout: u.dash_layout || null, ingest_key: u.ingest_key || null, templates: c.DB.templates, connections: c.DB.connections || {}, sample_loaded: !!u.sample_loaded };

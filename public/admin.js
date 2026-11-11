@@ -46,7 +46,7 @@
     const timer = setTimeout(() => ctl && ctl.abort(), 25000);
     let r; try { r = await fetch(path, init); } catch (e) { clearTimeout(timer); throw new Error(e && e.name === 'AbortError' ? `The server took too long to answer ${method} ${path}. Try again.` : 'The server could not be reached. Check your connection and try again.'); }
     let data = null, text = ''; try { text = await r.text(); clearTimeout(timer); data = JSON.parse(text); } catch (e) { clearTimeout(timer); /* not JSON */ }
-    if (r.status === 401) { signOut(); throw new Error('Your session has ended. Sign in again.'); }
+    if (r.status === 401) { signOut('Your session ended or reached its time limit. Sign in again.'); throw new Error('Your session has ended. Sign in again.'); }
     if (!r.ok) throw new Error((data && data.error) || `${method} ${path} answered ${r.status} ${r.statusText}`);
     if (data === null) throw new Error(`${method} ${path} did not return data (status ${r.status}). The server may be running an older version. Restart it and reload this page.`);
     return data;
@@ -121,10 +121,10 @@
   const fail = (e) => setView(`<div class="page"><div class="card"><div class="sa-note bad" role="alert">${esc(e.message)}</div><button class="btn" onclick="location.reload()">Try again</button></div></div>`);
 
   // ---------- sign in ----------
-  function signOut() {
+  function signOut(msg) {
     if (S.token) fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${S.token}` } }).catch(() => {});
     S.token = null; S.me = null; try { localStorage.removeItem(KEY); } catch (e) { /* storage blocked */ }
-    clearInterval(S.timer); showLogin();
+    clearInterval(S.timer); showLogin(typeof msg === 'string' ? msg : '');
   }
   function showLogin(msg) {
     $('#app').innerHTML = `<div class="sa-login"><div class="card"><div class="brand" style="padding:0"><img src="brand/mark.svg" alt="" width="32" height="32"><span>Project Manager AI<span class="sa-tag">Super admin</span></span></div>

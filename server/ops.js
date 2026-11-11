@@ -19,6 +19,7 @@ const CONFIG = {
   signup_enabled: { def: true, type: 'bool', label: 'Allow new sign ups' },
   self_serve_subscribe: { def: true, type: 'bool', label: 'Allow people to subscribe themselves in the app' },
   enforce_limits: { def: false, type: 'bool', label: 'Block AI use when a plan has ended or tokens are used up' },
+  session_minutes: { def: 60, type: 'int', min: 5, max: 43200, label: 'Automatic sign out: minutes a project manager can stay signed in' },
   maintenance_mode: { def: false, type: 'bool', label: 'Maintenance mode (only super admins can use the app)' },
   maintenance_message: { def: 'The service is being updated. Please try again in a few minutes.', type: 'text', max: 300, label: 'Maintenance message' },
   ticket_ai_triage: { def: true, type: 'bool', label: 'Let AI triage new support tickets' },

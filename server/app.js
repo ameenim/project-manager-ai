@@ -133,8 +133,9 @@ async function createApp(opts = {}) {
   try { await store.init(); }
   catch (error) { await db.close().catch(() => {}); throw error; }
   stage('store ready');
-  const auth = authm.make(db);
-  const ops = new Ops(db, store);
+  let ops = null;
+  const auth = authm.make(db, async () => (ops ? (await ops.config()).session_minutes : 60));
+  ops = new Ops(db, store);
   await ops.backfillSubscriptions();
   await ops.bootstrapSuperAdmins();
   if (opts.opsJobs !== false) ops.start();

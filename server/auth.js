@@ -1,10 +1,12 @@
 // Accounts and sessions. Passwords are hashed with scrypt and a per user salt. A session token is random,
-// only its SHA-256 hash is stored, and it expires after 30 days.
+// only its SHA-256 hash is stored, and it expires after 30 days at most. The super admin also sets how many minutes a person can stay signed in (default 60),
+// counted from sign in. That limit is checked on every request, so changing it applies to people already signed in.
 'use strict';
 const crypto = require('crypto');
 
 const SESSION_DAYS = 30;
 const MAX_SESSIONS = 20;
+const DEFAULT_MINUTES = 60;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 const err = (status, message, extra) => Object.assign(new Error(message), { status }, extra || {});
@@ -42,7 +44,8 @@ function checkPassword(password, email) {
 
 const publicUser = (u) => ({ id: u.id, name: u.name, email: u.email });
 
-function make(db) {
+function make(db, getSessionMinutes) {
+  const minutesNow = async () => { try { const m = Number(await getSessionMinutes()); return Number.isFinite(m) && m >= 1 ? m : DEFAULT_MINUTES; } catch (e) { return DEFAULT_MINUTES; } };
   async function newSession(userId) {
     const token = crypto.randomBytes(32).toString('hex');
     await db.query('INSERT INTO sessions(token_hash, user_id, expires_at) VALUES ($1, $2, now() + ($3 || \' days\')::interval)', [sha(token), userId, String(SESSION_DAYS)]);
@@ -85,7 +88,10 @@ function make(db) {
 
   async function userForToken(token) {
     if (!token || !/^[0-9a-f]{64}$/.test(token)) return null;
-    const row = (await db.query("SELECT u.id, u.name, u.email, u.prefs, u.avatar, COALESCE(f.is_super, false) AS is_super, COALESCE(f.status, 'active') AS status FROM sessions s JOIN users u ON u.id = s.user_id LEFT JOIN user_flags f ON f.user_id = u.id WHERE s.token_hash = $1 AND s.expires_at > now()", [sha(token)])).rows[0];
+    const minutes = await minutesNow();
+    // the session ends at the sooner of its stored 30 day expiry and sign in time plus the configured minutes
+    const row = (await db.query("SELECT u.id, u.name, u.email, u.prefs, u.avatar, COALESCE(f.is_super, false) AS is_super, COALESCE(f.status, 'active') AS status, LEAST(s.expires_at, s.created_at + ($2 || ' minutes')::interval) AS session_expires_at FROM sessions s JOIN users u ON u.id = s.user_id LEFT JOIN user_flags f ON f.user_id = u.id WHERE s.token_hash = $1 AND s.expires_at > now() AND s.created_at + ($2 || ' minutes')::interval > now()", [sha(token), String(minutes)])).rows[0];
+    if (row && row.session_expires_at) row.session_expires_at = new Date(row.session_expires_at).toISOString();
     return row || null;
   }
 
@@ -108,7 +114,7 @@ function make(db) {
     return newSession(userId);
   }
 
-  const purgeExpired = () => db.query('DELETE FROM sessions WHERE expires_at < now()');
+  const purgeExpired = async () => { const m = await minutesNow(); await db.query("DELETE FROM sessions WHERE expires_at < now() OR created_at + ($1 || ' minutes')::interval < now()", [String(m)]); };
   return { register, login, userForToken, logout, logoutEverywhere, changePassword, purgeExpired, EMAIL_RE };
 }
 

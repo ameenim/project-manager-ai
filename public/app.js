@@ -232,10 +232,25 @@
   // ---------- auth ----------
   function signOut(expired) {
     if (!expired && S.token) fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${S.token}` } }).catch(() => {});
+    if (expired) { try { sessionStorage.setItem('pm_notice', t('err_session_limit')); } catch (e) { /* storage blocked */ } }
+    clearTimeout(expiryTimer);
     S.token = null; S.user = null; localStorage.removeItem('pm_token'); localStorage.removeItem('pm_session');
-    location.replace('index.html');
+    location.replace(expired ? 'login.html' : 'index.html');
     return;
   }
+  // The server ends a session after the time the super admin sets (60 minutes by default). The browser signs the person
+  // out at that moment too, so a page left open does not stay on screen. It re-checks when the tab wakes up, because
+  // timers pause while a laptop sleeps.
+  let expiryTimer = null, expiryAt = 0;
+  function watchExpiry(iso) {
+    clearTimeout(expiryTimer);
+    expiryAt = iso ? Date.parse(iso) : 0;
+    if (!expiryAt || !S.token) return;
+    const left = expiryAt - Date.now();
+    if (left <= 0) return signOut(true);
+    expiryTimer = setTimeout(() => watchExpiry(iso), Math.min(left, 2 ** 30));
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && expiryAt && Date.now() >= expiryAt) signOut(true); });
   PM.signOut = signOut;
 
   function authView(mode) {
@@ -264,6 +279,7 @@
   }
   function setUser(u) {
     S.user = u;
+    if (u && u.session_expires_at) watchExpiry(u.session_expires_at);
     if (u.language) S.lang = u.language;
     if (u.theme) S.theme = u.theme;
     applyPrefs();

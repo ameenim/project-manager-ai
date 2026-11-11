@@ -252,7 +252,8 @@
   /* ---------- login page ---------- */
   var form = $('#authForm');
   if (form) {
-    var mode = 'in';
+    var mode = 'in', notice = '';
+    try { notice = sessionStorage.getItem('pm_notice') || ''; sessionStorage.removeItem('pm_notice'); } catch (e) { /* storage blocked */ }
     var tabIn = $('#tabIn'), tabUp = $('#tabUp'), title = $('#authTitle'), sub = $('#authSub'), submit = $('#submitBtn');
     var nameF = $('#fName'), emailF = $('#fEmail'), passF = $('#fPass'), okBox = $('#okPanel'), card = $('#formBody');
     function setMode(m) {
@@ -261,7 +262,7 @@
       tabIn.tabIndex = m === 'in' ? 0 : -1; tabUp.tabIndex = m === 'up' ? 0 : -1;
       nameF.hidden = m === 'in';
       title.textContent = m === 'in' ? 'Welcome back' : 'Start your free trial';
-      sub.textContent = m === 'in' ? 'Sign in to your project workspace.' : '15 days free. No card needed.';
+      sub.textContent = m === 'in' ? (notice || 'Sign in to your project workspace.') : '15 days free. No card needed.';
       submit.textContent = m === 'in' ? 'Sign in' : 'Create account';
       passF.querySelector('input').autocomplete = m === 'in' ? 'current-password' : 'new-password';
       okBox.hidden = true; card.hidden = false;

@@ -110,6 +110,31 @@ test('configuration is validated, saved and used', async () => {
   await A('PUT', '/api/admin/config', { settings: { maintenance_mode: false } });
   assert.equal((await s.call('GET', '/api/projects', null, alice.token)).status, 200);
 });
+test('automatic sign out: default is 60 minutes, the super admin can change it, and it applies to open sessions', async () => {
+  const row = (await A('GET', '/api/admin/config')).data.settings.find((x) => x.key === 'session_minutes');
+  assert.ok(row, 'the setting is listed in Configuration'); assert.equal(row.value, 60); assert.equal(row.default, 60);
+  assert.equal((await A('PUT', '/api/admin/config', { settings: { session_minutes: 2 } })).status, 400, 'below the minimum of 5');
+  assert.equal((await A('PUT', '/api/admin/config', { settings: { session_minutes: 'abc' } })).status, 400);
+  assert.equal((await s.call('PUT', '/api/admin/config', { settings: { session_minutes: 10 } }, alice.token)).status, 403, 'only super admins');
+  const u = await s.user('Timed');
+  const me = (await s.call('GET', '/api/me', null, u.token)).data.user;
+  const left = Date.parse(me.session_expires_at) - Date.now();
+  assert.ok(left > 59 * 60e3 && left <= 60 * 60e3, 'the client is told when the session ends');
+  // 59 minutes in, still signed in. 61 minutes in, signed out.
+  const age = (min) => s.app.db.query("UPDATE sessions SET created_at = now() - ($2 || ' minutes')::interval WHERE user_id = $1", [u.id, String(min)]);
+  await age(59); assert.equal((await s.call('GET', '/api/me', null, u.token)).status, 200);
+  await age(61); const out = await s.call('GET', '/api/projects', null, u.token);
+  assert.equal(out.status, 401); assert.match(out.data.error, /session/i);
+  // a longer limit applies to a person who is already signed in
+  const v = await s.user('Longer'); await s.app.db.query("UPDATE sessions SET created_at = now() - interval '90 minutes' WHERE user_id = $1", [v.id]);
+  assert.equal((await s.call('GET', '/api/me', null, v.token)).status, 401);
+  assert.equal((await A('PUT', '/api/admin/config', { settings: { session_minutes: 120 } })).status, 200);
+  await s.app.ops.config(true);
+  const w = await s.user('Longer2'); await s.app.db.query("UPDATE sessions SET created_at = now() - interval '90 minutes' WHERE user_id = $1", [w.id]);
+  assert.equal((await s.call('GET', '/api/me', null, w.token)).status, 200, 'a 120 minute limit keeps a 90 minute old session');
+  await age(0); await A('PUT', '/api/admin/config', { settings: { session_minutes: 60 } });
+  await s.app.auth.purgeExpired();
+});
 test('AI usage is metered and priced, and limits can be enforced', async () => {
   await s.app.ops.recordUsage({ userId: alice.id, source: 'document reading', model: 'm', input: 1000000, output: 100000 });
   const a = (await A('GET', '/api/admin/ai')).data;
