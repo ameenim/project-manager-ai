@@ -80,3 +80,29 @@
   --shadow-1: 0 1px 0 rgba(0, 0, 0, .35); --shadow-2: 0 1px 0 rgba(0, 0, 0, .35), 0 14px 30px -14px rgba(0, 0, 0, .7); --shadow-3: 0 30px 70px -20px rgba(0, 0, 0, .8);
   color-scheme: dark;
 }
+
+/* Glass layer. Surfaces are frosted panels over the live background (live-bg.js). Fills are tuned so text keeps 4.5 to 1 over the brightest
+   or darkest background frame. glass.css uses these tokens, nothing else defines glass colors. */
+:root {
+  --glass-chrome: rgba(255, 255, 255, .68); --glass-card: rgba(255, 255, 255, .72); --glass-nest: rgba(255, 255, 255, .52); --glass-modal: rgba(255, 255, 255, .84);
+  --glass-hover: rgba(255, 255, 255, .84); --glass-line: rgba(255, 255, 255, .7); --glass-rim: rgba(255, 255, 255, .95); --glass-hair: rgba(20, 25, 45, .08);
+  --glass-faint: #4f5a74; --glass-blur: 22px; --glass-sat: 1.7;
+  --glass-shadow: 0 1px 1px rgba(20, 30, 70, .04), 0 10px 30px -10px rgba(40, 60, 140, .22);
+  --glass-shadow-lift: 0 2px 4px rgba(20, 30, 70, .05), 0 22px 44px -16px rgba(40, 60, 140, .32);
+  /* live background palette, read by live-bg.js */
+  --lv-base: #f2f5ff; --lv-1: #a9c1ff; --lv-2: #cdb8ff; --lv-3: #a8ecd9; --lv-ink: #4a6be8;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --glass-chrome: rgba(11, 16, 32, .58); --glass-card: rgba(11, 16, 32, .6); --glass-nest: rgba(11, 16, 32, .42); --glass-modal: rgba(11, 16, 32, .84);
+    --glass-hover: rgba(24, 32, 58, .66); --glass-line: rgba(255, 255, 255, .1); --glass-rim: rgba(255, 255, 255, .16); --glass-hair: rgba(255, 255, 255, .08); --glass-faint: #929dba;
+    --glass-shadow: 0 1px 0 rgba(0, 0, 0, .3), 0 14px 34px -14px rgba(0, 0, 0, .6); --glass-shadow-lift: 0 2px 0 rgba(0, 0, 0, .3), 0 26px 50px -16px rgba(0, 0, 0, .75);
+    --lv-base: #070b16; --lv-1: #1b3a9c; --lv-2: #4a2aa8; --lv-3: #0c6a73; --lv-ink: #6f9cff;
+  }
+}
+:root[data-theme="dark"] {
+  --glass-chrome: rgba(11, 16, 32, .58); --glass-card: rgba(11, 16, 32, .6); --glass-nest: rgba(11, 16, 32, .42); --glass-modal: rgba(11, 16, 32, .84);
+  --glass-hover: rgba(24, 32, 58, .66); --glass-line: rgba(255, 255, 255, .1); --glass-rim: rgba(255, 255, 255, .16); --glass-hair: rgba(255, 255, 255, .08); --glass-faint: #929dba;
+  --glass-shadow: 0 1px 0 rgba(0, 0, 0, .3), 0 14px 34px -14px rgba(0, 0, 0, .6); --glass-shadow-lift: 0 2px 0 rgba(0, 0, 0, .3), 0 26px 50px -16px rgba(0, 0, 0, .75);
+  --lv-base: #070b16; --lv-1: #1b3a9c; --lv-2: #4a2aa8; --lv-3: #0c6a73; --lv-ink: #6f9cff;
+}
