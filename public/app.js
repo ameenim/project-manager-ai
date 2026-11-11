@@ -303,8 +303,11 @@
   }
 
   // ---------- shell ----------
+  // A failed read keeps the list the screen already had (it is never swapped for an empty one) and is remembered, so the
+  // Projects pop up and the next screen ask again instead of showing "No projects yet" until the page is reloaded.
   async function loadProjects() {
-    try { S.projects = (await api('GET', '/api/projects')).projects; } catch { /* handled */ }
+    try { S.projects = (await api('GET', '/api/projects')).projects; S.projectsOk = true; S.projectsAt = Date.now(); return true; }
+    catch { S.projectsOk = false; return false; }
   }
   function shell(active, content, projHead) {
     $('#app').innerHTML = `${PM.billing ? PM.billing.ribbon() : ''}<div class="shell"><aside class="sidebar"><div class="brand"><div class="logo">${PM.logo.mark()}</div><span class="grow">${t('app_name')}</span><button class="btn ghost icon sm" id="navHide" type="button" aria-label="${t('nav_hide')}" title="${t('nav_hide')}">${icon('chev_l')}</button></div>
@@ -351,7 +354,13 @@
     const fly = document.createElement('div');
     fly.className = 'fly'; fly.setAttribute('role', 'menu'); fly.setAttribute('aria-label', t('nav_projects'));
     const dot = (h) => `var(--${h === 'red' ? 'danger' : h === 'amber' ? 'warning' : 'success'})`;
-    fly.innerHTML = `<div class="fly-head">${t('fly_title')}</div><div class="fly-list">${S.projects.map((p) => `<div class="fly-row ${S.project && S.project.id === p.id ? 'cur' : ''}" role="none"><a role="menuitem" class="fly-main" href="#/p/${p.id}/overview"><span class="dot" style="background:${dot(p.stats.health)}"></span><span class="grow"><b>${esc(p.name)}</b><span class="small muted">${esc(p.client || p.code || '')}</span></span><span class="small muted">${p.stats.progress}%</span></a><span class="fly-quick"><a role="menuitem" href="#/p/${p.id}/schedule" data-tip="${t('tab_schedule')}" aria-label="${t('tab_schedule')}">${icon('cal')}</a><a role="menuitem" href="#/p/${p.id}/inbox" data-tip="${t('tab_inbox')}" aria-label="${t('tab_inbox')}">${icon('inbox')}</a></span></div>`).join('') || `<div class="small faint" style="padding:10px">${t('no_projects_yet')}</div>`}</div><div class="fly-foot"><a href="#/projects">${t('fly_all')}</a></div>`;
+    const listHtml = () => { const rows = S.projects.map((p) => `<div class="fly-row ${S.project && S.project.id === p.id ? 'cur' : ''}" role="none"><a role="menuitem" class="fly-main" href="#/p/${p.id}/overview"><span class="dot" style="background:${dot(p.stats.health)}"></span><span class="grow"><b>${esc(p.name)}</b><span class="small muted">${esc(p.client || p.code || '')}</span></span><span class="small muted">${p.stats.progress}%</span></a><span class="fly-quick"><a role="menuitem" href="#/p/${p.id}/schedule" data-tip="${t('tab_schedule')}" aria-label="${t('tab_schedule')}">${icon('cal')}</a><a role="menuitem" href="#/p/${p.id}/inbox" data-tip="${t('tab_inbox')}" aria-label="${t('tab_inbox')}">${icon('inbox')}</a></span></div>`).join(''); if (rows) return rows; return `<div class="small faint" style="padding:10px">${S.projectsAt === undefined && S.projectsOk !== false ? t('fly_loading') : S.projectsOk === false ? `${t('err_network')} <a href="#" class="fly-retry">${t('fly_retry')}</a>` : t('no_projects_yet')}</div>`; };
+    fly.innerHTML = `<div class="fly-head">${t('fly_title')}</div><div class="fly-list"></div><div class="fly-foot"><a href="#/projects">${t('fly_all')}</a></div>`;
+    const listEl = $('.fly-list', fly);
+    const paint = () => { listEl.innerHTML = listHtml(); };
+    const refresh = async () => { if (S.projectsOk === false || S.projectsAt === undefined || Date.now() - S.projectsAt > 15000) { await loadProjects(); if (fly.isConnected) { paint(); if (fly.classList.contains('on')) place(); } } };
+    listEl.addEventListener('click', (e) => { if (e.target.closest('.fly-retry')) { e.preventDefault(); e.stopPropagation(); loadProjects().then(() => { paint(); place(); }); } });
+    paint();
     document.body.appendChild(fly);
     let timer;
     const place = () => {
@@ -359,7 +368,7 @@
       fly.style.top = Math.max(8, Math.min(r.top - 6, innerHeight - fly.offsetHeight - 8)) + 'px';
       if (rtl) { fly.style.right = (innerWidth - side.left) + 'px'; fly.style.left = 'auto'; } else { fly.style.left = side.right + 'px'; fly.style.right = 'auto'; }
     };
-    const open = () => { clearTimeout(timer); if (fly.classList.contains('on')) return; fly.classList.add('on'); link.setAttribute('aria-expanded', 'true'); place(); };
+    const open = () => { clearTimeout(timer); if (fly.classList.contains('on')) return; paint(); fly.classList.add('on'); link.setAttribute('aria-expanded', 'true'); place(); refresh(); };
     const close = (now) => { clearTimeout(timer); timer = setTimeout(() => { fly.classList.remove('on'); link.setAttribute('aria-expanded', 'false'); }, now ? 0 : 160); };
     host.addEventListener('mouseenter', open); host.addEventListener('mouseleave', () => close());
     fly.addEventListener('mouseenter', () => clearTimeout(timer)); fly.addEventListener('mouseleave', () => close());
