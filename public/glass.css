@@ -11,6 +11,18 @@ body { background: transparent; }
     var(--lv-base); }
 .amb canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 
+
+/* menu: a floating rounded panel like the prototype, a glass active pill, a glowing logo */
+@media (min-width: 821px) {
+  .shell { gap: 12px; padding: 12px; }
+  .sidebar { border: 1px solid var(--glass-line); border-radius: var(--r-l); }
+  .proj-head { border: 1px solid var(--glass-line); border-radius: var(--r-l); }
+}
+.nav a.active { background: var(--glass-dense); font-weight: 700; }
+.nav > .ui-ind { background: var(--glass-dense); box-shadow: var(--glass-shadow); }
+.nav a:hover:not(.active) { background: var(--glass-hover); }
+.brand .logo { box-shadow: 0 6px 16px -6px var(--primary), inset 0 1px 0 var(--glass-rim); }
+
 /* secondary text on glass keeps 4.5 to 1 over the darkest background frame */
 .sidebar, .proj-head, .modal, .drawer, .card, .dw, .an-card, .upd, .upd-stat, .cht-card, .cht-panel, .wm-card, .bd-card, .site-header, .ls-ch, .q, .dash, .vis, .form-card, .ls-cmp { --faint: var(--glass-faint); }
 
