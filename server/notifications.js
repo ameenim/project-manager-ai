@@ -104,7 +104,7 @@ function createNotifications({ db, store, api }) {
     if (method === 'POST' && p === '/api/notifications/dismiss') { try { io.json(res, 200, await mark(user, await read(), 'dismiss')); } catch (e) { if (e.expose) throw e; io.json(res, 503, { error: 'Notifications need a database update that is not in place yet. Publish the latest version, then try again.' }); } return true; }
     return false;
   }
-  return { route, list, planState };
+  return { route, list, mark, planState };
 }
 
 module.exports = { createNotifications, planState };

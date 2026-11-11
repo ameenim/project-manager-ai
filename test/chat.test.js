@@ -185,7 +185,10 @@ test('a viewer can ask questions but gets no way to change anything', async () =
   assert.match(q.message.text, /One task/);
   const names = sc.seen[0].tools.map((t) => t.name);
   assert.ok(names.includes('list_tasks'));
-  assert.ok(!names.some((n) => /^(create|update|delete|set)_/.test(n)), 'no write tools for a viewer');
+  // a viewer keeps only the tools that change the person's own things (views, widgets, layouts, templates, tickets, a new project), never the project
+  const own = require('../server/chat/tools').USER_LEVEL;
+  assert.ok(!names.some((n) => /^(create|update|delete|set)_/.test(n) && !own.has(n)), 'no project write tools for a viewer');
+  assert.ok(!names.includes('create_task') && !names.includes('update_task') && !names.includes('create_item'));
   // even if a model tried, the server refuses
   say(use('create_item', { kind: 'risk', title: 'Sneaky' }, 't2')); say(text('I cannot change that.'));
   const w = await talk(v.token, { project_id: p.id, text: 'Add a risk called Sneaky' });

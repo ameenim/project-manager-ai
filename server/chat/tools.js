@@ -11,7 +11,8 @@ const KINDS = ['deliverable', 'requirement', 'risk', 'milestone', 'action', 'dec
 const KIND_LABEL = { deliverable: 'deliverable', requirement: 'requirement', risk: 'risk', milestone: 'payment', action: 'action', decision: 'decision' };
 const STATES = { deliverable: ['open', 'progress', 'closed'], requirement: ['open', 'progress', 'closed'], milestone: ['pending', 'invoiced', 'paid'], risk: ['open', 'mitigated', 'transferred', 'closed'], action: ['open', 'progress', 'closed'], decision: ['active', 'superseded'] };
 const LEVELS = ['Low', 'Medium', 'High'];
-const SCREENS = ['overview', 'review', 'schedule', 'logs', 'meetings', 'inbox', 'documents', 'reports', 'settings', 'calendar', 'account'];
+const SCREENS = ['overview', 'review', 'schedule', 'logs', 'meetings', 'inbox', 'documents', 'reports', 'closure', 'settings', 'calendar', 'account', 'widgets', 'support', 'thinking', 'projects'];
+const GLOBAL_SCREENS = { account: '#/account', calendar: '#/calendar', widgets: '#/widgets', support: '#/support', thinking: '#/thinking', projects: '#/projects' };
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const bad = (message, extra) => Object.assign(new Error(message), { chat: true, ...(extra || {}) });
 
@@ -49,7 +50,7 @@ const READ_TOOLS = [
 ];
 const ref = { item: str('Item id, or its exact title') };
 const WRITE_TOOLS = [
-  { name: 'create_item', description: 'Propose a new deliverable, requirement, risk or payment. For a risk give probability and impact (Low, Medium, High) and a mitigation. For a payment give due_date (YYYY-MM-DD) and amount or percent.', input_schema: { type: 'object', properties: { ...proj, kind: { type: 'string', enum: KINDS }, title: str('Short title'), description: str('Optional details'), owner: str('Optional owner'), due_date: str('YYYY-MM-DD'), probability: { type: 'string', enum: LEVELS }, impact: { type: 'string', enum: LEVELS }, mitigation: str('Risk mitigation'), amount: num('Payment amount'), percent: num('Payment percent of the project value') }, required: ['kind', 'title'] } },
+  { name: 'create_item', description: 'Propose a new deliverable, requirement, risk, payment, action or decision. Actions and decisions are log entries. For a risk give probability and impact (Low, Medium, High) and a mitigation. For a payment give due_date (YYYY-MM-DD) and amount or percent.', input_schema: { type: 'object', properties: { ...proj, kind: { type: 'string', enum: KINDS }, title: str('Short title'), description: str('Optional details'), owner: str('Optional owner'), due_date: str('YYYY-MM-DD'), probability: { type: 'string', enum: LEVELS }, impact: { type: 'string', enum: LEVELS }, mitigation: str('Risk mitigation'), amount: num('Payment amount'), percent: num('Payment percent of the project value') }, required: ['kind', 'title'] } },
   { name: 'update_item', description: 'Propose a change to an existing item: title, description, owner, due date, status, and for a risk its probability, impact, mitigation.', input_schema: { type: 'object', properties: { ...proj, item: ref.item, title: str('New title'), description: str('New description'), owner: str('New owner'), due_date: str('YYYY-MM-DD'), state: str('New status'), probability: { type: 'string', enum: LEVELS }, impact: { type: 'string', enum: LEVELS }, mitigation: str('New mitigation') }, required: ['item'] } },
   { name: 'set_payment_state', description: 'Propose moving a payment to pending, invoiced or paid.', input_schema: { type: 'object', properties: { ...proj, item: ref.item, state: { type: 'string', enum: ['pending', 'invoiced', 'paid'] } }, required: ['item', 'state'] } },
   { name: 'create_task', description: 'Propose a new task. Duration is in working days.', input_schema: { type: 'object', properties: { ...proj, name: str('Task name'), start: str('YYYY-MM-DD, optional'), duration: num('Working days, optional'), assignee: str('Owner, optional'), notes: str('Notes, optional') }, required: ['name'] } },
@@ -80,7 +81,7 @@ WRITE_TOOLS.push(
   { name: 'create_custom_document', description: 'Propose a new custom document for the Reports tab. Give it a name, the audience, a short brief and 3 to 15 sections, each with a heading and one line of guidance on what it must cover. Use it for anything beyond the standard types, including documents related to an attached file. The person reviews the plan and presses Apply before anything is created.', input_schema: { type: 'object', properties: { ...proj, name: str('Document name'), audience: str('Who it is for'), description: str('What it is for and the facts to carry over. Up to 1000 characters.'), sections: { type: 'array', items: { type: 'object', properties: { heading: str('Section heading'), guidance: str('What the section must cover') }, required: ['heading'] } }, format: { type: 'string', enum: ['docx', 'xlsx', 'pptx'], description: 'Word, Excel or PowerPoint. Default docx.' } }, required: ['name', 'audience', 'sections'] } },
 );
 const WRITE_NAMES = new Set(WRITE_TOOLS.map((t) => t.name));
-const catalog = (canWrite) => (canWrite ? READ_TOOLS.concat(WRITE_TOOLS) : READ_TOOLS).map((t) => ({ name: t.name, description: t.description, input_schema: t.input_schema }));
+const catalog = (canWrite) => (canWrite ? READ_TOOLS.concat(WRITE_TOOLS) : READ_TOOLS.concat(WRITE_TOOLS.filter((t) => USER_LEVEL.has(t.name)))).map((t) => ({ name: t.name, description: t.description, input_schema: t.input_schema }));
 
 // ---------- helpers ----------
 const clip = (s, n) => { const t = String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n) + '…' : t; };
@@ -308,7 +309,7 @@ const READ = {
   },
   async navigate(h, input, scope) {
     const screen = SCREENS.includes(input.screen) ? input.screen : 'overview';
-    if (screen === 'account') return { result: { opened: 'Account', href: '#/account' }, sources: [], link: { label: 'Open Account', href: '#/account' } };
+    if (GLOBAL_SCREENS[screen]) return { result: { opened: screen, href: GLOBAL_SCREENS[screen] }, sources: [], link: { label: 'Open ' + screen, href: GLOBAL_SCREENS[screen] } };
     const pid = pickProject(h, scope, input);
     const link = { label: 'Open ' + screen, href: href(pid, screen) };
     return { result: { opened: screen, href: link.href }, sources: [], link };
@@ -324,7 +325,7 @@ const cleanLevel = (v, what) => { if (v == null || v === '') return null; const 
 const WRITE = {
   create_item(h, input, scope) {
     const pid = pickProject(h, scope, input); const P = h.P(pid, 'editor');
-    const kind = input.kind; if (!KINDS.slice(0, 4).includes(kind)) throw bad('The type must be deliverable, requirement, risk or payment.');
+    const kind = input.kind; if (!KINDS.includes(kind)) throw bad('The type must be deliverable, requirement, risk, payment, action or decision.');
     const title = cleanText(input.title, 200); if (!title) throw bad('A title is required.');
     const data = {};
     if (input.owner) data.owner = cleanText(input.owner, 120);
@@ -630,7 +631,7 @@ WRITE.create_custom_document = async function (h, input, scope) {
 // ---------- applying and undoing ----------
 // Apply runs inside one runAs, so every operation succeeds or none is kept. Each operation returns what it needs to be undone.
 async function applyOp(h, op) {
-  const P = h.P(op.project_id, 'editor');
+  const P = op.project_id ? h.P(op.project_id, MORE.MANAGER_OPS.has(op.op) ? 'manager' : 'editor') : null;
   if (op.op === 'create_item') {
     const r = await h.call('POST', `/api/projects/${P.id}/items`, { kind: op.kind, title: op.title, description: op.description, data: op.data });
     return { undo: { op: 'remove_item', project_id: P.id, item_id: r.item.id }, refs: { item_id: r.item.id }, label: `${KIND_LABEL[op.kind]} "${op.title}"` };
@@ -769,6 +770,7 @@ async function applyOp(h, op) {
     const made = P.inbox.filter((x) => !seen.has(x.id)).map((x) => x.id);
     return { undo: { op: 'dismiss_rows', project_id: P.id, ids: made }, refs: { rows: made }, label: 'message' };
   }
+  if (MORE.APPLY[op.op]) return MORE.APPLY[op.op](h, op, P);
   throw bad('That change is not supported.');
 }
 
@@ -789,9 +791,12 @@ async function applyAll(api, user, ops, thread, done) {
     async fn(h) {
       const seen = new Map();
       for (const op of ops) {
-        const P = h.P(op.project_id, 'editor');
-        if (!seen.has(P)) seen.set(P, new Set(P.audit.map((a) => a.id)));
+        const P = op.project_id ? h.P(op.project_id, MORE.MANAGER_OPS.has(op.op) ? 'manager' : 'editor') : null;
+        if (P && !seen.has(P)) seen.set(P, new Set(P.audit.map((a) => a.id)));
         done.push(await applyOp(h, op));
+        // a new project is only known after it was made, so its history is marked too
+        const made = done[done.length - 1];
+        if (!P && made.refs && made.refs.project_id && h.projects[made.refs.project_id]) { const NP = h.projects[made.refs.project_id]; if (!seen.has(NP)) seen.set(NP, new Set()); }
       }
       // every history entry written by this apply is marked as coming from the chat
       for (const [P, before] of seen) for (const a of P.audit) if (!before.has(a.id)) a.detail = { ...(a.detail || {}), source: 'chat', chat_thread: thread };
@@ -805,8 +810,8 @@ async function undoOps(api, user, undos, thread) {
     user, write: true,
     async fn(h) {
       for (const u of undos.slice().reverse()) {
-        const P = h.P(u.project_id, 'editor');
-        const before = new Set(P.audit.map((a) => a.id));
+        const P = u.project_id ? h.P(u.project_id, u.op === 'remove_project' || MORE.MANAGER_OPS.has(u.op) ? 'manager' : 'editor') : null;
+        const before = new Set(P ? P.audit.map((a) => a.id) : []);
         if (u.op === 'remove_item') {
           if (!P.items.some((x) => x.id === u.item_id)) { notes.push('skipped'); continue; }
           await h.call('DELETE', `/api/items/${u.item_id}`); h.audit(P, h.ACTOR(), 'item_deleted', { summary: 'Undid an added item from the chat' });
@@ -866,8 +871,10 @@ async function undoOps(api, user, undos, thread) {
           await h.call('POST', `/api/inbox/${u.row_id}/${u.op === 'undo_inbox' ? 'undo' : 'restore'}`, {});
         } else if (u.op === 'dismiss_rows') {
           for (const id of u.ids) { const r = P.inbox.find((x) => x.id === id); if (!r) continue; if (r.status === 'pending') await h.call('POST', `/api/inbox/${id}/dismiss`, {}); else if (['applied', 'auto_applied'].includes(r.status)) await h.call('POST', `/api/inbox/${id}/undo`, {}); }
+        } else if (MORE.UNDO[u.op]) {
+          if (await MORE.UNDO[u.op](h, u, P) === 'skipped') { notes.push('skipped'); continue; }
         }
-        for (const a of P.audit) if (!before.has(a.id)) a.detail = { ...(a.detail || {}), source: 'chat', chat_thread: thread };
+        if (P && h.projects[P.id]) for (const a of P.audit) if (!before.has(a.id)) a.detail = { ...(a.detail || {}), source: 'chat', chat_thread: thread };
       }
     },
   });
@@ -877,4 +884,12 @@ async function undoOps(api, user, undos, thread) {
 // The model is shown tool results with secrets removed.
 const forModel = (result) => JSON.stringify(scrub(result)).slice(0, 14000);
 
-module.exports = { catalog, READ, WRITE, WRITE_NAMES, applyOps, undoOps, forModel, KINDS, STATES, KIND_LABEL, bad };
+// The second set of tools (review, closure, team, folders, meetings, sync, views, widgets and more) lives in its own file.
+const MORE = require('./tools_more')({ bad, clip, lim, href, pickProject, findRecord, cleanText, cleanDate, str, num, proj });
+READ_TOOLS.push(...MORE.READ_TOOLS); WRITE_TOOLS.push(...MORE.WRITE_TOOLS);
+Object.assign(READ, MORE.READ); Object.assign(WRITE, MORE.WRITE);
+for (const t of MORE.WRITE_TOOLS) WRITE_NAMES.add(t.name);
+const USER_LEVEL = MORE.USER_LEVEL;
+const useServices = MORE.useServices;
+
+module.exports = { catalog, READ, WRITE, WRITE_NAMES, USER_LEVEL, useServices, applyOps, undoOps, forModel, KINDS, STATES, KIND_LABEL, bad };

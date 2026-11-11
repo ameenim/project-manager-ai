@@ -171,6 +171,7 @@ async function createApp(opts = {}) {
   // The Project Chat. opts.chatModel lets tests replace the model with a scripted one.
   const chat = createChat({ db, store, api, auth, ops, model: opts.chatModel });
   const notifications = createNotifications({ db, store, api });
+  require('./chat/tools').useServices({ notifications, tickets });
   const apiLimit = limiter(Number(process.env.API_RATE || 900), 60e3);
   const signupLimit = limiter(30, 3600e3);
   const clientErrLimit = limiter(30, 60e3);
