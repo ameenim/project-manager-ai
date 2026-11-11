@@ -26,6 +26,8 @@ const TZ = process.env.APP_TZ || 'Asia/Dubai';
 const als = new AsyncLocalStorage();
 const ctx = () => { const c = als.getStore(); if (!c) throw new Error('No request context'); return c; };
 const err = (status, message) => { const e = new Error(message); e.status = status; return e; };
+// upload routes need a multipart form; a JSON or empty body is a client mistake (400), not a server fault
+const needForm = (b) => { if (!b || typeof b.get !== 'function') throw err(400, 'Send this as a form upload'); return b; };
 const clone = (x) => JSON.parse(JSON.stringify(x));
 // Building a date formatter is slow (about a tenth of a millisecond each), and these run once per task and per audit
 // entry, so the two formatters are built once. The text they give is the same as toLocaleDateString and toLocaleTimeString.
@@ -255,7 +257,21 @@ module.exports = function createApi(store, auth, connectors, ops) {
     const end = sched.reduce((mx, t) => (t.finish && t.finish > mx ? t.finish : mx), '');
     return { progress: m.actualPct, planned: m.plannedPct, spi: m.spi, overdue: m.overdue, tasks: m.taskCount, pendingItems, pendingInbox, health, forecast_end: end || null, today: TODAY() };
   }
-  const projectView = (P) => ({ ...clone(P.p), stats: stats(P), analysis: P.analysis ? clone(P.analysis) : null, role: roleOf(P), can_delete: canDelete(P), can_edit: !!roleOf(P) && RANK[roleOf(P)] >= RANK.editor });
+  // stats runs a full schedule pass over every task, so the project list (one call per app boot) paid for every project each
+  // time. The result only changes when the project is saved (the saved version moves) or the day rolls over. A project changed
+  // in this request, or waiting on a delayed save, is always computed fresh.
+  const statsMemo = new Map();
+  function statsFor(P) {
+    const c = store.cache.get(P.id);
+    if (!c || c.P !== P || ctx().touched.has(P) || store.timers.has(P.id)) return stats(P);
+    const key = c.version + '|' + TODAY();
+    const hit = statsMemo.get(P.id);
+    if (hit && hit.key === key) return { ...hit.value };
+    const value = stats(P);
+    statsMemo.set(P.id, { key, value });
+    return { ...value };
+  }
+  const projectView = (P) => ({ ...clone(P.p), stats: statsFor(P), analysis: P.analysis ? clone(P.analysis) : null, role: roleOf(P), can_delete: canDelete(P), can_edit: !!roleOf(P) && RANK[roleOf(P)] >= RANK.editor });
 
   function sanitizeChange(ch) {
     const o = {};
@@ -1078,7 +1094,7 @@ module.exports = function createApi(store, auth, connectors, ops) {
     await store.db.query('UPDATE users SET prefs = $2::jsonb WHERE id = $1', [c.user.id, JSON.stringify(c.user.prefs)]);
     return { views };
   });
-  on('POST', '/api/me/avatar', async (m, q, b) => { const f = b.get('file'); if (!f) throw err(400, 'No image received'); DB.user.avatar = await fileToDataUrl(f, 600 * 1024); await saveUser(); return { user: DB.user }; });
+  on('POST', '/api/me/avatar', async (m, q, b) => { needForm(b); const f = b.get('file'); if (!f) throw err(400, 'No image received'); DB.user.avatar = await fileToDataUrl(f, 600 * 1024); await saveUser(); return { user: DB.user }; });
   on('POST', '/api/me/password', async (m, q, b) => { const token = await ctx().auth.changePassword(ctx().user.id, b.current, b.next); return { ok: true, token }; });
   on('POST', '/api/me/ingest-key', async () => { DB.user.ingest_key = require('crypto').randomBytes(16).toString('hex'); await saveUser(); return { ingest_key: DB.user.ingest_key }; });
 
@@ -1152,7 +1168,7 @@ module.exports = function createApi(store, auth, connectors, ops) {
   on('DELETE', '/api/projects/(\\d+)', async (m) => {
     const id = Number(m[1]);
     P_(id, 'manager'); // only a project manager of this project may delete it
-    await store.remove(id);
+    await store.remove(id); statsMemo.delete(id);
     delete DB.projects[id]; DB.order = DB.order.filter((x) => x !== id); delete ctx().roles[id];
     ctx().touched.clear();
     return { ok: true };
@@ -1864,6 +1880,7 @@ Rules:
   on('GET', '/api/templates', async () => ({ templates: DB.templates.map((t) => ({ id: t.id, doc_type: t.doc_type, mode: modeOf(t), name: t.name, created_at: t.created_at, has_layout: !!t.layout && usesDesign(t), ...(t.brand && usesDesign(t) ? { brand: { colors: t.brand.colors, fonts: t.brand.fonts, has_logo: !!t.brand.logo, source: t.brand.source || null } } : {}), sections: usesStructure(t) ? R.parseTemplate(t.body || '').length : 0 })) }));
   on('GET', '/api/templates/skeleton/([a-z_]+)', async (m) => { if (!RAW.skeletons[m[1]]) throw err(404, 'Unknown document type'); return { body: RAW.skeletons[m[1]] }; });
   on('POST', '/api/templates', async (m, q, fd) => {
+    needForm(fd);
     const name = fd.get('name'), doc_type = fd.get('doc_type');
     if (!name || !(doc_type === '*' || RAW.skeletons[doc_type])) throw err(400, 'Choose a document type and give the template a name');
     let body = fd.get('body') || '';
@@ -1895,6 +1912,7 @@ Rules:
   // design: the look (logo, fonts, colors, styles, intro page, header and footer) for every document type, so no type is asked for.
   // structure or both: the document type is required, because the sections belong to one type.
   on('POST', '/api/templates/client', async (m, q, fd) => {
+    needForm(fd);
     const f = fd.get('file');
     if (!f || !f.name || !f.buffer || !f.buffer.length) throw err(400, 'Choose the template file');
     const mode = String(fd.get('mode') || '');

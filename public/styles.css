@@ -275,7 +275,9 @@ h1 { font-size: var(--fs-title); font-weight: 650; letter-spacing: -.02em; } h2 
 
 /* ---------------- dashboard widgets ---------------- */
 .dash .page-head { margin-bottom: 14px; }
-.dw-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; min-height: 30px; }
+.dw-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 10px; min-height: 30px; }
+/* on a phone the buttons wrap to a second line instead of running past the screen edge */
+.dw-bar > .row { flex-wrap: wrap; min-width: 0; }
 .dw-panel { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .3s var(--ease), margin .3s var(--ease); } .dw-panel > div { overflow: hidden; } .dw-panel.open { grid-template-rows: 1fr; margin-bottom: 12px; }
 .dw-panel-in { display: flex; flex-wrap: wrap; gap: 8px; padding: 2px 0 4px; }
 .dw-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px 5px 9px; border: 1px solid var(--border); border-radius: var(--r-pill); background: var(--surface); color: var(--muted); font: inherit; font-size: var(--fs-small); cursor: pointer; transition: all .15s; } .dw-chip .i { width: 15px; height: 15px; }
