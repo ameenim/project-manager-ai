@@ -11,6 +11,7 @@ const dbm = require('./db');
 const { Store } = require('./store');
 const authm = require('./auth');
 const { clientIp } = require('./net');
+const sec = require('./security');
 const { Connectors } = require('./connectors');
 const createApi = require('./api');
 const { MODEL } = require('./claude');
@@ -46,6 +47,7 @@ const CSP = [
   "base-uri 'self'",
   "form-action 'self'",
   "frame-ancestors 'self'",
+  ...(sec.isProduction() ? ['upgrade-insecure-requests'] : []),
 ].join('; ');
 const cspMode = String(process.env.CSP_MODE || 'on').toLowerCase();
 const SECURITY = {
@@ -53,8 +55,9 @@ const SECURITY = {
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'X-Frame-Options': 'SAMEORIGIN',
   'Permissions-Policy': 'camera=(), microphone=(self), display-capture=(self), geolocation=(), payment=(), usb=()',
-  'Strict-Transport-Security': 'max-age=31536000',
+  'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
   'Cross-Origin-Resource-Policy': 'same-origin',
+  'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
   'X-Permitted-Cross-Domain-Policies': 'none',
   ...(cspMode === 'off' ? {} : { [cspMode === 'report-only' ? 'Content-Security-Policy-Report-Only' : 'Content-Security-Policy']: CSP }),
 };
@@ -77,6 +80,10 @@ const json = (res, status, data, extra) => {
   res.end(body);
 };
 const bearer = (req) => { const h = String(req.headers.authorization || ''); return /^Bearer /i.test(h) ? h.slice(7).trim() : null; };
+// A request carries its session either in an Authorization header (scripts and tests) or in the session cookie (the web
+// app). Only the cookie needs CSRF protection, because a browser adds a cookie to a request on its own and never a header.
+const credentials = (req) => { const b = bearer(req); if (b) return { token: b, via: 'bearer' }; const c = sec.sessionCookieOf(req); return c ? { token: c, via: 'cookie' } : { token: null, via: null }; };
+const UNSAFE = (m) => m !== 'GET' && m !== 'HEAD' && m !== 'OPTIONS';
 
 // A simple allowance per address and minute, so one visitor cannot flood the server.
 function limiter(max, windowMs) {
@@ -134,15 +141,20 @@ async function createApp(opts = {}) {
   catch (error) { await db.close().catch(() => {}); throw error; }
   stage('store ready');
   let ops = null;
-  const auth = authm.make(db, async () => (ops ? (await ops.config()).session_minutes : 60));
+  const production = opts.production !== undefined ? opts.production : sec.isProduction();
+  const secLog = sec.createSecurityLog({ db, store });
+  const auth = authm.make(db, async () => (ops ? (await ops.config()).session_minutes : 60), { event: (type, o) => secLog.log(type, o) });
   ops = new Ops(db, store);
+  ops.security = secLog;
+  const envChecks = () => sec.checkEnvironment(process.env, production);
+  if (production || opts.envReport) for (const c of envChecks()) if (c.level !== 'ok') console.warn(`SECURITY CHECK [${c.level}] ${c.id}: ${c.message}`);
   await ops.backfillSubscriptions();
   await ops.bootstrapSuperAdmins();
   if (opts.opsJobs !== false) ops.start();
   // Support tickets. opts.ticketAi and opts.ticketDispatcher let tests replace the Claude call and the GitHub dispatch.
   const tickets = new Tickets({ db, store, ops, ai: opts.ticketAi, dispatcher: opts.ticketDispatcher, version: PKG.version });
   const usage = createUsage({ db, store });
-  const admin = createAdmin({ db, store, auth, ops, usage, tickets });
+  const admin = createAdmin({ db, store, auth, ops, usage, tickets, secLog, envChecks });
   const connectors = new Connectors(db, opts.connectorOptions || {});
   const api = createApi(store, auth, connectors, ops);
   // The Project Chat. opts.chatModel lets tests replace the model with a scripted one.
@@ -152,7 +164,12 @@ async function createApp(opts = {}) {
   const signupLimit = limiter(30, 3600e3);
   const clientErrLimit = limiter(30, 60e3);
   const usageLimit = limiter(120, 60e3);
-  const origin = (req) => { const proto = String(req.headers['x-forwarded-proto'] || 'http').split(',')[0].trim(); return (process.env.SITE_URL || `${proto}://${req.headers['x-forwarded-host'] || req.headers.host || 'localhost'}`).replace(/\/+$/, ''); };
+  // Sign in, sign up and reset links are limited per address on top of the lockouts, and the costly routes per person.
+  const authLimit = limiter(Number(opts.authRate || process.env.AUTH_RATE || 40), 60e3);
+  const adminLimit = limiter(300, 60e3);
+  const uploadLimit = limiter(Number(opts.uploadRate || 60), 60e3);
+  const sessionSeconds = async () => { let m = 60; try { m = Number((await ops.config()).session_minutes) || 60; } catch (e) { /* default */ } return Math.min(30 * 86400, Math.max(60, m * 60)); };
+  const origin = (req) => (process.env.SITE_URL || `${sec.isSecure(req) ? 'https' : 'http'}://${sec.hostOf(req)}`).replace(/\/+$/, '');
 
   // The optional demo account. It is off unless asked for, because everyone who knows its password shares its data.
   if (opts.demoAccount || process.env.DEMO_ACCOUNT === '1') {
@@ -165,8 +182,8 @@ async function createApp(opts = {}) {
     }
   }
   if (!opts.noScheduler) { const tick = setInterval(() => api.runDueSyncs().catch((e) => console.error('sync tick', e.message)), 60e3); tick.unref(); }
-  setInterval(() => auth.purgeExpired().catch(() => {}), 3600e3).unref();
-  if (opts.opsJobs !== false) { usage.prune(); setInterval(() => usage.prune(), 6 * 3600e3).unref(); }
+  setInterval(() => { auth.purgeExpired().catch(() => {}); auth.purgeResets(); }, 3600e3).unref();
+  if (opts.opsJobs !== false) { usage.prune(); setInterval(() => usage.prune(), 6 * 3600e3).unref(); secLog.prune(); setInterval(() => secLog.prune(), 6 * 3600e3).unref(); }
 
   // Daily snapshots of every project's key figures. The first capture runs shortly after start, then every hour.
   // A later capture on the same day replaces that day's row, so each day ends with its latest figures, and a
@@ -182,30 +199,50 @@ async function createApp(opts = {}) {
   async function handleApi(req, res, url) {
     const method = req.method;
     const p = url.pathname;
-    if (apiLimit(clientIp(req))) return json(res, 429, { error: 'Too many requests. Wait a moment and try again.' });
+    const ip = clientIp(req);
+    if (apiLimit(ip)) { secLog.log('rate_limited', { ip, path: p, throttleMs: 60e3, key: 'api' }); return json(res, 429, { error: 'Too many requests. Wait a moment and try again.' }); }
+    const tooFast = () => { if (!authLimit(ip)) return false; secLog.log('rate_limited', { ip, path: p, throttleMs: 60e3, key: 'auth' }); return true; };
 
     // ----- sign in, no token needed
-    if (method === 'POST' && /^\/api\/auth\/(login|register|logout)$/.test(p)) {
+    if (method === 'POST' && /^\/api\/auth\/(login|register|logout|reset|session)$/.test(p)) {
       const kind = p.split('/')[3];
-      if (kind === 'logout') { await auth.logout(bearer(req)); return json(res, 200, { ok: true }); }
-      if (kind === 'register' && signupLimit(clientIp(req))) return json(res, 429, { error: 'Too many new accounts from this address. Try again later.' });
+      if (kind === 'logout') {
+        const c = credentials(req);
+        // a page on another site must not be able to sign a person out
+        if (c.via === 'cookie' && !sec.fromOwnSite(req)) { secLog.log('origin_blocked', { ip, path: p, throttleMs: 60e3 }); return json(res, 403, { error: 'This request did not come from the app.' }); }
+        await auth.logout(c.token);
+        return json(res, 200, { ok: true }, { 'Set-Cookie': sec.clearCookies(req) });
+      }
+      if (tooFast()) return json(res, 429, { error: 'Too many attempts. Wait a minute and try again.' });
+      // a browser that signed in before cookies existed trades its old stored token for a cookie, once
+      if (kind === 'session') {
+        const old = bearer(req); const u = await auth.userForToken(old);
+        if (!u) return json(res, 401, { error: 'Your session has expired. Sign in again.' });
+        secLog.log('session_upgraded', { ip, userId: u.id, path: p });
+        return json(res, 200, { ok: true, user: api.userView(u) }, { 'Set-Cookie': sec.sessionCookies(req, old, await sessionSeconds()) });
+      }
+      if (kind === 'register' && signupLimit(ip)) return json(res, 429, { error: 'Too many new accounts from this address. Try again later.' });
       let body; try { body = JSON.parse((await readBody(req, 64 * 1024)).toString('utf8') || '{}'); } catch (e) { return json(res, e.status || 400, { error: e.status === 413 ? 'The request is too large' : 'Invalid request' }); }
+      if (!body || typeof body !== 'object' || Array.isArray(body)) return json(res, 400, { error: 'Invalid request' });
+      if (kind === 'reset') return json(res, 200, await auth.resetPassword(body.token, body.password, ip));
       if (kind === 'register') {
         if (!(await ops.config()).signup_enabled) return json(res, 403, { error: 'New sign ups are paused right now. Please try again later.' });
         // a super admin address cannot be claimed by signing up, so nobody can take the admin account by registering first
-        if (ops.isReservedEmail(body && body.email) && process.env.SUPER_ADMIN_ALLOW_REGISTER !== '1') return json(res, 403, { error: 'This email address is reserved. Contact the administrator.' });
+        if (ops.isReservedEmail(body && body.email) && process.env.SUPER_ADMIN_ALLOW_REGISTER !== '1') { secLog.log('reserved_email', { ip, path: p, throttleMs: 60e3 }); return json(res, 403, { error: 'This email address is reserved. Contact the administrator.' }); }
       }
-      const r = kind === 'register' ? await auth.register(body) : await auth.login(body, clientIp(req));
-      if (kind === 'register') { const u0 = await auth.userForToken(r.token); await ops.ensureSubscription(u0.id); await ops.bootstrapSuperAdmins(); }
+      const r = kind === 'register' ? await auth.register(body) : await auth.login(body, ip);
+      if (kind === 'register') { const u0 = await auth.userForToken(r.token); await ops.ensureSubscription(u0.id); await ops.bootstrapSuperAdmins(); secLog.log('register', { ip, userId: u0.id, path: p }); }
       const user = await auth.userForToken(r.token);
-      return json(res, 200, { token: r.token, user: api.userView(user) });
+      // The web app sends X-Session-Mode: cookie and never receives the token itself. Scripts without that header get it as before.
+      const web = String(req.headers['x-session-mode'] || '').toLowerCase() === 'cookie';
+      return json(res, 200, web ? { user: api.userView(user) } : { token: r.token, user: api.userView(user) }, { 'Set-Cookie': sec.sessionCookies(req, r.token, await sessionSeconds()) });
     }
 
     // browser error reports. Anyone may send one, a signed in person is attached to it.
     if (method === 'POST' && p === '/api/client-error') {
       if (clientErrLimit(clientIp(req))) return json(res, 429, { error: 'Too many reports' });
       let b = {}; try { b = JSON.parse((await readBody(req, 16 * 1024)).toString('utf8') || '{}'); } catch (e) { return json(res, 400, { error: 'Invalid request' }); }
-      const who = await auth.userForToken(bearer(req)).catch(() => null);
+      const who = await auth.userForToken(credentials(req).token).catch(() => null);
       await ops.logError({ kind: 'browser', userId: who && who.id, path: b.url, message: b.message || 'Unknown error', stack: b.stack, agent: req.headers['user-agent'] });
       return json(res, 200, { ok: true });
     }
@@ -213,10 +250,19 @@ async function createApp(opts = {}) {
     // the fix job calls these with a signature instead of a sign in
     if (p.startsWith('/api/hooks/tickets/')) { await tickets.hook(req, res, url, { json, readBody, SECURITY }); return; }
 
-    const token = bearer(req);
-    const user = await auth.userForToken(token);
-    if (!user) return json(res, 401, { error: 'Your session has expired. Sign in again.' });
+    const cred = credentials(req);
+    const user = await auth.userForToken(cred.token);
+    if (!user) {
+      if (cred.token) secLog.log('session_invalid', { ip, path: p, throttleMs: 300e3, key: cred.via });
+      return json(res, 401, { error: 'Your session has expired. Sign in again.' }, cred.via === 'cookie' ? { 'Set-Cookie': sec.clearCookies(req) } : undefined);
+    }
     if (user.status === 'suspended') return json(res, 403, { error: 'This account is suspended. Contact support.' });
+    // A request that changes something and rides on the cookie has to prove it came from our own page: the right origin,
+    // and the CSRF token that only a page that could read our cookie knows.
+    if (cred.via === 'cookie' && UNSAFE(method)) {
+      if (!sec.fromOwnSite(req)) { secLog.log('origin_blocked', { ip, userId: user.id, path: p, throttleMs: 60e3 }); return json(res, 403, { error: 'This request did not come from the app. Reload the page and try again.' }); }
+      if (!sec.safeEqual(req.headers['x-csrf-token'], sec.csrfFor(cred.token))) { secLog.log('csrf_blocked', { ip, userId: user.id, path: p, throttleMs: 60e3 }); return json(res, 403, { error: 'Your session could not be verified. Reload the page and try again.' }); }
+    }
     ops.touchSeen(user.id);
     // usage steps from the browser (screen names and action names only). Never fails the page that sends them.
     if (method === 'POST' && p === '/api/usage') {
@@ -224,7 +270,8 @@ async function createApp(opts = {}) {
       let b = {}; try { b = JSON.parse((await readBody(req, 32 * 1024)).toString('utf8') || '{}'); } catch (e) { return json(res, 400, { error: 'Invalid request' }); }
       return json(res, 200, await usage.ingest(user, b));
     }
-    if (await admin.route(req, res, url, user, { json, readBody, SECURITY, origin })) return;
+    if (p.startsWith('/api/admin') && adminLimit(user.id)) { secLog.log('rate_limited', { ip, userId: user.id, path: p, throttleMs: 60e3, key: 'admin' }); return json(res, 429, { error: 'Too many requests. Wait a moment and try again.' }); }
+    if (await admin.route(req, res, url, user, { json, readBody, SECURITY, origin, event: (type, o) => secLog.log(type, { ip, ...o }) })) return;
     if (!user.is_super && (await ops.config()).maintenance_mode && !/^\/api\/(me|billing)/.test(p)) return json(res, 503, { error: (await ops.config()).maintenance_message });
 
     if (p.startsWith('/api/tickets') && (await tickets.route(req, res, url, user, { json, readBody, SECURITY }))) return;
@@ -235,13 +282,21 @@ async function createApp(opts = {}) {
     if (method !== 'GET' && method !== 'HEAD') {
       const ct = String(req.headers['content-type'] || '');
       const big = /\/api\/(projects|workspace)\/import$/.test(p) || /\/api\/projects\/\d+\/msproject\/import$/.test(p);
-      if (ct.startsWith('multipart/form-data')) body = await readMultipart(req, big ? MAX_IMPORT : MAX_UPLOAD * 4);
+      if (ct.startsWith('multipart/form-data')) {
+        if (uploadLimit(user.id)) { secLog.log('rate_limited', { ip, userId: user.id, path: p, throttleMs: 60e3, key: 'upload' }); return json(res, 429, { error: 'Too many uploads in a short time. Wait a minute and try again.' }); }
+        body = await readMultipart(req, big ? MAX_IMPORT : MAX_UPLOAD * 4);
+      }
       else {
         const raw = await readBody(req, big ? MAX_IMPORT : MAX_JSON);
         if (raw.length) { try { body = JSON.parse(raw.toString('utf8')); } catch (e) { return json(res, 400, { error: 'The request body is not valid JSON' }); } }
+        // a body is an object or a list, never a bare number, string or true/false
+        if (body !== undefined && body !== null && typeof body !== 'object') return json(res, 400, { error: 'The request body must be a JSON object' });
       }
     }
-    const out = await api.handle({ user, method, path: p, query: Object.fromEntries(url.searchParams), body, origin: origin(req) });
+    let out = await api.handle({ user, method, path: p, query: Object.fromEntries(url.searchParams), body, origin: origin(req), ip });
+    // a password change signs every device out and hands this one a new session, so the cookie is replaced
+    let cookies;
+    if (p === '/api/me/password' && out && out.token) { cookies = sec.sessionCookies(req, out.token, await sessionSeconds()); if (cred.via === 'cookie') { out = { ...out }; delete out.token; } }
     if (out instanceof api.StreamResult) {
       const name = encodeURIComponent(out.filename).replace(/['()]/g, escape), gz = /\bgzip\b/.test(String(req.headers['accept-encoding'] || ''));
       res.writeHead(200, { 'Content-Type': out.type, 'Content-Disposition': `attachment; filename="download"; filename*=UTF-8''${name}`, 'Cache-Control': 'no-store', Vary: 'Accept-Encoding', ...(gz ? { 'Content-Encoding': 'gzip' } : {}), ...SECURITY });
@@ -259,7 +314,7 @@ async function createApp(opts = {}) {
       res.writeHead(200, { 'Content-Type': out.type, 'Content-Length': out.buffer.length, 'Content-Disposition': `attachment; filename="download"; filename*=UTF-8''${name}`, 'Cache-Control': 'no-store', ...SECURITY });
       return res.end(out.buffer);
     }
-    return json(res, 200, out);
+    return json(res, 200, out, cookies ? { 'Set-Cookie': cookies } : undefined);
   }
 
   // The service sends the person back here after they allow access. This page needs no sign in: the one time state
@@ -359,11 +414,15 @@ async function createApp(opts = {}) {
       return sendPage(req, res, path.join(ROOT, 'index.html'), (html) => html.replace('</head>', tags + '</head>'));
     }
     if (url.pathname === '/admin' || url.pathname === '/admin/') return sendPage(req, res, path.join(ROOT, 'admin.html'));
-    let urlPath; try { urlPath = decodeURIComponent(url.pathname); } catch (e) { res.writeHead(400); return res.end('Bad request'); }
-    if (urlPath.includes('\0')) { res.writeHead(400); return res.end('Bad request'); }
+    const probe = (why) => secLog.log('suspicious_request', { ip: clientIp(req), path: url.pathname, detail: { why }, throttleMs: 60e3, key: why });
+    let urlPath; try { urlPath = decodeURIComponent(url.pathname); } catch (e) { res.writeHead(400, SECURITY); return res.end('Bad request'); }
+    if (urlPath.includes('\0')) { probe('null byte'); res.writeHead(400, SECURITY); return res.end('Bad request'); }
     const file = path.normalize(path.join(ROOT, urlPath));
-    if (file !== ROOT && !file.startsWith(ROOT + path.sep)) { res.writeHead(403); return res.end('Forbidden'); }
+    if (file !== ROOT && !file.startsWith(ROOT + path.sep)) { probe('path traversal'); res.writeHead(403, SECURITY); return res.end('Forbidden'); }
+    // Only the file types the site actually serves are sent, and never a hidden file or folder (.env, .git and so on).
+    if (urlPath.split('/').some((seg) => seg.startsWith('.') && seg !== '.well-known' && seg !== '')) { probe('hidden file'); res.writeHead(404, { 'Content-Type': 'text/plain', ...SECURITY }); return res.end('Not found'); }
     const ext = path.extname(file).toLowerCase();
+    if (!TYPES[ext]) { res.writeHead(404, { 'Content-Type': 'text/plain', ...SECURITY }); return res.end('Not found'); }
     if (ext === '.html') return sendPage(req, res, file);
     let a;
     try { a = await assetOf(file); } catch (err) { res.writeHead(404, { 'Content-Type': 'text/plain', ...SECURITY }); return res.end('Not found'); }
@@ -379,7 +438,7 @@ async function createApp(opts = {}) {
   async function idempotent(req, res, url, run) {
     const id = String(req.headers['x-request-id'] || '');
     if (req.method === 'GET' || req.method === 'HEAD' || !/^[\w-]{8,64}$/.test(id)) return run();
-    const key = id + '|' + String(req.headers.authorization || '');
+    const key = id + '|' + String(req.headers.authorization || sec.sessionCookieOf(req) || '');
     const prior = idem.get(key);
     if (prior) {
       const r = await prior.done;
@@ -407,6 +466,13 @@ async function createApp(opts = {}) {
     const url = new URL(req.url, 'http://localhost');
     ops.counters.requests++;
     try {
+      // In production every page and call must use HTTPS. The proxy tells us how the person arrived. The health check is
+      // exempt because the host's own probe may use plain http.
+      if (production && sec.isPlainHttp(req) && url.pathname !== '/healthz') {
+        const host = (process.env.SITE_URL && sec.cleanHost(new URL(process.env.SITE_URL).host)) || sec.hostOf(req);
+        res.writeHead(308, { Location: `https://${host}${req.url.startsWith('/') ? req.url : '/'}`, 'Cache-Control': 'no-store', ...SECURITY });
+        return res.end();
+      }
       if (url.pathname === '/healthz') { await db.query('SELECT 1'); return json(res, 200, { ok: true, version: PKG.version, started: STARTED, admin: true }); }
       if (req.method === 'GET' && url.pathname === '/srv/ai/status') return json(res, 200, { configured: !!process.env.ANTHROPIC_API_KEY, model: MODEL });
       if (req.method === 'GET' && /^\/oauth\/callback\/(jira|outlook)$/.test(url.pathname)) return await oauthCallback(req, res, url);

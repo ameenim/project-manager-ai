@@ -35,7 +35,7 @@ Jira also has a simpler fallback in the wizard: a personal API token, checked li
 
 ## Accounts and roles
 
-Sign up and sign in use the server. Passwords are hashed with scrypt, sessions are random tokens stored as hashes and expire after 30 days, and repeated failed sign ins are rate limited. Every project has members with one of three roles:
+Sign up and sign in use the server. Passwords are hashed with scrypt, sessions are random tokens kept in an HttpOnly cookie, stored as hashes and expiring after 30 days, changes are protected by CSRF checks, and repeated failed sign ins are rate limited. Every project has members with one of three roles:
 
 1. Project manager owns the project, manages access and is the only role that can delete it.
 2. Editor changes content such as tasks, documents and reports.

@@ -44,7 +44,9 @@ function checkPassword(password, email) {
 
 const publicUser = (u) => ({ id: u.id, name: u.name, email: u.email });
 
-function make(db, getSessionMinutes) {
+function make(db, getSessionMinutes, hooks = {}) {
+  const emit = (type, o) => { try { const r = hooks.event && hooks.event(type, o); if (r && r.catch) r.catch(() => {}); } catch (e) { /* logging never blocks a sign in */ } };
+  const emailForLog = (e) => (EMAIL_RE.test(e) && e.length <= 200 ? e : '[not an email]');
   const minutesNow = async () => { try { const m = Number(await getSessionMinutes()); return Number.isFinite(m) && m >= 1 ? m : DEFAULT_MINUTES; } catch (e) { return DEFAULT_MINUTES; } };
   async function newSession(userId) {
     const token = crypto.randomBytes(32).toString('hex');
@@ -75,14 +77,15 @@ function make(db, getSessionMinutes) {
   async function login({ email, password }, ip) {
     email = String(email || '').trim().toLowerCase(); password = String(password || '');
     const keys = keysFor(ip, email);
-    if (tooMany(keys)) throw err(429, 'Too many attempts. Wait a few minutes and try again.');
+    if (tooMany(keys)) { emit('login_locked', { ip, email: emailForLog(email), path: '/api/auth/login', throttleMs: 60e3, key: email }); throw err(429, 'Too many attempts. Wait a few minutes and try again.'); }
     const row = (await db.query("SELECT u.id, u.name, u.email, u.pw_salt, u.pw_hash, COALESCE(f.status, 'active') AS status FROM users u LEFT JOIN user_flags f ON f.user_id = u.id WHERE u.email = $1", [email])).rows[0];
     // The hash is computed even for an unknown email so response time does not reveal which emails exist.
     const hash = await scrypt(password, row ? row.pw_salt : 'x'.repeat(32));
     const ok = row && crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(row.pw_hash, 'hex'));
-    if (!ok) { noteFail(keys); throw err(401, 'Email or password is not correct'); }
+    if (!ok) { noteFail(keys); emit('login_failed', { ip, email: emailForLog(email), path: '/api/auth/login', detail: { reason: row ? 'wrong_password' : 'unknown_email' } }); throw err(401, 'Email or password is not correct'); }
     fails.delete(keys[0]);
-    if (row.status === 'suspended') throw err(403, 'This account is suspended. Contact support.');
+    if (row.status === 'suspended') { emit('login_failed', { ip, userId: row.id, email: emailForLog(email), path: '/api/auth/login', detail: { reason: 'suspended' } }); throw err(403, 'This account is suspended. Contact support.'); }
+    emit('login_success', { ip, userId: row.id, path: '/api/auth/login' });
     return { user: publicUser(row), token: await newSession(row.id) };
   }
 
@@ -107,15 +110,48 @@ function make(db, getSessionMinutes) {
     const pwKeys = [`pwchange|${userId}`];
     if (tooMany(pwKeys, [6])) throw err(429, 'Too many attempts. Wait a few minutes and try again.');
     const hash = await scrypt(String(current || ''), row.pw_salt);
-    if (!crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(row.pw_hash, 'hex'))) { noteFail(pwKeys); throw err(400, 'The current password is not correct'); }
+    if (!crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(row.pw_hash, 'hex'))) { noteFail(pwKeys); emit('login_failed', { userId, path: '/api/me/password', detail: { reason: 'wrong_current_password' } }); throw err(400, 'The current password is not correct'); }
     const salt = crypto.randomBytes(16).toString('hex');
     await db.query('UPDATE users SET pw_salt = $1, pw_hash = $2 WHERE id = $3', [salt, await scrypt(next, salt), userId]);
     await logoutEverywhere(userId); // every other device is signed out, this one gets a fresh session
+    emit('password_changed', { userId, path: '/api/me/password' });
     return newSession(userId);
   }
 
+  // ---------- one time reset links ----------
+  // There is no email service, so a super admin makes a link and gives it to the person. Only the hash of the link is kept.
+  // It works once and stops working after 30 minutes. A new link for the same person replaces the older ones.
+  const RESET_MINUTES = 30;
+  async function createResetLink(userId, createdBy) {
+    const token = crypto.randomBytes(32).toString('hex');
+    await db.query('DELETE FROM password_resets WHERE user_id = $1 AND used_at IS NULL', [userId]);
+    await db.query("INSERT INTO password_resets(token_hash, user_id, created_by, expires_at) VALUES ($1, $2, $3, now() + ($4 || ' minutes')::interval)", [sha(token), userId, createdBy || null, String(RESET_MINUTES)]);
+    return { token, minutes: RESET_MINUTES, expires_at: new Date(Date.now() + RESET_MINUTES * 60e3).toISOString() };
+  }
+  async function resetPassword(token, password, ip) {
+    token = String(token || ''); password = String(password || '');
+    const bad = () => { emit('password_reset_failed', { ip, path: '/api/auth/reset', throttleMs: 30e3, key: 'bad' }); return err(400, 'This reset link is not valid or has expired. Ask your administrator for a new one.'); };
+    const rk = [`reset|${ip || ''}`];
+    if (tooMany(rk, [10])) throw err(429, 'Too many attempts. Wait a few minutes and try again.');
+    if (!/^[0-9a-f]{64}$/.test(token)) { noteFail(rk); throw bad(); }
+    const row = (await db.query('SELECT r.user_id, u.email FROM password_resets r JOIN users u ON u.id = r.user_id WHERE r.token_hash = $1 AND r.used_at IS NULL AND r.expires_at > now()', [sha(token)])).rows[0];
+    if (!row) { noteFail(rk); throw bad(); }
+    const policy = checkPassword(password, row.email);
+    if (policy) throw err(400, policy);
+    // the link is spent first and in one statement, so two requests with the same link cannot both win
+    const used = await db.query('UPDATE password_resets SET used_at = now() WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now() RETURNING user_id', [sha(token)]);
+    if (!used.rows.length) { noteFail(rk); throw bad(); }
+    const salt = crypto.randomBytes(16).toString('hex');
+    await db.query('UPDATE users SET pw_salt = $1, pw_hash = $2 WHERE id = $3', [salt, await scrypt(password, salt), row.user_id]);
+    await logoutEverywhere(row.user_id);
+    for (const k of [`email|${row.email}`, ...keysFor(ip, row.email)]) fails.delete(k);
+    emit('password_reset_used', { ip, userId: row.user_id, path: '/api/auth/reset' });
+    return { ok: true };
+  }
+
   const purgeExpired = async () => { const m = await minutesNow(); await db.query("DELETE FROM sessions WHERE expires_at < now() OR created_at + ($1 || ' minutes')::interval < now()", [String(m)]); };
-  return { register, login, userForToken, logout, logoutEverywhere, changePassword, purgeExpired, EMAIL_RE };
+  const purgeResets = () => db.query("DELETE FROM password_resets WHERE expires_at < now() - interval '1 day'").catch(() => {});
+  return { register, login, userForToken, logout, logoutEverywhere, changePassword, purgeExpired, createResetLink, resetPassword, purgeResets, EMAIL_RE, RESET_MINUTES };
 }
 
 module.exports = { make, err, checkPassword };

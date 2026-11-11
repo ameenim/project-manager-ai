@@ -254,25 +254,42 @@
   if (form) {
     var mode = 'in', notice = '';
     try { notice = sessionStorage.getItem('pm_notice') || ''; sessionStorage.removeItem('pm_notice'); } catch (e) { /* storage blocked */ }
+    // A reset link looks like login.html#reset=<64 characters>. The token is taken out of the address bar at once, so it does
+    // not stay in the history, and it is sent only to /api/auth/reset.
+    var resetToken = '';
+    function takeReset() {
+      var m = location.hash.match(/^#reset=([0-9a-f]{64})$/);
+      if (!m) return false;
+      resetToken = m[1];
+      try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* ignore */ }
+      return true;
+    }
+    takeReset();
     var tabIn = $('#tabIn'), tabUp = $('#tabUp'), title = $('#authTitle'), sub = $('#authSub'), submit = $('#submitBtn');
     var nameF = $('#fName'), emailF = $('#fEmail'), passF = $('#fPass'), okBox = $('#okPanel'), card = $('#formBody');
     function setMode(m) {
       mode = m;
+      var isReset = m === 'reset';
+      var tabs = $('.tabs', card); if (tabs) tabs.hidden = isReset;
+      var forgot = $('#forgotNote'); if (forgot) forgot.hidden = m !== 'in';
+      emailF.hidden = isReset;
       tabIn.setAttribute('aria-selected', m === 'in'); tabUp.setAttribute('aria-selected', m === 'up');
       tabIn.tabIndex = m === 'in' ? 0 : -1; tabUp.tabIndex = m === 'up' ? 0 : -1;
-      nameF.hidden = m === 'in';
-      title.textContent = m === 'in' ? 'Welcome back' : 'Start your free trial';
-      sub.textContent = m === 'in' ? (notice || 'Sign in to your project workspace.') : '15 days free. No card needed.';
-      submit.textContent = m === 'in' ? 'Sign in' : 'Create account';
+      nameF.hidden = m !== 'up';
+      title.textContent = isReset ? 'Choose a new password' : m === 'in' ? 'Welcome back' : 'Start your free trial';
+      sub.textContent = isReset ? 'This link works once and stops working 30 minutes after it was made.' : m === 'in' ? (notice || 'Sign in to your project workspace.') : '15 days free. No card needed.';
+      submit.textContent = isReset ? 'Set new password' : m === 'in' ? 'Sign in' : 'Create account';
       passF.querySelector('input').autocomplete = m === 'in' ? 'current-password' : 'new-password';
+      $('label', passF).textContent = isReset ? 'New password' : 'Password';
       okBox.hidden = true; card.hidden = false;
       clearErrors();
     }
     function fieldErr(f, msg) { f.classList.toggle('bad', !!msg); var inp = $('input', f); inp.setAttribute('aria-invalid', msg ? 'true' : 'false'); $('.err', f).textContent = msg || ''; }
     function clearErrors() { [nameF, emailF, passF].forEach(function (f) { fieldErr(f, ''); }); }
     function hashMode() { return location.hash === '#create' ? 'up' : 'in'; }
-    setMode(hashMode());
-    window.addEventListener('hashchange', function () { setMode(hashMode()); });
+    setMode(resetToken ? 'reset' : hashMode());
+    // a reset link opened in a tab that already shows this page only changes the hash, so it is picked up here too
+    window.addEventListener('hashchange', function () { if (takeReset()) { setMode('reset'); return; } if (mode !== 'reset') setMode(hashMode()); });
     tabIn.addEventListener('click', function () { setMode('in'); location.hash = 'signin'; });
     tabUp.addEventListener('click', function () { setMode('up'); location.hash = 'create'; });
     [tabIn, tabUp].forEach(function (t) { t.addEventListener('keydown', function (e) { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { (mode === 'in' ? tabUp : tabIn).click(); (mode === 'in' ? tabIn : tabUp).focus(); } }); });
@@ -286,6 +303,20 @@
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       if (submitting) return;
+      if (mode === 'reset') {
+        var np = $('input', passF).value;
+        if (np.length < 8) { fieldErr(passF, 'Use at least 8 characters.'); return; }
+        submitting = true; submit.disabled = true;
+        fetch('/api/auth/reset', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: resetToken, password: np }) })
+          .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, d: d }; }); })
+          .then(function (res) {
+            if (!res.ok) { fieldErr(passF, (res.d && res.d.error) || 'The password could not be changed. Try again.'); return; }
+            resetToken = ''; $('input', passF).value = ''; notice = 'Your password was changed. Sign in with the new password.'; setMode('in');
+          })
+          .catch(function () { fieldErr(passF, 'Could not reach the server. Check your connection and try again.'); })
+          .then(function () { submitting = false; submit.disabled = false; });
+        return;
+      }
       var bad = false;
       if (mode === 'up' && !$('input', nameF).value.trim()) { fieldErr(nameF, 'Enter your name.'); bad = true; } else fieldErr(nameF, '');
       var em = $('input', emailF).value.trim();
@@ -295,7 +326,7 @@
       submitting = true; submit.disabled = true;
       var label = submit.textContent; submit.textContent = 'Please wait';
       fetch('/api/auth/' + (mode === 'in' ? 'login' : 'register'), {
-        method: 'POST', headers: { 'content-type': 'application/json' },
+        method: 'POST', headers: { 'content-type': 'application/json', 'X-Session-Mode': 'cookie' },
         body: JSON.stringify({ name: $('input', nameF).value.trim(), email: em, password: $('input', passF).value }),
       }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, status: r.status, d: d }; }); })
         .then(function (res) {
@@ -307,7 +338,7 @@
             return;
           }
           var saved = false;
-          try { localStorage.setItem('pm_token', res.d.token); localStorage.setItem('pm_session', JSON.stringify({ id: res.d.user.id, name: res.d.user.name, email: res.d.user.email })); saved = localStorage.getItem('pm_token') === res.d.token; } catch (er) { /* checked below */ }
+          try { localStorage.removeItem('pm_token'); localStorage.setItem('pm_signed', '1'); localStorage.setItem('pm_session', JSON.stringify({ id: res.d.user.id, name: res.d.user.name, email: res.d.user.email })); saved = localStorage.getItem('pm_signed') === '1'; } catch (er) { /* checked below */ }
           if (!saved) { fieldErr(passF, 'Your browser is blocking storage, so you cannot stay signed in.'); return; }
           showOk();
         })

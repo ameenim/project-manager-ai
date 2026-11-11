@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test --test-concurrency=1 \"test/*.test.js\""
+    "test": "node --test --test-concurrency=1 \"test/*.test.js\"",
+    "scan:secrets": "node scripts/secret-scan.js --history"
   },
   "engines": {
     "node": ">=18"
@@ -22,5 +23,8 @@
     "pptxgenjs": "^4.0.1",
     "ws": "^8.22.1",
     "xlsx": "^0.18.5"
+  },
+  "overrides": {
+    "image-size": "^2.0.3"
   }
 }

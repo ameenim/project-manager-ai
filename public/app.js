@@ -1,6 +1,6 @@
 /* Project Manager AI, front end core. Plain JavaScript, hash routing, no build step. */
 (function () {
-  const PM = (window.PM = Object.assign(window.PM || {}, { views: {}, state: { token: localStorage.getItem('pm_token'), user: null, lang: localStorage.getItem('pm_lang') || 'en', theme: localStorage.getItem('pm_theme') || 'light', status: {}, projects: [], project: null, nav: 0 } }));
+  const PM = (window.PM = Object.assign(window.PM || {}, { views: {}, state: { token: localStorage.getItem('pm_signed'), user: null, lang: localStorage.getItem('pm_lang') || 'en', theme: localStorage.getItem('pm_theme') || 'light', status: {}, projects: [], project: null, nav: 0 } }));
   const S = PM.state;
 
   // ---------- helpers ----------
@@ -108,9 +108,14 @@
       early.set(path, { at: now, p });
     }
   }
+  // The session itself is in an HttpOnly cookie that scripts cannot read. S.token is only a marker that says a person is signed
+  // in. A change sends the CSRF token, which the server gave us in a second cookie and checks against the session.
+  const csrf = () => { const m = document.cookie.match(/(?:^|;\s*)(?:__Host-)?pm_csrf=([0-9a-f]+)/); return m ? m[1] : ''; };
+  PM.csrf = csrf;
   async function rawApi(method, path, body) {
-    const init = { method, headers: {} };
-    if (S.token) init.headers.Authorization = `Bearer ${S.token}`;
+    const init = { method, headers: {}, credentials: 'same-origin' };
+    if (method !== 'GET' && method !== 'HEAD') init.headers['X-CSRF-Token'] = csrf();
+    if (path.startsWith('/api/auth/')) init.headers['X-Session-Mode'] = 'cookie';
     if (body instanceof FormData) init.body = body;
     else if (body !== undefined) { init.headers['content-type'] = 'application/json'; init.body = JSON.stringify(body); }
     // A dropped connection (a server that was asleep or restarting, an idle connection the host closed) fails once and works
@@ -142,7 +147,7 @@
     return data;
   }
   async function download(path, filename) {
-    const r = await fetch(path, { headers: { Authorization: `Bearer ${S.token}` } });
+    const r = await fetch(path, { credentials: 'same-origin' });
     if (!r.ok) { let m = ''; try { m = (await r.json()).error || ''; } catch (e) { /* not JSON */ } toast(m || `${t('err_download')} (${r.status})`, 'err'); return; }
     let blob; try { blob = await r.blob(); } catch (e) { toast(`${t('err_download')} (${t('err_network')})`, 'err'); return; }
     const a = document.createElement('a');
@@ -248,10 +253,10 @@
 
   // ---------- auth ----------
   function signOut(expired) {
-    if (!expired && S.token) fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${S.token}` } }).catch(() => {});
+    if (!expired && S.token) fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-Token': csrf() } }).catch(() => {});
     if (expired) { try { sessionStorage.setItem('pm_notice', t('err_session_limit')); } catch (e) { /* storage blocked */ } }
     clearTimeout(expiryTimer);
-    S.token = null; S.user = null; localStorage.removeItem('pm_token'); localStorage.removeItem('pm_session');
+    S.token = null; S.user = null; localStorage.removeItem('pm_signed'); localStorage.removeItem('pm_token'); localStorage.removeItem('pm_session');
     location.replace(expired ? 'login.html' : 'index.html');
     return;
   }
@@ -289,7 +294,7 @@
       btn.disabled = true;
       try {
         const r = await api('POST', `/api/auth/${mode}`, fd);
-        S.token = r.token; localStorage.setItem('pm_token', r.token); setUser(r.user);
+        S.token = '1'; localStorage.setItem('pm_signed', '1'); localStorage.removeItem('pm_token'); setUser(r.user);
         location.hash = '#/';
       } catch (err) { $('#authErr').textContent = err.message; btn.disabled = false; }
     };
@@ -481,7 +486,7 @@
     if (PM.onboard) PM.onboard.bindAccount($('#content'));
     if (PM.data) PM.data.bindAccount($('#content'));
     $('#acSave').onclick = () => busy($('#acSave'), async () => { const pe = PM.onboard ? PM.onboard.savePhone($('#acPhone').value) : ''; if (pe) { toast(pe, 'err'); $('#acPhone').focus(); return; } await api('PUT', '/api/me', { name: $('#acName').value.trim() || u.name, language: $('#acLang').value, theme: $('#acTheme').value }).then((r) => setUser(r.user)); toast(t('saved'), 'ok'); route(); });
-    $('#pwSave').onclick = () => busy($('#pwSave'), async () => { const pr = await api('POST', '/api/me/password', { current: $('#pwCur').value, next: $('#pwNew').value }); if (pr && pr.token) { S.token = pr.token; localStorage.setItem('pm_token', pr.token); } $('#pwCur').value = ''; $('#pwNew').value = ''; toast(t('saved'), 'ok'); });
+    $('#pwSave').onclick = () => busy($('#pwSave'), async () => { const pr = await api('POST', '/api/me/password', { current: $('#pwCur').value, next: $('#pwNew').value }); $('#pwCur').value = ''; $('#pwNew').value = ''; toast(t('saved'), 'ok'); });
     $('#avFile').onchange = async (e) => { const f = e.target.files[0]; if (!f) return; const fd = new FormData(); fd.append('file', f); const r = await busy(null, () => api('POST', '/api/me/avatar', fd)); if (r) { setUser(r.user); toast(t('saved'), 'ok'); route(); } };
   };
 
@@ -609,7 +614,7 @@
     let sent = 0; const seen = new Set();
     const send = (message, stack) => {
       const key = String(message).slice(0, 120); if (sent >= 5 || seen.has(key)) return; seen.add(key); sent++;
-      try { fetch('/api/client-error', { method: 'POST', keepalive: true, headers: Object.assign({ 'content-type': 'application/json' }, S.token ? { Authorization: `Bearer ${S.token}` } : {}), body: JSON.stringify({ message: String(message).slice(0, 500), stack: String(stack || '').slice(0, 3000), url: location.pathname + location.hash }) }).catch(() => {}); } catch (e) { /* best effort */ }
+      try { fetch('/api/client-error', { method: 'POST', keepalive: true, headers: Object.assign({ 'content-type': 'application/json' }, S.token ? { 'X-CSRF-Token': csrf() } : {}), body: JSON.stringify({ message: String(message).slice(0, 500), stack: String(stack || '').slice(0, 3000), url: location.pathname + location.hash }) }).catch(() => {}); } catch (e) { /* best effort */ }
     };
     let offered = 0;
     const offer = () => { if (offered++ || !PM.tickets) return; setTimeout(() => toast(t('sp_unexpected'), 'err', { label: t('sp_report_it'), fn: () => PM.tickets.open() }), 400); };

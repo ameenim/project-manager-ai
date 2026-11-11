@@ -13,7 +13,7 @@ const scrypt = (pw, salt) => new Promise((ok, no) => crypto.scrypt(pw, salt, 64,
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const csvCell = (v) => { const s = String(v == null ? '' : v); return /[",\n\r]/.test(s) || /^[=+\-@]/.test(s) ? '"' + (/^[=+\-@]/.test(s) ? "'" : '') + s.replace(/"/g, '""') + '"' : s; };
 
-module.exports = function createAdmin({ db, store, auth, ops, usage, tickets }) {
+module.exports = function createAdmin({ db, store, auth, ops, usage, tickets, secLog, envChecks }) {
   const q = (t, p) => db.query(t, p);
   const routes = [];
   const on = (method, re, fn) => routes.push([method, new RegExp('^/api/admin' + re + '$'), fn]);
@@ -67,6 +67,7 @@ module.exports = function createAdmin({ db, store, auth, ops, usage, tickets }) 
       currency: cfg.currency,
       users: { total: num(users.total), new7: num(users.new7), suspended: num(users.suspended), active30: num(users.active30) },
       subscriptions: by, mrr_cents: mrr, income: { month_cents: num(inc.month), total_cents: num(inc.total) }, projects,
+      security24: await secLog.summary(24),
       ai30: await aiTotals(30), errors24: { total: num(errs.d1), open: num(errs.open1) }, tickets: tickets ? await tickets.stats() : { open: 0, needs_action: 0, counts: {}, ai_fix: { tried: 0, succeeded: 0 } },
       uptime: { d1: await ops.uptime(1), d7: await ops.uptime(7), d30: await ops.uptime(30) },
       series: {
@@ -148,6 +149,15 @@ module.exports = function createAdmin({ db, store, auth, ops, usage, tickets }) 
     await auth.logoutEverywhere(id);
     await audit(admin, 'user.password_reset', `user:${id}`, {});
     return { ok: true };
+  });
+  // A one time link the person opens to choose their own new password. The administrator never sees the password.
+  // Only the hash of the link is stored, it works once and expires after 30 minutes.
+  on('POST', '/users/(\\d+)/reset-link', async ({ m, admin, origin }) => {
+    const id = idOf(m[1]); const u = await userRow(id);
+    const r = await auth.createResetLink(id, admin.id);
+    await audit(admin, 'user.reset_link', `user:${id}`, { expires_at: r.expires_at });
+    if (secLog) secLog.log('password_reset_issued', { userId: id, path: '/api/admin/users/reset-link', detail: { by: admin.email } });
+    return { url: `${origin || ''}/login.html#reset=${r.token}`, expires_at: r.expires_at, minutes: r.minutes, email: u.email };
   });
   on('POST', '/users/(\\d+)/sign-out', async ({ m, admin }) => { const id = idOf(m[1]); await userRow(id); await auth.logoutEverywhere(id); await audit(admin, 'user.sign_out', `user:${id}`, {}); return { ok: true }; });
   on('DELETE', '/users/(\\d+)', async ({ m, admin, query }) => {
@@ -336,7 +346,20 @@ module.exports = function createAdmin({ db, store, auth, ops, usage, tickets }) 
   on('DELETE', '/widgets/(\\d+)', async ({ m, admin }) => { const id = idOf(m[1]); const r = await q('DELETE FROM widgets WHERE id = $1 RETURNING title', [id]); if (!r.rows.length) throw err(404, 'Widget not found'); await audit(admin, 'widget.delete', `widget:${id}`, r.rows[0]); return { ok: true }; });
 
   // ---------- configuration ----------
-  on('GET', '/config', async () => ({ settings: await ops.configRows(), environment: { anthropic_key: !!process.env.ANTHROPIC_API_KEY, database: db.kind, replit_deployment: process.env.REPLIT_DEPLOYMENT === '1', site_url: process.env.SITE_URL || null, app_tz: process.env.APP_TZ || 'Asia/Dubai', jira_oauth: !!process.env.ATLASSIAN_CLIENT_ID, outlook_oauth: !!process.env.MICROSOFT_CLIENT_ID, demo_account: process.env.DEMO_ACCOUNT === '1', super_admin_emails: ops.adminEmails(), note: 'Secrets and connection strings are managed in Replit Secrets. They are never shown here.' } }));
+  // ---------- security ----------
+  on('GET', '/security', async ({ query }) => {
+    const { size, offset, page: p } = page(query, 50);
+    const w = []; const params = [];
+    if (query.severity === 'high' || query.severity === 'warn' || query.severity === 'info') { params.push(query.severity); w.push(`severity = $${params.length}`); }
+    if (query.type) { params.push(String(query.type).slice(0, 40)); w.push(`type = $${params.length}`); }
+    if (query.q) { params.push(like(query.q)); w.push(`(ip ILIKE $${params.length} OR email ILIKE $${params.length} OR path ILIKE $${params.length})`); }
+    const where = w.length ? 'WHERE ' + w.join(' AND ') : '';
+    const total = num((await q(`SELECT count(*) AS c FROM security_events ${where}`, params)).rows[0].c);
+    const rows = (await q(`SELECT e.id, e.type, e.severity, e.user_id, e.email, e.ip, e.path, e.detail, e.created_at, u.email AS user_email FROM security_events e LEFT JOIN users u ON u.id = e.user_id ${where.replace(/\b(severity|type|ip|email|path)\b/g, 'e.$1')} ORDER BY e.created_at DESC, e.id DESC LIMIT ${size} OFFSET ${offset}`, params)).rows;
+    return { total, page: p, size, summary: await secLog.summary(intOf(query.hours, 24)), checks: envChecks ? envChecks() : [], events: rows.map((r) => ({ id: r.id, type: r.type, severity: r.severity, user_id: r.user_id, person: r.user_email || r.email || null, ip: r.ip, path: r.path, detail: r.detail, at: iso(r.created_at) })) };
+  });
+
+  on('GET', '/config', async () => ({ settings: await ops.configRows(), environment: { checks: envChecks ? envChecks() : [], anthropic_key: !!process.env.ANTHROPIC_API_KEY, database: db.kind, replit_deployment: process.env.REPLIT_DEPLOYMENT === '1', site_url: process.env.SITE_URL || null, app_tz: process.env.APP_TZ || 'Asia/Dubai', jira_oauth: !!process.env.ATLASSIAN_CLIENT_ID, outlook_oauth: !!process.env.MICROSOFT_CLIENT_ID, demo_account: process.env.DEMO_ACCOUNT === '1', super_admin_emails: ops.adminEmails(), note: 'Secrets and connection strings are managed in Replit Secrets. They are never shown here.' } }));
   on('PUT', '/config', async ({ admin, body }) => { const done = await ops.setConfig(body.settings || body, admin.id); await audit(admin, 'config.update', 'config', done); return { settings: await ops.configRows() }; });
 
   // ---------- health ----------
@@ -396,7 +419,7 @@ module.exports = function createAdmin({ db, store, auth, ops, usage, tickets }) 
     if (!url.pathname.startsWith('/api/admin/') && url.pathname !== '/api/admin') return false;
     // the super admin switch is read from the database on every request, never from a cache
     const fresh = (await q("SELECT u.id, u.name, u.email, COALESCE(f.is_super, false) AS is_super, COALESCE(f.status, 'active') AS status FROM users u LEFT JOIN user_flags f ON f.user_id = u.id WHERE u.id = $1", [user.id])).rows[0];
-    if (!fresh || !fresh.is_super || fresh.status !== 'active') { c.json(res, 403, { error: 'This area is for super admins only.' }); return true; }
+    if (!fresh || !fresh.is_super || fresh.status !== 'active') { if (c.event) c.event('admin_denied', { userId: user.id, path: url.pathname, throttleMs: 60e3 }); c.json(res, 403, { error: 'This area is for super admins only.' }); return true; }
     if (url.pathname === '/api/admin/finance/export.csv' && req.method === 'GET') {
       const rows = (await q('SELECT p.*, u.name FROM payments p LEFT JOIN users u ON u.id = p.user_id ORDER BY p.paid_at DESC, p.id DESC')).rows;
       const head = ['id', 'date', 'name', 'email', 'kind', 'status', 'amount', 'currency', 'method', 'reference', 'note'];

@@ -9,6 +9,8 @@ const path = require('path');
 const crypto = require('crypto');
 const { AsyncLocalStorage } = require('async_hooks');
 const { extractText } = require('./extract');
+const filesig = require('./filesig');
+const security = require('./security');
 const { callClaude, MODEL } = require('./claude');
 const { RANK } = require('./store');
 const exporter = require('./exporter');
@@ -982,6 +984,20 @@ module.exports = function createApi(store, auth, connectors, ops) {
     return `data:${f.type};base64,${f.buffer.toString('base64')}`;
   };
 
+  // Every uploaded document is checked before anything is stored: the type must be on the list, the first bytes must match
+  // the type, and a refusal is written to the security log.
+  const assertUploadable = (files, where) => {
+    for (const f of files) {
+      const why = filesig.check(f.name, f.buffer);
+      if (why) {
+        if (ops && ops.security) ops.security.log('upload_rejected', { userId: ctx().user.id, ip: ctx().ip, path: where, detail: { name: String(f.name || '').slice(0, 80), size: f.buffer ? f.buffer.length : 0 } });
+        throw err(415, why);
+      }
+    }
+  };
+  // Until a payment processor is connected a paid period cannot be bought, so self service is off on the live site.
+  const paymentsOpen = () => !security.isProduction() || process.env.DEMO_BILLING === '1';
+
   // ---------- routes ----------
   const routes = [];
   const on = (method, re, fn) => routes.push([method, new RegExp('^' + re + '$'), fn]);
@@ -1008,7 +1024,7 @@ module.exports = function createApi(store, auth, connectors, ops) {
     const t = (v) => (v ? new Date(v).getTime() : null);
     return {
       state: ops.constructor.state(s), status: s.status, plan: s.plan, price_cents: Number(s.price_cents), currency: cfg.currency, token_limit: Number(s.token_limit), tokens_used: used,
-      trial_start: t(s.trial_start), trial_end: t(s.trial_end), period_start: t(s.period_start), period_end: t(s.period_end), auto_renew: !!s.auto_renew, period_days: cfg.period_days, trial_days: cfg.trial_days, self_serve: !!cfg.self_serve_subscribe,
+      trial_start: t(s.trial_start), trial_end: t(s.trial_end), period_start: t(s.period_start), period_end: t(s.period_end), auto_renew: !!s.auto_renew, period_days: cfg.period_days, trial_days: cfg.trial_days, self_serve: !!cfg.self_serve_subscribe && paymentsOpen(),
       usage: Object.fromEntries(days.map((r) => [r.d, Number(r.n)])),
       invoices: pays.map((p, i) => ({ no: 'PM-' + (1001 + i), at: t(p.paid_at), amount_cents: Number(p.amount_cents), currency: p.currency, demo: p.status === 'demo' })).reverse(),
     };
@@ -1019,6 +1035,7 @@ module.exports = function createApi(store, auth, connectors, ops) {
   on('POST', '/api/billing/subscribe', async () => {
     const cfg = await ops.config(); const uid = ctx().user.id;
     if (!cfg.self_serve_subscribe) throw err(403, 'Subscriptions are set up by our team. Contact support to subscribe.');
+    if (!paymentsOpen()) { if (ops.security) ops.security.log('subscribe_blocked', { userId: uid, ip: ctx().ip, path: '/api/billing/subscribe' }); throw err(403, 'Online payment is not connected yet, so plans are set up by our team. Contact support to subscribe.'); }
     await ops.ensureSubscription(uid);
     const cur = (await ops.q('SELECT * FROM subscriptions WHERE user_id = $1', [uid])).rows[0];
     const from = cur.status === 'active' && cur.period_end && new Date(cur.period_end) > new Date() ? new Date(cur.period_end) : new Date();
@@ -1135,6 +1152,7 @@ module.exports = function createApi(store, auth, connectors, ops) {
     if (!name) throw err(400, 'Give the project a name');
     if (name.length > 200) throw err(400, 'The project name is too long');
     if (files.length > 12) throw err(400, 'Attach at most 12 files when creating a project');
+    assertUploadable(files, '/api/projects');
     const id = nid();
     const P = makeProject(id, { id, owner_id: DB.user.id, name, code: null, client: null, client_logo: null, currency: null, value: null, start_date: null, end_date: null, work_days: [1, 2, 3, 4, 5], work_start: '08:00', work_end: '17:00', holidays: [], status: 'active', wizard_done: 0, analyzing: 0, impact_check: 1, auto_apply: 0, auto_threshold: 0.9, jira_key: null, teams_channel: null, created_at: nowTs() });
     P.p.wizard_done = files.length ? 0 : 1; // a project with no documents has nothing to review yet
@@ -1164,7 +1182,7 @@ module.exports = function createApi(store, auth, connectors, ops) {
     audit(P, ACTOR(), 'settings_changed', { summary: 'Project settings updated' });
     return { project: projectView(P) };
   });
-  on('POST', '/api/projects/(\\d+)/logo', async (m, q, b) => { const P = P_(m[1]); const f = b.get('file'); if (!f) throw err(400, 'No image received'); P.p.client_logo = await fileToDataUrl(f); return { project: clone(P.p) }; });
+  on('POST', '/api/projects/(\\d+)/logo', async (m, q, b) => { const P = P_(m[1]); const f = typeof b.get === 'function' ? b.get('file') : null; if (!f) throw err(400, 'No image received'); P.p.client_logo = await fileToDataUrl(f); return { project: clone(P.p) }; });
   on('DELETE', '/api/projects/(\\d+)', async (m) => {
     const id = Number(m[1]);
     P_(id, 'manager'); // only a project manager of this project may delete it
@@ -1273,6 +1291,7 @@ module.exports = function createApi(store, auth, connectors, ops) {
     const P = P_(m[1]); const mode = fd.get('purpose') || 'auto';
     const files = fd.getAll('files').filter((f) => f && f.name);
     if (!files.length) throw err(400, 'Choose at least one file to upload');
+    assertUploadable(files, '/api/projects/documents');
     const out = [], src = [];
     for (const d of await addDocuments(P, files)) {
       audit(P, ACTOR(), 'document_uploaded', { summary: `Uploaded ${d.filename} (${d.kind})` });
@@ -2227,7 +2246,7 @@ Rules:
     const d = P.documents.find((x) => x.id === Number(m[2]));
     if (!d) throw err(404, 'Document not found');
     const f = await store.getFile(P.id, d.id);
-    if (f) return new FileResult(f.buffer, f.mime || 'application/octet-stream', d.filename);
+    if (f) return new FileResult(f.buffer, filesig.safeType(d.filename), d.filename);
     // files added before originals were kept still have their text
     return new FileResult(Buffer.from(P.texts[d.id] || '', 'utf8'), 'text/plain; charset=utf-8', `${d.filename}.txt`);
   });
@@ -2265,8 +2284,8 @@ Rules:
     const name = f.name || 'meeting.txt';
     const ext = (name.match(/\.[^.]+$/) || [''])[0].toLowerCase();
     let text;
-    if (['.vtt', '.srt'].includes(ext)) text = f.buffer.toString('utf8');
-    else text = (await extractText(f.buffer, name)).text;
+    if (['.vtt', '.srt'].includes(ext)) { if (f.buffer.subarray(0, 8192).includes(0)) throw err(415, `${name.slice(0, 80)} is not a text file.`); text = f.buffer.toString('utf8'); }
+    else { assertUploadable([{ name, buffer: f.buffer }], '/api/meetings/document'); text = (await extractText(f.buffer, name)).text; }
     const raw = meetings.parseDocument(text, { name, as: b.get('kind') });
     let attendees = []; try { attendees = JSON.parse(b.get('attendees') || '[]'); } catch { attendees = [b.get('attendees')]; }
     const title = txt(b.get('title'), 140) || name.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ');
@@ -2476,8 +2495,9 @@ Rules:
     throw err(404, 'Not found');
   }
 
-  async function handle({ user, method, path: p, query, body, origin, scheduled }) {
+  async function handle({ user, method, path: p, query, body, origin, scheduled, ip }) {
     const c = await makeCtx(user, origin, method === 'GET' ? 'viewer' : 'editor', scheduled);
+    c.ip = ip || '';
     return als.run(c, async () => {
       const out = await dispatch(c, method, p, query, body);
       // a change is saved before the answer is sent, so "saved" on screen always means saved in the database

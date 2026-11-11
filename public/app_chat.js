@@ -558,7 +558,7 @@
     S.msgs.push(user, bot); paint(true);
     const ctl = new AbortController(); S.ctl = ctl;
     try {
-      const r = await fetch('/api/chat/message', { method: 'POST', headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + PM.state.token }, body: JSON.stringify({ project_id: S.ctx.projectId, text, screen: S.ctx.screen, deep: S.deep, ...(images && images.length ? { images: images.map((a) => ({ media_type: a.media_type, data: a.data })) } : {}) }), signal: ctl.signal });
+      const r = await fetch('/api/chat/message', { method: 'POST', headers: { 'content-type': 'application/json', 'X-CSRF-Token': PM.csrf() }, credentials: 'same-origin', body: JSON.stringify({ project_id: S.ctx.projectId, text, screen: S.ctx.screen, deep: S.deep, ...(images && images.length ? { images: images.map((a) => ({ media_type: a.media_type, data: a.data })) } : {}) }), signal: ctl.signal });
       if (!r.ok || !r.body) { let msg = t('cht_failed'); try { const j = await r.json(); msg = j.error || msg; } catch (e) { /* not json */ } if (r.status === 401) msg = t('err_session'); throw new Error(msg); }
       const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = '';
       for (;;) {

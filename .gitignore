@@ -1,4 +1,23 @@
 node_modules
 .DS_Store
+# secrets and keys never belong in Git
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+*.keystore
+# local data, dumps and logs
 data/
+*.sqlite
+*.sqlite3
+*.db
+*.dump
+*.sql.gz
+*.log
+npm-debug.log*
+coverage/
+.nyc_output/

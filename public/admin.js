@@ -1,10 +1,13 @@
 /* Super admin console. Plain JavaScript, hash routing, no build step. Talks to /api/admin with the person's own sign in. */
 (function () {
   'use strict';
-  const KEY = 'pm_admin_token';
+  const KEY = 'pm_admin_signed';
   const BUILD = '1.3.0';
   const S = { token: null, me: null, timer: null, errs: [] };
-  try { S.token = localStorage.getItem(KEY); } catch (e) { /* storage blocked */ }
+  try { S.token = localStorage.getItem(KEY); localStorage.removeItem('pm_admin_token'); } catch (e) { /* storage blocked */ }
+  // The session is an HttpOnly cookie. S.token only says that someone signed in, and changes send the CSRF token from the cookie.
+  const csrf = () => { const m = document.cookie.match(/(?:^|;\s*)(?:__Host-)?pm_csrf=([0-9a-f]+)/); return m ? m[1] : ''; };
+  const sess = (h) => Object.assign({ 'X-CSRF-Token': csrf() }, h || {});
   try { const th = localStorage.getItem('pm_theme'); if (th) document.documentElement.dataset.theme = th; } catch (e) { /* storage blocked */ }
 
   // ---------- helpers ----------
@@ -18,6 +21,7 @@
     route: '<circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5"/>', spark: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8Z"/>', folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
     grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
     gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>', pulse: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+    shield: '<path d="M12 3 4.5 6v5.5c0 4.4 3.1 8.2 7.5 9.5 4.4-1.3 7.5-5.1 7.5-9.5V6Z"/><path d="m9 12 2 2 4-4"/>',
     alert: '<path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/>', list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
     life: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/><path d="M5.6 5.6l3.9 3.9M14.5 14.5l3.9 3.9M18.4 5.6l-3.9 3.9M9.5 14.5l-3.9 3.9"/>',
     logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>', plus: '<path d="M12 5v14M5 12h14"/>', back: '<path d="m15 18-6-6 6-6"/>', menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
@@ -39,8 +43,7 @@
   const qs = (o) => Object.entries(o).filter(([, v]) => v !== '' && v != null).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
 
   async function api(method, path, body) {
-    const init = { method, headers: {} };
-    if (S.token) init.headers.Authorization = `Bearer ${S.token}`;
+    const init = { method, headers: method === 'GET' ? {} : sess(), credentials: 'same-origin' };
     if (body !== undefined) { init.headers['content-type'] = 'application/json'; init.body = JSON.stringify(body); }
     const ctl = typeof AbortController === 'function' ? new AbortController() : null; if (ctl) init.signal = ctl.signal;
     const timer = setTimeout(() => ctl && ctl.abort(), 25000);
@@ -52,7 +55,7 @@
     return data;
   }
   async function download(path, name) {
-    const r = await fetch(path, { headers: { Authorization: `Bearer ${S.token}` } });
+    const r = await fetch(path, { credentials: 'same-origin' });
     if (!r.ok) { toast('The file could not be downloaded.', 'err'); return; }
     const a = document.createElement('a'); a.href = URL.createObjectURL(await r.blob()); a.download = name; document.body.appendChild(a); a.click(); a.remove();
   }
@@ -122,7 +125,7 @@
 
   // ---------- sign in ----------
   function signOut(msg) {
-    if (S.token) fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${S.token}` } }).catch(() => {});
+    if (S.token) fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin', headers: sess() }).catch(() => {});
     S.token = null; S.me = null; try { localStorage.removeItem(KEY); } catch (e) { /* storage blocked */ }
     clearInterval(S.timer); showLogin(typeof msg === 'string' ? msg : '');
   }
@@ -134,11 +137,11 @@
     $('#lf').onsubmit = async (e) => {
       e.preventDefault(); const b = $('button', e.target); b.disabled = true; $('#lerr').textContent = '';
       try {
-        const r = await fetch('/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(Object.fromEntries(new FormData(e.target))) });
+        const r = await fetch('/api/auth/login', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json', 'X-Session-Mode': 'cookie' }, body: JSON.stringify(Object.fromEntries(new FormData(e.target))) });
         const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Sign in failed');
-        S.token = d.token; const me = await fetch('/api/admin/me', { headers: { Authorization: `Bearer ${S.token}` } });
-        if (me.status === 403) { await fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${S.token}` } }).catch(() => {}); S.token = null; throw new Error('This account is not a super admin.'); }
-        try { localStorage.setItem(KEY, S.token); } catch (x) { /* storage blocked */ }
+        S.token = '1'; const me = await fetch('/api/admin/me', { credentials: 'same-origin' });
+        if (me.status === 403) { await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin', headers: sess() }).catch(() => {}); S.token = null; throw new Error('This account is not a super admin.'); }
+        try { localStorage.setItem(KEY, '1'); } catch (x) { /* storage blocked */ }
         boot();
       } catch (x) { $('#lerr').textContent = x.message; b.disabled = false; }
     };
@@ -147,7 +150,7 @@
   // ---------- shell ----------
   const NAV = [
     ['overview', 'Overview', 'home'], ['users', 'Users', 'users'], ['usability', 'Usability', 'route'], ['subscriptions', 'Subscriptions', 'card'], ['finance', 'Finance and income', 'coin'], ['ai', 'AI consumption', 'spark'],
-    ['projects', 'Projects', 'folder'], ['widgets', 'Widgets', 'grid'], ['config', 'Configuration', 'gear'], ['health', 'System health', 'pulse'], ['tickets', 'Tickets', 'life'], ['errors', 'Error log', 'alert'], ['audit', 'Audit log', 'list'],
+    ['projects', 'Projects', 'folder'], ['widgets', 'Widgets', 'grid'], ['config', 'Configuration', 'gear'], ['health', 'System health', 'pulse'], ['tickets', 'Tickets', 'life'], ['errors', 'Error log', 'alert'], ['security', 'Security', 'shield'], ['audit', 'Audit log', 'list'],
   ];
   function shell() {
     const dark = document.documentElement.dataset.theme === 'dark';
@@ -192,6 +195,7 @@
         ${kpi(tok(o.ai30.total), 'AI tokens, 30 days', `${nf(o.ai30.calls)} calls`, 'info')}
         ${kpi(usd(o.ai30.cost), 'AI cost, 30 days', 'Estimated at your rates', 'warn')}
         ${kpi(nf(o.errors24.open), 'Open errors, 24 hours', `${nf(o.errors24.total)} logged in total`, o.errors24.open ? 'bad' : 'good')}
+        ${kpi(nf(o.security24 ? o.security24.high : 0), 'Security alerts, 24 hours', `${nf(o.security24 ? o.security24.warn : 0)} warnings`, o.security24 && o.security24.high ? 'bad' : 'good')}
         ${kpi(nf(o.tickets ? o.tickets.open : 0), 'Open tickets', `${nf(o.tickets ? o.tickets.needs_action : 0)} need your action`, o.tickets && o.tickets.needs_action ? 'warn' : 'good')}
         ${kpi(up == null ? 'No data' : up + '%', 'Uptime, 7 days', `${o.uptime.d1.pct == null ? 'No data' : o.uptime.d1.pct + '%'} in 24 hours`, up == null ? '' : up >= 99 ? 'good' : up >= 95 ? 'warn' : 'bad')}
       </div>
@@ -204,7 +208,7 @@
   };
 
   // ---------- users ----------
-  const F = { users: { q: '', status: '', role: '', page: 1 }, subs: { q: '', state: '', page: 1 }, projects: { q: '', page: 1 }, widgets: { page: 1 }, errors: { kind: '', resolved: '0', q: '', page: 1 }, audit: { q: '', page: 1 }, fin: { from: '', to: '', page: 1 }, aiDays: 30, useDays: 30 };
+  const F = { users: { q: '', status: '', role: '', page: 1 }, subs: { q: '', state: '', page: 1 }, projects: { q: '', page: 1 }, widgets: { page: 1 }, errors: { kind: '', resolved: '0', q: '', page: 1 }, audit: { q: '', page: 1 }, security: { q: '', severity: '', type: '', page: 1 }, fin: { from: '', to: '', page: 1 }, aiDays: 30, useDays: 30 };
   VIEWS.users = async (rest) => {
     if (rest[0]) return userDetail(Number(rest[0]));
     const f = F.users;
@@ -231,7 +235,7 @@
   async function userDetail(id) {
     const d = await api('GET', `/api/admin/users/${id}`); const u = d.user, s = d.subscription;
     const pct = s.token_limit ? Math.min(100, Math.round((d.tokens_used / s.token_limit) * 100)) : 0;
-    setView(`<div class="page"><a class="sa-back" href="#/users">${ic('back')}All users</a>${head(u.name, `<button class="btn" id="eEdit">Edit details</button><button class="btn" id="eSusp">${u.status === 'suspended' ? 'Reactivate' : 'Suspend'}</button><button class="btn" id="eSuper">${u.is_super ? 'Remove super admin' : 'Make super admin'}</button><button class="btn" id="ePw">Reset password</button><button class="btn" id="eOut">Sign out everywhere</button><button class="btn danger" id="eDel">Delete</button>`, u.email)}
+    setView(`<div class="page"><a class="sa-back" href="#/users">${ic('back')}All users</a>${head(u.name, `<button class="btn" id="eEdit">Edit details</button><button class="btn" id="eSusp">${u.status === 'suspended' ? 'Reactivate' : 'Suspend'}</button><button class="btn" id="eSuper">${u.is_super ? 'Remove super admin' : 'Make super admin'}</button><button class="btn" id="ePw">Reset link</button><button class="btn" id="eOut">Sign out everywhere</button><button class="btn danger" id="eDel">Delete</button>`, u.email)}
       <div class="sa-chips">${u.is_super ? chip('blue', 'Super admin') : ''}${u.status === 'suspended' ? chip('red', 'Account suspended') : chip('green', 'Account active')}${chip(...(STATE[s.state] || ['gray', s.state]).map((x, i) => (i ? 'Plan: ' + x : x)))}<span class="muted small">Joined ${day(u.created_at)}. Last seen ${ago(u.last_seen_at)}.</span></div>
       <div class="sa-grid2">
         <section class="card"><div class="card-head"><h3>Subscription</h3><div class="row"><button class="btn sm" id="sEdit">Edit</button><button class="btn sm primary" id="sAct">Activate or renew</button></div></div>
@@ -244,7 +248,15 @@
     $('#eEdit').onclick = () => { const m = modal({ title: 'Edit details', body: `<div class="sa-modal-form">${field('Full name', `<input type="text" id="nm" maxlength="120" value="${esc(u.name)}">`)}${field('Email', `<input type="email" id="em" value="${esc(u.email)}">`)}</div>`, footer: '<button class="btn" data-close>Cancel</button><button class="btn primary" id="go">Save</button>' }); m.$('#go').onclick = () => busy(m.$('#go'), async () => { await api('PUT', `/api/admin/users/${id}`, { name: m.$('#nm').value, email: m.$('#em').value }); m.close(); toast('Saved'); refresh(); }); };
     $('#eSusp').onclick = async () => { const to = u.status === 'suspended' ? 'active' : 'suspended'; if (to === 'suspended' && !(await confirmDlg({ title: 'Suspend this account', message: `${esc(u.name)} will be signed out and cannot sign in until you reactivate the account.`, ok: 'Suspend', danger: true }))) return; await busy(null, async () => { await api('PUT', `/api/admin/users/${id}`, { status: to }); toast(to === 'active' ? 'Account reactivated' : 'Account suspended'); refresh(); }); };
     $('#eSuper').onclick = async () => { const to = !u.is_super; if (!(await confirmDlg({ title: to ? 'Grant super admin' : 'Remove super admin', message: to ? `${esc(u.name)} will be able to manage everything on the platform, including users, money and settings.` : `${esc(u.name)} will lose access to this console.`, ok: to ? 'Grant access' : 'Remove access', danger: to }))) return; await busy(null, async () => { await api('PUT', `/api/admin/users/${id}`, { is_super: to }); toast('Saved'); refresh(); }); };
-    $('#ePw').onclick = () => { const m = modal({ title: 'Reset password', body: `<div class="sa-modal-form">${field('New password', '<input type="text" id="pw" autocomplete="off">', 'At least 8 characters. All devices are signed out.')}</div>`, footer: '<button class="btn" data-close>Cancel</button><button class="btn primary" id="go">Reset password</button>' }); m.$('#go').onclick = () => busy(m.$('#go'), async () => { await api('POST', `/api/admin/users/${id}/password`, { password: m.$('#pw').value }); m.close(); toast('Password reset'); }); };
+    // A one time link. The person opens it and chooses their own password, so nobody else ever sees it.
+    $('#ePw').onclick = () => { const m = modal({ title: 'Password reset link', body: `<p class="muted" style="margin-top:0">Make a link for ${esc(u.name)} and send it to them yourself. It works once and stops working after 30 minutes. A new link replaces any older one.</p><div id="lk"></div>`, footer: '<button class="btn" data-close>Close</button><button class="btn primary" id="go">Make link</button>' });
+      m.$('#go').onclick = () => busy(m.$('#go'), async () => {
+        const r = await api('POST', `/api/admin/users/${id}/reset-link`, {});
+        m.$('#lk').innerHTML = `<div class="sa-modal-form">${field('Reset link', `<input type="text" id="lku" readonly value="${esc(r.url)}">`, `Expires ${dt(r.expires_at)}. Opening it signs nobody in. It only lets the person choose a new password.`)}<button class="btn" id="cp" type="button">Copy link</button></div>`;
+        m.$('#lku').onfocus = (e) => e.target.select();
+        m.$('#cp').onclick = () => { (navigator.clipboard ? navigator.clipboard.writeText(r.url) : Promise.reject()).then(() => toast('Link copied'), () => { m.$('#lku').select(); toast('Select the link and copy it', 'err'); }); };
+        m.$('#go').textContent = 'Make a new link';
+      }); };
     $('#eOut').onclick = () => busy(null, async () => { await api('POST', `/api/admin/users/${id}/sign-out`, {}); toast('Signed out on every device'); });
     $('#eDel').onclick = async () => {
       if (!(await confirmDlg({ title: 'Delete this user', message: `This permanently deletes ${esc(u.name)}. It cannot be undone.${d.projects.some((p) => p.role === 'manager') ? ' Projects they own will be deleted too.' : ''}`, ok: 'Delete user', danger: true }))) return;
@@ -552,6 +564,38 @@
   };
 
 
+
+  // ---------- security ----------
+  const SEC_LEVEL = { high: ['red', 'High'], warn: ['amber', 'Warning'], info: ['gray', 'Info'] };
+  const TYPE_LABEL = (t) => String(t).replace(/_/g, ' ');
+  VIEWS.security = async () => {
+    const f = F.security;
+    async function draw() {
+      const r = await api('GET', '/api/admin/security?' + qs(f)); const pg = pager(r, (p) => { f.page = p; draw(); });
+      const sm = r.summary, by = sm.by_type || {};
+      const lvl = { error: ['red', 'Fix now'], warn: ['amber', 'Review'], ok: ['green', 'Good'] };
+      const bad = r.checks.filter((c) => c.level !== 'ok');
+      $('#sum').innerHTML = `<div class="sa-kpis">
+        ${kpi(nf(sm.high), 'High severity, 24 hours', 'Blocked requests, lockouts and denied admin access', sm.high ? 'bad' : 'good')}
+        ${kpi(nf(sm.warn), 'Warnings, 24 hours', 'Failed sign ins, rate limits, refused uploads', sm.warn ? 'warn' : 'good')}
+        ${kpi(nf(by.login_failed || 0), 'Failed sign ins, 24 hours', `${nf(by.login_success || 0)} successful`, (by.login_failed || 0) > 20 ? 'warn' : 'info')}
+        ${kpi(nf(bad.length), 'Settings to review', bad.length ? 'See the list below' : 'All checks pass', bad.length ? 'warn' : 'good')}</div>
+        <section class="card mt"><div class="card-head"><h3>Environment checks</h3></div><div class="table-wrap"><table class="t sa-tbl"><thead><tr><th>Setting</th><th>Status</th><th>What to know</th></tr></thead><tbody>${r.checks.map((c) => `<tr><td><b>${esc(c.id)}</b></td><td>${chip(...lvl[c.level])}</td><td class="wrap">${esc(c.message)}</td></tr>`).join('')}</tbody></table></div></section>
+        ${sm.top_addresses.length ? `<section class="card mt"><div class="card-head"><h3>Busiest addresses, 24 hours</h3></div><div class="table-wrap"><table class="t sa-tbl"><thead><tr><th>Address</th><th class="num">Warning and high events</th></tr></thead><tbody>${sm.top_addresses.map((a) => `<tr><td>${esc(a.ip)}</td><td class="num">${nf(a.events)}</td></tr>`).join('')}</tbody></table></div></section>` : ''}`;
+      $('#tbl').innerHTML = r.events.length ? `<div class="table-wrap"><table class="t sa-tbl"><thead><tr><th>When</th><th>Level</th><th>Event</th><th>Person</th><th>Address</th><th>Where</th><th>Detail</th></tr></thead><tbody>${r.events.map((e) => `<tr><td>${dt(e.at)}</td><td>${chip(...(SEC_LEVEL[e.severity] || ['gray', e.severity]))}</td><td>${esc(TYPE_LABEL(e.type))}</td><td>${esc(e.person || '')}</td><td>${esc(e.ip || '')}</td><td class="wrap small">${esc(e.path || '')}</td><td class="wrap small muted">${esc(Object.keys(e.detail || {}).length ? JSON.stringify(e.detail) : '')}</td></tr>`).join('')}</tbody></table></div>${pg.html || ''}` : empty('No security events match.');
+      pg.bind($('#tbl'));
+    }
+    setView(`<div class="page">${head('Security', '', 'Sign in attempts, blocked requests and settings that protect the platform. Events are kept for 180 days.')}<div id="sum">${loading()}</div>
+      <div class="sa-toolbar mt"><label class="sf">${ic('search')}<input type="search" id="fq" placeholder="Search address, person or page" value="${esc(f.q)}" aria-label="Search security events"></label>
+      <select id="fsv" aria-label="Level"><option value="">All levels</option><option value="high"${f.severity === 'high' ? ' selected' : ''}>High</option><option value="warn"${f.severity === 'warn' ? ' selected' : ''}>Warning</option><option value="info"${f.severity === 'info' ? ' selected' : ''}>Info</option></select>
+      <select id="fty" aria-label="Event type"><option value="">All events</option>${['login_failed', 'login_locked', 'bruteforce_suspected', 'csrf_blocked', 'origin_blocked', 'admin_denied', 'rate_limited', 'upload_rejected', 'suspicious_request', 'password_reset_issued', 'password_reset_used', 'password_reset_failed', 'session_invalid', 'subscribe_blocked', 'reserved_email', 'password_changed', 'login_success', 'register'].map((t) => `<option value="${t}"${f.type === t ? ' selected' : ''}>${TYPE_LABEL(t)}</option>`).join('')}</select></div>
+      <div class="card mt" id="tbl">${loading()}</div></div>`);
+    let t; $('#fq').oninput = (e) => { clearTimeout(t); t = setTimeout(() => { f.q = e.target.value; f.page = 1; draw(); }, 250); };
+    $('#fsv').onchange = (e) => { f.severity = e.target.value; f.page = 1; draw(); };
+    $('#fty').onchange = (e) => { f.type = e.target.value; f.page = 1; draw(); };
+    await draw();
+  };
+
   // ---------- diagnostics (open #/diag) ----------
   VIEWS.diag = async () => {
     const rows = [];
@@ -560,7 +604,7 @@
     rows.push(['Page script build', BUILD], ['Server /healthz', hz], ['Signed in as', S.me ? `${S.me.email}` : 'not signed in'], ['Browser', navigator.userAgent], ['Window size', `${innerWidth} x ${innerHeight}`]);
     for (const p of ['me', 'overview', 'users', 'subscriptions', 'finance', 'ai', 'projects', 'widgets', 'config', 'health', 'errors', 'audit']) {
       const t = Date.now();
-      try { const r = await fetch(`/api/admin/${p}`, { headers: { Authorization: `Bearer ${S.token}` }, cache: 'no-store' }); const x = await r.text(); let ok = 'JSON'; try { JSON.parse(x); } catch (e) { ok = 'NOT JSON'; } rows.push([`GET /api/admin/${p}`, `${r.status}, ${Date.now() - t} ms, ${x.length} characters, ${ok}${r.ok ? '' : ': ' + x.slice(0, 120)}`]); }
+      try { const r = await fetch(`/api/admin/${p}`, { credentials: 'same-origin', cache: 'no-store' }); const x = await r.text(); let ok = 'JSON'; try { JSON.parse(x); } catch (e) { ok = 'NOT JSON'; } rows.push([`GET /api/admin/${p}`, `${r.status}, ${Date.now() - t} ms, ${x.length} characters, ${ok}${r.ok ? '' : ': ' + x.slice(0, 120)}`]); }
       catch (e) { rows.push([`GET /api/admin/${p}`, 'failed: ' + e.message]); }
     }
     rows.push(['Script errors in this visit', S.errs.length ? S.errs.join(' || ') : 'None']);

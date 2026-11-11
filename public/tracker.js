@@ -90,7 +90,7 @@
     const token = PM.state && PM.state.token; if (!token) { queue = []; return; }
     const now = Date.now();
     const events = queue.splice(0, MAX).map((e) => ({ k: e.k, s: e.s, a: e.a, ms: e.ms, ago: now - e.t }));
-    fetch('/api/usage', { method: 'POST', keepalive: true, headers: { 'content-type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ sid: session(), device: device(), events }) }).catch(() => {});
+    fetch('/api/usage', { method: 'POST', keepalive: true, headers: { 'content-type': 'application/json', 'X-CSRF-Token': (PM.csrf ? PM.csrf() : '') }, credentials: 'same-origin', body: JSON.stringify({ sid: session(), device: device(), events }) }).catch(() => {});
     if (queue.length && !final) setTimeout(flush, 300);
   });
 

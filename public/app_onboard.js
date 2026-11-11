@@ -47,7 +47,7 @@
     sub_title: 'Subscribe to Project Manager AI', sub_plan: 'Monthly plan', sub_per: 'per month', sub_f1: '10 million tokens every month', sub_f2: 'All project, schedule and report features', sub_f3: 'Jira and email connections',
     sub_today: 'Due today', sub_renews: 'Renews on', sub_continue: 'Continue to payment', sub_not_now: 'Not now', sub_pay_h: 'Secure payment',
     sub_pay_note: 'Payment is handled by a secure checkout page. Project Manager AI never sees your card details.', sub_demo: 'Demo only. No payment is taken.', sub_pay: 'Pay $25.00',
-    sub_ok_h: 'You are subscribed', sub_ok_p: 'Your 10 million tokens are ready to use. Your plan renews on {date}.',
+    sub_closed_h: 'Plans are set up by our team', sub_closed_p: 'Online payment is not connected yet. Contact support and we will activate your plan.', sub_ok_h: 'You are subscribed', sub_ok_p: 'Your 10 million tokens are ready to use. Your plan renews on {date}.',
     pw_title: 'Your free trial has ended', pw_body: 'Subscribe for $25 per month to keep creating and updating projects. You can still view your existing projects.', pw_later: 'View only for now',
     bl_title: 'Billing and plan', bl_plan: 'Plan', bl_trial: 'Free trial', bl_active: 'Active', bl_ended: 'Ended', bl_days_left: 'Days left',
     bl_started: 'Started {date}', bl_ends: 'Ends on {date}', bl_renews: 'Renews on {date}', bl_ended_on: 'Ended on {date}', bl_price: '$25 per month', bl_includes: 'Includes 10 million tokens each month',
@@ -89,7 +89,7 @@
     sub_title: 'الاشتراك في مدير المشاريع الذكي', sub_plan: 'الباقة الشهرية', sub_per: 'شهريا', sub_f1: '10 ملايين رمز كل شهر', sub_f2: 'كل ميزات المشاريع والجداول والتقارير', sub_f3: 'ربط Jira والبريد الإلكتروني',
     sub_today: 'المستحق اليوم', sub_renews: 'يتجدد في', sub_continue: 'المتابعة إلى الدفع', sub_not_now: 'ليس الآن', sub_pay_h: 'دفع آمن',
     sub_pay_note: 'تتم معالجة الدفع عبر صفحة دفع آمنة. لا يطلع مدير المشاريع الذكي على بيانات بطاقتك.', sub_demo: 'نسخة تجريبية فقط. لا يتم سحب أي مبلغ.', sub_pay: 'ادفع $25.00',
-    sub_ok_h: 'تم اشتراكك', sub_ok_p: 'رموزك البالغة 10 ملايين جاهزة للاستخدام. تتجدد باقتك في {date}.',
+    sub_closed_h: 'يتم تفعيل الباقات عبر فريقنا', sub_closed_p: 'الدفع عبر الإنترنت غير متصل بعد. تواصل مع الدعم وسنفعّل باقتك.', sub_ok_h: 'تم اشتراكك', sub_ok_p: 'رموزك البالغة 10 ملايين جاهزة للاستخدام. تتجدد باقتك في {date}.',
     pw_title: 'انتهت تجربتك المجانية', pw_body: 'اشترك مقابل 25 دولارا شهريا لمتابعة إنشاء المشاريع وتحديثها. ما زال بإمكانك عرض مشاريعك الحالية.', pw_later: 'العرض فقط الآن',
     bl_title: 'الفوترة والباقة', bl_plan: 'الباقة', bl_trial: 'تجربة مجانية', bl_active: 'نشطة', bl_ended: 'منتهية', bl_days_left: 'الأيام المتبقية',
     bl_started: 'بدأت في {date}', bl_ends: 'تنتهي في {date}', bl_renews: 'تتجدد في {date}', bl_ended_on: 'انتهت في {date}', bl_price: '25 دولارا شهريا', bl_includes: 'تشمل 10 ملايين رمز كل شهر',
@@ -246,6 +246,12 @@
       <ul class="sub-list">${['sub_f1', 'sub_f2', 'sub_f3'].map((k) => `<li>${icon('check')}<span>${t(k)}</span></li>`).join('')}</ul></div>
       <dl class="sub-sum"><div><dt>${t('sub_today')}</dt><dd dir="ltr">$${PRICE}.00</dd></div><div><dt>${t('sub_renews')}</dt><dd>${renews()}</dd></div></dl>`;
     function step1() {
+      // Without a connected payment service a plan cannot be bought here, so the dialog says so instead of showing a checkout
+      if (B.selfServe === false) {
+        m.setBody(`<div class="banner warn mb">${icon('alert')}<div class="grow"><b>${t('sub_closed_h')}</b><div class="small">${t('sub_closed_p')}</div></div></div>`);
+        m.setFooter(`<button class="btn" data-close>${t('rb_close')}</button><a class="btn primary" href="#/support">${t('nav_support') || 'Support'}</a>`);
+        return;
+      }
       m.setBody(plan());
       m.setFooter(`<button class="btn" data-close>${t(o.expired ? 'pw_later' : 'sub_not_now')}</button><button class="btn primary" id="subNext">${t('sub_continue')}</button>`);
       m.$('#subNext').onclick = step2; m.$('#subNext').focus();

@@ -412,6 +412,33 @@ const MIGRATIONS = [
   );
   CREATE INDEX IF NOT EXISTS notifications_user_idx ON notifications(user_id, updated_at);
   `,
+  // 14: security. security_events is the record of sign in failures, lockouts, blocked requests and other signs of an
+  // attack, kept 180 days. password_resets holds one time reset links. Only the SHA-256 hash of a link is stored, a link
+  // works once and expires after 30 minutes.
+  `
+  CREATE TABLE IF NOT EXISTS security_events (
+    id BIGINT PRIMARY KEY,
+    type TEXT NOT NULL,
+    severity TEXT NOT NULL DEFAULT 'info',
+    user_id BIGINT,
+    email TEXT,
+    ip TEXT NOT NULL DEFAULT '',
+    path TEXT NOT NULL DEFAULT '',
+    detail JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS security_events_time_idx ON security_events(created_at DESC);
+  CREATE INDEX IF NOT EXISTS security_events_type_idx ON security_events(type, created_at DESC);
+  CREATE TABLE IF NOT EXISTS password_resets (
+    token_hash TEXT PRIMARY KEY,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_by BIGINT,
+    expires_at TIMESTAMPTZ NOT NULL,
+    used_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS password_resets_user_idx ON password_resets(user_id);
+  `,
 ];
 
 async function openPg(url) {

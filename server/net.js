@@ -27,4 +27,7 @@ function clientIp(req) {
   return list[Math.max(0, list.length - Math.max(1, n - used))];
 }
 
-module.exports = { clientIp, isInternal };
+// true when our own proxy sits in front of the app, so its forwarded headers can be believed
+const trustProxy = () => hops() > 0;
+
+module.exports = { clientIp, isInternal, trustProxy };

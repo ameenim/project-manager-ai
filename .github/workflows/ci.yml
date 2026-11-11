@@ -26,3 +26,17 @@ jobs:
           ANTHROPIC_API_KEY: ''
       - name: Dependency check
         run: npm audit --omit=dev --audit-level=critical
+
+  # Looks for keys and passwords in the files and in every commit. A key that was ever committed counts as leaked.
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Secret scan
+        run: node scripts/secret-scan.js --history
