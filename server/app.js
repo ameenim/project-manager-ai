@@ -12,6 +12,7 @@ const { Store } = require('./store');
 const authm = require('./auth');
 const { clientIp } = require('./net');
 const sec = require('./security');
+const trace = require('./trace');
 const { Connectors } = require('./connectors');
 const createApi = require('./api');
 const { MODEL } = require('./claude');
@@ -28,19 +29,25 @@ const STARTED = new Date().toISOString();
 const MAX_UPLOAD = 40 * 1024 * 1024;       // one file
 const MAX_JSON = 8 * 1024 * 1024;          // a normal JSON request
 const MAX_IMPORT = 64 * 1024 * 1024;       // a backup file, which can carry original documents
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.woff2': 'font/woff2', '.jpg': 'image/jpeg', '.json': 'application/json; charset=utf-8', '.ico': 'image/x-icon', '.mp4': 'video/mp4', '.txt': 'text/plain; charset=utf-8' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.avif': 'image/avif', '.woff2': 'font/woff2', '.jpg': 'image/jpeg', '.json': 'application/json; charset=utf-8', '.ico': 'image/x-icon', '.mp4': 'video/mp4', '.txt': 'text/plain; charset=utf-8' };
 
 // The Content Security Policy tells the browser which sources a page may load from, so an injected script cannot run
 // or send data anywhere else. Styles allow inline because the screens set colors with style attributes. Fonts come from
 // Google Fonts. Set CSP_MODE=report-only to watch for problems without blocking, or CSP_MODE=off to remove it.
+// Optional CDN. Set CDN_URL to the address of a content delivery network that pulls from this server (for example
+// https://cdn.example.com) and the scripts and styles of every page are named from there, with the same versioned names, so the
+// network can keep them for a year. Fonts come from there too, since the styles ask for them by address. Leave it unset and
+// everything is served from this server as before.
+const CDN = (() => { try { const u = new URL(process.env.CDN_URL || ''); return /^https?:$/.test(u.protocol) ? u.origin : ''; } catch (e) { return ''; } })();
+const withCdn = (src) => (CDN ? `${src} ${CDN}` : src);
 const CSP = [
   "default-src 'self'",
-  "script-src 'self'",
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "font-src 'self' https://fonts.gstatic.com data:",
-  "img-src 'self' data: blob:",
+  withCdn("script-src 'self'"),
+  withCdn("style-src 'self' 'unsafe-inline' https://fonts.googleapis.com"),
+  withCdn("font-src 'self' https://fonts.gstatic.com data:"),
+  withCdn("img-src 'self' data: blob:"),
   "media-src 'self' blob: data:",
-  "connect-src 'self'",
+  withCdn("connect-src 'self'"),
   "frame-src 'self' blob:",
   "worker-src 'self' blob:",
   "object-src 'none'",
@@ -62,19 +69,23 @@ const SECURITY = {
   ...(cspMode === 'off' ? {} : { [cspMode === 'report-only' ? 'Content-Security-Policy-Report-Only' : 'Content-Security-Policy']: CSP }),
 };
 
-// Answers over about 1.4 KB are sent gzipped when the browser accepts it. A project or schedule answer is mostly repeated
-// field names, so it shrinks to a fraction, and that is the part of a slow screen that no amount of server speed fixes.
+// Answers over about 1.4 KB are sent compressed when the browser accepts it: brotli when it can, gzip otherwise. A project or
+// schedule answer is mostly repeated field names, so it shrinks to a fraction, and that is the part of a slow screen that no
+// amount of server speed fixes. Brotli at a low quality is close to gzip in speed and smaller on the wire.
 const json = (res, status, data, extra) => {
   const body = JSON.stringify(data);
   const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...SECURITY, ...(extra || {}) };
   const accepts = String((res.req && res.req.headers['accept-encoding']) || '');
-  if (body.length > 1400 && /\bgzip\b/.test(accepts)) {
-    return zlib.gzip(body, { level: 4 }, (e, z) => {
+  const enc = body.length > 1400 ? (/\bbr\b/.test(accepts) ? 'br' : /\bgzip\b/.test(accepts) ? 'gzip' : null) : null;
+  if (enc) {
+    const done = (e, z) => {
       if (res.writableEnded || res.destroyed) return;
       if (e) { res.writeHead(status, headers); return res.end(body); }
-      res.writeHead(status, { ...headers, 'Content-Encoding': 'gzip', Vary: 'Accept-Encoding', 'Content-Length': z.length });
+      res.writeHead(status, { ...headers, 'Content-Encoding': enc, Vary: 'Accept-Encoding', 'Content-Length': z.length });
       res.end(z);
-    });
+    };
+    if (enc === 'br') return zlib.brotliCompress(body, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 4, [zlib.constants.BROTLI_PARAM_SIZE_HINT]: body.length } }, done);
+    return zlib.gzip(body, { level: 4 }, done);
   }
   res.writeHead(status, headers);
   res.end(body);
@@ -134,7 +145,7 @@ function readMultipart(req, limit) {
 async function createApp(opts = {}) {
   const stage = opts.onStartupStage || (() => {});
   stage('database open');
-  const db = opts.db || (await dbm.open(opts.dbOptions || {}));
+  const db = trace.shared.instrumentDb(opts.db || (await dbm.open(opts.dbOptions || {})));
   stage('database ready; store init');
   const store = new Store(db);
   try { await store.init(); }
@@ -343,6 +354,7 @@ async function createApp(opts = {}) {
   const assets = new Map();                 // file path to { mtimeMs, size, etag, buf }
   const compCache = new Map();              // key to a promise of the compressed bytes
   const COMPRESS = new Set(['.html', '.js', '.css', '.svg', '.json', '.txt', '.xml']);
+  const MEDIA = new Set(['.webp', '.avif', '.png', '.jpg', '.svg', '.ico', '.mp4']);
   const KEEP_BYTES = 3 * 1024 * 1024;
   async function assetOf(file) {
     const st = await fs.promises.stat(file);
@@ -371,8 +383,9 @@ async function createApp(opts = {}) {
     return p;
   }
   const notModified = (req, etag) => String(req.headers['if-none-match'] || '').split(',').some((x) => x.trim().replace(/^W\//, '') === etag);
-  async function sendBytes(req, res, { key, buf, type, etag, cache, compressible }) {
-    const headers = { 'Content-Type': type, ETag: etag, 'Cache-Control': cache, Vary: 'Accept-Encoding', ...SECURITY };
+  async function sendBytes(req, res, { key, buf, type, etag, cache, compressible, shared }) {
+    // with a CDN in front, scripts, styles and fonts must be readable from the page's other address
+    const headers = { 'Content-Type': type, ETag: etag, 'Cache-Control': cache, Vary: 'Accept-Encoding', ...SECURITY, ...(CDN && shared ? { 'Cross-Origin-Resource-Policy': 'cross-origin', 'Access-Control-Allow-Origin': '*' } : {}) };
     if (notModified(req, etag)) { res.writeHead(304, headers); return res.end(); }
     let body = buf;
     const accepts = String(req.headers['accept-encoding'] || '');
@@ -391,7 +404,7 @@ async function createApp(opts = {}) {
     const refs = [...new Set([...html.matchAll(/\s(?:src|href)="([^"#?:]+?\.(?:js|css))"/g)].map((m) => m[1]).filter((r) => !r.startsWith('/') && !r.includes('..')))];
     const ver = new Map();
     await Promise.all(refs.map(async (r) => { try { const a = await assetOf(path.join(ROOT, r)); ver.set(r, crypto.createHash('sha1').update(a.etag).digest('hex').slice(0, 10)); } catch (e) { /* left as it was */ } }));
-    html = html.replace(/(\s(?:src|href)=")([^"#?:]+?\.(?:js|css))(")/g, (m, a, r, c) => (ver.has(r) ? `${a}${r}?v=${ver.get(r)}${c}` : m));
+    html = html.replace(/(\s(?:src|href)=")([^"#?:]+?\.(?:js|css))(")/g, (m, a, r, c) => (ver.has(r) ? `${a}${CDN ? CDN + '/' : ''}${r}?v=${ver.get(r)}${c}` : m));
     pages.set(file, { at: Date.now(), html });
     return html;
   }
@@ -428,7 +441,11 @@ async function createApp(opts = {}) {
     try { a = await assetOf(file); } catch (err) { res.writeHead(404, { 'Content-Type': 'text/plain', ...SECURITY }); return res.end('Not found'); }
     // a file asked for by the version a page named is the one that version stands for, so it never needs checking again
     const versioned = url.searchParams.has('v') && (ext === '.js' || ext === '.css');
-    return sendBytes(req, res, { key: file, buf: a.buf, type: TYPES[ext] || 'application/octet-stream', etag: a.etag, cache: versioned ? 'public, max-age=31536000, immutable' : 'no-cache', compressible: COMPRESS.has(ext) });
+    // Fonts and pictures do not change with a release and have no version in their name, so they are kept by the browser for
+    // a while instead of being asked about on every page (the ETag still lets a changed file through when the time is up). A
+    // picture may be shown from the kept copy for a week while a fresh one is fetched in the background.
+    const cache = versioned ? 'public, max-age=31536000, immutable' : ext === '.woff2' ? 'public, max-age=2592000' : MEDIA.has(ext) ? 'public, max-age=86400, stale-while-revalidate=604800' : 'no-cache';
+    return sendBytes(req, res, { key: file, buf: a.buf, type: TYPES[ext] || 'application/octet-stream', etag: a.etag, cache, compressible: COMPRESS.has(ext), shared: versioned || ext === '.woff2' || MEDIA.has(ext) });
   }
 
   // A change sent from the browser carries a request id. If the connection drops after the server did the work, the browser
@@ -462,7 +479,9 @@ async function createApp(opts = {}) {
     try { return await run(); } catch (e) { forgetIt(); throw e; }
   }
 
-  const server = http.createServer(async (req, res) => {
+  // Each request runs inside a trace (see trace.js): Server-Timing on the answer, a log line when it is slow, and optional
+  // OpenTelemetry export.
+  const onRequest = async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     ops.counters.requests++;
     try {
@@ -484,7 +503,8 @@ async function createApp(opts = {}) {
       if (!res.headersSent) return json(res, status, { error: e.message });
       res.end();
     }
-  });
+  };
+  const server = http.createServer((req, res) => trace.shared.request(req, res, () => onRequest(req, res)));
   // Cloud Run and Replit keep idle connections open for several minutes. If this server closes an idle connection first,
   // the browser's next request on it fails with "Cannot reach the server", so this server must be the last to let go.
   server.requestTimeout = 5 * 60e3;

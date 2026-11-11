@@ -4,7 +4,11 @@
 'use strict';
 
 const DAY = 86400e3;
-const KINDS = new Set(['view', 'dwell', 'act', 'rage', 'slow', 'fail']);
+const KINDS = new Set(['view', 'dwell', 'act', 'rage', 'slow', 'fail', 'vital']);
+// Real user speed. The browser reports each measure once per page view: the target is the measure and ms its value (layout
+// shift is sent in thousandths). A reading is good, needs work or is poor by the thresholds the web platform publishes.
+const VITALS = { lcp: [2500, 4000, 'Largest content shown'], fcp: [1800, 3000, 'First content shown'], inp: [200, 500, 'Response to a tap or click'], cls: [0.1, 0.25, 'Layout stability'], ttfb: [800, 1800, 'Server first byte'] };
+const rateVital = (m, v) => (VITALS[m] ? (v <= VITALS[m][0] ? 'good' : v <= VITALS[m][1] ? 'needs work' : 'poor') : '');
 const DEVICES = new Set(['desktop', 'tablet', 'phone']);
 const NAME_RE = /^[a-z0-9_:/.\- ]{1,48}$/;
 const num = (v) => Number(v || 0);
@@ -65,7 +69,7 @@ function createUsage({ db, store }) {
     catch (e) { return empty(days, 'The usage table is not ready yet. It is created when the server restarts after the update.'); }
     if (!num(tot.users)) return empty(days, '');
 
-    const [sess, daily, screens, trans, loops, firsts, exits, acts, rage, slow, fail, people, devices, newbies, retention] = await Promise.all([
+    const [sess, daily, screens, trans, loops, firsts, exits, acts, rage, slow, fail, people, devices, newbies, retention, vit, vitScreens] = await Promise.all([
       q(`SELECT avg(len) AS avg_len, avg(acts) AS avg_acts, avg(views) AS avg_views FROM (SELECT sid, extract(epoch FROM max(created_at) - min(created_at)) AS len, count(*) FILTER (WHERE kind='act') AS acts, count(*) FILTER (WHERE kind='view') AS views FROM usage_events WHERE ${W} GROUP BY sid) s`, P),
       q(`SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') AS d, count(DISTINCT user_id) AS users, count(DISTINCT sid) AS sessions FROM usage_events WHERE ${W} GROUP BY 1 ORDER BY 1`, P),
       q(`SELECT screen, count(*) FILTER (WHERE kind='view') AS views, count(DISTINCT user_id) FILTER (WHERE kind='view') AS users, COALESCE(avg(ms) FILTER (WHERE kind='dwell'), 0) AS dwell, count(*) FILTER (WHERE kind='dwell') AS dn, count(*) FILTER (WHERE kind='dwell' AND ms < 5000) AS quick FROM usage_events WHERE ${W} AND screen <> '' GROUP BY screen ORDER BY views DESC`, P),
@@ -78,9 +82,11 @@ function createUsage({ db, store }) {
       q(`SELECT target, count(*) AS n, count(DISTINCT user_id) AS users, avg(ms) AS ms FROM usage_events WHERE ${W} AND kind='slow' GROUP BY target ORDER BY n DESC LIMIT 10`, P),
       q(`SELECT target, count(*) AS n, count(DISTINCT user_id) AS users FROM usage_events WHERE ${W} AND kind='fail' GROUP BY target ORDER BY n DESC LIMIT 10`, P),
       q(`SELECT e.user_id, u.name, u.email, u.created_at AS joined, count(DISTINCT e.sid) AS sessions, count(DISTINCT date_trunc('day', e.created_at)) AS active_days, count(*) FILTER (WHERE e.kind='view') AS views, count(*) FILTER (WHERE e.kind='act') AS acts, count(*) FILTER (WHERE e.kind='rage') AS rage, count(*) FILTER (WHERE e.kind='slow') AS slow, count(*) FILTER (WHERE e.kind='fail') AS fail, max(e.created_at) AS last_at, mode() WITHIN GROUP (ORDER BY e.device) AS device, count(DISTINCT e.screen) FILTER (WHERE e.kind='view') AS screens FROM usage_events e JOIN users u ON u.id = e.user_id WHERE e.${W} GROUP BY e.user_id, u.name, u.email, u.created_at ORDER BY sessions DESC, views DESC LIMIT 100`, P),
-      q(`SELECT device, count(DISTINCT user_id) AS users, count(DISTINCT sid) AS sessions, count(*) FILTER (WHERE kind IN ('rage','slow','fail')) AS friction, count(*) AS steps FROM usage_events WHERE ${W} GROUP BY device`, P),
+      q(`SELECT device, count(DISTINCT user_id) AS users, count(DISTINCT sid) AS sessions, count(*) FILTER (WHERE kind IN ('rage','slow','fail')) AS friction, count(*) FILTER (WHERE kind <> 'vital') AS steps FROM usage_events WHERE ${W} GROUP BY device`, P),
       q(`SELECT count(*) AS users, count(*) FILTER (WHERE NOT seen_project) AS stalled FROM (SELECT e.user_id, bool_or(e.kind='view' AND e.screen LIKE 'project:%') AS seen_project FROM usage_events e JOIN users u ON u.id = e.user_id WHERE e.${W} AND u.created_at >= now() - interval '14 days' GROUP BY e.user_id) t`, P),
       q(`SELECT count(*) AS users, count(*) FILTER (WHERE days >= 2) AS back FROM (SELECT user_id, count(DISTINCT date_trunc('day', created_at)) AS days FROM usage_events WHERE ${W} GROUP BY user_id) t`, P),
+      q(`SELECT target, device, count(*) AS n, percentile_cont(0.75) WITHIN GROUP (ORDER BY ms) AS p75 FROM usage_events WHERE ${W} AND kind='vital' GROUP BY target, device`, P),
+      q(`SELECT screen, count(*) AS n, percentile_cont(0.75) WITHIN GROUP (ORDER BY ms) AS p75 FROM usage_events WHERE ${W} AND kind='vital' AND target='lcp' GROUP BY screen HAVING count(*) >= 3 ORDER BY p75 DESC LIMIT 8`, P),
     ]);
 
     const users = num(tot.users);
@@ -110,13 +116,17 @@ function createUsage({ db, store }) {
       devices: devices.rows.map((r) => ({ device: r.device, users: num(r.users), sessions: num(r.sessions), friction_pct: pct(num(r.friction), num(r.steps)) })),
       people: people.rows.map((r) => ({ id: r.user_id, name: r.name, email: r.email, sessions: num(r.sessions), active_days: num(r.active_days), screens: num(r.screens), views: num(r.views), actions: num(r.acts), friction: num(r.rage) + num(r.slow) + num(r.fail), last_at: r.last_at ? new Date(r.last_at).toISOString() : null, device: r.device, is_new: Date.now() - new Date(r.joined).getTime() < 14 * DAY })),
       onboarding: { new_users: num(newbies.rows[0].users), stalled: num(newbies.rows[0].stalled) },
+      vitals: {
+        metrics: vit.rows.filter((r) => VITALS[r.target]).map((r) => { const v = r.target === 'cls' ? num(r.p75) / 1000 : num(r.p75); return { metric: r.target, name: VITALS[r.target][2], device: r.device, samples: num(r.n), p75: r.target === 'cls' ? Math.round(v * 1000) / 1000 : Math.round(v), unit: r.target === 'cls' ? '' : 'ms', rating: rateVital(r.target, v) }; }),
+        slowest_screens: vitScreens.rows.map((r) => ({ screen: r.screen, label: label(r.screen), samples: num(r.n), lcp_ms: Math.round(num(r.p75)), rating: rateVital('lcp', num(r.p75)) })),
+      },
     };
     data.suggestions = suggest(data);
     return data;
   }
 
   function empty(days, note) {
-    return { days, generated_at: new Date().toISOString(), since: null, empty: true, note, kpis: { users: 0, sessions: 0, avg_session_min: 0, avg_actions: 0, avg_screens: 0, returning_pct: 0, friction_events: 0, rage: 0, slow: 0, fail: 0 }, daily: [], screens: [], unused: [], transitions: [], loops: [], first_screens: [], exit_screens: [], actions: [], friction: { rage: [], slow: [], fail: [] }, devices: [], people: [], onboarding: { new_users: 0, stalled: 0 }, suggestions: [] };
+    return { days, generated_at: new Date().toISOString(), since: null, empty: true, note, kpis: { users: 0, sessions: 0, avg_session_min: 0, avg_actions: 0, avg_screens: 0, returning_pct: 0, friction_events: 0, rage: 0, slow: 0, fail: 0 }, daily: [], screens: [], unused: [], transitions: [], loops: [], first_screens: [], exit_screens: [], actions: [], friction: { rage: [], slow: [], fail: [] }, vitals: { metrics: [], slowest_screens: [] }, devices: [], people: [], onboarding: { new_users: 0, stalled: 0 }, suggestions: [] };
   }
 
   // ---------- suggestions ----------
@@ -126,6 +136,7 @@ function createUsage({ db, store }) {
     const out = []; const users = d.kpis.users;
     const add = (id, priority, area, title, evidence, action, affected) => out.push({ id, priority, area, title, evidence, action, users: affected });
     for (const f of d.friction.fail) if (f.users >= NEEDS_USERS || f.count >= 5) add('fail:' + f.target, f.users >= 3 ? 'high' : 'medium', 'Reliability', `Requests to ${f.target} keep failing`, `${f.count} failed calls hit ${f.users} project managers.`, 'Check the error log for this call, fix the cause, and show a clear message with a retry button instead of a plain failure.', f.users);
+    for (const v of (d.vitals && d.vitals.metrics) || []) if (v.rating === 'poor' && v.samples >= 5) add('vital:' + v.metric + ':' + v.device, 'high', 'Speed', `${v.name} is poor on ${v.device}`, `The slowest quarter of ${v.samples} page views on ${v.device} took ${v.p75}${v.unit ? ' ' + v.unit : ''} or more.`, 'Open the slowest screens below and the Server-Timing header of their calls to see whether the server or the page is the cause.', 0);
     for (const s of d.friction.slow) if (s.users >= NEEDS_USERS && s.count >= 3) add('slow:' + s.target, s.avg_s >= 4 ? 'high' : 'medium', 'Speed', `${s.target} feels slow`, `${s.count} slow calls averaging ${s.avg_s} seconds hit ${s.users} project managers.`, 'Profile this call, save only what changed, load the screen in parts, and keep the loading screen visible so people know the system is working.', s.users);
     for (const r of d.friction.rage) if (r.users >= NEEDS_USERS) add('rage:' + r.screen + r.target, 'high', 'Clarity', `People click ${r.name || 'an element'} on ${r.screen} again and again`, `${r.count} bursts of repeated clicks from ${r.users} project managers.`, 'The control looks clickable but gives no sign that it worked. Add immediate feedback, disable it while it runs, or make the result visible at once.', r.users);
     for (const s of d.screens) {

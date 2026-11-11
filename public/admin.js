@@ -90,7 +90,7 @@
     try { return await fn(); } catch (e) { toast(e.message, 'err'); return undefined; } finally { if (btn && btn.isConnected) { btn.disabled = false; btn.innerHTML = btn.dataset.h; } }
   }
   const tip = (s) => `title="${esc(s)}" aria-label="${esc(s)}"`;
-  const loading = () => '<div style="display:grid;place-items:center;padding:40px">' + PM.loader.html({ size: 'md' }) + '</div>';
+  const loading = () => '<div class="card" style="padding:18px">' + PM.skeleton.table(6, 4) + '</div>';
   const empty = (t) => `<div class="empty">${esc(t)}</div>`;
   const kpi = (v, l, h, tone) => `<div class="sa-kpi ${tone || ''}"><div class="v">${v}</div><div class="l">${esc(l)}</div>${h ? `<div class="h">${esc(h)}</div>` : ''}</div>`;
   const note = (t, cls) => `<div class="sa-note ${cls || ''}" role="note">${esc(t)}</div>`;
@@ -380,6 +380,11 @@
           <div><h4 class="sa-sub">Repeated clicks</h4>${tbl([['Where'], ['Bursts', 'num'], ['People', 'num']], r.friction.rage.map((x) => [esc(x.screen + ': ' + (x.name || 'unnamed')), nf(x.count), nf(x.users)]), 'None found.')}</div>
           <div><h4 class="sa-sub">Slow calls</h4>${tbl([['Call'], ['Times', 'num'], ['Average', 'num']], r.friction.slow.map((x) => [esc(x.target || 'unknown'), nf(x.count), x.avg_s + ' s']), 'None found.')}</div>
           <div><h4 class="sa-sub">Failed calls</h4>${tbl([['Call'], ['Times', 'num'], ['People', 'num']], r.friction.fail.map((x) => [esc(x.target || 'unknown'), nf(x.count), nf(x.users)]), 'None found.')}</div>
+        </div></section>
+      <section class="card mt"><div class="card-head"><h3>Real user speed</h3><span class="small muted">Measured in each person's browser. The slowest quarter of page views, so one fast visit cannot hide a slow one</span></div>
+        <div class="sa-grid2">
+          <div>${tbl([['Measure'], ['Device'], ['Page views', 'num'], ['Slowest quarter', 'num'], ['Rating']], ((r.vitals && r.vitals.metrics) || []).map((x) => [esc(x.name), esc(x.device), nf(x.samples), x.p75 + (x.unit ? ' ' + x.unit : ''), `<span class="chip ${x.rating === 'good' ? 'green' : x.rating === 'poor' ? 'red' : 'amber'}">${esc(x.rating)}</span>`]), 'No speed readings yet. They arrive as people use the app.')}</div>
+          <div><h4 class="sa-sub">Slowest screens to show their main content</h4>${tbl([['Screen'], ['Page views', 'num'], ['Time', 'num']], ((r.vitals && r.vitals.slowest_screens) || []).map((x) => [esc(x.label), nf(x.samples), x.lcp_ms + ' ms']), 'None yet.')}</div>
         </div></section>
       <section class="card mt"><div class="card-head"><h3>Features used</h3><span class="small muted">Buttons and controls, by how many project managers use them</span></div>
         ${tbl([['Control'], ['Where'], ['Uses', 'num'], ['Project managers', 'num'], ['Adoption', 'num']], r.actions.map((x) => [esc(x.name || x.target), esc(x.screen), nf(x.count), nf(x.users), x.adoption_pct + '%']), 'No actions recorded yet.')}</section>

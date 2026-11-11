@@ -47,12 +47,14 @@
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
   const today = () => new Date().toLocaleDateString('en-CA');
-  const avatarHtml = (u, cls = '') => `<div class="avatar ${cls}">${u.avatar ? `<img src="${esc(u.avatar)}" alt="">` : esc(initials(u.name))}</div>`;
+  const avatarHtml = (u, cls = '') => `<div class="avatar ${cls}">${u.avatar ? `<img src="${esc(u.avatar)}" alt="" loading="lazy" decoding="async">` : esc(initials(u.name))}</div>`;
   // A date formatter costs about a tenth of a millisecond to build, so a screen that formats hundreds of dates built them
   // for most of its time. One is built per language and set of options and then reused.
   const dtfs = new Map();
   const dtf = (loc, o) => { const k = loc + JSON.stringify(o); let f = dtfs.get(k); if (!f) { f = new Intl.DateTimeFormat(loc, o); dtfs.set(k, f); } return f; };
-  Object.assign(PM, { esc, t, icon, money, initials, $, $$, avatarHtml, today, dtf });
+  // Waits until typing pauses before running fn, so a search box redraws once per word and not once per key.
+  const debounce = (fn, ms = 180) => { let timer; const d = (...a) => { clearTimeout(timer); timer = setTimeout(() => fn(...a), ms); }; d.cancel = () => clearTimeout(timer); return d; };
+  Object.assign(PM, { esc, t, icon, money, initials, $, $$, avatarHtml, today, dtf, debounce });
 
   function applyPrefs() {
     document.documentElement.dataset.theme = S.theme;
@@ -61,6 +63,35 @@
     localStorage.setItem('pm_theme', S.theme);
     localStorage.setItem('pm_lang', S.lang);
   }
+
+  // ---------- screens loaded when they are first needed ----------
+  // Screens that most visits never open (meetings, closure, brand, the connection wizard, the document editor and client
+  // templates) are listed in app.html with type="pm/lazy", so the browser does not fetch or run them at start. The first use
+  // loads the group, in order, and the screen or the action goes on from there. The stubs below stand in until then and hand the
+  // call to the real code once it has replaced them. A few seconds after the first screen, the files are fetched quietly at low
+  // priority so the first use finds them already in the cache.
+  const lazy = (() => {
+    // This file runs before the later script tags are parsed, so the list is read on first use, when the page is complete.
+    let groups = null; const loading = {};
+    const scan = () => { if (groups) return groups; groups = {}; document.querySelectorAll('script[type="pm/lazy"]').forEach((el) => { const g = el.getAttribute('data-group'); (groups[g] = groups[g] || []).push(el.getAttribute('src')); el.remove(); }); return groups; };
+    const add = (src) => new Promise((ok, no) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => { s.remove(); no(new Error(t('err_network'))); }; document.head.appendChild(s); });
+    const load = (g) => {
+      if (!scan()[g]) return Promise.resolve();
+      if (!loading[g]) loading[g] = groups[g].reduce((p, src) => p.then(() => add(src)), Promise.resolve()).catch((e) => { delete loading[g]; throw e; });
+      return loading[g];
+    };
+    const warm = () => { try { const all = [].concat(...Object.values(scan())); let i = 0; const next = () => { if (i >= all.length) return; fetch(all[i++], { credentials: 'same-origin', priority: 'low' }).catch(() => {}).then(() => setTimeout(next, 400)); }; next(); } catch (e) { /* a warm up is optional */ } };
+    return { load, warm };
+  })();
+  const stubView = (name, group) => { const stub = async function () { await lazy.load(group); const real = PM.views[name]; if (real === stub) throw new Error(t('err_network')); return real.apply(this, arguments); }; PM.views[name] = stub; };
+  const stubObject = (key, methods, group) => { const stub = {}; methods.forEach((m) => { stub[m] = (...a) => lazy.load(group).then(() => { if (PM[key] === stub) throw new Error(t('err_network')); return PM[key][m](...a); }); }); PM[key] = stub; };
+  stubView('tab_meetings', 'meetings'); stubView('tab_closure', 'closure'); stubView('brand', 'brand');
+  stubObject('connect', ['wizard', 'mountRows'], 'connect');
+  stubObject('clientTpl', ['upload', 'open', 'readLogo'], 'docs');
+  stubObject('docEditor', ['open'], 'docs');
+  const askStub = (...a) => lazy.load('closure').then(() => { if (PM.askNotDelivered === askStub) throw new Error(t('err_network')); return PM.askNotDelivered(...a); });
+  PM.askNotDelivered = askStub;
+  PM.lazy = lazy;
 
   // ---------- api ----------
   // A screen used to ask again, on every move, for things that had not changed: the project list, the plan and usage
@@ -73,7 +104,14 @@
   const early = new Map();     // path to { at, p } for a read started early, handed to the first caller that asks for it
   const EARLY_MS = 4000;
   const keepFor = (path) => { for (const [re, ms] of KEEP) if (re.test(path)) return ms; return 0; };
-  const forget = () => { kept.clear(); early.clear(); };
+  // Two screens that ask for the same read at the same moment share one request. Whoever asks first gets the answer as it came;
+  // anyone who joins before it lands gets their own copy made from the same text, so one screen can change what it got without
+  // the next screen seeing the change. A change made from here empties this, like the kept answers, so nobody reads a request
+  // that started before the change. The same goes for a PUT or DELETE sent twice with the same body while the first is still
+  // on its way (a double click or a double Enter): it is one request, because doing it twice gives the same result.
+  const flight = new Map();    // path to { p, shared, text } for a read on its way
+  const writing = new Map();   // method, path and body to the promise of a PUT or DELETE on its way
+  const forget = () => { kept.clear(); early.clear(); flight.clear(); };
   const quiet = (method, path) => method === 'GET' || /^\/api\/(usage|client-error)$/.test(path) || (method === 'PUT' && path === '/api/me');
   async function api(method, path, body) {
     if (method === 'GET') {
@@ -90,11 +128,22 @@
       }
       const e = early.get(path);
       if (e) { early.delete(path); if (now - e.at < EARLY_MS) return e.p; }
-      return rawApi('GET', path);
+      const f = flight.get(path);
+      if (f && !f.settled) { f.shared = true; return f.first.then(() => JSON.parse(f.text)); }
+      const entry = { shared: false, settled: false, text: null, first: null };
+      entry.first = rawApi('GET', path).then((d) => { if (entry.shared) entry.text = JSON.stringify(d); entry.settled = true; return d; }, (e) => { entry.settled = true; throw e; });
+      flight.set(path, entry);
+      const done = () => { if (flight.get(path) === entry) flight.delete(path); };
+      entry.first.then(done, done);
+      return entry.first;
     }
     if (quiet(method, path)) return rawApi(method, path, body);
+    const twice = (method === 'PUT' || method === 'DELETE') && !(body instanceof FormData) ? method + ' ' + path + ' ' + (body === undefined ? '' : JSON.stringify(body)) : '';
+    if (twice && writing.has(twice)) return writing.get(twice);
     forget();
-    try { return await rawApi(method, path, body); } finally { forget(); }
+    const run = (async () => { try { return await rawApi(method, path, body); } finally { forget(); if (twice) writing.delete(twice); } })();
+    if (twice) writing.set(twice, run);
+    return run;
   }
   // starts reads that a screen is about to need, at the same time as the read it will wait for first
   function prefetch(paths) {
@@ -145,6 +194,21 @@
     if (PM.tickets && (!r.ok || path.startsWith('/api/'))) PM.tickets.note(method, path, r.status, data && data.ref, data && data.error);
     if (!r.ok) throw new Error((data && data.error) || r.statusText);
     return data;
+  }
+  // A photo is shrunk and saved as WebP in the browser before it is sent. The avatar is shown at 40 pixels or less, and it
+  // travels with every page that shows a person, so a 2 MB photo made every one of them heavy. If the browser cannot do it,
+  // the original goes as it was.
+  async function smallImage(file, max) {
+    try {
+      if (!/^image\/(png|jpe?g|webp)$/i.test(file.type)) return file;
+      const bmp = await createImageBitmap(file);
+      const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+      const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(bmp.width * k)); c.height = Math.max(1, Math.round(bmp.height * k));
+      c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+      const blob = await new Promise((ok) => c.toBlob(ok, 'image/webp', 0.85));
+      if (blob && blob.type === 'image/webp' && blob.size < file.size) return new File([blob], 'avatar.webp', { type: 'image/webp' });
+    } catch (e) { /* use the original */ }
+    return file;
   }
   async function download(path, filename) {
     const r = await fetch(path, { credentials: 'same-origin' });
@@ -487,7 +551,7 @@
     if (PM.data) PM.data.bindAccount($('#content'));
     $('#acSave').onclick = () => busy($('#acSave'), async () => { const pe = PM.onboard ? PM.onboard.savePhone($('#acPhone').value) : ''; if (pe) { toast(pe, 'err'); $('#acPhone').focus(); return; } await api('PUT', '/api/me', { name: $('#acName').value.trim() || u.name, language: $('#acLang').value, theme: $('#acTheme').value }).then((r) => setUser(r.user)); toast(t('saved'), 'ok'); route(); });
     $('#pwSave').onclick = () => busy($('#pwSave'), async () => { const pr = await api('POST', '/api/me/password', { current: $('#pwCur').value, next: $('#pwNew').value }); $('#pwCur').value = ''; $('#pwNew').value = ''; toast(t('saved'), 'ok'); });
-    $('#avFile').onchange = async (e) => { const f = e.target.files[0]; if (!f) return; const fd = new FormData(); fd.append('file', f); const r = await busy(null, () => api('POST', '/api/me/avatar', fd)); if (r) { setUser(r.user); toast(t('saved'), 'ok'); route(); } };
+    $('#avFile').onchange = async (e) => { const f0 = e.target.files[0]; if (!f0) return; const f = await smallImage(f0, 256); const fd = new FormData(); fd.append('file', f); const r = await busy(null, () => api('POST', '/api/me/avatar', fd)); if (r) { setUser(r.user); toast(t('saved'), 'ok'); route(); } };
   };
 
   // ---------- project shell ----------
@@ -509,7 +573,7 @@
     const items = [['sharepoint_url', 'folder', 'pl_open_sp'], ['jira_url', 'jira', 'pl_open_jira']].filter(([k]) => p[k]);
     return items.length ? `<div class="proj-links" role="group" aria-label="${esc(t('pl_title'))}">${items.map(([k, ic, name]) => `<a class="btn ghost icon" href="${esc(p[k])}" target="_blank" rel="noopener noreferrer" aria-label="${esc(t(name))}" data-tip="${esc(t(name))}">${icon(ic)}</a>`).join('')}</div>` : '';
   };
-  const spot = () => `${PM.loader.html({ size: 'page' })}`;
+  const spot = () => PM.skeleton.page();
   // A soft refresh keeps the side menu and the page frame and only reloads the project header and the open tab.
   PM.projectView = async function (id, tab, query, opts) {
     const soft = !!(opts && opts.soft) && S.project && S.project.id === id && !!$('#main > .proj-head') && !!$('#content');
@@ -531,15 +595,16 @@
       const big = d === 0 ? t('end_counter_today') : String(Math.abs(d));
       return `<div class="endctr ${cls}" data-tip="${esc(tip)}" role="status" aria-label="${esc(tip)}"><b>${big}</b><span>${d === 0 ? '' : d < 0 ? t('end_counter_past') : t('end_counter_left')}</span></div>`;
     };
-    const head = `<div class="proj-head"><div class="proj-title">${p.client_logo ? `<img class="logo" src="${esc(p.client_logo)}" alt="">` : ''}<h1>${esc(p.name)}</h1>${PM.statusChip(p)}<span class="muted small">${esc(p.client || '')}</span><span class="grow"></span>${projLinks(p)}${endCounter(p)}${p.analyzing ? `<span class="chip blue">${PM.loader.html({ size: 'sm' })}${t('analyzing')}</span>` : ''}</div>
+    const head = `<div class="proj-head"><div class="proj-title">${p.client_logo ? `<img class="logo" src="${esc(p.client_logo)}" alt="" decoding="async">` : ''}<h1>${esc(p.name)}</h1>${PM.statusChip(p)}<span class="muted small">${esc(p.client || '')}</span><span class="grow"></span>${projLinks(p)}${endCounter(p)}${p.analyzing ? `<span class="chip blue">${PM.loader.html({ size: 'sm' })}${t('analyzing')}</span>` : ''}</div>
       <div class="tabs">${TABS.map(([k, ic]) => `<a class="tab ${k === tab ? 'active' : ''}" href="#/p/${id}/${k}">${icon(ic)}${t('tab_' + k)}${badge(k)}</a>`).join('')}</div>${p.status === 'closed' && tab !== 'closure' ? `<div class="banner cl-head-note" role="status"><span class="grow">${t('cl_banner_head')}</span><a class="btn sm" href="#/p/${id}/closure">${t('cl_banner_go')}</a></div>` : ''}</div>`;
     if (soft) $('#main > .proj-head').outerHTML = head; else shell('', spot(), head);
     const view = PM.views['tab_' + tab];
     if (!view) { $('#content').innerHTML = ''; return; }
     const token = ++S.nav;
-    // a tab that is still fetching its data shows the loading screen instead of an empty page
-    const endLoad = PM.loader.show(t('ld_loading'));
-    try { await view($('#content'), p, query, token); } catch (e) { console.error(e); $('#content').innerHTML = `<div class="page"><div class="card empty">${esc(e.message)}${PM.tickets ? `<div style="margin-top:12px"><button class="btn" id="spRep">${t('sp_report_problem')}</button></div>` : ''}</div></div>`; const rb = $('#spRep'); if (rb) rb.onclick = () => PM.tickets.open(); } finally { endLoad(); }
+    // a tab that is still fetching its data shows the shape of the page, at once, instead of a loading screen that has to stay a
+    // minimum time. A soft refresh keeps what is on screen.
+    if (!soft) $('#content').innerHTML = PM.skeleton.page();
+    try { await view($('#content'), p, query, token); } catch (e) { console.error(e); $('#content').innerHTML = `<div class="page"><div class="card empty">${esc(e.message)}${PM.tickets ? `<div style="margin-top:12px"><button class="btn" id="spRep">${t('sp_report_problem')}</button></div>` : ''}</div></div>`; const rb = $('#spRep'); if (rb) rb.onclick = () => PM.tickets.open(); } 
   };
   PM.stale = (token) => token !== S.nav;
 
@@ -621,6 +686,6 @@
     window.addEventListener('error', (e) => { if (e.message && !/ResizeObserver loop/.test(e.message)) { send(e.message, e.error && e.error.stack); offer(); } });
     window.addEventListener('unhandledrejection', (e) => { const r = e.reason; send('Unhandled promise rejection: ' + ((r && r.message) || r), r && r.stack); });
   })();
-  PM.start = () => { window.addEventListener('hashchange', () => PM.vt(route)); route(); };
+  PM.start = () => { window.addEventListener('hashchange', () => PM.vt(route)); route(); setTimeout(lazy.warm, 3500); };
   document.addEventListener('click', (e) => { const a = e.target.closest('[data-go]'); if (a && a.tagName !== 'TR') location.hash = a.dataset.go; });
 })();

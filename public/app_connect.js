@@ -148,7 +148,7 @@
       if (step === 1) return drawSignin(msg, false);
       return drawDone(msg);
     }
-    m.setBody(`<div class="empty small">${PM.loader.html({ size: 'md' })}</div>`);
+    m.setBody(`<div class="empty small">${PM.skeleton.list(3)}</div>`);
     load().then((x) => { if (x.connected) { step = 2; return drawDone(); } draw(); }).catch((e) => { m.setBody(`<div class="empty small">${esc(e.message)}</div>`); });
   }
 
@@ -173,7 +173,7 @@
         try { const r = await api('DELETE', `/api/connections/${b.dataset.connOff}`); draw(r.connections); await refreshStatus(); } catch (e) { toast(e.message, 'err'); }
       }));
     };
-    host.innerHTML = `<div class="empty small">${PM.loader.html({ size: 'md' })}</div>`;
+    host.innerHTML = `<div class="empty small">${PM.skeleton.list(3)}</div>`;
     try { draw((await api('GET', '/api/connections')).connections); } catch (e) { host.innerHTML = `<div class="empty small">${esc(e.message)}</div>`; }
   }
   PM.connect = { wizard, mountRows };

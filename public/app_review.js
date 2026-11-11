@@ -279,7 +279,7 @@
     if (!kind || !KINDS.includes(kind)) { const pb = proposedBy(); kind = KINDS.find((k) => pb[k]) || 'deliverable'; }
     if (!status) status = Object.values(proposedBy()).some(Boolean) ? 'proposed' : 'all';
     let an = p.analysis || null;
-    const reload = async () => { items = (await api('GET', `/api/projects/${p.id}/items`)).items; S.project = (await api('GET', `/api/projects/${p.id}`)).project; an = S.project.analysis || null; picked.clear(); draw(); };
+    const reload = async () => { const [ir, pr] = await Promise.all([api('GET', `/api/projects/${p.id}/items`), api('GET', `/api/projects/${p.id}`)]); items = ir.items; S.project = pr.project; an = S.project.analysis || null; picked.clear(); draw(); };
     const hiOf = (list) => list.filter((i) => i.status === 'proposed' && (i.confidence || 0) >= 0.8);
 
     function draw() {
@@ -328,7 +328,7 @@
       }));
       $$('[data-kind]', root).forEach((b) => (b.onclick = () => { kind = b.dataset.kind; picked.clear(); sessionStorage.setItem('rv_kind', kind); draw(); }));
       $$('[data-status]', root).forEach((b) => (b.onclick = () => { status = b.dataset.status; sessionStorage.setItem('rv_f', status); draw(); }));
-      const si = $('#rvSearch', root); if (si) si.oninput = () => { search = si.value; const pos = si.selectionStart; draw(); const n = $('#rvSearch', root); n.focus(); n.setSelectionRange(pos, pos); };
+      const si = $('#rvSearch', root); if (si) si.oninput = PM.debounce(() => { search = si.value; const pos = si.selectionStart; draw(); const n = $('#rvSearch', root); n.focus(); n.setSelectionRange(pos, pos); }, 180);
       const act = async (e, fn) => { const b = e.currentTarget; await busy(b, fn); await reload(); };
       $$('[data-confirm]', root).forEach((b) => (b.onclick = (e) => act(e, () => api('POST', `/api/items/${b.dataset.confirm}/confirm`))));
       $$('[data-ignore]', root).forEach((b) => (b.onclick = (e) => act(e, () => api('POST', `/api/items/${b.dataset.ignore}/ignore`))));

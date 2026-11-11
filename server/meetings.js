@@ -82,13 +82,23 @@ class Meetings {
     return r ? this.settle(r) : null;
   }
   async get(id) { const r = await this.row(id); return r ? this.view(r, true) : null; }
-  async list(projectId) {
+  async list(projectId, o) {
     const rows = (await this.q(`SELECT id, project_id, owner_id, title, meeting_at, duration_sec, language, minutes_lang, source, status, stage, error, notes, attendees, created_at, updated_at,
         jsonb_array_length(transcript) AS segments, (minutes IS NOT NULL) AS has_minutes, COALESCE(minutes->>'summary', '') AS summary, jsonb_array_length(COALESCE(minutes->'actions', '[]'::jsonb)) AS actions
-      FROM meetings WHERE project_id = $1 ORDER BY COALESCE(meeting_at, created_at) DESC, id DESC`, [Number(projectId)])).rows;
+      FROM meetings WHERE project_id = $1 ORDER BY COALESCE(meeting_at, created_at) DESC, id DESC${o ? ' LIMIT ' + (Number(o.limit) | 0) + ' OFFSET ' + (Number(o.offset) | 0) : ''}`, [Number(projectId)])).rows;
     const out = [];
     for (const r of rows) out.push(this.view(await this.settle(r)));
     return out;
+  }
+  // The list with optional paging (?limit, ?offset), newest first. The total comes from a count, and only the requested rows
+  // are read and settled, so a long history costs the same as a short one.
+  async page(projectId, q) {
+    const limit = parseInt(q && q.limit, 10);
+    if (!(limit > 0)) return { meetings: await this.list(projectId) };
+    const lim = Math.min(limit, 200), off = Math.max(0, parseInt(q.offset, 10) || 0);
+    const total = Number((await this.q('SELECT count(*) AS c FROM meetings WHERE project_id = $1', [Number(projectId)])).rows[0].c);
+    const meetings = await this.list(projectId, { limit: lim, offset: off });
+    return { meetings, total, offset: off, has_more: off + lim < total };
   }
   async hasAudio(id) { return !!(await this.q('SELECT 1 FROM meeting_audio WHERE meeting_id = $1', [Number(id)])).rows.length; }
 

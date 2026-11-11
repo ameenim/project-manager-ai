@@ -63,4 +63,21 @@
     try { return await (typeof work === 'function' ? work() : work); } finally { end(); }
   }
   PM.loader = { html, show, hide, wrap };
+
+  // Skeletons: the shape of the page in quiet gray blocks while its data is on the way. They show at once and leave as soon as
+  // the data lands, so they never add waiting time the way a loading screen with a minimum display time does. The logo loader
+  // stays for starting the app and for long actions. A skeleton is only a stand in: it says "loading" to a screen reader and
+  // carries no content. Each helper returns markup, so it can sit inside any card, list or page.
+  const bar = (cls) => `<span class="sk sk-line ${cls || ''}"></span>`;
+  const row = () => `<div class="sk-row"><span class="sk sk-dot"></span><div class="sk-col">${bar('l')}${bar('s')}</div><span class="sk sk-chip"></span></div>`;
+  const rows = (n) => Array.from({ length: n }, row).join('');
+  const skeleton = {
+    line: bar,
+    list: (n) => `<div class="sk-wrap" role="status" aria-busy="true" aria-label="${esc(tr('ld_loading'))}">${rows(n || 5)}</div>`,
+    cards: (n) => `<div class="sk-wrap sk-cards" role="status" aria-busy="true" aria-label="${esc(tr('ld_loading'))}">${Array.from({ length: n || 3 }, () => `<div class="card sk-card">${bar('m')}${bar('xl')}${bar('l')}</div>`).join('')}</div>`,
+    table: (n, cols) => `<div class="sk-wrap" role="status" aria-busy="true" aria-label="${esc(tr('ld_loading'))}"><div class="sk-trow sk-thead" style="--cols:${cols || 4}">${Array.from({ length: cols || 4 }, () => bar('s')).join('')}</div>${Array.from({ length: n || 6 }, () => `<div class="sk-trow" style="--cols:${cols || 4}">${Array.from({ length: cols || 4 }, () => bar('m')).join('')}</div>`).join('')}</div>`,
+    // a whole page: a title, a row of summary cards and a list card
+    page: () => `<div class="page sk-page" role="status" aria-busy="true" aria-label="${esc(tr('ld_loading'))}"><span class="sk sk-title"></span><div class="sk-cards">${Array.from({ length: 3 }, () => `<div class="card sk-card">${bar('s')}<span class="sk sk-metric"></span>${bar('m')}</div>`).join('')}</div><div class="card sk-card">${bar('m')}${rows(5)}</div></div>`,
+  };
+  PM.skeleton = skeleton;
 })();

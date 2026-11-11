@@ -280,7 +280,9 @@ module.exports = function createAdmin({ db, store, auth, ops, usage, tickets, se
     for (const r of a) bySource.push({ source: r.source, input: num(r.i), output: num(r.o), calls: num(r.calls) });
     const c = (await q("SELECT COALESCE(SUM(input_tokens),0) AS i, COALESCE(SUM(output_tokens),0) AS o, count(*) AS calls FROM chat_log WHERE billable AND (input_tokens > 0 OR output_tokens > 0) AND created_at >= now() - ($1 || ' days')::interval", [String(days)])).rows[0];
     if (num(c.calls)) bySource.push({ source: 'thinking area', input: num(c.i), output: num(c.o), calls: num(c.calls) });
-    for (const s of bySource) s.cost = await ops.cost(s.input, s.output);
+    // the rates are already loaded above, so each figure is computed here instead of asking for the settings again per row
+    const costOf = (i, o) => (Number(i) / 1e6) * cfg.ai_price_input_per_m + (Number(o) / 1e6) * cfg.ai_price_output_per_m;
+    for (const s of bySource) s.cost = costOf(s.input, s.output);
     const perUser = (await q(`SELECT u.id, u.email, u.name, SUM(t.i) AS i, SUM(t.o) AS o, SUM(t.calls) AS calls FROM (
       SELECT user_id, input_tokens AS i, output_tokens AS o, 1 AS calls FROM ai_usage WHERE created_at >= now() - ($1 || ' days')::interval
       UNION ALL SELECT user_id, input_tokens, output_tokens, 1 FROM chat_log WHERE billable AND (input_tokens > 0 OR output_tokens > 0) AND created_at >= now() - ($1 || ' days')::interval) t
@@ -295,7 +297,7 @@ module.exports = function createAdmin({ db, store, auth, ops, usage, tickets, se
       days, totals, rates: { input_per_m: cfg.ai_price_input_per_m, output_per_m: cfg.ai_price_output_per_m },
       note: 'Cost is an estimate: tokens multiplied by the rates in Configuration. Set the rates of your model there. Usage before this feature existed is not recorded, and the project chat tokens come from the chat log, which keeps 90 days.',
       configured: !!process.env.ANTHROPIC_API_KEY, by_source: bySource, by_model: models.map((r) => ({ model: r.model || 'unknown', input: num(r.i), output: num(r.o), calls: num(r.calls) })),
-      top_users: await Promise.all(perUser.map(async (r) => ({ id: r.id, email: r.email, name: r.name, input: num(r.i), output: num(r.o), calls: num(r.calls), cost: await ops.cost(num(r.i), num(r.o)) }))), daily,
+      top_users: perUser.map((r) => ({ id: r.id, email: r.email, name: r.name, input: num(r.i), output: num(r.o), calls: num(r.calls), cost: costOf(num(r.i), num(r.o)) })), daily,
     };
   });
 

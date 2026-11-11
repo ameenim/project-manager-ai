@@ -53,6 +53,7 @@
     if (next === cur) return;
     session(); leave();
     cur = next; visibleMs = 0; lastTick = document.hidden ? 0 : Date.now(); since = Date.now();
+    if (!vitScreen) vitScreen = cur;
     push({ k: 'view', s: cur });
   });
 
@@ -75,6 +76,39 @@
     if (clicks.length === 3) push({ k: 'rage', s: cur || screenOf(), a: target });
   });
 
+
+  // ---------- real user speed ----------
+  // The browser's own measures of how the first page load felt: when the first content showed (FCP), when the main content
+  // showed (LCP), how much the layout jumped (CLS), the slowest response to a tap or click (INP) and how long the server took
+  // to answer (TTFB). They are sent once, when the page is hidden or closed, as steps of kind "vital" with the first screen.
+  // Nothing about the content of the page is read. A page opened in a background tab is skipped, because its timings measure
+  // the tab and not the app.
+  const vit = {};
+  let vitSent = false, vitScreen = '', vitHidden = document.visibilityState === 'hidden' || !!document.prerendering, cls = 0, win = 0, winStart = 0, lastShift = 0;
+  const inter = {};
+  function watch(type, cb, extra) {
+    try { const po = new PerformanceObserver((l) => { try { l.getEntries().forEach(cb); } catch (e) { /* ignore */ } }); po.observe(Object.assign({ type: type, buffered: true }, extra || {})); } catch (e) { /* not supported here */ }
+  }
+  watch('largest-contentful-paint', (e) => { vit.lcp = Math.round(e.startTime); });
+  watch('layout-shift', (e) => {
+    if (e.hadRecentInput) return;
+    if (e.startTime - lastShift > 1000 || e.startTime - winStart > 5000) { win = 0; winStart = e.startTime; }
+    lastShift = e.startTime; win += e.value; if (win > cls) cls = win;
+  });
+  watch('event', (e) => { if (e.interactionId) { inter[e.interactionId] = Math.max(inter[e.interactionId] || 0, e.duration); vit.inp = Math.max(vit.inp || 0, Math.round(inter[e.interactionId])); } }, { durationThreshold: 40 });
+  const sendVitals = safe(function () {
+    if (vitSent || vitHidden) return;
+    vitSent = true;
+    try {
+      const nav = performance.getEntriesByType('navigation')[0];
+      if (nav && nav.responseStart > 0) vit.ttfb = Math.round(nav.responseStart);
+      const fcp = performance.getEntriesByName('first-contentful-paint')[0]; if (fcp) vit.fcp = Math.round(fcp.startTime);
+    } catch (e) { /* older browser */ }
+    vit.cls = Math.round(cls * 1000);
+    const at = vitScreen || cur || screenOf();
+    for (const k of Object.keys(vit)) if (Number.isFinite(vit[k]) && (vit[k] > 0 || k === 'cls')) push({ k: 'vital', s: at, a: k, ms: vit[k] });
+  });
+
   // called by the api wrapper for every request
   const endpoint = (path) => slug(String(path).split('?')[0].replace(/^\/api\//, '').replace(/\/\d+/g, '/:id').split('/').slice(0, 3).join('/'));
   const call = safe(function (path, ms, ok) {
@@ -94,11 +128,11 @@
     if (queue.length && !final) setTimeout(flush, 300);
   });
 
-  PM.track = { call, act, flush, screen: enter };
+  PM.track = { call, act, flush, screen: enter, vitals: () => Object.assign({}, vit, { cls: Math.round(cls * 1000) / 1000 }) };
   window.addEventListener('hashchange', enter);
   document.addEventListener('click', onClick, true);
-  document.addEventListener('visibilitychange', safe(() => { tick(); if (document.hidden) { push({ k: 'dwell', s: cur, ms: visibleMs }); visibleMs = 0; flush(true); } else lastTick = Date.now(); }));
-  window.addEventListener('pagehide', safe(() => { leave(); flush(true); }));
+  document.addEventListener('visibilitychange', safe(() => { tick(); if (document.hidden) { sendVitals(); push({ k: 'dwell', s: cur, ms: visibleMs }); visibleMs = 0; flush(true); } else lastTick = Date.now(); }));
+  window.addEventListener('pagehide', safe(() => { sendVitals(); leave(); flush(true); }));
   setInterval(flush, FLUSH);
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', enter); else setTimeout(enter, 0);
 })();

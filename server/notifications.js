@@ -51,20 +51,30 @@ function createNotifications({ db, store, api }) {
     });
   }
 
+  // Brings the stored notifications in line with what is true now. It runs on every list, so it must cost a few queries
+  // however many notifications there are: rows whose figures did not change are left alone, new rows go in with one insert
+  // and rows that no longer apply are removed with one delete.
   async function sync(user) {
     const now = await conditions(user);
-    const have = (await q('SELECT id, project_id, kind, sig FROM notifications WHERE user_id = $1', [user.id])).rows;
+    const have = (await q('SELECT id, project_id, kind, sig, n, extra FROM notifications WHERE user_id = $1', [user.id])).rows;
     const key = (a) => Number(a.project_id) + ':' + a.kind;
     const mine = new Map(have.map((r) => [key(r), r]));
     const live = new Set();
+    const fresh = [];
     for (const c of now) {
       live.add(key(c));
       const r = mine.get(key(c));
-      if (!r) await q('INSERT INTO notifications(id, user_id, project_id, kind, sig, n, extra) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)', [store.nid(), user.id, c.project_id, c.kind, c.sig, c.n, JSON.stringify(c.extra)]);
-      else if (r.sig !== c.sig) await q('UPDATE notifications SET sig = $2, n = $3, extra = $4::jsonb, read_at = NULL, dismissed = false, updated_at = now() WHERE id = $1', [r.id, c.sig, c.n, JSON.stringify(c.extra)]);
-      else await q('UPDATE notifications SET n = $2, extra = $3::jsonb WHERE id = $1', [r.id, c.n, JSON.stringify(c.extra)]);
+      if (!r) { fresh.push(c); continue; }
+      if (r.sig !== c.sig) await q('UPDATE notifications SET sig = $2, n = $3, extra = $4::jsonb, read_at = NULL, dismissed = false, updated_at = now() WHERE id = $1', [r.id, c.sig, c.n, JSON.stringify(c.extra)]);
+      else if (Number(r.n) !== Number(c.n) || JSON.stringify(r.extra || {}) !== JSON.stringify(c.extra || {})) await q('UPDATE notifications SET n = $2, extra = $3::jsonb WHERE id = $1', [r.id, c.n, JSON.stringify(c.extra)]);
     }
-    for (const r of have) if (!live.has(key(r))) await q('DELETE FROM notifications WHERE id = $1', [r.id]);
+    if (fresh.length) {
+      const vals = [], params = [];
+      fresh.forEach((c, i) => { const o = i * 7; vals.push(`($${o + 1}, $${o + 2}, $${o + 3}, $${o + 4}, $${o + 5}, $${o + 6}, $${o + 7}::jsonb)`); params.push(store.nid(), user.id, c.project_id, c.kind, c.sig, c.n, JSON.stringify(c.extra)); });
+      await q(`INSERT INTO notifications(id, user_id, project_id, kind, sig, n, extra) VALUES ${vals.join(', ')}`, params);
+    }
+    const gone = have.filter((r) => !live.has(key(r))).map((r) => r.id);
+    if (gone.length) await q('DELETE FROM notifications WHERE id = ANY($1::bigint[])', [gone]);
     return now;
   }
 

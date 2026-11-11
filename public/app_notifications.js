@@ -62,10 +62,17 @@
     }
     paintBell(); if (pop) paintPop();
   }
+  // The list changes on screen at once and the server is told after. If the server says no, the list goes back to what it was
+  // and the person is told, so a dismissed or read notification never waits on the network to look dismissed or read.
   async function act(kind, body) {
     if (S.busy) return; S.busy = true;
+    const was = { items: S.items.slice(), unread: S.unread };
+    if (kind === 'dismiss') S.items = S.items.filter((x) => String(x.id) !== String(body.id));
+    else if (kind === 'read') S.items = S.items.map((x) => (body.all || String(x.id) === String(body.id) ? Object.assign({}, x, { read: true }) : x));
+    S.unread = S.items.filter((x) => !x.read).length;
+    paintBell(); if (pop) paintPop();
     try { await PM.api('POST', '/api/notifications/' + kind, body); await load(true); }
-    catch (e) { PM.toast(e.message || t('nc_failed'), 'err'); }
+    catch (e) { S.items = was.items; S.unread = was.unread; paintBell(); if (pop) paintPop(); PM.toast(e.message || t('nc_failed'), 'err'); }
     finally { S.busy = false; }
   }
 

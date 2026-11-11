@@ -88,6 +88,16 @@ module.exports = function createApi(store, auth, connectors, ops) {
   } : null;
   const RAW = win.DEMO_SEED;
   const nid = () => store.nid();
+  // Optional paging for a long list. Without ?limit the whole list comes back as it always did. With ?limit=N (up to 500) and
+  // ?offset=M the answer holds that slice plus total, offset and has_more, so a screen can offer "Show more" and never has to
+  // download the whole history just to show the newest part. The view function runs only on the rows that are sent.
+  const paged = (list, q, field, view, maxLimit = 500) => {
+    const map = view || ((x) => x);
+    const limit = parseInt(q && q.limit, 10);
+    if (!(limit > 0)) return { [field]: list.map(map) };
+    const lim = Math.min(limit, maxLimit), off = Math.max(0, parseInt(q.offset, 10) || 0);
+    return { [field]: list.slice(off, off + lim).map(map), total: list.length, offset: off, has_more: off + lim < list.length };
+  };
   const ensurePipe = async () => {};
   const ACTOR = () => ctx().DB.user.name;
   const running = new Set(); // projects whose analysis is running in this process
@@ -1286,7 +1296,7 @@ module.exports = function createApi(store, auth, connectors, ops) {
     return { project: projectView(P), closure: closureState(P) };
   });
 
-  on('GET', '/api/projects/(\\d+)/documents', async (m) => ({ documents: P_(m[1]).documents.map(clone) }));
+  on('GET', '/api/projects/(\\d+)/documents', async (m, q) => paged(P_(m[1]).documents, q, 'documents', clone));
   on('POST', '/api/projects/(\\d+)/documents', async (m, q, fd) => {
     const P = P_(m[1]); const mode = fd.get('purpose') || 'auto';
     const files = fd.getAll('files').filter((f) => f && f.name);
@@ -1355,7 +1365,7 @@ module.exports = function createApi(store, auth, connectors, ops) {
     if (q.status) rows = rows.filter((i) => i.status === q.status);
     if (q.state) rows = rows.filter((i) => i.state === q.state);
     if (q.q) rows = rows.filter((i) => (i.title + ' ' + i.description).toLowerCase().includes(String(q.q).toLowerCase()));
-    return { items: rows.sort((a, b) => a.id - b.id).map((i) => itemView(P, i)) };
+    return paged(rows.sort((a, b) => a.id - b.id), q, 'items', (i) => itemView(P, i));
   });
   on('POST', '/api/projects/(\\d+)/items', async (m, q, b) => {
     const P = P_(m[1]);
@@ -1760,7 +1770,7 @@ Rules:
     return scheduleResponse(P);
   });
 
-  on('GET', '/api/projects/(\\d+)/inbox', async (m) => { const P = P_(m[1]); return { inbox: P.inbox.map((r) => inboxView(P, r)) }; });
+  on('GET', '/api/projects/(\\d+)/inbox', async (m, q) => { const P = P_(m[1]); return paged(P.inbox, q, 'inbox', (r) => inboxView(P, r)); });
   on('GET', '/api/inbox/unassigned', async () => ({ inbox: [] }));
   const findRow = (id) => { for (const k of DB.order) { const P = DB.projects[k]; const r = P && P.inbox.find((x) => x.id === Number(id)); if (r) { need(P, ctx().level); touch(P); return [P, r]; } } throw err(404, 'Not found'); };
   on('POST', '/api/inbox/(\\d+)/apply', async (m, q, b) => {
@@ -2097,7 +2107,7 @@ Rules:
     audit(P, ACTOR(), 'document_generated', { summary: `Generated ${g.title}${tpl ? ` from template "${tpl.name}"` : cu ? ' as a custom document' : ''}` });
     return { generated: clone(g), engine: out.engine, unconfirmed: snap.ctx.unconfirmed };
   });
-  on('GET', '/api/projects/(\\d+)/generated', async (m) => ({ generated: P_(m[1]).generated.map(gSummary) }));
+  on('GET', '/api/projects/(\\d+)/generated', async (m, q) => paged(P_(m[1]).generated, q, 'generated', gSummary));
   const findGen = (id) => { for (const k of DB.order) { const P = DB.projects[k]; const g = P && P.generated.find((x) => x.id === Number(id)); if (g) { need(P, ctx().level); touch(P); return [P, g]; } } throw err(404, 'Not found'); };
   on('GET', '/api/generated/(\\d+)', async (m) => { const [P, g] = findGen(m[1]); return { generated: clone(complete(P, g)) }; });
   on('PUT', '/api/generated/(\\d+)', async (m, q, b) => {
@@ -2134,7 +2144,7 @@ Rules:
     for (const k of DB.order) { const P = DB.projects[k]; const f = P && P.folders && P.folders.find((x) => x.id === Number(m[1])); if (f) { need(P, ctx().level); touch(P); const moved = P.generated.filter((g) => g.folder_id === f.id).map((g) => g.id); P.generated.forEach((g) => { if (g.folder_id === f.id) g.folder_id = null; }); P.folders = P.folders.filter((x) => x !== f); return { ok: true, moved }; } }
     throw err(404, 'Folder not found');
   });
-  on('GET', '/api/projects/(\\d+)/audit', async (m) => ({ audit: P_(m[1]).audit.slice(0, 200).map(clone) }));
+  on('GET', '/api/projects/(\\d+)/audit', async (m, q) => paged(P_(m[1]).audit.slice(0, 200), q, 'audit', clone));
 
 
   // ---------- members ----------
@@ -2275,7 +2285,7 @@ Rules:
       else await meetings.markApplied(Number(m[1]), m[2], { [m[3]]: { inbox_id: r.id, pending: false } });
     } catch (e) { console.error('meeting sync', e.message); }
   }
-  on('GET', '/api/projects/(\\d+)/meetings', async (m) => { const P = P_(m[1]); return { meetings: await meetings.list(P.id), stt: meetingStatus(), attendees: P.resources.map((r) => ({ name: r.name, email: r.email || null, role: r.role || null })) }; });
+  on('GET', '/api/projects/(\\d+)/meetings', async (m, q) => { const P = P_(m[1]); return { ...(await meetings.page(P.id, q)), stt: meetingStatus(), attendees: P.resources.map((r) => ({ name: r.name, email: r.email || null, role: r.role || null })) }; });
   // A transcript or minutes file (Word, PDF, text, or Teams and Zoom caption files) becomes a meeting with minutes.
   on('POST', '/api/projects/(\\d+)/meetings/document', async (m, q, b) => {
     const P = P_(m[1]);

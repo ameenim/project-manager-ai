@@ -323,11 +323,11 @@
   }
 
   PM.views.trends = async function () {
-    PM.shell('trends', `${PM.loader.html({ size: 'page' })}`);
+    PM.shell('trends', `${PM.skeleton.page()}`);
     const token = S.nav;
     await PM.loadProjects();
     if (PM.stale(token)) return;
-    PM.shell('trends', `<div class="page"><div class="page-head"><h1>${esc(t('tr_title'))}</h1>${periodSeg(getDays())}</div><div class="small muted mb">${esc(t('tr_note'))}</div><div class="tr-note"></div><div class="tr-host">${PM.loader.html({ size: 'page' })}</div></div>`);
+    PM.shell('trends', `<div class="page"><div class="page-head"><h1>${esc(t('tr_title'))}</h1>${periodSeg(getDays())}</div><div class="small muted mb">${esc(t('tr_note'))}</div><div class="tr-note"></div><div class="tr-host">${PM.skeleton.page()}</div></div>`);
     const root = $('#content'), o = { url: '/api/trends', scope: 'portfolio', days: getDays(), token };
     wire(root, o);
     await paint(root, o, true);
@@ -335,7 +335,7 @@
 
   // The Trends tab of one project. It also opens in the side panel.
   PM.views.tab_trends = async function (root, p, q, token) {
-    root.innerHTML = `<div class="page"><div class="qa-bar"><span class="qa-lab">${icon('trend')}${esc(t('tr_period'))}</span>${periodSeg(getDays())}</div><div class="small muted mb">${esc(t('tr_note'))}</div><div class="tr-note"></div><div class="tr-host">${PM.loader.html({ size: 'page' })}</div></div>`;
+    root.innerHTML = `<div class="page"><div class="qa-bar"><span class="qa-lab">${icon('trend')}${esc(t('tr_period'))}</span>${periodSeg(getDays())}</div><div class="small muted mb">${esc(t('tr_note'))}</div><div class="tr-note"></div><div class="tr-host">${PM.skeleton.page()}</div></div>`;
     const o = { url: `/api/projects/${p.id}/trends`, scope: 'project', days: getDays(), token };
     wire(root, o);
     await paint(root, o, true);

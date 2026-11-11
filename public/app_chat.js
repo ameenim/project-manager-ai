@@ -316,7 +316,7 @@
   const when = (x) => { try { return new Date(x).toLocaleString(PM.state.lang === 'ar' ? 'ar' : 'en', { dateStyle: 'medium', timeStyle: 'short' }); } catch (e) { return ''; } };
   function historyHtml() {
     const H = S.hist || {};
-    if (H.items == null) return `<div class="cht-h-wait">${PM.loader.html({ size: 'md' })}</div>`;
+    if (H.items == null) return `<div class="cht-h-wait">${PM.skeleton.list(4)}</div>`;
     if (H.error) return `<div class="cht-empty"><p class="cht-err small" role="alert">${esc(H.error)} <button class="btn sm" type="button" data-act="hreload">${esc(t('fly_retry'))}</button></p></div>`;
     if (!H.items.length) return `<div class="cht-empty"><div class="cht-empty-ic">${icon('clock')}</div><p class="muted">${esc(t('cht_hist_empty'))}</p></div>`;
     return `<div class="cht-h-list">${H.items.map((x) => {
@@ -417,7 +417,7 @@
   }
   function threadRows() {
     const T = S.th; const items = T.items || [];
-    if (T.items == null) return `<div class="cht-h-wait">${PM.loader.html({ size: 'md' })}</div>`;
+    if (T.items == null) return `<div class="cht-h-wait">${PM.skeleton.list(4)}</div>`;
     if (T.error && !items.length) return `<div class="small muted th-none" role="alert">${esc(T.error)} <button class="btn sm" type="button" data-act="treload">${esc(t('fly_retry'))}</button></div>`;
     if (!items.length) return `<div class="small muted th-none">${esc(T.q ? t('th_no_match') : t('cht_hist_empty'))}</div>`;
     return items.map((x) => {

@@ -227,3 +227,14 @@ The Logs tab shows Type, Item, Status, Owner, Due date and Invoice amount by def
 
 ## Notification center
 A bell in the side menu (with an unread count, and a count badge on the phone menu button) replaces the top plan ribbon. `server/notifications.js` keeps one row per person, project and kind in `notifications` (migration 13). It covers late tasks and late payments per project and the plan state (trial days, 80 and 100 percent of tokens, trial or subscription ended, renewal within 3 days), using the same formulas as health and the Thinking Area suggestions. `GET /api/notifications` refreshes and lists, `POST /api/notifications/read` and `/dismiss` take an id or `all`. A dismissed notification returns only when its condition changes. If the table is missing (before Publish applies it) the list reports `available: false` and the old ribbon is shown instead, so the plan status is never hidden.
+
+## Speed settings
+
+Optional environment variables for the speed pass.
+
+CDN_URL: serve static files from a CDN origin. Pages, scripts and styles then load from that address.
+OTEL_EXPORTER_OTLP_ENDPOINT: send request traces to an OpenTelemetry collector. Without it, slow requests are only logged.
+SLOW_REQUEST_MS: requests slower than this are logged with their database timings.
+PG_STATEMENT_TIMEOUT_MS: stops database queries that run too long.
+
+Run `node scripts/speed-browser-check.js` for the browser speed checks. Use `BENCH_CPU=4 BENCH_LATENCY_MS=300 node scripts/perf-browser.js` to test a slow phone on a slow network.

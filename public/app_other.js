@@ -40,17 +40,17 @@
   // ================= Updates (inbox) =================
   // Messages and documents become suggested changes. The PM reviews each one and applies, edits or dismisses it.
   PM.views.tab_inbox = async function (root, p, q, token) {
-    let rows = (await api('GET', `/api/projects/${p.id}/inbox`)).inbox;
+    let rows;
     let filter = 'pending', src = 'all', view = 'updates', sh = { last: null, history: [], schedule: { mode: 'off', time: '08:00' }, next: null };
     const loadSync = async () => { try { sh = await api('GET', `/api/projects/${p.id}/sync-history`); } catch (e) { /* keep the last view */ } };
-    await loadSync();
+    rows = (await Promise.all([api('GET', `/api/projects/${p.id}/inbox`), loadSync()]))[0].inbox;
     const fdt = (iso) => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString(S.lang === 'ar' ? 'ar-AE' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' }); };
     const schedLabel = (s) => (s.mode === 'off' ? t('sh_f_off') : t('sh_s_' + s.mode, { time: s.time }));
     const SRC ={ teams: 'chat', email: 'mail', jira: 'jira', upload: 'file', manual: 'edit', meeting: 'mic' };
     const FIL = { pending: ['pending'], applied: ['applied', 'auto_applied'], other: ['dismissed', 'undone', 'no_action'] };
     const ACT = { update_task: 'cal', close_deliverable: 'check', milestone_invoiced: 'coin', milestone_paid: 'coin', flag_issue: 'alert', create_item: 'list', create_task: 'plus' };
     let guide = true; try { guide = localStorage.getItem('pm_upd_guide') !== 'off'; } catch (e) { /* storage blocked */ }
-    const reload = async () => { rows = (await api('GET', `/api/projects/${p.id}/inbox`)).inbox; await loadSync(); S.project = (await api('GET', `/api/projects/${p.id}`)).project; draw(); };
+    const reload = async () => { const [r, , pr] = await Promise.all([api('GET', `/api/projects/${p.id}/inbox`), loadSync(), api('GET', `/api/projects/${p.id}`)]); rows = r.inbox; S.project = pr.project; draw(); };
     const level = (c) => (c == null ? null : c >= 0.8 ? 'hi' : c >= 0.65 ? 'mid' : 'lo');
     const conf = (c) => (c == null ? '' : `<span class="conf ${level(c)}" data-tip="${esc(t('upd_conf_tip', { n: Math.round(c * 100) }))}">${t('upd_conf_' + level(c))} ${Math.round(c * 100)}%</span>`);
     const completes = (r) => !!(r.action && r.action.type === 'update_task' && r.action.progress >= 100);
@@ -651,7 +651,7 @@
       card.innerHTML = `<div class="card-head"><h3 class="tm-title">${t('team')}</h3><span class="chip" aria-label="${team.length}">${team.length}</span><span class="grow"></span><button type="button" class="btn sm" id="r_extract" data-tip="${esc(t('tx_tip'))}">${icon('spark')}${t('tx_btn')}</button><button type="button" class="btn sm primary" id="r_add">${icon('plus')}${t('tm_add')}</button></div>
         ${team.length ? `<div class="tm-search"><span class="tm-search-i">${icon('search')}</span><input type="search" id="tmQ" value="${esc(tmQ)}" placeholder="${esc(t('tm_search'))}" aria-label="${esc(t('tm_search'))}"></div><div id="tmList"></div>` : `<div class="empty small">${t('no_team')}</div>`}
         <div class="small muted mt">${t('team_hint')}</div>`;
-      if (team.length) { drawTeamList(); const q = $('#tmQ', card); q.oninput = () => { tmQ = q.value; tmPage = 1; drawTeamList(); }; }
+      if (team.length) { drawTeamList(); const q = $('#tmQ', card); q.oninput = PM.debounce(() => { tmQ = q.value; tmPage = 1; drawTeamList(); }, 160); }
       $('#r_add', card).onclick = () => personDialog(null);
       $('#r_extract', card).onclick = extractFromSchedule;
     }

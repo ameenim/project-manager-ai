@@ -148,6 +148,8 @@ table.t tr:last-child td { border-bottom: 0; } table.t tr:hover td { background:
 .quote { font-size: var(--fs-small); color: var(--muted); border-inline-start: 3px solid var(--border-strong); padding: 2px 10px; margin-top: 6px; font-style: italic; }
 .conf { font-size: var(--fs-micro); font-weight: 600; padding: 1px 7px; border-radius: var(--r-m); } .conf.hi { background: var(--success-soft); color: var(--success); } .conf.mid { background: var(--warning-soft); color: var(--warning); } .conf.lo { background: var(--danger-soft); color: var(--danger); }
 .list-item { display: flex; gap: 12px; padding: 12px 4px; border-bottom: 1px solid var(--border); align-items: flex-start; } .list-item:last-child { border-bottom: 0; }
+/* a long list does not draw or lay out the rows that are far off screen: only rows after the 24th are skipped, so short lists are untouched */
+.list-item:nth-child(n+25) { content-visibility: auto; contain-intrinsic-size: auto 64px; }
 .dropzone { border: 2px dashed var(--border-strong); border-radius: var(--radius); padding: 22px; text-align: center; color: var(--muted); cursor: pointer; transition: .15s; background: var(--surface-2); }
 .dropzone:hover, .dropzone.over { border-color: var(--primary); background: var(--primary-soft); color: var(--primary); }
 .filelist { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; } .filelist .fi { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--surface-2); border-radius: var(--r-s); font-size: var(--fs-body); }
@@ -1531,9 +1533,32 @@ body.ded-open { overflow: hidden; }
 @keyframes pmld-ripple { 0% { transform: scale(.45); opacity: .55; } 100% { transform: scale(1); opacity: 0; } }
 @keyframes pmld-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
 @keyframes pmld-soft { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+/* skeletons: quiet blocks in the shape of the page, with one soft sweep. Only transform moves. Reduced motion keeps them still. */
+.sk { position: relative; display: block; overflow: hidden; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; }
+.sk::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, var(--border), transparent); opacity: .7; transform: translateX(-100%); animation: sk-sweep 1.4s var(--ease) infinite; }
+[dir="rtl"] .sk::after { animation-name: sk-sweep-rtl; transform: translateX(100%); }
+@keyframes sk-sweep { to { transform: translateX(100%); } }
+@keyframes sk-sweep-rtl { to { transform: translateX(-100%); } }
+.sk-line { height: 12px; width: 50%; margin: 8px 0; border-radius: 6px; }
+.sk-line.s { width: 28%; } .sk-line.m { width: 46%; } .sk-line.l { width: 72%; } .sk-line.xl { width: 92%; }
+.sk-title { height: 24px; width: min(280px, 60%); margin-bottom: 18px; }
+.sk-metric { height: 28px; width: 38%; margin: 10px 0; }
+.sk-dot { width: 36px; height: 36px; border-radius: 50%; flex: none; }
+.sk-chip { width: 64px; height: 22px; border-radius: 20px; flex: none; }
+.sk-wrap { display: grid; gap: 4px; }
+.sk-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.sk-row:last-child { border-bottom: 0; }
+.sk-col { flex: 1; min-width: 0; } .sk-col .sk-line { margin: 6px 0; }
+.sk-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 16px; }
+.sk-card { overflow: hidden; }
+.sk-trow { display: grid; grid-template-columns: repeat(var(--cols, 4), 1fr); gap: 16px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.sk-trow .sk-line { width: 80%; margin: 6px 0; }
+.sk-thead .sk-line { width: 50%; }
+@media (prefers-reduced-motion: reduce) { .sk::after { animation: none; opacity: 0; } }
 /* the loading screen: centered on the whole window, everything behind it dimmed and blurred */
 .pmld-screen { position: fixed; inset: 0; z-index: 250; display: grid; place-items: center; padding: 20px; background: rgba(10, 16, 32, .55); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); opacity: 0; transition: opacity .2s var(--ease); }
 .pmld-screen.on { opacity: 1; }
+
 /* no box: the logo and circles sit straight on the dimmed page, so colors are the light ones that read on the dark scrim in both themes */
 .pmld-screen .pmld { --ring: rgba(255, 255, 255, .6); --dot1: var(--primary-600); --dot2: var(--violet); --dot3: var(--white); }
 .pmld-screen .pmld-ring { border-color: var(--ring); }

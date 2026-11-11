@@ -16,7 +16,7 @@
 
   PM.views.projects = async function () {
     S.project = null;
-    PM.shell('projects', `${PM.loader.html({ size: 'page' })}`);
+    PM.shell('projects', `${PM.skeleton.page()}`);
     await PM.loadProjects();
     PM.shell('projects', '');
     let mode = store.get('pm_proj_view', 'cards');
@@ -31,7 +31,7 @@
       return list;
     };
 
-    const card = (p) => `<a class="card pj-card" href="#/p/${p.id}/overview"><div class="row">${p.client_logo ? `<img src="${esc(p.client_logo)}" alt="" style="height:30px;max-width:90px;object-fit:contain">` : ''}<div class="grow" style="min-width:0"><h3>${esc(p.name)}</h3><div class="small muted">${esc(p.client || '')}</div></div>${PM.statusChip(p)}</div>
+    const card = (p) => `<a class="card pj-card" href="#/p/${p.id}/overview"><div class="row">${p.client_logo ? `<img loading="lazy" decoding="async" src="${esc(p.client_logo)}" alt="" style="height:30px;max-width:90px;object-fit:contain">` : ''}<div class="grow" style="min-width:0"><h3>${esc(p.name)}</h3><div class="small muted">${esc(p.client || '')}</div></div>${PM.statusChip(p)}</div>
       <div class="mt"><div class="row small"><span class="grow">${t('progress')} ${p.stats.progress}%</span><span class="muted">${p.value ? money(p.value, p.currency) : ''}</span></div><div class="progress" style="margin-top:6px"><i style="width:${p.stats.progress}%"></i></div></div>
       <div class="row small muted mt wrap"><span>${p.start_date || '?'} ${t('to')} ${p.end_date || '?'}</span>${p.stats.pendingItems + p.stats.pendingInbox ? `<span class="chip blue">${p.stats.pendingItems + p.stats.pendingInbox} ${t('to_review')}</span>` : ''}</div></a>`;
 
@@ -61,7 +61,7 @@
     $('#pjHealth').value = Q.health; $('#pjCur').value = Q.cur;
     $('#newProj').onclick = PM.newProjectDialog;
     $('#impProj').onclick = PM.data.importDialog;
-    $('#pjQ').oninput = (e) => { Q.q = e.target.value; draw(); };
+    $('#pjQ').oninput = PM.debounce((e) => { Q.q = e.target.value; draw(); }, 160);
     $('#pjHealth').onchange = (e) => { Q.health = e.target.value; draw(); };
     $('#pjCur').onchange = (e) => { Q.cur = e.target.value; draw(); };
     $$('#pjMode button').forEach((b) => (b.onclick = () => { mode = b.dataset.mode; store.set('pm_proj_view', mode); draw(); }));
@@ -76,7 +76,7 @@
 
   PM.views.calendar = async function () {
     const token = S.nav;
-    PM.shell('calendar', `${PM.loader.html({ size: 'page' })}`);
+    PM.shell('calendar', `${PM.skeleton.page()}`);
     let data;
     const load = async () => { data = await api('GET', '/api/calendar'); };
     await Promise.all([load(), PM.loadProjects()]);
@@ -264,7 +264,7 @@
     $('#calMonthPick').onchange = (e) => { const v = e.target.value; if (!/^\d{4}-\d{2}$/.test(v)) return; const ny = +v.slice(0, 4), nm = +v.slice(5) - 1; dir = (ny * 12 + nm) - (year * 12 + month); year = ny; month = nm; render(); };
     $$('.dd-btn').forEach((b) => (b.onclick = (e) => { e.stopPropagation(); toggleDd(b.parentElement); }));
     $$('.dd-pop').forEach((p) => p.addEventListener('click', (e) => e.stopPropagation()));
-    $('#ddProj .dd-search').oninput = refreshProjList;
+    $('#ddProj .dd-search').oninput = PM.debounce(refreshProjList, 160);
     $('#ddProjList').onchange = (e) => { const id = Number(e.target.dataset.p); if (!id) return; e.target.checked ? sel.add(id) : sel.delete(id); persist(); render(); };
     $('#ddProjList').onclick = (e) => { const b = e.target.closest('[data-only-p]'); if (!b) return; e.preventDefault(); sel.clear(); sel.add(Number(b.dataset.onlyP)); persist(); refreshProjList(); render(); };
     $('#ddTypeList').onchange = (e) => { const k = e.target.dataset.t; if (!k) return; e.target.checked ? types.add(k) : types.delete(k); persist(); render(); };

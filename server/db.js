@@ -439,12 +439,33 @@ const MIGRATIONS = [
   );
   CREATE INDEX IF NOT EXISTS password_resets_user_idx ON password_resets(user_id);
   `,
+  // 14: indexes for the lookups the app makes all the time. Only indexes are added, so nothing about the data changes.
+  // projects by owner, expired sessions (swept every hour), the chat log by time (admin usage and the 90 day purge),
+  // the error log by reference (a support ticket finds its server error), meeting audio by age (swept every six hours),
+  // and the projects that have an automatic sync turned on (the scheduler asks for them every minute and used to read
+  // every project to find them).
+  `
+  CREATE INDEX IF NOT EXISTS projects_owner_idx ON projects(owner_id);
+  CREATE INDEX IF NOT EXISTS sessions_expires_idx ON sessions(expires_at);
+  CREATE INDEX IF NOT EXISTS chat_log_time_idx ON chat_log(created_at);
+  CREATE INDEX IF NOT EXISTS error_log_ref_idx ON error_log(ref);
+  CREATE INDEX IF NOT EXISTS meeting_audio_created_idx ON meeting_audio(created_at);
+  CREATE INDEX IF NOT EXISTS projects_sync_idx ON projects ((data->'sync_cfg'->>'mode')) WHERE (data->'sync_cfg'->>'mode') IS NOT NULL;
+  `,
 ];
 
 async function openPg(url) {
   const { Pool, types } = require('pg');
   types.setTypeParser(20, (v) => Number(v)); // bigint ids fit safely in a JS number
-  const pool = new Pool({ connectionString: url, max: Number(process.env.PG_POOL_MAX) || 10, idleTimeoutMillis: 30000, connectionTimeoutMillis: 10000 });
+  // The pool is shared by every request. A statement that runs longer than PG_STATEMENT_TIMEOUT_MS (default 60 seconds) is
+  // stopped by the database, and a connection left idle inside a transaction is released after 30 seconds, so one stuck
+  // query cannot hold a connection and starve the rest. query_timeout is the same limit measured by the app, for a database
+  // that stops answering altogether.
+  const stmtMs = Number(process.env.PG_STATEMENT_TIMEOUT_MS) || 60000;
+  const pool = new Pool({
+    connectionString: url, max: Number(process.env.PG_POOL_MAX) || 10, idleTimeoutMillis: 30000, connectionTimeoutMillis: 10000,
+    statement_timeout: stmtMs, query_timeout: stmtMs + 5000, idle_in_transaction_session_timeout: 30000, keepAlive: true,
+  });
   pool.on('error', (e) => console.error('database pool error', e.message));
   return {
     kind: 'pg',
