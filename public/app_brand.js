@@ -1,32 +1,6 @@
 /* Brand kit view: logo versions for light and dark backgrounds, English and Arabic, plus the responsive logo. */
 (function () {
   const PM = window.PM;
-  Object.assign(PM.I18N.en, {
-    nav_brand: 'Brand kit', brand_title: 'Brand kit', brand_sub: 'Logo files for Project Manager AI. Choose the version that matches the background and the space.',
-    brand_full: 'Full logo', brand_full_hint: 'Use on websites, documents and presentations. The wordmark follows the language of the product.',
-    brand_on_light: 'Light background', brand_on_dark: 'Dark background', brand_en: 'English', brand_ar: 'Arabic',
-    brand_icon: 'App icon', brand_icon_hint: 'The mark works alone at small sizes. It is the favicon, the app icon and the avatar.',
-    brand_stacked: 'Stacked logo', brand_stacked_hint: 'Use on splash screens, covers and square spaces.',
-    brand_resp: 'Responsive logo', brand_resp_hint: 'The full logo switches to the mark when the space is narrower than 220 px. Drag the slider to try it.',
-    brand_width: 'Available width', brand_mode_full: 'Showing the full logo', brand_mode_mark: 'Showing the mark only',
-    brand_colors: 'Colors', brand_clear: 'Clear space and size', brand_clear_text: 'Keep a margin of one quarter of the mark height around the logo. Do not place text or edges inside it. The mark is never smaller than 16 px. The full logo is never narrower than 160 px.',
-    brand_files: 'Files', brand_file: 'File', brand_version: 'Version', brand_copy: 'Copy SVG', brand_copied: 'SVG copied', brand_copy_fail: 'Copy is not available here. Select the logo file from the list and copy it from there.',
-    brand_png: 'PNG, 2000 px wide', brand_png_mark: 'PNG, 512 px',
-    brand_c_blue: 'Brand blue', brand_c_violet: 'Brand violet', brand_c_ai_light: 'AI accent on light', brand_c_ai_dark: 'AI accent on dark', brand_c_ink: 'Ink', brand_c_night: 'Night',
-  });
-  Object.assign(PM.I18N.ar, {
-    nav_brand: 'هوية العلامة', brand_title: 'هوية العلامة', brand_sub: 'ملفات شعار مدير المشاريع الذكي. اختر النسخة التي تناسب الخلفية والمساحة.',
-    brand_full: 'الشعار الكامل', brand_full_hint: 'للمواقع والمستندات والعروض. تتبع الكلمة لغة المنتج.',
-    brand_on_light: 'خلفية فاتحة', brand_on_dark: 'خلفية داكنة', brand_en: 'الإنجليزية', brand_ar: 'العربية',
-    brand_icon: 'أيقونة التطبيق', brand_icon_hint: 'تعمل العلامة وحدها بالأحجام الصغيرة. وهي أيقونة المتصفح وأيقونة التطبيق والصورة الرمزية.',
-    brand_stacked: 'الشعار العمودي', brand_stacked_hint: 'لشاشات البداية والأغلفة والمساحات المربعة.',
-    brand_resp: 'الشعار المتجاوب', brand_resp_hint: 'يتحول الشعار الكامل إلى العلامة وحدها عندما تقل المساحة عن 220 بكسل. حرّك المؤشر لتجربته.',
-    brand_width: 'العرض المتاح', brand_mode_full: 'يظهر الشعار الكامل', brand_mode_mark: 'تظهر العلامة وحدها',
-    brand_colors: 'الألوان', brand_clear: 'المساحة الحرة والحجم', brand_clear_text: 'اترك هامشا يساوي ربع ارتفاع العلامة حول الشعار. لا تضع نصا أو حافة داخله. لا يقل حجم العلامة عن 16 بكسل، ولا يقل عرض الشعار الكامل عن 160 بكسل.',
-    brand_files: 'الملفات', brand_file: 'الملف', brand_version: 'النسخة', brand_copy: 'نسخ SVG', brand_copied: 'تم نسخ SVG', brand_copy_fail: 'النسخ غير متاح هنا. اختر ملف الشعار من القائمة وانسخه منه.',
-    brand_png: 'PNG بعرض 2000 بكسل', brand_png_mark: 'PNG بعرض 512 بكسل',
-    brand_c_blue: 'الأزرق', brand_c_violet: 'البنفسجي', brand_c_ai_light: 'لون الذكاء على الفاتح', brand_c_ai_dark: 'لون الذكاء على الداكن', brand_c_ink: 'الحبر', brand_c_night: 'الليل',
-  });
 
   const SWATCHES = [['brand_c_blue', '#3B82F6'], ['brand_c_violet', '#8B5CF6'], ['brand_c_ai_light', '#7C3AED'], ['brand_c_ai_dark', '#A78BFA'], ['brand_c_ink', '#10172B'], ['brand_c_night', '#0B1020']];
   const THRESHOLD = 220;

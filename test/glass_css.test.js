@@ -38,3 +38,13 @@ test('glass has fallbacks and the live background honors accessibility settings'
   assert.ok(/prefers-reduced-motion/.test(js), 'reduced motion draws a still frame');
   assert.ok(/visibilitychange/.test(js), 'pauses when the tab is hidden');
 });
+
+test('text for lazy screens loads with the page so headers never show raw keys', () => {
+  const html = pub('app.html');
+  assert.ok(/<script src="i18n_lazy\.js"><\/script>/.test(html), 'app.html loads i18n_lazy.js');
+  for (const f of ['app_closure.js', 'app_meetings.js', 'app_brand.js']) {
+    assert.ok(!/Object\.assign\(PM\.I18N\.(en|ar),/.test(pub(f)), f + ' keeps no dictionary of its own');
+  }
+  const dict = pub('i18n_lazy.js');
+  for (const k of ['tab_meetings', 'tab_closure', 'pc_closed', 'cl_banner_head', 'cl_banner_go']) assert.ok(new RegExp('\\b' + k + ':').test(dict), k + ' is defined up front');
+});

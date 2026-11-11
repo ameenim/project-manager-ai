@@ -16,7 +16,9 @@ body { background: transparent; }
 @media (min-width: 821px) {
   .shell { gap: 12px; padding: 12px; }
   .sidebar { border: 1px solid var(--glass-line); border-radius: var(--r-l); }
-  .proj-head { border: 1px solid var(--glass-line); border-radius: var(--r-l); }
+  .proj-head { border: 1px solid var(--glass-line); border-radius: var(--r-l); width: min(1280px, 100% - 56px); margin-inline: auto; overflow: hidden; flex: none; }
+  .main:has(.page.wide) .proj-head { width: calc(100% - 56px); }
+  .proj-head .cl-head-note { margin-block: 12px; }
 }
 .nav a.active { background: var(--glass-dense); font-weight: 700; }
 .nav > .ui-ind { background: var(--glass-dense); box-shadow: var(--glass-shadow); }
