@@ -113,9 +113,26 @@
     if (S.token) init.headers.Authorization = `Bearer ${S.token}`;
     if (body instanceof FormData) init.body = body;
     else if (body !== undefined) { init.headers['content-type'] = 'application/json'; init.body = JSON.stringify(body); }
+    // A dropped connection (a server that was asleep or restarting, an idle connection the host closed) fails once and works
+    // a moment later, so a read is tried up to three times and a change twice. A change carries a request id, so if the
+    // first try did reach the server it is not done twice.
+    const isRead = method === 'GET' || method === 'HEAD';
+    if (!isRead) init.headers['X-Request-Id'] = (window.crypto && crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2, 12) + '0000'));
+    const tries = isRead ? 3 : 2;
     let r;
     const t0 = performance.now();
-    try { r = await fetch(path, init); } catch { if (PM.tickets) PM.tickets.note(method, path, 0, '', t('err_network')); if (PM.track) PM.track.call(path, performance.now() - t0, false); throw new Error(t('err_network')); }
+    for (let n = 1; ; n++) {
+      try {
+        r = await fetch(path, init);
+        if (n < tries && (r.status === 502 || r.status === 503 || r.status === 504)) { await new Promise((ok) => setTimeout(ok, 400 * n * n)); continue; }
+        break;
+      } catch {
+        if (n < tries) { await new Promise((ok) => setTimeout(ok, 400 * n * n)); continue; }
+        if (PM.tickets) PM.tickets.note(method, path, 0, '', t('err_network'));
+        if (PM.track) PM.track.call(path, performance.now() - t0, false);
+        throw new Error(t('err_network'));
+      }
+    }
     let data = null;
     try { data = await r.json(); } catch { /* not json */ }
     if (PM.track) PM.track.call(path, performance.now() - t0, r.ok || r.status === 401 || (r.status >= 400 && r.status < 500 && r.status !== 429));

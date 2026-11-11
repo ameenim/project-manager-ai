@@ -64,3 +64,24 @@ test('downloads cannot be used with another account token', async () => {
   assert.equal((await s.call('GET', `/api/projects/${p.id}/schedule/export?format=csv`, null, b.token)).status, 404);
   assert.equal((await s.call('GET', `/api/projects/${p.id}/schedule/export?format=csv`)).status, 401);
 });
+
+test('a change sent again with the same request id is done once', async () => {
+  const u = await s.user();
+  const id = 'retry-test-' + Date.now();
+  const send = () => { const fd = new FormData(); fd.append('name', 'Retry once'); return s.call('POST', '/api/projects', fd, u.token, { 'x-request-id': id }); };
+  const a = await send();
+  const b = await send();
+  assert.equal(a.status, b.status);
+  const list = (await s.call('GET', '/api/projects', null, u.token)).data;
+  const n = (list.projects || list).filter((p) => p.name === 'Retry once').length;
+  assert.equal(n, 1, 'the second try must not create a second project');
+  const fd2 = new FormData(); fd2.append('name', 'Retry once');
+  const c = await s.call('POST', '/api/projects', fd2, u.token, { 'x-request-id': id + '-other' });
+  assert.equal(c.status, a.status);
+  const again = (await s.call('GET', '/api/projects', null, u.token)).data;
+  assert.equal((again.projects || again).filter((p) => p.name === 'Retry once').length, 2, 'a different id is a different change');
+});
+test('idle connections stay open longer than the host keeps them', () => {
+  assert.ok(s.app.server.keepAliveTimeout >= 600e3);
+  assert.ok(s.app.server.headersTimeout > s.app.server.keepAliveTimeout);
+});

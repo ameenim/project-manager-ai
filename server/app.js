@@ -372,6 +372,37 @@ async function createApp(opts = {}) {
     return sendBytes(req, res, { key: file, buf: a.buf, type: TYPES[ext] || 'application/octet-stream', etag: a.etag, cache: versioned ? 'public, max-age=31536000, immutable' : 'no-cache', compressible: COMPRESS.has(ext) });
   }
 
+  // A change sent from the browser carries a request id. If the connection drops after the server did the work, the browser
+  // sends the same change again with the same id, and the server answers with the first result instead of doing it twice.
+  const IDEM_MS = 120e3, IDEM_MAX_BYTES = 1024 * 1024, idem = new Map();   // key to { at, done: promise of the saved answer or null }
+  setInterval(() => { const n = Date.now(); for (const [k, v] of idem) if (n - v.at > IDEM_MS) idem.delete(k); }, 30e3).unref();
+  async function idempotent(req, res, url, run) {
+    const id = String(req.headers['x-request-id'] || '');
+    if (req.method === 'GET' || req.method === 'HEAD' || !/^[\w-]{8,64}$/.test(id)) return run();
+    const key = id + '|' + String(req.headers.authorization || '');
+    const prior = idem.get(key);
+    if (prior) {
+      const r = await prior.done;
+      if (r) { res.writeHead(r.status, r.headers); return res.end(r.body); }
+      return run();
+    }
+    let settle; const entry = { at: Date.now(), done: new Promise((ok) => { settle = ok; }) };
+    idem.set(key, entry);
+    const forgetIt = () => { if (idem.get(key) === entry) idem.delete(key); settle(null); };
+    let status = 0, headers = null, size = 0, keep = true; const chunks = [];
+    const wh = res.writeHead.bind(res), wr = res.write.bind(res), en = res.end.bind(res);
+    const grab = (c) => { if (c == null || typeof c === 'function') return; const b = Buffer.isBuffer(c) ? c : Buffer.from(c); size += b.length; if (size > IDEM_MAX_BYTES) keep = false; else chunks.push(b); };
+    res.writeHead = (s, h, ...rest) => { status = s; headers = h && typeof h === 'object' ? { ...h } : null; if (!headers || !/json/i.test(String(headers['Content-Type'] || '')) || s >= 500) keep = false; return wh(s, h, ...rest); };
+    res.write = (c, ...rest) => { grab(c); return wr(c, ...rest); };
+    res.end = (c, ...rest) => {
+      grab(c);
+      if (keep && status) { settle({ status, headers, body: Buffer.concat(chunks) }); } else forgetIt();
+      return en(c, ...rest);
+    };
+    res.on('close', () => { if (!res.writableEnded) forgetIt(); });
+    try { return await run(); } catch (e) { forgetIt(); throw e; }
+  }
+
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     ops.counters.requests++;
@@ -379,7 +410,7 @@ async function createApp(opts = {}) {
       if (url.pathname === '/healthz') { await db.query('SELECT 1'); return json(res, 200, { ok: true, version: PKG.version, started: STARTED, admin: true }); }
       if (req.method === 'GET' && url.pathname === '/srv/ai/status') return json(res, 200, { configured: !!process.env.ANTHROPIC_API_KEY, model: MODEL });
       if (req.method === 'GET' && /^\/oauth\/callback\/(jira|outlook)$/.test(url.pathname)) return await oauthCallback(req, res, url);
-      if (url.pathname.startsWith('/api/')) return await handleApi(req, res, url);
+      if (url.pathname.startsWith('/api/')) return await idempotent(req, res, url, () => handleApi(req, res, url));
       return await serveStatic(req, res, url);
     } catch (e) {
       const status = e.status && e.status >= 400 && e.status < 600 ? e.status : 500;
@@ -388,9 +419,11 @@ async function createApp(opts = {}) {
       res.end();
     }
   });
+  // Cloud Run and Replit keep idle connections open for several minutes. If this server closes an idle connection first,
+  // the browser's next request on it fails with "Cannot reach the server", so this server must be the last to let go.
   server.requestTimeout = 5 * 60e3;
-  server.headersTimeout = 30e3;
-  server.keepAliveTimeout = 65e3;
+  server.keepAliveTimeout = 650e3;
+  server.headersTimeout = 660e3;
 
   async function close() {
     snapTimers.forEach((x) => { clearTimeout(x); clearInterval(x); });
