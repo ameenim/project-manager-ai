@@ -212,9 +212,14 @@
     try {
       const q = new URLSearchParams({ screen: S.ctx.screen }); if (S.ctx.projectId) q.set('project_id', S.ctx.projectId);
       const d = await PM.api('GET', '/api/chat?' + q);
-      S.data = d; S.msgs = d.messages.slice();
+      S.data = d; S.msgs = d.messages.slice(); S.loadError = ''; S.loadTries = 0;
       await loadSug();
-    } catch (e) { S.data = { suggestions: [], capabilities: '', ai: true, can_write: true, project: null }; S.msgs = []; S.loadError = e.message; }
+    } catch (e) {
+      // keep the conversation already on screen, show what failed with a way to try again, and try once more by itself
+      if (!S.data) { S.data = { suggestions: [], capabilities: '', ai: true, can_write: true, project: null }; S.msgs = []; }
+      S.loadError = e.message || t('err_network');
+      if ((S.loadTries = (S.loadTries || 0) + 1) <= 2) setTimeout(() => { if (S.loadError && !S.busy) load(); }, 2500 * S.loadTries);
+    }
     paint(true);
   }
 
@@ -306,13 +311,13 @@
     const sug = (d.suggestions || []).map((s) => `<button class="btn sm cht-sug" type="button" data-act="sug" data-q="${esc(s)}">${esc(s)}</button>`).join('');
     const b = d.brief || [];
     const brief = d.brief ? `<div class="cht-brief"><div class="small muted">${esc(t('cht_brief_h'))}</div>${b.length ? b.map((x) => `<button class="cht-tile" type="button" data-act="sug" data-q="${esc(t('cht_q_' + x.key))}"><b>${esc(String(x.n))}</b><span>${esc(t('cht_b_' + x.key, { n: '' }).trim())}</span></button>`).join('') : `<div class="small muted">${esc(t('cht_brief_clear'))}</div>`}</div>` : '';
-    return `<div class="cht-empty"><div class="cht-empty-ic">${icon('spark')}</div><h3>${esc(t('cht_empty_title'))}</h3><p class="muted">${esc(d.capabilities || '')}</p>${S.loadError ? `<p class="cht-err small" role="alert">${esc(S.loadError)}</p>` : ''}${proact()}${brief}${starters}${sug ? `<div class="small muted cht-quick">${esc(t('th_quick'))}</div>` : ''}<div class="cht-sugs">${sug}</div></div>`;
+    return `<div class="cht-empty"><div class="cht-empty-ic">${icon('spark')}</div><h3>${esc(t('cht_empty_title'))}</h3><p class="muted">${esc(d.capabilities || '')}</p>${S.loadError ? `<p class="cht-err small" role="alert">${esc(S.loadError)} <button class="btn sm" type="button" data-act="reload">${esc(t('fly_retry'))}</button></p>` : ''}${proact()}${brief}${starters}${sug ? `<div class="small muted cht-quick">${esc(t('th_quick'))}</div>` : ''}<div class="cht-sugs">${sug}</div></div>`;
   }
   const when = (x) => { try { return new Date(x).toLocaleString(PM.state.lang === 'ar' ? 'ar' : 'en', { dateStyle: 'medium', timeStyle: 'short' }); } catch (e) { return ''; } };
   function historyHtml() {
     const H = S.hist || {};
     if (H.items == null) return `<div class="cht-h-wait">${PM.loader.html({ size: 'md' })}</div>`;
-    if (H.error) return `<div class="cht-empty"><p class="cht-err small" role="alert">${esc(H.error)}</p></div>`;
+    if (H.error) return `<div class="cht-empty"><p class="cht-err small" role="alert">${esc(H.error)} <button class="btn sm" type="button" data-act="hreload">${esc(t('fly_retry'))}</button></p></div>`;
     if (!H.items.length) return `<div class="cht-empty"><div class="cht-empty-ic">${icon('clock')}</div><p class="muted">${esc(t('cht_hist_empty'))}</p></div>`;
     return `<div class="cht-h-list">${H.items.map((x) => {
       const sure = H.confirm === x.id;
@@ -406,13 +411,14 @@
   async function loadThreads() {
     try {
       const q = new URLSearchParams(); if (S.ctx.projectId) q.set('project_id', S.ctx.projectId); if (S.th.q) q.set('q', S.th.q);
-      S.th.items = (await PM.api('GET', '/api/chat/history?' + q)).items;
-    } catch (e) { S.th.items = S.th.items || []; S.th.error = t('cht_hist_fail'); }
+      S.th.items = (await PM.api('GET', '/api/chat/history?' + q)).items; S.th.error = '';
+    } catch (e) { S.th.items = S.th.items || []; S.th.error = t('cht_hist_fail'); if (!S.th.retried) { S.th.retried = true; setTimeout(() => { S.th.retried = false; if (S.th.error) loadThreads(); }, 3000); } }
     if (S.page) { const th = $q('#chtThreads'); if (th && !th.contains(document.activeElement)) th.innerHTML = threadsHtml(); else if (th) { const l = th.querySelector('.th-list'); if (l) l.innerHTML = threadRows(); } }
   }
   function threadRows() {
     const T = S.th; const items = T.items || [];
     if (T.items == null) return `<div class="cht-h-wait">${PM.loader.html({ size: 'md' })}</div>`;
+    if (T.error && !items.length) return `<div class="small muted th-none" role="alert">${esc(T.error)} <button class="btn sm" type="button" data-act="treload">${esc(t('fly_retry'))}</button></div>`;
     if (!items.length) return `<div class="small muted th-none">${esc(T.q ? t('th_no_match') : t('cht_hist_empty'))}</div>`;
     return items.map((x) => {
       const sure = T.confirm === x.id;
@@ -639,6 +645,9 @@
     const act = el.dataset.act; const id = el.dataset.id;
     if (act === 'nav') { if (window.matchMedia('(max-width: 600px)').matches) close(); return; }
     if (act === 'close') return close();
+    if (act === 'reload') { S.loadTries = 0; return load(); }
+    if (act === 'treload') return loadThreads();
+    if (act === 'hreload') return showHistory();
     if (act === 'hist') return S.mode === 'history' ? (S.needReload ? (S.needReload = false, S.mode = 'chat', load()) : backToChat()) : showHistory();
     if (act === 'expand') { location.hash = S.ctx.projectId ? `#/p/${S.ctx.projectId}/thinking` : '#/thinking'; return; }
     if (act === 'collapse') { const to = S.ctx.projectId ? `#/p/${S.ctx.projectId}/overview` : '#/'; location.hash = to; setTimeout(() => { if (!S.page) open(); }, 80); return; }

@@ -130,7 +130,7 @@
         if (n < tries) { await new Promise((ok) => setTimeout(ok, 400 * n * n)); continue; }
         if (PM.tickets) PM.tickets.note(method, path, 0, '', t('err_network'));
         if (PM.track) PM.track.call(path, performance.now() - t0, false);
-        throw new Error(t('err_network'));
+        throw Object.assign(new Error(t('err_network')), { network: true });
       }
     }
     let data = null;
@@ -307,7 +307,7 @@
   // Projects pop up and the next screen ask again instead of showing "No projects yet" until the page is reloaded.
   async function loadProjects() {
     try { S.projects = (await api('GET', '/api/projects')).projects; S.projectsOk = true; S.projectsAt = Date.now(); return true; }
-    catch { S.projectsOk = false; return false; }
+    catch (e) { S.projectsOk = false; if (S.projectsAt === undefined) throw e; return false; }
   }
   function shell(active, content, projHead) {
     $('#app').innerHTML = `${PM.billing ? PM.billing.ribbon() : ''}<div class="shell"><aside class="sidebar"><div class="brand"><div class="logo">${PM.logo.mark()}</div><span class="grow">${t('app_name')}</span><button class="btn ghost icon sm" id="navHide" type="button" aria-label="${t('nav_hide')}" title="${t('nav_hide')}">${icon('chev_l')}</button></div>
@@ -358,8 +358,8 @@
     fly.innerHTML = `<div class="fly-head">${t('fly_title')}</div><div class="fly-list"></div><div class="fly-foot"><a href="#/projects">${t('fly_all')}</a></div>`;
     const listEl = $('.fly-list', fly);
     const paint = () => { listEl.innerHTML = listHtml(); };
-    const refresh = async () => { if (S.projectsOk === false || S.projectsAt === undefined || Date.now() - S.projectsAt > 15000) { await loadProjects(); if (fly.isConnected) { paint(); if (fly.classList.contains('on')) place(); } } };
-    listEl.addEventListener('click', (e) => { if (e.target.closest('.fly-retry')) { e.preventDefault(); e.stopPropagation(); loadProjects().then(() => { paint(); place(); }); } });
+    const refresh = async () => { if (S.projectsOk === false || S.projectsAt === undefined || Date.now() - S.projectsAt > 15000) { await loadProjects().catch(() => {}); if (fly.isConnected) { paint(); if (fly.classList.contains('on')) place(); } } };
+    listEl.addEventListener('click', (e) => { if (e.target.closest('.fly-retry')) { e.preventDefault(); e.stopPropagation(); loadProjects().catch(() => {}).then(() => { paint(); place(); }); } });
     paint();
     document.body.appendChild(fly);
     let timer;
@@ -539,19 +539,48 @@
   PM.stale = (token) => token !== S.nav;
 
   // ---------- router ----------
+  // ---------- a screen that could not load ----------
+  // Any screen whose data cannot be read shows what went wrong and a Try again button in place, and tries again by itself
+  // when the browser comes back online or the tab is shown again, so nothing stays blank until the page is reloaded.
+  let routeRun = 0, failed = null;
+  const failText = (e) => (e && e.message) || t('err_network');
+  function viewFail(e) {
+    console.error(e);
+    failed = 'view';
+    if (!$('#content')) shell('', '');
+    const host = $('#content'); if (!host) return;
+    host.innerHTML = `<div class="page"><div class="card empty" role="alert"><div class="big">${icon('alert')}</div><p>${esc(failText(e))}</p><div style="margin-top:12px"><button class="btn primary" id="ldRetry" type="button">${t('fly_retry')}</button>${PM.tickets && !(e && e.network) ? ` <button class="btn" id="spRep" type="button">${t('sp_report_problem')}</button>` : ''}</div></div></div>`;
+    const b = $('#ldRetry'); if (b) b.onclick = () => { b.disabled = true; route(); };
+    const rb = $('#spRep'); if (rb) rb.onclick = () => PM.tickets.open();
+  }
+  function bootFail(e) {
+    console.error(e);
+    failed = 'boot';
+    $('#app').innerHTML = `<div class="auth"><div class="card" role="alert"><div class="brand" style="padding-inline:0"><div class="logo">${PM.logo.mark()}</div><span>${t('app_name')}</span></div><h2 style="margin:6px 0 4px">${esc(failText(e))}</h2><p class="muted" style="margin:0 0 16px">${t('ld_failed_sub')}</p><button class="btn primary" id="ldRetry" type="button" style="justify-content:center">${t('fly_retry')}</button></div></div>`;
+    $('#ldRetry').onclick = () => route();
+  }
+  const retryFailed = () => { if (failed && S.token && !document.hidden) route(); };
+  window.addEventListener('online', retryFailed);
+  document.addEventListener('visibilitychange', retryFailed);
   async function route() {
     const soft = S.soft; S.soft = false;
+    const mine = ++routeRun;
     applyPrefs();
     const h = location.hash.replace(/^#/, '') || '/';
     const [pathPart, qs] = h.split('?');
     const parts = pathPart.split('/').filter(Boolean);
     if (!S.token) { location.replace('index.html'); return; }
     if (!S.user) {
-      try { const r = await api('GET', '/api/me'); setUser(r.user); S.status = r.status; } catch { return; }
+      try { const r = await api('GET', '/api/me'); setUser(r.user); S.status = r.status; } catch (e) { if (S.token && mine === routeRun) bootFail(e); return; }
     }
     if (parts[0] === 'login' || parts[0] === 'register') { location.hash = '#/'; return; }
     if (PM.onboard) PM.onboard.gate();
     S.nav++;
+    failed = null;
+    try { return await dispatch(parts, qs, soft); }
+    catch (e) { if (mine === routeRun && S.token) viewFail(e); }
+  }
+  async function dispatch(parts, qs, soft) {
     if (!parts.length) return PM.views.dashboard();
     if (parts[0] === 'billing') { S.project = null; return PM.views.billing(); }
     if (parts[0] === 'support') { S.project = null; return PM.views.support(parts[1] ? Number(parts[1]) : null); }

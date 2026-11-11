@@ -54,6 +54,8 @@
       const off = !S.ok;
       if (off !== wasOff()) { flag(off); if (PM.billing) PM.billing.refresh(); }
     } catch (e) {
+      // the server could not be reached: keep what the bell already showed and ask again soon, never mark the center as off
+      if (e && e.network) { S.at = Date.now() - 20000; paintBell(); if (pop) paintPop(); return; }
       // the center answered with an error or does not exist (a demo, or a release without it): keep the plan ribbon
       S.ok = false; S.items = []; S.unread = 0;
       if (!wasOff()) { flag(true); if (PM.billing) PM.billing.refresh(); }
