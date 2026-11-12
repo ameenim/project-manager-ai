@@ -64,3 +64,11 @@ test('project tabs center the active tab only when it changes, so a swipe is nev
   const js = pub('ui.js');
   assert.ok(/dataset\.centered/.test(js) && /changed &&/.test(js), 'centering is skipped when the active tab is the same');
 });
+
+test('refraction is Chromium only, off for reduced transparency and data saver, and the plain glass stays underneath', () => {
+  const js = pub('glass-refract.js'), css = pub('glass.css'), html = pub('app.html');
+  assert.ok(/Chromium/.test(js) && /prefers-reduced-transparency/.test(js) && /saveData/.test(js), 'gated on browser and user settings');
+  assert.ok(/html\.refract \.nav-fab/.test(css) && /html\.refract \.cht-fab/.test(css) && /html\.refract \.proj-head \.tabs > \.ui-ind/.test(css), 'only applied under the refract class');
+  assert.ok(/glass-refract\.js/.test(html), 'app.html loads glass-refract.js');
+  assert.ok(!/#[0-9a-f]{3,8}\b/i.test(css.replace(/\/\*[\s\S]*?\*\//g, '')), 'no hex colors in glass.css');
+});

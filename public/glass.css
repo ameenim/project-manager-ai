@@ -134,3 +134,13 @@ body { background: transparent; }
 @media (prefers-reduced-motion: reduce) {
   .btn:active, .sug-chip:active, .dw-chip:active, .cal-tog:active, .nav-fab:active, .cht-fab:active { transform: none; }
 }
+
+
+/* refraction on Chromium: the page bends at the rim of the three floating controls, a lit edge and a soft inner glow sell the glass */
+@media (max-width: 820px) {
+  html.refract .nav-fab, html.refract .cht-fab { -webkit-backdrop-filter: url(#pm-rf-round) blur(calc(var(--glass-blur) * .08)) saturate(var(--glass-sat)); backdrop-filter: url(#pm-rf-round) blur(calc(var(--glass-blur) * .08)) saturate(var(--glass-sat)); }
+  html.refract .nav-fab { background: color-mix(in srgb, var(--glass-chrome) 62%, transparent); box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-rim), inset 0 0 14px var(--glass-line); }
+  html.refract .cht-fab { background: color-mix(in srgb, var(--primary) 84%, transparent); box-shadow: var(--glass-shadow-lift), inset 0 1px 0 var(--glass-rim), inset 0 0 16px var(--glass-line); }
+  html.refract .proj-head .tabs > .ui-ind { -webkit-backdrop-filter: url(#pm-rf-wide) blur(calc(var(--glass-blur) * .06)) saturate(var(--glass-sat)); backdrop-filter: url(#pm-rf-wide) blur(calc(var(--glass-blur) * .06)) saturate(var(--glass-sat));
+    background: color-mix(in srgb, var(--glass-dense) 62%, transparent); box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-rim), inset 0 0 10px var(--glass-line); }
+}
