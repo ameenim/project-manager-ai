@@ -72,3 +72,13 @@ test('refraction is Chromium only, off for reduced transparency and data saver, 
   assert.ok(/glass-refract\.js/.test(html), 'app.html loads glass-refract.js');
   assert.ok(!/#[0-9a-f]{3,8}\b/i.test(css.replace(/\/\*[\s\S]*?\*\//g, '')), 'no hex colors in glass.css');
 });
+
+test('phone layout: header collapses to the tab bar, tables become cards, Logs filters fold away, settings rows stack', () => {
+  const css = pub('styles.css'), ui = pub('ui.js'), logs = pub('app_logs.js');
+  assert.ok(/--ph-up/.test(css) && /ph-stuck/.test(ui) && /--ph-up/.test(ui), 'project header scrolls away above the pinned tabs');
+  assert.ok(/function labelTables/.test(ui) && /data-label/.test(ui), 'table cells carry their column name');
+  assert.ok(/td::before \{ content: attr\(data-label\)/.test(css), 'cells show the column name in card mode');
+  assert.ok(/id="lgFt"/.test(logs) && /\.lg-filters:not\(\.open\)/.test(css), 'Logs filters open from a button on phones');
+  assert.ok(/body\.chat-page \.proj-head/.test(css), 'the Thinking tab frees the room above the chat');
+  assert.ok(/\[style\*="width:160px"\]/.test(css), 'settings logo block stacks above the form');
+});

@@ -2065,3 +2065,60 @@ input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 4px color-mix(in s
 .cht-panel.full.page { inset: auto; }
 body.chat-full { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) { .cht-panel.full { transition: none; } }
+
+
+/* ===== phones: roomy header, card tables, collapsible filters ===== */
+.lg-ftoggle { display: none; }
+@media (max-width: 820px) {
+  /* everything above the tabs scrolls away, the tab bar stays pinned (ui.js sets --ph-up) */
+  .proj-head { top: calc(var(--ph-up, 0px) * -1); }
+  html.ph-stuck .proj-head .tabs { margin-inline-start: 50px; }
+  /* the Thinking tab already names the project in its own header, so the chat gets the room */
+  body.chat-page .proj-head > *:not(.tabs):not(.banner) { display: none; }
+  body.chat-page .proj-head { padding-top: 56px; }
+}
+@media (max-width: 700px) {
+  /* a table becomes a stack of cards, each cell shows its column name (ui.js writes data-label) */
+  .page table.t:not(.lg-t):not(.keep-table), .page table.t:not(.lg-t):not(.keep-table) tbody { display: block; width: 100%; }
+  .page table.t:not(.lg-t):not(.keep-table) thead { display: none; }
+  .page table.t:not(.lg-t):not(.keep-table) tbody { display: grid; gap: 10px; }
+  .page table.t:not(.lg-t):not(.keep-table) tr { display: grid; gap: 6px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--r-m); background: var(--glass-nest); min-width: 0; }
+  .page table.t:not(.lg-t):not(.keep-table) td { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 0; border: 0; white-space: normal; text-align: start; min-width: 0; overflow-wrap: anywhere; }
+  .page table.t:not(.lg-t):not(.keep-table) td::before { content: attr(data-label); flex: 0 0 34%; max-width: 34%; color: var(--muted); font-size: var(--fs-small); font-weight: 600; }
+  .page table.t:not(.lg-t):not(.keep-table) td:not([data-label])::before, .page table.t:not(.lg-t):not(.keep-table) td:first-child::before { display: none; }
+  .page table.t:not(.lg-t):not(.keep-table) td:first-child { display: block; font-size: var(--fs-body); }
+  .page table.t:not(.lg-t):not(.keep-table) td.right, .page table.t:not(.lg-t):not(.keep-table) td.nowrap.right { justify-content: flex-start; gap: 8px; padding-top: 4px; border-top: 1px solid var(--glass-hair); }
+  .page table.t:not(.lg-t):not(.keep-table) td.right select { width: 100% !important; max-width: none; flex: 1 1 100%; }
+  .page table.t:not(.lg-t):not(.keep-table) tr:hover td { background: none; }
+
+  /* Logs: the same card layout, the sort buttons stay as a row of chips */
+  .lg-card .table-wrap { overflow: visible; }
+  .page table.lg-t, .page table.lg-t tbody { display: block; width: 100%; }
+  .page table.lg-t thead { display: block; padding: 10px 12px 4px; position: static; }
+  .page table.lg-t thead tr { display: flex; flex-wrap: wrap; gap: 6px; }
+  .page table.lg-t th { display: none; position: static; padding: 0; border: 0; background: none; box-shadow: none; }
+  .page table.lg-t th:has(.lg-sort) { display: inline-flex; }
+  .page table.lg-t .lg-sort { min-height: 36px; padding: 0 12px; border: 1px solid var(--border-strong); border-radius: var(--r-pill); background: var(--surface); }
+  .page table.lg-t tbody { display: grid; gap: 10px; padding: 8px 12px 12px; }
+  .page table.lg-t tbody tr { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--r-m); background: var(--glass-nest); min-width: 0; }
+  .page table.lg-t td { text-align: start; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 0; border: 0; min-width: 0; white-space: normal; overflow-wrap: anywhere; position: static; box-shadow: none; background: none; }
+  .page table.lg-t td::before { content: attr(data-label); flex: 0 0 34%; max-width: 34%; color: var(--muted); font-size: var(--fs-small); font-weight: 600; }
+  .page table.lg-t td:not([data-label])::before, .page table.lg-t td.lg-item::before, .page table.lg-t td:has(.lg-item)::before, .page table.lg-t td.lg-acts::before { display: none; }
+  .page table.lg-t td.lg-item, .page table.lg-t td:has(.lg-item) { order: -1; display: block; }
+  .page table.lg-t .lg-item { min-width: 0; max-width: none; }
+  .page table.lg-t td.lg-acts { order: 99; width: auto; min-width: 0; padding-top: 8px; border-top: 1px solid var(--glass-hair); }
+  .page table.lg-t .lg-acts .row { flex-wrap: wrap; justify-content: flex-start; gap: 8px; }
+  .page table.lg-t tbody tr:hover td, .page table.lg-t tbody tr:hover td.lg-acts { background: none; }
+  .lg-sel, .lg-sel.st { min-width: 0; max-width: 100%; }
+
+  /* Logs filters: search stays, the rest opens from a Filters button */
+  .lg-ftoggle { display: inline-flex; }
+  .lg-filters:not(.open) .lg-kinds, .lg-filters:not(.open) .lg-sels { display: none; }
+  .lg-filters .lg-search { flex: 1 1 100%; max-width: none; }
+  .lg-filters .lg-sels .f { flex: 1 1 calc(50% - 6px); min-width: 0; }
+  /* settings and account headers: side by side blocks stack instead of squeezing each other */
+  .page .row.wrap.gap-lg > [style*="width:160px"] { width: 100% !important; }
+  .page .row.wrap.gap-lg > .grow { flex: 1 1 100%; min-width: 0; }
+  .page .card > .row.gap-lg { flex-wrap: wrap; }
+  .page .card > .row.gap-lg > .grow { flex: 1 1 160px; min-width: 0; overflow-wrap: anywhere; }
+}

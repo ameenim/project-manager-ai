@@ -45,8 +45,27 @@
     $$('.sidebar .nav').forEach(function (nav) { track('nav', nav, $('a.active', nav), 'y'); });
     $$('.proj-head .tabs').forEach(function (tabs) { var on = $('.tab.active', tabs); track('tabs', tabs, on, 'x'); var href = on ? on.getAttribute('href') : ''; var changed = tabs.dataset.centered !== href; tabs.dataset.centered = href; if (on && changed && tabs.scrollWidth > tabs.clientWidth + 2) tabs.scrollTo({ left: Math.max(0, on.offsetLeft - (tabs.clientWidth - on.offsetWidth) / 2), behavior: reduced() ? 'auto' : 'smooth' }); });
   }
+  /* phone tables turn into cards, so every cell carries its column name for the card label */
+  function labelTables() {
+    $$('table.t').forEach(function (tb) {
+      var hr = tb.tHead && tb.tHead.rows[0]; if (!hr) return;
+      var heads = [];
+      for (var i = 0; i < hr.cells.length; i++) { var c = hr.cells[i], txt = (c.textContent || '').replace(/[\u25B2\u25BC\u2191\u2193]/g, '').replace(/\s+/g, ' ').trim(); for (var k = 0; k < (c.colSpan || 1); k++) heads.push(txt); }
+      $$(':scope > tbody > tr:not([data-lb])', tb).forEach(function (tr) {
+        tr.setAttribute('data-lb', '1'); var col = 0;
+        for (var j = 0; j < tr.cells.length; j++) { var td = tr.cells[j]; if (!td.hasAttribute('data-label') && heads[col]) td.setAttribute('data-label', heads[col]); col += td.colSpan || 1; }
+      });
+    });
+  }
+  /* phone project header: everything above the tabs scrolls away and the tab bar stays, so the page keeps its room */
+  function headUp() {
+    var h = $('.proj-head'), tabs = h && $('.tabs', h); if (!h || !tabs) { document.documentElement.classList.remove('ph-stuck'); return; }
+    var up = Math.max(0, tabs.offsetTop - 8); h.style.setProperty('--ph-up', up + 'px');
+    document.documentElement.classList.toggle('ph-stuck', h.getBoundingClientRect().top <= -up + 1);
+  }
+  document.addEventListener('scroll', function () { headUp(); }, { passive: true, capture: true });
   var placeQ = 0;
-  function schedule() { if (placeQ) return; placeQ = requestAnimationFrame(function () { placeQ = 0; place(); entrance(); }); }
+  function schedule() { if (placeQ) return; placeQ = requestAnimationFrame(function () { placeQ = 0; place(); labelTables(); headUp(); entrance(); }); }
 
   /* ---------- one entrance per visit and count up ---------- */
   var lastHash = null;

@@ -16,7 +16,7 @@
     lg_kind_action: 'Action', lg_kind_decision: 'Decision', lg_details_action: 'Action details', lg_details_decision: 'Decision details', lg_s_action_open: 'Not started', lg_s_action_progress: 'In progress', lg_s_action_closed: 'Done', lg_s_decision_active: 'Active', lg_s_decision_superseded: 'Superseded', lg_a_supersede: 'Supersede',
     lg_c_source: 'Source', lg_src_manual: 'Manual', lg_src_document: 'Document', lg_src_meeting: 'Meeting',
     lg_title: 'Logs', lg_lead: 'Every deliverable, requirement, payment milestone and risk in one place. Update status, owner and dates right here.',
-    lg_add: 'Add', lg_export: 'Export CSV', lg_search: 'Search by title or description', lg_type: 'Type', lg_status: 'Status', lg_any_status: 'Any status', lg_prob: 'Probability', lg_imp: 'Impact', lg_any: 'Any',
+    lg_add: 'Add', lg_filters: 'Filters', lg_export: 'Export CSV', lg_search: 'Search by title or description', lg_type: 'Type', lg_status: 'Status', lg_any_status: 'Any status', lg_prob: 'Probability', lg_imp: 'Impact', lg_any: 'Any',
     lg_due: 'Due date', lg_due_any: 'Any date', lg_due_over: 'Overdue', lg_due_7: 'Next 7 days', lg_due_30: 'Next 30 days', lg_due_none: 'No date', lg_review: 'Review', lg_rs_live: 'Approved and needs review', lg_rs_confirmed: 'Approved only', lg_rs_proposed: 'Needs review only', lg_rs_ignored: 'Ignored only', lg_rs_all: 'Everything',
     lg_clear: 'Clear filters', lg_item: 'Item', lg_owner: 'Owner', lg_amount: 'Invoice amount', lg_actions: 'Actions', lg_level: 'Level',
     lg_kind_deliverable: 'Deliverable', lg_kind_requirement: 'Requirement', lg_kind_milestone: 'Payment', lg_kind_risk: 'Risk',
@@ -40,7 +40,7 @@
     lg_kind_action: 'إجراء', lg_kind_decision: 'قرار', lg_details_action: 'تفاصيل الإجراء', lg_details_decision: 'تفاصيل القرار', lg_s_action_open: 'لم يبدأ', lg_s_action_progress: 'قيد التنفيذ', lg_s_action_closed: 'تم', lg_s_decision_active: 'ساري', lg_s_decision_superseded: 'تم استبداله', lg_a_supersede: 'استبدل',
     lg_c_source: 'المصدر', lg_src_manual: 'يدوي', lg_src_document: 'مستند', lg_src_meeting: 'اجتماع',
     lg_title: 'السجلات', lg_lead: 'كل المخرجات والمتطلبات ودفعات الدفع والمخاطر في مكان واحد. حدث الحالة والمسؤول والتواريخ من هنا مباشرة.',
-    lg_add: 'إضافة', lg_export: 'تصدير CSV', lg_search: 'ابحث بالعنوان أو الوصف', lg_type: 'النوع', lg_status: 'الحالة', lg_any_status: 'أي حالة', lg_prob: 'الاحتمال', lg_imp: 'الأثر', lg_any: 'الكل',
+    lg_add: 'إضافة', lg_filters: 'التصفية', lg_export: 'تصدير CSV', lg_search: 'ابحث بالعنوان أو الوصف', lg_type: 'النوع', lg_status: 'الحالة', lg_any_status: 'أي حالة', lg_prob: 'الاحتمال', lg_imp: 'الأثر', lg_any: 'الكل',
     lg_due: 'تاريخ الاستحقاق', lg_due_any: 'أي تاريخ', lg_due_over: 'متأخر', lg_due_7: 'خلال 7 أيام', lg_due_30: 'خلال 30 يوما', lg_due_none: 'بدون تاريخ', lg_review: 'المراجعة', lg_rs_live: 'المعتمد وما يحتاج مراجعة', lg_rs_confirmed: 'المعتمد فقط', lg_rs_proposed: 'ما يحتاج مراجعة فقط', lg_rs_ignored: 'المتجاهل فقط', lg_rs_all: 'كل شيء',
     lg_clear: 'مسح التصفية', lg_item: 'العنصر', lg_owner: 'المسؤول', lg_amount: 'مبلغ الفاتورة', lg_actions: 'الإجراءات', lg_level: 'المستوى',
     lg_kind_deliverable: 'مخرج', lg_kind_requirement: 'متطلب', lg_kind_milestone: 'دفعة', lg_kind_risk: 'خطر',
@@ -200,7 +200,7 @@
         <button class="btn" id="lgExport">${icon('dl')}${t('lg_export')}</button><button class="btn primary" id="lgAdd">${icon('plus')}${t('lg_add')}</button></div>
       <div class="lg-views" id="lgViews" role="group" aria-label="${esc(t('lg_views'))}"></div>
       <div class="card lg-filters">
-        <div class="lg-row"><label class="sf lg-search">${icon('search')}<input type="search" id="lgQ" placeholder="${esc(t('lg_search'))}" value="${esc(F.q)}" aria-label="${esc(t('lg_search'))}"></label>
+        <div class="lg-row"><label class="sf lg-search">${icon('search')}<input type="search" id="lgQ" placeholder="${esc(t('lg_search'))}" value="${esc(F.q)}" aria-label="${esc(t('lg_search'))}"></label><button type="button" class="btn lg-ftoggle" id="lgFt" aria-expanded="false">${icon('list')}${t('lg_filters')}</button>
           <div class="lg-kinds" role="group" aria-label="${esc(t('lg_type'))}">${KINDS.map((k) => `<button type="button" class="rd-chip ${F.kinds.includes(k) ? 'on' : ''}" data-kind="${k}" aria-pressed="${F.kinds.includes(k)}">${t('lg_kind_' + k)} <span data-count="${k}"></span></button>`).join('')}</div></div>
         <div class="lg-row lg-sels">
           <label class="f">${t('lg_status')}<select id="lgSt">${stOptions()}</select></label>
@@ -336,6 +336,7 @@
       $('#lgSt', root).innerHTML = stOptions(); F.page = 1; drawTable();
     }));
     // clearing removes the filters and search; the chosen columns and the open view stay
+    $('#lgFt', root).onclick = (e) => { const box = $('.lg-filters', root); const on = !box.classList.contains('open'); box.classList.toggle('open', on); e.currentTarget.setAttribute('aria-expanded', String(on)); };
     $('#lgClear', root).onclick = () => { const keep = { size: F.size, cols: F.cols, view: F.view }; Object.assign(F, defaults(), keep); syncControls(); drawTable(); };
     $('#lgAdd', root).onclick = () => itemDialog(null, p, () => reload());
     $('#lgCols', root).onclick = (e) => { e.stopPropagation(); togglePop(popEl().hidden); };
