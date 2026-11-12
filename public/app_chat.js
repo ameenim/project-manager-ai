@@ -73,6 +73,19 @@
     cht_v_open: 'مفتوح', cht_v_progress: 'قيد التنفيذ', cht_v_closed: 'مغلق', cht_v_mitigated: 'تمت المعالجة', cht_v_transferred: 'تم النقل', cht_v_pending: 'قيد الانتظار', cht_v_invoiced: 'تمت الفوترة', cht_v_paid: 'مدفوعة', cht_v_low: 'منخفض', cht_v_medium: 'متوسط', cht_v_high: 'مرتفع',
   });
 
+  Object.assign(PM.I18N.en, {
+    th_plus: 'Add to your message', th_cam: 'Take a photo', th_photos: 'Add photos', th_files: 'Add files', th_files_h: 'PDF, Word, Excel or PowerPoint', th_deep_h: 'Slower, more careful answers for schedules and trade offs',
+    th_mic: 'Voice input', th_mic_ok: 'Use this text', th_mic_no: 'Cancel recording', th_listening: 'Listening', th_transcribing: 'Writing down your words',
+    th_mic_blocked: 'The microphone is blocked. Allow it in your browser settings and try again.', th_mic_fail: 'Voice input could not understand that. Try again.', th_mic_long: 'That recording is too long. Keep it under two minutes.', th_mic_none: 'No speech was heard.',
+    th_deep_off: 'Turn off Think deeper', th_sheet_x: 'Close',
+  });
+  Object.assign(PM.I18N.ar, {
+    th_plus: 'إضافة إلى الرسالة', th_cam: 'التقاط صورة', th_photos: 'إضافة صور', th_files: 'إضافة ملفات', th_files_h: 'مستندات وجداول وعروض تقديمية', th_deep_h: 'إجابات أبطأ وأدق للجداول والمفاضلات',
+    th_mic: 'إدخال صوتي', th_mic_ok: 'استخدم هذا النص', th_mic_no: 'إلغاء التسجيل', th_listening: 'جار الاستماع', th_transcribing: 'جار كتابة كلامك',
+    th_mic_blocked: 'الميكروفون محظور. اسمح بالوصول إليه من إعدادات المتصفح وحاول مرة أخرى.', th_mic_fail: 'تعذر فهم الصوت. حاول مرة أخرى.', th_mic_long: 'التسجيل طويل جدا. اجعله أقل من دقيقتين.', th_mic_none: 'لم أسمع أي كلام.',
+    th_deep_off: 'إيقاف التفكير بعمق', th_sheet_x: 'إغلاق',
+  });
+
   const pref = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* storage blocked */ } return null; };
   const DEF_W = 420, MIN_W = 340, WIDE_W = 760, MIN_IN = 38;
   const S = { open: false, busy: false, ctl: null, ctx: { projectId: null, screen: 'portfolio' }, data: null, msgs: [], confirming: null, raf: 0, mode: 'chat', hist: null, w: Number(pref('pm_chat_w')) || DEF_W, inH: Number(pref('pm_chat_inh')) || 0, dragging: false, page: false, att: [], upl: false, deep: pref('pm_think_deep') === '1', th: { items: null, q: '', confirm: null } };
@@ -108,6 +121,7 @@
   };
   const noteText = (it) => { const n = it.noteData; if (!n) return it.note || ''; return [n.kids ? t(n.kids === 1 ? 'cht_note_kids1' : 'cht_note_kids', { n: n.kids }) : '', n.succ ? t(n.succ === 1 ? 'cht_note_succ1' : 'cht_note_succ', { n: n.succ }) : ''].filter(Boolean).join(' '); };
 
+  const CAM_ICON = '<svg class="i" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"/><circle cx="12" cy="13" r="4"/></svg>';
   // ---------- building the shell once ----------
   function build() {
     if (root) return;
@@ -131,17 +145,39 @@
           <div class="cht-grip" id="chtGrip" role="separator" aria-orientation="horizontal" aria-label="${esc(t('cht_grow'))}" data-tip="${esc(t('cht_grow'))}"></div>
           <div class="cht-ctxbar small" id="chtCtxBar"></div>
           <div class="small muted cht-note" id="chtNote"></div>
-          <div class="cht-atts small" id="chtAtts"></div>
-          <div class="cht-composer">
-            <button class="btn ghost icon cht-attach" id="chtAttach" type="button" data-act="attach" aria-label="${esc(t('th_attach'))}" data-tip="${esc(t('th_attach_tip'))}">${icon('file')}</button>
-            <input type="file" id="chtFile" multiple hidden accept=".pdf,.docx,.xlsx,.pptx,.txt,.md,.csv">
-            <button class="btn ghost icon cht-imgbtn" id="chtImgBtn" type="button" data-act="img" aria-label="${esc(t('th_img'))}" data-tip="${esc(t('th_img_tip'))}">${icon('image')}</button>
-            <input type="file" id="chtImg" multiple hidden accept="image/png,image/jpeg,image/webp,image/gif">
-            <button class="btn ghost icon cht-deep" id="chtDeep" type="button" data-act="deep" aria-pressed="false" aria-label="${esc(t('th_deep'))}" data-tip="${esc(t('th_deep_tip'))}">${icon('spark')}</button>
-            <textarea id="chtIn" rows="1" maxlength="4000" placeholder="${esc(t('cht_ph'))}" aria-label="${esc(t('cht_ph'))}"></textarea>
-            <button class="btn primary icon" id="chtSend" type="button" data-act="send" aria-label="${esc(t('cht_send'))}" data-tip="${esc(t('cht_send'))}">${icon('up')}</button>
+          <div class="cht-box" id="chtBox">
+            <div class="cht-atts small" id="chtAtts"></div>
+            <div class="cht-composer">
+              <button class="btn ghost icon cht-plus" id="chtPlus" type="button" data-act="plus" aria-haspopup="dialog" aria-label="${esc(t('th_plus'))}" data-tip="${esc(t('th_plus'))}">${icon('plus')}</button>
+              <button class="btn ghost icon cht-attach" id="chtAttach" type="button" data-act="attach" aria-label="${esc(t('th_attach'))}" data-tip="${esc(t('th_attach_tip'))}">${icon('file')}</button>
+              <input type="file" id="chtFile" multiple hidden accept=".pdf,.docx,.xlsx,.pptx,.txt,.md,.csv">
+              <button class="btn ghost icon cht-imgbtn" id="chtImgBtn" type="button" data-act="img" aria-label="${esc(t('th_img'))}" data-tip="${esc(t('th_img_tip'))}">${icon('image')}</button>
+              <input type="file" id="chtImg" multiple hidden accept="image/png,image/jpeg,image/webp,image/gif">
+              <input type="file" id="chtCam" hidden accept="image/*" capture="environment">
+              <button class="btn ghost icon cht-deep" id="chtDeep" type="button" data-act="deep" aria-pressed="false" aria-label="${esc(t('th_deep'))}" data-tip="${esc(t('th_deep_tip'))}">${icon('spark')}</button>
+              <button class="cht-deep-pill" id="chtDeepPill" type="button" data-act="deep" aria-label="${esc(t('th_deep_off'))}" data-tip="${esc(t('th_deep_off'))}" hidden>${icon('spark')}<span>${esc(t('th_deep'))}</span>${icon('x')}</button>
+              <textarea id="chtIn" rows="1" maxlength="4000" placeholder="${esc(t('cht_ph'))}" aria-label="${esc(t('cht_ph'))}"></textarea>
+              <button class="btn ghost icon cht-mic" id="chtMic" type="button" data-act="mic" aria-label="${esc(t('th_mic'))}" data-tip="${esc(t('th_mic'))}" hidden>${icon('mic')}</button>
+              <button class="btn primary icon" id="chtSend" type="button" data-act="send" aria-label="${esc(t('cht_send'))}" data-tip="${esc(t('cht_send'))}">${icon('up')}</button>
+            </div>
+            <div class="cht-rec" id="chtRec" role="status" aria-live="polite">
+              <button class="btn ghost icon" type="button" data-act="micno" aria-label="${esc(t('th_mic_no'))}" data-tip="${esc(t('th_mic_no'))}">${icon('x')}</button>
+              <span class="cht-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+              <span class="cht-rec-l" id="chtRecL"></span><span class="cht-rec-t" id="chtRecT">0:00</span>
+              <button class="btn primary icon" type="button" data-act="micok" aria-label="${esc(t('th_mic_ok'))}" data-tip="${esc(t('th_mic_ok'))}">${icon('check')}</button>
+            </div>
           </div>
         </footer>
+        <div class="cht-sheet" id="chtSheet" hidden>
+          <div class="cht-sheet-bg" data-act="sheetx"></div>
+          <div class="cht-sheet-card" role="dialog" aria-modal="true" aria-label="${esc(t('th_plus'))}">
+            <div class="cht-sheet-grip" aria-hidden="true"></div>
+            <button class="cht-sheet-i" type="button" data-act="cam">${CAM_ICON}<span class="cht-sheet-t"><b>${esc(t('th_cam'))}</b></span></button>
+            <button class="cht-sheet-i" type="button" data-act="img">${icon('image')}<span class="cht-sheet-t"><b>${esc(t('th_photos'))}</b></span></button>
+            <button class="cht-sheet-i" type="button" data-act="attach">${icon('file')}<span class="cht-sheet-t"><b>${esc(t('th_files'))}</b><span class="small muted">${esc(t('th_files_h'))}</span></span></button>
+            <button class="cht-sheet-i" id="chtSheetDeep" type="button" data-act="deep" aria-pressed="false">${icon('spark')}<span class="cht-sheet-t"><b>${esc(t('th_deep'))}</b><span class="small muted">${esc(t('th_deep_h'))}</span></span><span class="cht-sw" aria-hidden="true"></span></button>
+          </div>
+        </div>
       </section>`;
     document.body.appendChild(root);
     document.body.classList.add('chat-on');
@@ -151,14 +187,14 @@
     inp.addEventListener('input', grow);
     applyWidth(); applyInputHeight(); bindResize();
     root.addEventListener('input', (e) => { if (e.target && e.target.id === 'thSearch') onSearch(e); });
-    root.addEventListener('change', (e) => { if (e.target && e.target.id === 'chtFile') onFiles(e); if (e.target && e.target.id === 'chtImg') { const fl = [...(e.target.files || [])]; e.target.value = ''; addImages(fl); } });
+    root.addEventListener('change', (e) => { if (e.target && e.target.id === 'chtFile') onFiles(e); if (e.target && (e.target.id === 'chtImg' || e.target.id === 'chtCam')) { const fl = [...(e.target.files || [])]; e.target.value = ''; addImages(fl); } });
     root.addEventListener('paste', (e) => { if (e.target && e.target.id === 'chtIn') onPaste(e); });
     root.addEventListener('dragover', (e) => { if (e.dataTransfer && [...(e.dataTransfer.types || [])].includes('Files')) e.preventDefault(); });
     root.addEventListener('drop', onDrop);
-    root.addEventListener('keydown', (e) => { if (e.key === 'Escape' && S.open && !S.page) { e.stopPropagation(); close(); } else if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('cht-h-item')) { e.preventDefault(); openChat(e.target.dataset.id); } else if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('th-item')) { e.preventDefault(); openThread(e.target.dataset.id); } });
+    root.addEventListener('keydown', (e) => { if (e.key === 'Escape' && sheetOpen()) { e.stopPropagation(); closeSheet(); $q('#chtPlus').focus(); } else if (e.key === 'Escape' && V) { e.stopPropagation(); cancelVoice(); } else if (e.key === 'Escape' && S.open && !S.page) { e.stopPropagation(); close(); } else if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('cht-h-item')) { e.preventDefault(); openChat(e.target.dataset.id); } else if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('th-item')) { e.preventDefault(); openThread(e.target.dataset.id); } });
   }
   // the message box grows with the text up to a cap. A person can raise the base height by dragging its top line.
-  function grow() { const i = $q('#chtIn'); if (!i) return; const base = S.inH || 0; i.style.height = 'auto'; i.style.height = Math.max(base, Math.min(i.scrollHeight, Math.max(base, 120))) + 'px'; }
+  function grow() { const i = $q('#chtIn'); if (!i) return; syncHas(); const base = S.inH || 0; i.style.height = 'auto'; i.style.height = Math.max(base, Math.min(i.scrollHeight, Math.max(base, 120))) + 'px'; }
   function applyInputHeight() { const i = $q('#chtIn'); if (!i) return; i.style.minHeight = S.inH ? S.inH + 'px' : ''; i.style.maxHeight = S.inH ? Math.max(S.inH, 120) + 'px' : ''; grow(); }
   const maxWidth = () => Math.max(MIN_W, Math.min(1000, window.innerWidth - 280));
   function applyWidth() {
@@ -200,6 +236,7 @@
   }
   function close(quiet) {
     if (!root) return;
+    cancelVoice(); closeSheet();
     S.open = false; keep('pm_chat_open', '0');
     const p = $q('#chtPanel'); p.classList.remove('on');
     document.body.classList.remove('chat-open');
@@ -311,7 +348,7 @@
     const sug = (d.suggestions || []).map((s) => `<button class="btn sm cht-sug" type="button" data-act="sug" data-q="${esc(s)}">${esc(s)}</button>`).join('');
     const b = d.brief || [];
     const brief = d.brief ? `<div class="cht-brief"><div class="small muted">${esc(t('cht_brief_h'))}</div>${b.length ? b.map((x) => `<button class="cht-tile" type="button" data-act="sug" data-q="${esc(t('cht_q_' + x.key))}"><b>${esc(String(x.n))}</b><span>${esc(t('cht_b_' + x.key, { n: '' }).trim())}</span></button>`).join('') : `<div class="small muted">${esc(t('cht_brief_clear'))}</div>`}</div>` : '';
-    return `<div class="cht-empty"><div class="cht-empty-ic">${icon('spark')}</div><h3>${esc(t('cht_empty_title'))}</h3><p class="muted">${esc(d.capabilities || '')}</p>${S.loadError ? `<p class="cht-err small" role="alert">${esc(S.loadError)} <button class="btn sm" type="button" data-act="reload">${esc(t('fly_retry'))}</button></p>` : ''}${proact()}${brief}${starters}${sug ? `<div class="small muted cht-quick">${esc(t('th_quick'))}</div>` : ''}<div class="cht-sugs">${sug}</div></div>`;
+    return `<div class="cht-empty"><div class="cht-empty-ic">${icon('spark')}</div><h3>${esc(t('cht_empty_title'))}</h3><p class="muted cht-caps">${esc(d.capabilities || '')}</p>${S.loadError ? `<p class="cht-err small" role="alert">${esc(S.loadError)} <button class="btn sm" type="button" data-act="reload">${esc(t('fly_retry'))}</button></p>` : ''}${proact()}${brief}${starters}${sug ? `<div class="small muted cht-quick">${esc(t('th_quick'))}</div>` : ''}<div class="cht-sugs">${sug}</div></div>`;
   }
   const when = (x) => { try { return new Date(x).toLocaleString(PM.state.lang === 'ar' ? 'ar' : 'en', { dateStyle: 'medium', timeStyle: 'short' }); } catch (e) { return ''; } };
   function historyHtml() {
@@ -347,6 +384,9 @@
     $q('#chtNote').textContent = note; $q('#chtNote').hidden = !note;
     const send = $q('#chtSend');
     send.innerHTML = icon(S.busy ? 'x' : 'up'); send.dataset.act = S.busy ? 'stop' : 'send';
+    const bx = $q('#chtBox'); if (bx) bx.classList.toggle('busy', !!S.busy);
+    const mic = $q('#chtMic'); if (mic) { mic.hidden = !micOk(); mic.disabled = !!S.busy; }
+    syncHas();
     const lab = S.busy ? t('cht_stop') : t('cht_send'); send.setAttribute('aria-label', lab); send.dataset.tip = lab;
   }
 
@@ -367,6 +407,8 @@
       const chips = S.ctx.projectId ? [ctxName(), t('th_ctx_data'), t('th_ctx_docs')] : [t('th_ctx_portfolio')];
       cb.innerHTML = `<span class="muted">${esc(t('th_sees'))}</span>${chips.map((c) => `<span class="chip gray">${esc(c)}</span>`).join('')}`;
     }
+    const pill = $q('#chtDeepPill'); if (pill) pill.hidden = !S.deep;
+    const sd = $q('#chtSheetDeep'); if (sd) { sd.classList.toggle('on', S.deep); sd.setAttribute('aria-pressed', String(S.deep)); }
     const dp = $q('#chtDeep'); if (dp) { dp.classList.toggle('on', S.deep); dp.setAttribute('aria-pressed', String(S.deep)); dp.dataset.tip = t(S.deep ? 'th_deep_on' : 'th_deep') + '. ' + t('th_deep_tip'); }
   }
 
@@ -378,10 +420,13 @@
     if (!root || !S.page) return;
     const host = document.getElementById('thHost'); if (!host) return;
     const r = host.getBoundingClientRect();
-    const h = Math.max(360, window.innerHeight - r.top - 16);
+    // on a phone the chat uses the whole width and the space above the keyboard, like a messaging app
+    const phone = window.matchMedia('(max-width: 600px)').matches;
+    const vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+    const h = phone ? Math.max(280, vh - r.top) : Math.max(360, window.innerHeight - r.top - 16);
     host.style.height = h + 'px';
     const p = $q('#chtPanel');
-    p.style.top = r.top + 'px'; p.style.left = r.left + 'px'; p.style.width = r.width + 'px'; p.style.height = h + 'px';
+    p.style.top = r.top + 'px'; p.style.left = (phone ? 0 : r.left) + 'px'; p.style.width = (phone ? document.documentElement.clientWidth : r.width) + 'px'; p.style.height = h + 'px';
   }
   async function mountPage() {
     if (!root) { build(); bindFab(); }
@@ -400,6 +445,7 @@
   }
   function unmountPage() {
     if (!S.page || !root) return;
+    cancelVoice(); closeSheet();
     S.page = false; S.open = false;
     if (hostObs) { hostObs.disconnect(); hostObs = null; }
     document.body.classList.remove('chat-page');
@@ -463,6 +509,136 @@
 
   const soon = () => { if (S.raf) return; S.raf = requestAnimationFrame(() => { S.raf = 0; paint(); }); };
 
+  // ---------- the plus menu, shown as a bottom sheet on a phone ----------
+  const sheetOpen = () => { const e = $q('#chtSheet'); return !!e && !e.hidden; };
+  function openSheet() {
+    const e = $q('#chtSheet'); if (!e || V) return;
+    e.hidden = false; requestAnimationFrame(() => e.classList.add('on'));
+    const b = $q('#chtPlus'); if (b) b.setAttribute('aria-expanded', 'true');
+    const f = e.querySelector('.cht-sheet-i'); if (f) f.focus();
+  }
+  function closeSheet() {
+    const e = $q('#chtSheet'); if (!e || e.hidden) return;
+    e.classList.remove('on'); e.hidden = true;
+    const b = $q('#chtPlus'); if (b) b.setAttribute('aria-expanded', 'false');
+  }
+  // the send button and the mic button swap places like in the Claude app: text or an image shows Send, an empty box shows the mic
+  function syncHas() {
+    const box = $q('#chtBox'), i = $q('#chtIn'); if (!box || !i) return;
+    box.classList.toggle('has', !!(i.value.trim() || (S.imgs || []).length));
+  }
+
+  // ---------- voice input ----------
+  // The browser's own speech recognition is used when there is one, so words appear while the person speaks. Without it a short
+  // recording is sent to the server, which turns it into text. The words land in the message box and nothing is sent by itself.
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const canRecord = () => !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+  const micOk = () => !!SR || (canRecord() && !!(S.data && S.data.dictation));
+  const mmss = (ms) => { const n = Math.floor(ms / 1000); return Math.floor(n / 60) + ':' + String(n % 60).padStart(2, '0'); };
+  let V = null;
+  function recPaint() {
+    const box = $q('#chtBox'); if (!box) return;
+    box.classList.toggle('rec', !!V); box.classList.toggle('wait', !!(V && V.busy));
+    const l = $q('#chtRecL'), tm = $q('#chtRecT'), i = $q('#chtIn');
+    if (l) l.textContent = V ? t(V.busy ? 'th_transcribing' : 'th_listening') : '';
+    if (tm) tm.textContent = V ? mmss(Date.now() - V.t0) : '0:00';
+    if (i) i.readOnly = !!(V && V.busy);
+  }
+  function showVoiceText(interim) {
+    const i = $q('#chtIn'); if (!i || !V) return;
+    const lead = V.base ? V.base.replace(/\s+$/, '') + ' ' : '';
+    i.value = (lead + V.text + (interim ? (V.text ? ' ' : '') + interim.trim() : '')).slice(0, 4000);
+    grow(); i.scrollTop = i.scrollHeight;
+  }
+  function endVoice() {
+    if (!V) return;
+    clearInterval(V.timer); clearTimeout(V.limit);
+    if (V.stream) V.stream.getTracks().forEach((x) => { try { x.stop(); } catch (e) { /* already stopped */ } });
+    V = null; recPaint(); syncHas();
+  }
+  // a hard stop: the text goes back to what it was
+  function cancelVoice() {
+    if (!V) return;
+    const v = V; v.cancelled = true;
+    try { if (v.sr) { v.sr.onend = null; v.sr.abort(); } if (v.mr && v.mr.state !== 'inactive') v.mr.stop(); } catch (e) { /* already stopped */ }
+    const i = $q('#chtIn'); if (i) { i.value = v.base; grow(); }
+    endVoice();
+  }
+  function finishVoice() { const i = $q('#chtIn'); endVoice(); if (i) { i.focus(); try { i.setSelectionRange(i.value.length, i.value.length); } catch (e) { /* not focusable */ } } }
+  function confirmVoice() {
+    if (!V || V.busy) return;
+    V.stopping = true;
+    try { if (V.sr) V.sr.stop(); else if (V.mr && V.mr.state !== 'inactive') V.mr.stop(); else finishVoice(); } catch (e) { finishVoice(); }
+  }
+  function startSR() {
+    const r = new SR(); V.sr = r; const born = Date.now(); let got = false;
+    r.lang = PM.state.lang === 'ar' ? 'ar-SA' : 'en-US'; r.continuous = false; r.interimResults = true; r.maxAlternatives = 1;
+    r.onresult = (e) => {
+      let interim = '';
+      for (let k = e.resultIndex; k < e.results.length; k++) { const x = e.results[k]; if (x.isFinal) V.text += (V.text ? ' ' : '') + x[0].transcript.trim(); else interim += x[0].transcript; }
+      got = true; showVoiceText(interim);
+    };
+    r.onerror = (e) => { if (V && V.sr === r) V.err = e.error; };
+    r.onend = () => {
+      if (!V || V.sr !== r) return;
+      const err = V.err; V.err = null;
+      if (err === 'not-allowed' || err === 'service-not-allowed' || err === 'audio-capture') { cancelVoice(); PM.toast(t('th_mic_blocked'), 'err'); return; }
+      if (err && err !== 'no-speech' && err !== 'aborted') {
+        // the browser service failed. Fall back to a recording the server can read.
+        if (S.data && S.data.dictation && canRecord()) { V.sr = null; startMR(); return; }
+        cancelVoice(); PM.toast(t('th_mic_fail'), 'err'); return;
+      }
+      if (V.stopping) return finishVoice();
+      // the browser ends a session after a pause, so listen again until the person is done
+      V.quick = Date.now() - born < 700 && !got ? (V.quick || 0) + 1 : 0;
+      if (V.quick >= 3) { const none = !V.text; cancelVoice(); if (none) PM.toast(t('th_mic_none'), 'err'); return; }
+      try { startSR(); } catch (x) { finishVoice(); }
+    };
+    r.start();
+  }
+  async function startMR() {
+    const v = V;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (V !== v) { stream.getTracks().forEach((x) => x.stop()); return; }
+      const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
+      const mime = types.find((x) => window.MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(x)) || '';
+      const rec = new MediaRecorder(stream, { ...(mime ? { mimeType: mime } : {}), audioBitsPerSecond: 32000 });
+      v.mr = rec; v.stream = stream; v.chunks = [];
+      rec.ondataavailable = (e) => { if (e.data && e.data.size) v.chunks.push(e.data); };
+      rec.onstop = () => mrDone(v, rec.mimeType || mime || 'audio/webm');
+      rec.start();
+      v.limit = setTimeout(() => { if (V === v) confirmVoice(); }, 110000);
+    } catch (e) { if (V === v) { cancelVoice(); PM.toast(t('th_mic_blocked'), 'err'); } }
+  }
+  async function mrDone(v, mime) {
+    if (v.stream) v.stream.getTracks().forEach((x) => { try { x.stop(); } catch (e) { /* already stopped */ } });
+    if (v.cancelled || V !== v) return;
+    const blob = new Blob(v.chunks, { type: mime });
+    if (!blob.size) { cancelVoice(); PM.toast(t('th_mic_none'), 'err'); return; }
+    if (blob.size > 3 * 1024 * 1024) { cancelVoice(); PM.toast(t('th_mic_long'), 'err'); return; }
+    v.busy = true; recPaint();
+    try {
+      const audio = await new Promise((ok, no) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(',')[1] || ''); fr.onerror = () => no(fr.error); fr.readAsDataURL(blob); });
+      const r = await PM.api('POST', '/api/chat/dictate', { audio, mime, language: PM.state.lang === 'ar' ? 'ar' : 'en' });
+      if (V !== v) return;
+      v.text = String(r.text || '').trim(); showVoiceText('');
+      finishVoice();
+    } catch (e) {
+      if (V !== v) return;
+      cancelVoice(); PM.toast(e.status === 402 || e.status === 413 || e.status === 429 || e.status === 422 ? e.message : t('th_mic_fail'), 'err');
+    }
+  }
+  async function startVoice() {
+    if (V || S.busy) return;
+    if (!micOk()) return PM.toast(t('th_mic_fail'), 'err');
+    closeSheet();
+    const i = $q('#chtIn');
+    V = { t0: Date.now(), base: i ? i.value : '', text: '', busy: false };
+    V.timer = setInterval(recPaint, 500); recPaint();
+    try { if (SR) startSR(); else await startMR(); } catch (e) { cancelVoice(); PM.toast(t('th_mic_blocked'), 'err'); }
+  }
+
   // ---------- attachments ----------
   function paintAtts() {
     const box = $q('#chtAtts'); if (!box) return;
@@ -470,6 +646,7 @@
     const imgs = (S.imgs || []).map((a, i) => `<span class="cht-att img"><img src="${a.thumb}" alt=""><button class="btn ghost icon" type="button" data-act="imgrm" data-i="${i}" aria-label="${esc(t('th_img_rm'))}" data-tip="${esc(t('th_img_rm'))}">${icon('x')}</button></span>`).join('');
     box.innerHTML = imgs + S.att.map((a) => `<span class="cht-att"><span class="cht-att-n">${esc(a.filename)}</span><button class="btn ghost icon" type="button" data-act="attrm" data-id="${a.id}" aria-label="${esc(t('th_att_rm'))}" data-tip="${esc(t('th_att_rm'))}">${icon('x')}</button></span>`).join('') + (S.upl ? `<span class="muted">${esc(t('th_uploading'))}</span>` : '');
     const b = $q('#chtAttach'); if (b) b.disabled = S.upl || S.busy;
+    syncHas();
   }
   async function onFiles(e) {
     const files = [...(e.target.files || [])]; e.target.value = '';
@@ -651,7 +828,13 @@
     if (act === 'hist') return S.mode === 'history' ? (S.needReload ? (S.needReload = false, S.mode = 'chat', load()) : backToChat()) : showHistory();
     if (act === 'expand') { location.hash = S.ctx.projectId ? `#/p/${S.ctx.projectId}/thinking` : '#/thinking'; return; }
     if (act === 'collapse') { const to = S.ctx.projectId ? `#/p/${S.ctx.projectId}/overview` : '#/'; location.hash = to; setTimeout(() => { if (!S.page) open(); }, 80); return; }
-    if (act === 'deep') { S.deep = !S.deep; pref('pm_think_deep', S.deep ? '1' : null); paintShell(); return; }
+    if (act === 'plus') return sheetOpen() ? closeSheet() : openSheet();
+    if (act === 'sheetx') return closeSheet();
+    if (act === 'mic') return startVoice();
+    if (act === 'micok') return confirmVoice();
+    if (act === 'micno') return cancelVoice();
+    if (act === 'cam') { closeSheet(); const f = $q('#chtCam'); if (f) f.click(); return; }
+    if (act === 'deep') { closeSheet(); S.deep = !S.deep; pref('pm_think_deep', S.deep ? '1' : null); paintShell(); return; }
     if (act === 'topen') return openThread(id);
     if (act === 'tpin') return pinThread(id);
     if (act === 'tren') return renameThread(id);
@@ -666,9 +849,9 @@
     if (act === 'hdel2') return deleteChat(id);
     if (act === 'wpub') return wPublish(id, el);
     if (act === 'docopen' || act === 'docdl') return docAct(act, id, el);
-    if (act === 'img') { const f = $q('#chtImg'); if (f) f.click(); return; }
+    if (act === 'img') { closeSheet(); const f = $q('#chtImg'); if (f) f.click(); return; }
     if (act === 'imgrm') { (S.imgs || []).splice(Number(el.dataset.i), 1); return paintAtts(); }
-    if (act === 'attach') { const f = $q('#chtFile'); if (f) f.click(); return; }
+    if (act === 'attach') { closeSheet(); const f = $q('#chtFile'); if (f) f.click(); return; }
     if (act === 'attrm') { S.att = S.att.filter((a) => String(a.id) !== String(id)); return paintAtts(); }
     if (act === 'send') return submit();
     if (act === 'stop') { if (S.ctl) S.ctl.abort(); return; }
@@ -778,6 +961,7 @@
   // a language change rebuilds the shell so every label follows
   function rebuild() {
     if (!root) return;
+    cancelVoice();
     const was = S.open; const pg = S.page; S.mode = 'chat'; S.hist = null; root.remove(); root = null; document.body.classList.remove('chat-open');
     build(); bindFab();
     if (pg) { S.page = false; mountPage(); } else if (was) { S.open = false; open(); } else paint();
@@ -790,6 +974,7 @@
     window.addEventListener('hashchange', onHash);
     startChips();
     window.addEventListener('resize', () => { if (root) { applyWidth(); place(); } });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', () => { if (root && S.page) place(); });
     // a click anywhere outside the chat closes it. Dialogs, toasts, tooltips and the loading screen are not "outside".
     document.addEventListener('pointerdown', (e) => {
       if (!S.open || S.page || !root || S.dragging || root.contains(e.target)) return;

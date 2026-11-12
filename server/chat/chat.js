@@ -8,6 +8,7 @@ const tools = require('./tools');
 const claude = require('../claude');
 const skill = require('./skill');
 const { createSuggest } = require('./suggest');
+const stt = require('../stt');
 
 const MINUTE_LIMIT = Number(process.env.CHAT_PER_MINUTE || 20);
 const DAY_LIMIT = Number(process.env.CHAT_PER_DAY || 200);
@@ -19,6 +20,8 @@ const MAX_ROUNDS = 6;
 const MAX_OPS = 20;
 const STRONG_OVER = 5;
 const HISTORY = 20;
+const DICTATE_MAX = 3 * 1024 * 1024;     // a spoken message is short: about two minutes of compressed audio
+const DICTATE_PER_MINUTE = 12;
 
 // Messages the person can see on a card or in a refusal, in both languages. The server picks by the person's language.
 const MSG = {
@@ -36,6 +39,7 @@ function createChat({ db, store, api, auth, ops, model }) {
   const modelFn = model || claude.streamClaude;
   const hasModel = () => !!model || !!process.env.ANTHROPIC_API_KEY;
   const perMinute = new Map();
+  const dictHits = new Map();
 
   // ---------- storage ----------
   const q = (text, params) => db.query(text, params);
@@ -417,7 +421,7 @@ function createChat({ db, store, api, auth, ops, model }) {
     const ui = uiLang(user);
     const key = A.projectId ? (prompt.SUGGESTIONS[screen] ? screen : 'overview') : 'portfolio';
     const used = Number((await q("SELECT COUNT(*) AS n FROM chat_log WHERE user_id = $1 AND kind = 'message' AND created_at >= $2", [user.id, dayStart()])).rows[0].n);
-    return { thread: thread ? { id: thread.id } : null, messages: rows.map(msgView), suggestions: prompt.SUGGESTIONS[key][ui], starters: prompt.startersFor(ui), capabilities: prompt.CAPABILITIES[ui], ai: hasModel(), role: A.role, project: A.project, remaining_today: Math.max(0, DAY_LIMIT - used), brief: rows.length ? [] : await brief(user, A.projectId), can_write: A.projectId ? RANK[A.role] >= 2 : A.role !== 'viewer' };
+    return { thread: thread ? { id: thread.id } : null, messages: rows.map(msgView), suggestions: prompt.SUGGESTIONS[key][ui], starters: prompt.startersFor(ui), capabilities: prompt.CAPABILITIES[ui], ai: hasModel(), role: A.role, project: A.project, remaining_today: Math.max(0, DAY_LIMIT - used), dictation: stt.configured(), brief: rows.length ? [] : await brief(user, A.projectId), can_write: A.projectId ? RANK[A.role] >= 2 : A.role !== 'viewer' };
   }
   // Today at a glance. Plain counts from the same routes as the screens, with no AI, so the numbers always match.
   async function brief(user, projectId) {
@@ -513,6 +517,25 @@ function createChat({ db, store, api, auth, ops, model }) {
     return { ok: true };
   }
 
+  // Voice input for the message box: a short recording comes in as base64 and the words go back as plain text.
+  async function dictate(user, b) {
+    if (!stt.configured()) throw err(503, 'Voice input is not set up on this server.');
+    const raw = typeof (b && b.audio) === 'string' ? Buffer.from(b.audio, 'base64') : null;
+    if (!raw || !raw.length) throw err(400, 'Record something first.');
+    if (raw.length > DICTATE_MAX) throw err(413, 'That recording is too long. Keep it under two minutes.');
+    const mime = stt.cleanMime(b.mime, '');
+    if (!mime) throw err(400, 'This recording type is not supported.');
+    const now = Date.now(); const hits = (dictHits.get(user.id) || []).filter((x) => now - x < 60e3);
+    if (hits.length >= DICTATE_PER_MINUTE) throw err(429, 'Too many recordings in a short time. Wait a minute and try again.');
+    hits.push(now); dictHits.set(user.id, hits);
+    const stop = ops ? await ops.allowance(user) : null; if (stop) throw err(402, stop);
+    const language = b.language === 'ar' || b.language === 'en' ? b.language : uiLang(user);
+    const r = await stt.transcribe({ buffer: raw, mime, language, name: 'dictation' });
+    const text = (r.segments || []).map((x) => x.text).join(' ').replace(/\s+/g, ' ').trim();
+    if (!text) throw err(422, 'No speech was found in this recording.');
+    return { text: clip(text, 4000) };
+  }
+
   // ---------- http ----------
   // Returns true when the request was a chat request and has been answered.
   async function route(req, res, url, user, io) {
@@ -534,6 +557,11 @@ function createChat({ db, store, api, auth, ops, model }) {
       const b = await read(); const lang = uiLang(user);
       const out = m[2] === 'apply' ? await applyCard(user, m[1], b, lang) : m[2] === 'cancel' ? await cancelCard(user, m[1]) : m[2] === 'undo' ? await undoCard(user, m[1], lang) : await feedback(user, m[1], b.value);
       io.json(res, 200, out); return true;
+    }
+    if (method === 'POST' && p === '/api/chat/dictate') {
+      const raw = await io.readBody(req, 5 * 1024 * 1024); let b = {};
+      if (raw.length) { try { b = JSON.parse(raw.toString('utf8')); } catch (e) { throw err(400, 'The request body is not valid JSON'); } }
+      io.json(res, 200, await dictate(user, b)); return true;
     }
     if (method === 'POST' && p === '/api/chat/message') {
       const raw = await io.readBody(req, 9 * 1024 * 1024); let b = {}; if (raw.length) { try { b = JSON.parse(raw.toString('utf8')); } catch (e) { throw err(400, 'The request body is not valid JSON'); } }
