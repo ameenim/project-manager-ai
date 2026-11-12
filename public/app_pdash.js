@@ -188,6 +188,15 @@
   const SRC = { teams: 'chat', email: 'mail', jira: 'jira', upload: 'file', manual: 'edit' };
   const stateTone = (s) => (s === 'paid' || s === 'closed' ? 'green' : s === 'invoiced' ? 'blue' : '');
   const monthLabel = (m) => PM.dtf(S.lang === 'ar' ? 'ar-AE' : 'en-US', { month: 'short', year: '2-digit', timeZone: 'UTC' }).format(new Date(m + '-01T00:00:00Z'));
+  // Display currency for a project: converts from the project's own currency when the toggle is on (same rates as the main overview)
+  const CASH_KEYS = ['paid', 'invoiced', 'pending', 'late', 'cumPlanned', 'cumReceived'];
+  const disp = (d) => {
+    const from = d.project.currency, mode = PM.fx.mode, on = mode !== 'native' && PM.fx.known(from) && mode !== from;
+    const cv = (n) => (on && n != null && n !== '' ? Math.round(PM.fx.convert(n, from, mode)) : n);
+    const cash = d.cash ? { ...d.cash, months: d.cash.months.map((r) => { const o = { ...r }; CASH_KEYS.forEach((k) => { if (o[k] != null) o[k] = cv(o[k]); }); return o; }) } : d.cash;
+    const sums = {}; Object.entries(d.paymentSums || {}).forEach(([k, v]) => (sums[k] = typeof v === 'number' ? cv(v) : v));
+    return { cur: on ? mode : from, cv, cash, sums };
+  };
   const short = (n) => (Math.abs(n) >= 1e6 ? (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M' : Math.abs(n) >= 1e3 ? Math.round(n / 1e3) + 'K' : String(Math.round(n)));
   const W = () => Math.max(300, Math.min(1600, Math.round(H().width())));
   const nice = (max) => { const p = Math.pow(10, Math.floor(Math.log10(max || 1))); const f = max / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p; };
@@ -196,7 +205,7 @@
     pkpi: {
       size: 'l', title: 'pw_kpi',
       render(body, d) {
-        const a = d.analytics.projects[0] || {}, S0 = d.paymentSums, cur = d.project.currency;
+        const a = d.analytics.projects[0] || {}, S0 = d.paymentSums, { cur, cv } = disp(d);
         const high = d.radar.counts.high;
         const tiles = [
           { k: 'progress', v: a.progress != null ? a.progress + '%' : '-', n: a.progress, suffix: '%', sub: a.planned != null ? t('planned') + ' ' + a.planned + '%' : t('no_baseline'), tone: a.progress != null && a.planned != null ? (a.progress >= a.planned - 2 ? 'good' : a.progress >= a.planned - 10 ? 'warn' : 'bad') : '' },
@@ -204,7 +213,7 @@
           { k: 'pk_critical', v: d.criticalOpen, n: d.criticalOpen, sub: t('pk_of_n', { n: d.criticalTotal }), tone: '' },
           { k: 'pk_late', v: d.status.late, n: d.status.late, sub: t('tasks_n', { n: d.taskCount }), tone: d.status.late ? 'bad' : 'good' },
           { k: 'kpi_high_risks', v: high, n: high, sub: t('kpi_of_signals', { n: d.radar.items.length }), tone: high ? 'bad' : 'good' },
-          { k: 'pk_collected', v: d.project.value ? Math.round((S0.paid / (S0.total || 1)) * 100) + '%' : '-', n: d.project.value ? Math.round((S0.paid / (S0.total || 1)) * 100) : null, suffix: '%', sub: money(S0.paid, cur), tone: '' },
+          { k: 'pk_collected', v: d.project.value ? Math.round((S0.paid / (S0.total || 1)) * 100) + '%' : '-', n: d.project.value ? Math.round((S0.paid / (S0.total || 1)) * 100) : null, suffix: '%', sub: money(cv(S0.paid), cur), tone: '' },
         ];
         body.innerHTML = `<div class="kpis">${tiles.map((x, i) => `<div class="kpi-t ${x.tone}" style="--i:${i}"><div class="kv" ${x.n != null ? `data-count="${x.n}" data-suffix="${x.suffix || ''}"` : ''}>${x.v}</div><div class="kl">${esc(t(x.k))}</div><div class="ks small muted">${esc(x.sub)}</div></div>`).join('')}</div>`;
         return { csv: () => [[t('metric'), t('value')], ...tiles.map((x) => [t(x.k), x.v])] };
@@ -297,22 +306,22 @@
     ppay: {
       size: 'm', title: 'payment_milestones',
       render(body, d, ctx) {
-        const h = H(), P = d.payments, cur = d.project.currency, s = d.paymentSums;
+        const h = H(), { cur, cv, sums: s } = disp(d), P = d.payments;
         if (!P.length) { body.innerHTML = h.empty(); return { csv: () => [] }; }
         const bar = [['ok', 'paid', t('state_paid')], ['c1', 'invoiced', t('state_invoiced')], ['idle', 'pending', t('state_pending')], ['bad', 'late', t('late')]];
         const cl = PMCL.get('stackbar'), liveBar = bar.filter(([, k]) => s[k]), sumBar = liveBar.reduce((a, [, k]) => a + s[k], 0);
         const labOf = (k) => PMCL.str(cl, { text: money(s[k], cur), pct: PMCL.pctOf(s[k], sumBar) });
         const labsRow = cl.on && cl.pos !== 'center' ? `<div class="sb-labs" dir="ltr">${liveBar.map(([, k]) => `<span class="cl-t" style="flex:${s[k]}">${esc(labOf(k))}</span>`).join('')}</div>` : '';
-        body.innerHTML = `${cl.on && cl.pos === 'above' ? labsRow : ''}<div class="stackbar ${cl.on && cl.pos === 'center' ? 'tall' : ''}" role="img" aria-label="${esc(t('payment_milestones'))}">${bar.map(([c, k]) => (s[k] ? `<i class="${c}" style="flex:${s[k]}" ${h.tipAttr(`${t(k === 'late' ? 'late' : 'state_' + k)}: ${money(s[k], cur)}`)}>${cl.on && cl.pos === 'center' ? `<span class="cl-t">${esc(labOf(k))}</span>` : ''}</i>` : '')).join('')}</div>${cl.on && cl.pos === 'below' ? labsRow : ''}${h.legend(bar.map(([c, k, l]) => [c, l, money(s[k], cur)]))}` + P.map((x) => `<div class="list-item"><div class="grow"><div style="font-weight:600">${esc(x.title)}</div><div class="small muted">${x.due || ''}${x.percent != null ? ` · ${x.percent}%` : ''}${x.late ? ` <span class="bad-txt">(${t('late')})</span>` : ''}</div>${x.state !== 'paid' ? `<div class="row qa">${x.state === 'pending' ? `<button class="btn sm" data-py="invoiced" data-i="${x.id}" data-prev="${x.state}">${t('state_invoiced')}</button>` : ''}<button class="btn sm good" data-py="paid" data-i="${x.id}" data-prev="${x.state}">${t('ra_paid')}</button></div>` : ''}</div><div class="right"><div>${x.amount ? money(x.amount, cur) : ''}</div><span class="chip ${stateTone(x.state)}">${t('state_' + x.state)}</span></div></div>`).join('');
+        body.innerHTML = `${cl.on && cl.pos === 'above' ? labsRow : ''}<div class="stackbar ${cl.on && cl.pos === 'center' ? 'tall' : ''}" role="img" aria-label="${esc(t('payment_milestones'))}">${bar.map(([c, k]) => (s[k] ? `<i class="${c}" style="flex:${s[k]}" ${h.tipAttr(`${t(k === 'late' ? 'late' : 'state_' + k)}: ${money(s[k], cur)}`)}>${cl.on && cl.pos === 'center' ? `<span class="cl-t">${esc(labOf(k))}</span>` : ''}</i>` : '')).join('')}</div>${cl.on && cl.pos === 'below' ? labsRow : ''}${h.legend(bar.map(([c, k, l]) => [c, l, money(s[k], cur)]))}` + P.map((x) => `<div class="list-item"><div class="grow"><div style="font-weight:600">${esc(x.title)}</div><div class="small muted">${x.due || ''}${x.percent != null ? ` · ${x.percent}%` : ''}${x.late ? ` <span class="bad-txt">(${t('late')})</span>` : ''}</div>${x.state !== 'paid' ? `<div class="row qa">${x.state === 'pending' ? `<button class="btn sm" data-py="invoiced" data-i="${x.id}" data-prev="${x.state}">${t('state_invoiced')}</button>` : ''}<button class="btn sm good" data-py="paid" data-i="${x.id}" data-prev="${x.state}">${t('ra_paid')}</button></div>` : ''}</div><div class="right"><div>${x.amount ? money(cv(x.amount), cur) : ''}</div><span class="chip ${stateTone(x.state)}">${t('state_' + x.state)}</span></div></div>`).join('');
         $$('[data-py]', body).forEach((b) => (b.onclick = () => setState(Number(b.dataset.i), b.dataset.py, b.dataset.prev, () => ctx.reload())));
-        return { csv: () => [[t('milestone'), t('due_date'), t('amount'), t('col_state')], ...P.map((x) => [x.title, x.due || '', x.amount, x.state])] };
+        return { csv: () => [[t('milestone'), t('due_date'), t('amount'), t('currency'), t('col_state')], ...P.map((x) => [x.title, x.due || '', cv(x.amount), cur, x.state])] };
       },
     },
 
     pcash: {
       size: 'l', title: 'pw_cash',
       render(body, d) {
-        const h = H(), C = d.cash, cur = d.project.currency;
+        const h = H(), { cur, cash: C } = disp(d);
         if (!C) { body.innerHTML = h.empty(); return { csv: () => [] }; }
         const Wd = W(), Ht = 220, L = 46, R = 12, T = 12, B = 28, pw = Wd - L - R, ph = Ht - T - B;
         const tot = (r) => r.paid + r.invoiced + r.pending + r.late;
@@ -339,14 +348,14 @@
         const ti = C.months.findIndex((r) => r.m === C.thisMonth);
         if (ti >= 0) g += `<line class="tl-today" x1="${L + slot * ti + slot / 2}" x2="${L + slot * ti + slot / 2}" y1="${T}" y2="${T + ph}"/>`;
         body.innerHTML = `<svg class="viz cashcols" viewBox="0 0 ${Wd} ${Ht}" role="img" aria-label="${esc(t('pw_cash'))}">${g}</svg>${h.legend([['ok', t('state_paid')], ['c1', t('state_invoiced')], ['idle', t('state_pending')], ['bad', t('late')]])}`;
-        return { csv: () => [[t('month'), t('state_paid'), t('state_invoiced'), t('state_pending'), t('late')], ...C.months.map((r) => [r.m, r.paid, r.invoiced, r.pending, r.late])] };
+        return { csv: () => [[t('month'), t('state_paid'), t('state_invoiced'), t('state_pending'), t('late'), t('currency')], ...C.months.map((r) => [r.m, r.paid, r.invoiced, r.pending, r.late, cur])] };
       },
     },
 
     pcum: {
       size: 'm', title: 'pw_cumulative',
       render(body, d) {
-        const h = H(), C = d.cash, cur = d.project.currency;
+        const h = H(), { cur, cash: C } = disp(d);
         if (!C) { body.innerHTML = h.empty(); return { csv: () => [] }; }
         const Wd = W(), Ht = 220, L = 46, R = 14, T = 12, B = 28, pw = Wd - L - R, ph = Ht - T - B, n = C.months.length;
         const top = nice(Math.max(1, ...C.months.map((r) => r.cumPlanned))), y = (v) => T + ph - (v / top) * ph, x = (i) => (n === 1 ? L + pw / 2 : L + (pw * i) / (n - 1));
@@ -364,7 +373,7 @@
         }
         const last = C.months[n - 1];
         body.innerHTML = `<svg class="viz scurve" viewBox="0 0 ${Wd} ${Ht}" role="img" aria-label="${esc(t('pw_cumulative'))}">${g}</svg>${h.legend([['c1', t('planned'), money(last.cumPlanned, cur)], ['ok', t('state_paid'), money(last.cumReceived, cur)]])}`;
-        return { csv: () => [[t('month'), t('planned'), t('state_paid')], ...C.months.map((r) => [r.m, r.cumPlanned, r.cumReceived])] };
+        return { csv: () => [[t('month'), t('planned'), t('state_paid'), t('currency')], ...C.months.map((r) => [r.m, r.cumPlanned, r.cumReceived, cur])] };
       },
     },
 
@@ -417,6 +426,6 @@
     const order = PORDER.concat(PM.trends ? PM.trends.ids('project') : []);
     if (PM.trends) Object.assign(PW, PM.trends.wrapped('project'));
     for (const id of order) widgets[id] = { ...PW[id], render: (body, dd, ctx) => PW[id].render(body, dd, Object.assign(Object.create(ctx), { nav })) };
-    PM.dash.mount($('#pdHost', root), d, { widgets, order, key: 'proj', always: true, currencyToggle: false, fetch: fetchD });
+    PM.dash.mount($('#pdHost', root), d, { widgets, order, key: 'proj', always: true, currencyToggle: true, fetch: fetchD });
   };
 })();
