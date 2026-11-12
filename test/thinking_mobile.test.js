@@ -42,9 +42,9 @@ test('voice input checks the recording before it spends anything', async () => {
 test('the phone composer pieces exist in the page code and the styles, in both languages', () => {
   const js = fs.readFileSync(path.join(__dirname, '../public/app_chat.js'), 'utf8');
   const css = fs.readFileSync(path.join(__dirname, '../public/styles.css'), 'utf8');
-  for (const id of ['chtPlus', 'chtMic', 'chtSheet', 'chtCam', 'chtRec', 'chtBox', 'chtDeepPill']) assert.ok(js.includes(id), id);
-  for (const cls of ['.cht-sheet-card', '.cht-box.rec', '.cht-wave', '.cht-sw']) assert.ok(css.includes(cls), cls);
-  const keys = ['th_plus', 'th_cam', 'th_photos', 'th_files', 'th_files_h', 'th_deep_h', 'th_mic', 'th_mic_ok', 'th_mic_no', 'th_listening', 'th_transcribing', 'th_mic_blocked', 'th_mic_fail', 'th_mic_long', 'th_mic_none', 'th_deep_off', 'th_sheet_x'];
+  for (const id of ['chtPlus', 'chtMic', 'chtSheet', 'chtCam', 'chtRec', 'chtBox', 'chtDeepPill', 'chtFullBtn']) assert.ok(js.includes(id), id);
+  for (const cls of ['.cht-sheet-card', '.cht-box.rec', '.cht-wave', '.cht-sw', '.cht-panel.full']) assert.ok(css.includes(cls), cls);
+  const keys = ['th_plus', 'th_cam', 'th_photos', 'th_files', 'th_files_h', 'th_deep_h', 'th_mic', 'th_mic_ok', 'th_mic_no', 'th_listening', 'th_transcribing', 'th_mic_blocked', 'th_mic_fail', 'th_mic_long', 'th_mic_none', 'th_deep_off', 'th_sheet_x', 'th_full', 'th_full_off'];
   const en = js.slice(js.indexOf('Object.assign(PM.I18N.en, {\n    th_plus'), js.indexOf('Object.assign(PM.I18N.ar, {\n    th_plus'));
   const ar = js.slice(js.indexOf('Object.assign(PM.I18N.ar, {\n    th_plus'), js.indexOf('const pref = '));
   for (const k of keys) { assert.ok(en.includes(k + ':'), 'en ' + k); assert.ok(ar.includes(k + ':'), 'ar ' + k); }

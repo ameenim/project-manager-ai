@@ -77,13 +77,13 @@
     th_plus: 'Add to your message', th_cam: 'Take a photo', th_photos: 'Add photos', th_files: 'Add files', th_files_h: 'PDF, Word, Excel or PowerPoint', th_deep_h: 'Slower, more careful answers for schedules and trade offs',
     th_mic: 'Voice input', th_mic_ok: 'Use this text', th_mic_no: 'Cancel recording', th_listening: 'Listening', th_transcribing: 'Writing down your words',
     th_mic_blocked: 'The microphone is blocked. Allow it in your browser settings and try again.', th_mic_fail: 'Voice input could not understand that. Try again.', th_mic_long: 'That recording is too long. Keep it under two minutes.', th_mic_none: 'No speech was heard.',
-    th_deep_off: 'Turn off Think deeper', th_sheet_x: 'Close',
+    th_deep_off: 'Turn off Think deeper', th_sheet_x: 'Close', th_full: 'Full screen', th_full_off: 'Exit full screen',
   });
   Object.assign(PM.I18N.ar, {
     th_plus: 'إضافة إلى الرسالة', th_cam: 'التقاط صورة', th_photos: 'إضافة صور', th_files: 'إضافة ملفات', th_files_h: 'مستندات وجداول وعروض تقديمية', th_deep_h: 'إجابات أبطأ وأدق للجداول والمفاضلات',
     th_mic: 'إدخال صوتي', th_mic_ok: 'استخدم هذا النص', th_mic_no: 'إلغاء التسجيل', th_listening: 'جار الاستماع', th_transcribing: 'جار كتابة كلامك',
     th_mic_blocked: 'الميكروفون محظور. اسمح بالوصول إليه من إعدادات المتصفح وحاول مرة أخرى.', th_mic_fail: 'تعذر فهم الصوت. حاول مرة أخرى.', th_mic_long: 'التسجيل طويل جدا. اجعله أقل من دقيقتين.', th_mic_none: 'لم أسمع أي كلام.',
-    th_deep_off: 'إيقاف التفكير بعمق', th_sheet_x: 'إغلاق',
+    th_deep_off: 'إيقاف التفكير بعمق', th_sheet_x: 'إغلاق', th_full: 'ملء الشاشة', th_full_off: 'الخروج من ملء الشاشة',
   });
 
   const pref = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* storage blocked */ } return null; };
@@ -134,6 +134,7 @@
         <div class="cht-resize" id="chtResize" role="separator" aria-orientation="vertical" aria-label="${esc(t('cht_resize'))}" data-tip="${esc(t('cht_resize'))}"></div>
         <header class="cht-head">
           <div class="grow"><h2 id="chtHead">${esc(t('cht_title'))}</h2><div class="small muted cht-ctx" id="chtCtx"></div></div>
+          <button class="btn ghost icon cht-full-btn" type="button" data-act="full" id="chtFullBtn" aria-label="${esc(t('th_full'))}" data-tip="${esc(t('th_full'))}">${icon('expand')}</button>
           <button class="btn ghost icon" type="button" data-act="hist" id="chtHistBtn" aria-label="${esc(t('cht_history'))}" data-tip="${esc(t('cht_history'))}">${icon('clock')}</button>
           <button class="btn ghost icon" type="button" data-act="expand" id="chtExpandBtn" aria-label="${esc(t('th_expand'))}" data-tip="${esc(t('th_expand'))}">${icon('cols')}</button>
           <button class="btn ghost icon cht-wide-btn" type="button" data-act="wide" id="chtWideBtn" aria-label="${esc(t('cht_wide'))}" data-tip="${esc(t('cht_wide'))}">${icon('expand')}</button>
@@ -191,7 +192,7 @@
     root.addEventListener('paste', (e) => { if (e.target && e.target.id === 'chtIn') onPaste(e); });
     root.addEventListener('dragover', (e) => { if (e.dataTransfer && [...(e.dataTransfer.types || [])].includes('Files')) e.preventDefault(); });
     root.addEventListener('drop', onDrop);
-    root.addEventListener('keydown', (e) => { if (e.key === 'Escape' && sheetOpen()) { e.stopPropagation(); closeSheet(); $q('#chtPlus').focus(); } else if (e.key === 'Escape' && V) { e.stopPropagation(); cancelVoice(); } else if (e.key === 'Escape' && S.open && !S.page) { e.stopPropagation(); close(); } else if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('cht-h-item')) { e.preventDefault(); openChat(e.target.dataset.id); } else if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('th-item')) { e.preventDefault(); openThread(e.target.dataset.id); } });
+    root.addEventListener('keydown', (e) => { if (e.key === 'Escape' && sheetOpen()) { e.stopPropagation(); closeSheet(); $q('#chtPlus').focus(); } else if (e.key === 'Escape' && V) { e.stopPropagation(); cancelVoice(); } else if (e.key === 'Escape' && S.full) { e.stopPropagation(); exitFull(); } else if (e.key === 'Escape' && S.open && !S.page) { e.stopPropagation(); close(); } else if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('cht-h-item')) { e.preventDefault(); openChat(e.target.dataset.id); } else if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('th-item')) { e.preventDefault(); openThread(e.target.dataset.id); } });
   }
   // the message box grows with the text up to a cap. A person can raise the base height by dragging its top line.
   function grow() { const i = $q('#chtIn'); if (!i) return; syncHas(); const base = S.inH || 0; i.style.height = 'auto'; i.style.height = Math.max(base, Math.min(i.scrollHeight, Math.max(base, 120))) + 'px'; }
@@ -236,7 +237,7 @@
   }
   function close(quiet) {
     if (!root) return;
-    cancelVoice(); closeSheet();
+    cancelVoice(); closeSheet(); exitFull();
     S.open = false; keep('pm_chat_open', '0');
     const p = $q('#chtPanel'); p.classList.remove('on');
     document.body.classList.remove('chat-open');
@@ -407,6 +408,7 @@
       const chips = S.ctx.projectId ? [ctxName(), t('th_ctx_data'), t('th_ctx_docs')] : [t('th_ctx_portfolio')];
       cb.innerHTML = `<span class="muted">${esc(t('th_sees'))}</span>${chips.map((c) => `<span class="chip gray">${esc(c)}</span>`).join('')}`;
     }
+    paintFull();
     const pill = $q('#chtDeepPill'); if (pill) pill.hidden = !S.deep;
     const sd = $q('#chtSheetDeep'); if (sd) { sd.classList.toggle('on', S.deep); sd.setAttribute('aria-pressed', String(S.deep)); }
     const dp = $q('#chtDeep'); if (dp) { dp.classList.toggle('on', S.deep); dp.setAttribute('aria-pressed', String(S.deep)); dp.dataset.tip = t(S.deep ? 'th_deep_on' : 'th_deep') + '. ' + t('th_deep_tip'); }
@@ -418,6 +420,7 @@
   // The panel is drawn over the page's own empty host, so it fills the space beside the side menu and the project header.
   function place() {
     if (!root || !S.page) return;
+    if (S.full) return fitFull();
     const host = document.getElementById('thHost'); if (!host) return;
     const r = host.getBoundingClientRect();
     // on a phone the chat uses the whole width and the space above the keyboard, like a messaging app
@@ -445,7 +448,7 @@
   }
   function unmountPage() {
     if (!S.page || !root) return;
-    cancelVoice(); closeSheet();
+    cancelVoice(); closeSheet(); exitFull();
     S.page = false; S.open = false;
     if (hostObs) { hostObs.disconnect(); hostObs = null; }
     document.body.classList.remove('chat-page');
@@ -508,6 +511,35 @@
   }
 
   const soon = () => { if (S.raf) return; S.raf = requestAnimationFrame(() => { S.raf = 0; paint(); }); };
+
+  // ---------- full screen: the chat covers the whole browser view ----------
+  // The page layout is kept as an overlay so it works everywhere. Where the browser allows it, the real full screen mode is used
+  // as well, which also hides the browser bars on a phone.
+  function fitFull() {
+    const p = $q('#chtPanel'); if (!p || !S.full) return;
+    const vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+    p.style.top = '0px'; p.style.left = '0px'; p.style.width = document.documentElement.clientWidth + 'px'; p.style.height = vh + 'px';
+  }
+  function paintFull() {
+    const p = $q('#chtPanel'); if (p) p.classList.toggle('full', !!S.full);
+    document.body.classList.toggle('chat-full', !!S.full);
+    const b = $q('#chtFullBtn'); if (!b) return;
+    const lab = t(S.full ? 'th_full_off' : 'th_full');
+    b.innerHTML = icon(S.full ? 'shrink' : 'expand'); b.setAttribute('aria-label', lab); b.dataset.tip = lab; b.classList.toggle('on', !!S.full);
+  }
+  function enterFull() {
+    if (S.full) return;
+    S.full = true; paintFull(); fitFull();
+    try { const r = document.documentElement.requestFullscreen && document.documentElement.requestFullscreen({ navigationUI: 'hide' }); if (r && r.then) r.then(() => { S.fsApi = true; }).catch(() => {}); } catch (e) { /* the overlay is enough */ }
+  }
+  function exitFull(fromBrowser) {
+    if (!S.full) return;
+    S.full = false; paintFull();
+    const p = $q('#chtPanel'); if (p) { if (S.page) place(); else { ['top', 'left', 'width', 'height'].forEach((k) => { p.style[k] = ''; }); } }
+    if (S.fsApi && !fromBrowser) { try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) { /* already out */ } }
+    S.fsApi = false; grow();
+  }
+  document.addEventListener('fullscreenchange', () => { if (S.full && S.fsApi && !document.fullscreenElement) exitFull(true); });
 
   // ---------- the plus menu, shown as a bottom sheet on a phone ----------
   const sheetOpen = () => { const e = $q('#chtSheet'); return !!e && !e.hidden; };
@@ -828,6 +860,7 @@
     if (act === 'hist') return S.mode === 'history' ? (S.needReload ? (S.needReload = false, S.mode = 'chat', load()) : backToChat()) : showHistory();
     if (act === 'expand') { location.hash = S.ctx.projectId ? `#/p/${S.ctx.projectId}/thinking` : '#/thinking'; return; }
     if (act === 'collapse') { const to = S.ctx.projectId ? `#/p/${S.ctx.projectId}/overview` : '#/'; location.hash = to; setTimeout(() => { if (!S.page) open(); }, 80); return; }
+    if (act === 'full') return S.full ? exitFull() : enterFull();
     if (act === 'plus') return sheetOpen() ? closeSheet() : openSheet();
     if (act === 'sheetx') return closeSheet();
     if (act === 'mic') return startVoice();
@@ -961,7 +994,7 @@
   // a language change rebuilds the shell so every label follows
   function rebuild() {
     if (!root) return;
-    cancelVoice();
+    cancelVoice(); exitFull();
     const was = S.open; const pg = S.page; S.mode = 'chat'; S.hist = null; root.remove(); root = null; document.body.classList.remove('chat-open');
     build(); bindFab();
     if (pg) { S.page = false; mountPage(); } else if (was) { S.open = false; open(); } else paint();
@@ -973,8 +1006,8 @@
     new MutationObserver(() => rebuild()).observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
     window.addEventListener('hashchange', onHash);
     startChips();
-    window.addEventListener('resize', () => { if (root) { applyWidth(); place(); } });
-    if (window.visualViewport) window.visualViewport.addEventListener('resize', () => { if (root && S.page) place(); });
+    window.addEventListener('resize', () => { if (root) { applyWidth(); place(); if (S.full) fitFull(); } });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', () => { if (root && S.full) fitFull(); else if (root && S.page) place(); });
     // a click anywhere outside the chat closes it. Dialogs, toasts, tooltips and the loading screen are not "outside".
     document.addEventListener('pointerdown', (e) => {
       if (!S.open || S.page || !root || S.dragging || root.contains(e.target)) return;
