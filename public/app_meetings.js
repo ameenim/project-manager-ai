@@ -31,7 +31,17 @@
   async function openSysDevice(id) {
     try { return await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: id }, echoCancellation: false, noiseSuppression: false, autoGainControl: false }, video: false }); } catch { return null; }
   }
-  const sysMode0 = () => { const pr = loadPrefs(); return ['dev', 'share', 'none'].includes(pr.sysMode) ? pr.sysMode : pr.sysDev ? 'dev' : 'share'; };
+  // 'room' records the microphone only. 'call' also records the other side of an online call. Older saved values map onto these two.
+  const callMode0 = () => { const pr = loadPrefs(); return pr.sysMode === 'call' || pr.sysMode === 'dev' || pr.sysMode === 'share' ? 'call' : 'room'; };
+  const audioInputs = async () => { try { return (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audioinput' && d.deviceId && d.deviceId !== 'default' && d.deviceId !== 'communications'); } catch { return []; } };
+  // the call input found without asking: the one the person saved, otherwise any virtual cable or loopback input that is connected
+  async function findCallInput() {
+    const pr = loadPrefs(), list = await audioInputs();
+    return list.find((d) => pr.sysDev && d.deviceId === pr.sysDev) || list.find((d) => pr.sysLabel && d.label === pr.sysLabel) || list.find((d) => LOOP.test(d.label)) || null;
+  }
+  // what went wrong when the microphone could not be opened
+  const micErr = (e) => { const n = (e && e.name) || ''; return n === 'NotFoundError' || n === 'OverconstrainedError' ? 'none' : n === 'NotReadableError' || n === 'AbortError' || n === 'TrackStartError' ? 'busy' : 'blocked'; };
+  const micErrKey = { blocked: 'mt_rec_nomic', none: 'mt_mic_none_toast', busy: 'mt_mic_busy_toast' };
   function sysHelp() {
     const mac = /Mac/i.test(navigator.platform || navigator.userAgent || '');
     const block = (h, k) => `<h3 style="margin:14px 0 6px">${t(h)}</h3><ol style="margin:0;padding-inline-start:20px;display:flex;flex-direction:column;gap:6px">${t(k).split('|').map((x) => `<li>${esc(x)}</li>`).join('')}</ol>`;
@@ -50,23 +60,46 @@
         systemAudio: 'include', selfBrowserSurface: 'exclude', surfaceSwitching: 'include', preferCurrentTab: false,
       });
     } catch { return null; } // the person closed the picker
-    if (!d.getAudioTracks().length) { d.getTracks().forEach((x) => x.stop()); toast(t('mt_rec_noaudio'), 'warn'); return null; }
+    if (!d.getAudioTracks().length) { d.getTracks().forEach((x) => x.stop()); toast(t('mt_rec_noaudio'), 'warn'); return false; }
     d.getVideoTracks().forEach((v) => { try { v.applyConstraints({ frameRate: 1, width: 320, height: 180 }); } catch { /* optional */ } });
     return d;
   }
 
-  async function startRecorder(meeting, onDone, liveOpt, sysInit) {
+  // Finds the other side of the call with the fewest steps: a saved or detected audio input first (no window), then the browser's share picker.
+  // Returns { stream, devId, label } or null. Must run straight from a click because the picker needs one.
+  async function getCallSource() {
+    const dev = await findCallInput();
+    if (dev) {
+      const d = await openSysDevice(dev.deviceId);
+      if (d) { const pr = loadPrefs(); pr.sysDev = dev.deviceId; pr.sysLabel = dev.label; savePrefs(pr); return { stream: d, devId: dev.deviceId, label: dev.label }; }
+    }
+    if (!canShare()) { toast(t('mt_call_nosupport'), 'warn'); return null; }
+    const d = await pickSystemAudio();
+    return d ? { stream: d, devId: '', label: '' } : (d === false ? null : (toast(t('mt_call_cancelled'), 'info'), null));
+  }
+
+  async function startRecorder(meeting, onDone, liveOpt, sysInit, sysInfo) {
     const prefs = loadPrefs();
     const getMic = (deviceId) => navigator.mediaDevices.getUserMedia({ audio: { ...(deviceId ? { deviceId: { exact: deviceId } } : {}), echoCancellation: prefs.ec !== false, noiseSuppression: prefs.ns !== false, autoGainControl: true }, video: false });
-    let mic;
-    try { mic = await getMic(prefs.deviceId); } catch { if (prefs.deviceId) { prefs.deviceId = ''; try { mic = await getMic(''); } catch { /* handled below */ } } }
-    if (!mic) { if (sysInit) sysInit.getTracks().forEach((x) => x.stop()); toast(t('mt_rec_nomic'), 'err'); return false; }
+    let mic, micFail = 'blocked';
+    try { mic = await getMic(prefs.deviceId); } catch (e) { micFail = micErr(e); if (prefs.deviceId) { prefs.deviceId = ''; try { mic = await getMic(''); } catch (e2) { micFail = micErr(e2); } } }
+    if (!mic) { if (sysInit) sysInit.getTracks().forEach((x) => x.stop()); toast(t(micErrKey[micFail]), 'err'); return false; }
     const AC = window.AudioContext || window.webkitAudioContext;
-    const ctx = new AC(), dest = ctx.createMediaStreamDestination(), mix = ctx.createGain();
+    const ctx = new AC(); if (ctx.state === 'suspended') { try { await ctx.resume(); } catch { /* resumes on the next click */ } }
+    const dest = ctx.createMediaStreamDestination(), mix = ctx.createGain();
     const micGain = ctx.createGain(), micAn = ctx.createAnalyser(); micAn.fftSize = 256;
     micGain.connect(micAn); micGain.connect(dest); micGain.connect(mix);
     let micSrc = null;
-    const wireMic = (stream) => { if (micSrc) micSrc.disconnect(); micSrc = ctx.createMediaStreamSource(stream); micSrc.connect(micGain); };
+    // a microphone that is unplugged or taken by another app ends its track, so the recording moves to the default microphone instead of going silent
+    const wireMic = (stream) => {
+      if (micSrc) micSrc.disconnect(); micSrc = ctx.createMediaStreamSource(stream); micSrc.connect(micGain);
+      const tr = stream.getAudioTracks()[0];
+      if (tr) tr.addEventListener('ended', async () => {
+        if (closed || stream !== mic) return;
+        const ok = await reacquire('');
+        toast(t(ok ? 'mt_mic_lost' : 'mt_mic_lost_none'), ok ? 'warn' : 'err');
+      });
+    };
     wireMic(mic);
     let sysAn = null, sysStream = null, muted = false;
     const hasType = (x) => window.MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(x);
@@ -90,41 +123,49 @@
         <button class="btn ghost icon" id="rcMin" aria-label="${esc(t('mt_dock_min'))}" data-tip="${esc(t('mt_dock_min'))}">${icon('down')}</button></div>
       <div class="rec-body">
         ${liveOpt && liveOpt.on ? `<div class="row"><b class="small grow">${t('mt_live')}</b><span class="chip" id="lvState">${t('mt_live_connecting')}</span><a class="small" href="${href}">${t('mt_live_full')}</a></div><div id="lvBox" class="rec-live"><span class="muted">${t('mt_live_wait')}</span></div>` : ''}
-        <div class="row" style="gap:8px"><label class="small muted" for="rcDev" style="min-width:64px">${t('mt_input')}</label><select id="rcDev" aria-label="${esc(t('mt_input'))}"><option value="">${t('mt_input_default')}</option></select>
+        <div class="rc-row"><span class="rc-lbl">${t('mt_dock_you')}</span><span class="rc-name grow" id="rcMicName" ${bidi}>${t('mt_input_default')}</span><span class="rec-lvl" aria-hidden="true"><i id="mtMic"></i></span>
           <button class="btn icon" id="rcMute" aria-pressed="false" aria-label="${esc(t('mt_mute'))}" data-tip="${esc(t('mt_mute'))}">${icon('mic')}</button></div>
-        <label class="row small" style="gap:8px"><input type="checkbox" id="rcNs" ${prefs.ns !== false ? 'checked' : ''}> ${t('mt_ns')}</label>
-        <div class="row" style="gap:8px"><div class="small muted grow" id="sysLabel">${t('mt_rec_sys_off')}</div><span class="rec-lvl" aria-hidden="true"><i id="mtSys"></i></span></div>
-        <div class="row" style="gap:8px"><label class="small muted" for="rcSysDev" style="min-width:64px">${t('mt_sysdev')}</label><select id="rcSysDev" aria-label="${esc(t('mt_sysdev'))}"><option value="">${t('mt_sysdev_none')}</option></select></div>
-        <div class="row" style="gap:8px"><button class="btn small" id="rcShare">${icon('expand')} ${t('mt_rec_share')}</button><a href="#" class="small grow" id="rcSysHelp" style="text-align:end">${t('mt_sysdev_help')}</a></div>
+        <div class="rc-row"><span class="rc-lbl">${t('mt_dock_call')}</span><span class="rc-name grow" id="sysLabel" role="status">${t('mt_call_off')}</span><span class="rec-lvl" aria-hidden="true"><i id="mtSys"></i></span>
+          <button class="btn small" id="rcShare">${t('mt_call_add')}</button></div>
+        <details class="rc-more" id="rcMore"><summary>${t('mt_dock_more')}</summary>
+          <div class="rc-row"><label class="small muted rc-lbl" for="rcDev">${t('mt_input')}</label><select id="rcDev" class="grow" aria-label="${esc(t('mt_input'))}"><option value="">${t('mt_input_default')}</option></select></div>
+          <div class="rc-row"><label class="small muted rc-lbl" for="rcSysDev">${t('mt_sysdev')}</label><select id="rcSysDev" class="grow" aria-label="${esc(t('mt_sysdev'))}"><option value="">${t('mt_sysdev_none')}</option></select></div>
+          <label class="row small" style="gap:8px"><input type="checkbox" id="rcNs" ${prefs.ns !== false ? 'checked' : ''}> ${t('mt_ns')}</label>
+          <a href="#" class="small" id="rcSysHelp">${t('mt_call_desktop')}</a>
+        </details>
         <div class="row" style="gap:8px"><input type="text" id="rcNote" maxlength="300" placeholder="${esc(t('mt_note_ph'))}" ${bidi}><button class="btn icon" id="rcNoteGo" aria-label="${esc(t('mt_note_add'))}" data-tip="${esc(t('mt_note_add'))}">${icon('plus')}</button></div>
         <div class="row"><span class="small faint grow">${t('mt_rec_keep')}</span><button class="btn ghost small" id="rcCancel">${icon('trash')} ${t('mt_rec_cancel')}</button></div>
       </div>`;
     document.body.appendChild(dock);
     const $d = (s) => $(s, dock);
     // devices
-    let sysDevId = '';
+    let sysDevId = '', sysDevLabel = '';
     const fillDevices = async () => {
       try {
-        const list = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audioinput' && d.deviceId && d.deviceId !== 'default' && d.deviceId !== 'communications');
-        const curId = (mic.getAudioTracks()[0].getSettings() || {}).deviceId || '';
-        $d('#rcDev').innerHTML = `<option value="">${t('mt_input_default')}</option>` + list.map((d, i) => `<option value="${esc(d.deviceId)}" ${d.deviceId === curId && prefs.deviceId ? 'selected' : ''}>${esc(d.label || (t('mt_rec_mic') + ' ' + (i + 1)))}</option>`).join('');
+        const all = await audioInputs();
+        const curId = prefs.deviceId || (mic.getAudioTracks()[0].getSettings() || {}).deviceId || '';
+        const mics = all.filter((d) => !LOOP.test(d.label));
+        $d('#rcDev').innerHTML = `<option value="">${t('mt_input_default')}</option>` + mics.map((d, i) => `<option value="${esc(d.deviceId)}" ${d.deviceId === prefs.deviceId ? 'selected' : ''}>${esc(d.label || (t('mt_rec_mic') + ' ' + (i + 1)))}</option>`).join('');
+        const here = all.find((d) => d.deviceId === curId);
+        $d('#rcMicName').textContent = (here && here.label) || t('mt_input_default');
         // call audio: loopback style inputs first, the current choice stays selected
-        const all = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audioinput' && d.deviceId && d.deviceId !== 'default' && d.deviceId !== 'communications');
         const rank = (d) => (LOOP.test(d.label) ? 0 : 1);
         const sel = $d('#rcSysDev'), keep = sel.value || (sysDevId || '');
-        sel.innerHTML = `<option value="">${t('mt_sysdev_none')}</option>` + all.sort((a, b) => rank(a) - rank(b)).map((d, i) => `<option value="${esc(d.deviceId)}">${esc(d.label || (t('mt_rec_mic') + ' ' + (i + 1)))}${LOOP.test(d.label) ? ' (' + t('mt_sysdev_rec') + ')' : ''}</option>`).join('');
+        sel.innerHTML = `<option value="">${t('mt_sysdev_none')}</option>` + all.slice().sort((a, b) => rank(a) - rank(b)).map((d, i) => `<option value="${esc(d.deviceId)}">${esc(d.label || (t('mt_rec_mic') + ' ' + (i + 1)))}${LOOP.test(d.label) ? ' (' + t('mt_sysdev_rec') + ')' : ''}</option>`).join('');
         if ([...sel.options].some((o) => o.value === keep)) sel.value = keep;
+        if (sysStream) { const f0 = sel.options[0]; if (f0 && !sysDevId) f0.textContent = t('mt_call_shared'); }
       } catch { /* the list is optional */ }
     };
     fillDevices();
-    const reacquire = async (deviceId) => {
+    async function reacquire(deviceId) {
       try {
         const next = await getMic(deviceId);
-        mic.getTracks().forEach((x) => x.stop()); mic = next; wireMic(mic); prefs.deviceId = deviceId || ''; savePrefs(prefs);
-      } catch { toast(t('mt_rec_nomic'), 'err'); }
-    };
-    $d('#rcDev').onchange = (e) => reacquire(e.target.value);
-    $d('#rcNs').onchange = (e) => { prefs.ns = e.target.checked; savePrefs(prefs); reacquire(prefs.deviceId); };
+        const old = mic; mic = next; old.getTracks().forEach((x) => x.stop()); wireMic(mic); prefs.deviceId = deviceId || ''; savePrefs(prefs); fillDevices();
+        return true;
+      } catch (e) { return false; }
+    }
+    $d('#rcDev').onchange = async (e) => { if (!(await reacquire(e.target.value))) { toast(t('mt_mic_none_toast'), 'err'); fillDevices(); } };
+    $d('#rcNs').onchange = async (e) => { prefs.ns = e.target.checked; savePrefs(prefs); if (!(await reacquire(prefs.deviceId))) toast(t('mt_rec_nomic'), 'err'); };
     $d('#rcMute').onclick = (e) => {
       muted = !muted; micGain.gain.value = muted ? 0 : 1; const b = e.currentTarget;
       b.setAttribute('aria-pressed', String(muted)); b.classList.toggle('danger', muted); b.setAttribute('data-tip', t(muted ? 'mt_unmute' : 'mt_mute')); b.setAttribute('aria-label', t(muted ? 'mt_unmute' : 'mt_mute'));
@@ -143,10 +184,12 @@
     $d('#rcNoteGo').onclick = addNote; $d('#rcNote').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); addNote(); } };
     const level = (an) => { const a = new Uint8Array(an.fftSize); an.getByteTimeDomainData(a); let mx = 0; for (const v of a) mx = Math.max(mx, Math.abs(v - 128)); return Math.min(100, Math.round(mx / 128 * 160)); };
     const meterSrc = (stream) => { const src = ctx.createMediaStreamSource(stream), an = ctx.createAnalyser(); an.fftSize = 256; src.connect(an); src.connect(dest); src.connect(mix); an._src = src; return an; };
+    let micHeard = false, micTicks = 0;
     tick = setInterval(() => {
       const s = clock(elapsed());
       $d('#rcTime').textContent = s; document.title = `● ${s} · ${baseTitle}`;
-      $d('#mtMic').style.width = (muted ? 0 : level(micAn)) + '%';
+      const ml = level(micAn); $d('#mtMic').style.width = (muted ? 0 : ml) + '%';
+      if (!micHeard) { if (ml > 0) micHeard = true; else if (!muted && cur.state === 'recording' && ++micTicks === 30) toast(t('mt_mic_quiet'), 'warn'); }
       $d('#mtSys').style.width = sysAn ? level(sysAn) + '%' : '0%';
       emit();
     }, 500);
@@ -226,13 +269,20 @@
     // meeting audio: the other side of the call joins the recording and the live transcript, and the meter proves sound arrives
     const detachSystem = () => {
       const d = sysStream; if (!d) return;
-      sysStream = null; sysAn = null; sysDevId = ''; d.getTracks().forEach((x) => x.stop());
+      sysStream = null; sysAn = null; sysDevId = ''; sysDevLabel = ''; d.getTracks().forEach((x) => x.stop());
       try { d._src && d._src.disconnect(); } catch { /* ignore */ }
-      $d('#sysLabel').textContent = t('mt_rec_sys_off'); $d('#rcSysDev').value = '';
+      paintSys(); $d('#rcSysDev').value = '';
     };
-    const attachSystem = (d, devId) => {
-      sysStream = d; sysDevId = devId || ''; const an = meterSrc(new MediaStream(d.getAudioTracks())); sysAn = an; d._src = an._src;
-      $d('#sysLabel').textContent = t('mt_rec_sys'); $d('#rcSysDev').value = sysDevId;
+    const paintSys = () => {
+      const on = !!sysStream;
+      $d('#sysLabel').textContent = on ? t('mt_call_on') + (sysDevLabel ? ' · ' + sysDevLabel : '') : t('mt_call_off');
+      const b = $d('#rcShare'); b.textContent = on ? t('mt_call_remove') : t('mt_call_add'); b.classList.toggle('ghost', on);
+      dock.classList.toggle('has-call', on);
+      const first = $d('#rcSysDev').options[0]; if (first) first.textContent = on && !sysDevId ? t('mt_call_shared') : t('mt_sysdev_none');
+    };
+    const attachSystem = (d, devId, label) => {
+      sysStream = d; sysDevId = devId || ''; sysDevLabel = label || ''; const an = meterSrc(new MediaStream(d.getAudioTracks())); sysAn = an; d._src = an._src;
+      paintSys(); $d('#rcSysDev').value = sysDevId;
       const lost = () => {
         if (closed || sysStream !== d) return;
         detachSystem(); toast(t('mt_sys_lost'), 'warn');
@@ -246,26 +296,22 @@
         else if (++n >= 16) { clearInterval(check); toast(t('mt_sys_quiet'), 'warn'); }
       }, 500);
     };
-    $d('#rcShare').onclick = async () => { const d = await pickSystemAudio(); if (d) { detachSystem(); prefs.sysMode = 'share'; savePrefs(prefs); attachSystem(d); } };
+    $d('#rcShare').onclick = async () => {
+      if (sysStream) { detachSystem(); prefs.sysMode = 'room'; savePrefs(prefs); return; }
+      const src = await getCallSource();
+      if (src) { detachSystem(); prefs.sysMode = 'call'; if (src.devId) { prefs.sysDev = src.devId; prefs.sysLabel = src.label; } savePrefs(prefs); attachSystem(src.stream, src.devId, src.label); }
+    };
     $d('#rcSysHelp').onclick = (e) => { e.preventDefault(); sysHelp(); };
     $d('#rcSysDev').onchange = async (e) => {
       const id = e.target.value; detachSystem();
-      if (!id) { prefs.sysMode = 'none'; savePrefs(prefs); return; }
+      if (!id) { prefs.sysMode = 'room'; savePrefs(prefs); return; }
       const d = await openSysDevice(id);
       if (!d) { toast(t('mt_sysdev_fail'), 'err'); $d('#rcSysDev').value = ''; return; }
-      prefs.sysDev = id; prefs.sysMode = 'dev'; savePrefs(prefs); attachSystem(d, id);
+      const label = ((await audioInputs()).find((x) => x.deviceId === id) || {}).label || '';
+      prefs.sysDev = id; prefs.sysLabel = label; prefs.sysMode = 'call'; savePrefs(prefs); attachSystem(d, id, label);
     };
     navigator.mediaDevices.addEventListener && navigator.mediaDevices.addEventListener('devicechange', fillDevices);
-    if (sysInit) attachSystem(sysInit);
-    else if (liveOpt && liveOpt.sysMode === 'dev') {
-      // the saved input is opened without any prompt, so there is no sharing window
-      (async () => {
-        if (prefs.sysDev) {
-          const d = await openSysDevice(prefs.sysDev);
-          if (d) attachSystem(d, prefs.sysDev); else toast(t('mt_sysdev_missing'), 'warn');
-        } else { toast(t('mt_sysdev_choose'), 'info'); const sl = $d('#rcSysDev'); sl.classList.add('attn'); sl.focus(); }
-      })();
-    }
+    if (sysInit) attachSystem(sysInit, sysInfo && sysInfo.devId, sysInfo && sysInfo.label);
     $d('#rcPause').onclick = (e) => {
       const b = e.currentTarget;
       if (rec.state === 'recording') { rec.pause(); pausedAt = Date.now(); cur.state = 'paused'; dock.classList.add('paused'); b.innerHTML = icon('play'); b.setAttribute('data-tip', t('mt_rec_resume')); b.setAttribute('aria-label', t('mt_rec_resume')); }
@@ -299,9 +345,74 @@
     return out;
   }
 
+  // ---------------- microphone check (inside the new meeting dialog) ----------------
+  // Tells the person in plain words whether the microphone works before recording starts: permission, device, a live level.
+  function micCheck(host, onState) {
+    const prefs = loadPrefs();
+    let stream = null, ctx = null, timer = 0, st = '', gone = false, perm = null, seq = 0, devs = [];
+    const setState = (k) => { st = k; onState && onState(k); };
+    const release = () => { clearInterval(timer); timer = 0; if (stream) stream.getTracks().forEach((x) => x.stop()); stream = null; if (ctx) { try { ctx.close(); } catch { /* ignore */ } } ctx = null; };
+    const bad = (k, retry) => `<div class="mc-bad" role="alert"><div class="mc-t">${icon('alert')} <b>${t('mt_mc_' + k)}</b></div><div class="small muted">${t('mt_mc_' + k + '_h')}</div>${retry ? `<button type="button" class="btn small" id="mcRetry">${icon('refresh')} ${t('mt_mc_retry')}</button>` : ''}</div>`;
+    const paint = (k, extra) => {
+      if (gone) return; setState(k);
+      if (k === 'checking') host.innerHTML = `<div class="mc-t muted" role="status">${PM.loader ? PM.loader.html({ size: 'sm' }) : ''} ${t('mt_mc_checking')}</div>`;
+      else if (k === 'need') host.innerHTML = `<div class="mc-need"><div class="small muted grow">${t('mt_mc_allow_h')}</div><button type="button" class="btn primary small" id="mcAllow">${icon('mic')} ${t('mt_mc_allow')}</button></div>`;
+      else if (k === 'ready') {
+        const mics = devs.filter((d) => !LOOP.test(d.label)), cur = (stream.getAudioTracks()[0].getSettings() || {}).deviceId || '';
+        const name = ((devs.find((d) => d.deviceId === cur) || {}).label) || t('mt_input_default');
+        host.innerHTML = `<div class="mc-ready" role="status"><span class="mc-ok" aria-hidden="true">${icon('check')}</span><div class="grow" style="min-width:0"><div class="mc-t"><b>${t('mt_mc_ready')}</b></div><div class="small muted mc-name" ${bidi}>${esc(name)}</div></div><span class="rec-lvl mc-lvl" aria-hidden="true"><i id="mcLvl"></i></span></div>
+          <div class="small faint">${t('mt_mc_speak')}</div>${mics.length > 1 ? `<label class="f small">${t('mt_mc_change')}<select id="mcSel"><option value="">${t('mt_input_default')}</option>${mics.map((d, i) => `<option value="${esc(d.deviceId)}" ${prefs.deviceId === d.deviceId ? 'selected' : ''}>${esc(d.label || (t('mt_rec_mic') + ' ' + (i + 1)))}</option>`).join('')}</select></label>` : ''}`;
+      } else host.innerHTML = bad(k, k !== 'unsupported' && k !== 'insecure');
+      extra && extra();
+    };
+    const meter = () => {
+      const AC = window.AudioContext || window.webkitAudioContext; if (!AC || !stream) return;
+      try {
+        ctx = new AC(); const an = ctx.createAnalyser(); an.fftSize = 256; ctx.createMediaStreamSource(stream).connect(an);
+        const a = new Uint8Array(an.fftSize), bar = host.querySelector('#mcLvl');
+        timer = setInterval(() => { if (!bar || !bar.isConnected) return; an.getByteTimeDomainData(a); let mx = 0; for (const v of a) mx = Math.max(mx, Math.abs(v - 128)); bar.style.width = Math.min(100, Math.round(mx / 128 * 160)) + '%'; }, 100);
+      } catch { /* the meter is optional */ }
+    };
+    async function run(gesture) {
+      const my = ++seq; release();
+      if (!window.isSecureContext) return paint('insecure');
+      if (!canRecord()) return paint('unsupported');
+      paint('checking');
+      let state = '';
+      try { const ps = await navigator.permissions.query({ name: 'microphone' }); if (perm && perm !== ps) perm.onchange = null; perm = ps; state = ps.state; ps.onchange = () => { if (!gone) run(false); }; } catch { /* Safari and Firefox do not report it */ }
+      if (my !== seq || gone) return;
+      if (state === 'denied') return paint('blocked');
+      if (state !== 'granted' && !gesture) return paint('need', () => { const b = host.querySelector('#mcAllow'); if (b) b.onclick = () => run(true); });
+      const open = (id) => navigator.mediaDevices.getUserMedia({ audio: { ...(id ? { deviceId: { exact: id } } : {}), echoCancellation: prefs.ec !== false, noiseSuppression: prefs.ns !== false, autoGainControl: true }, video: false });
+      let s, fail = 'blocked';
+      try { s = await open(prefs.deviceId); } catch (e) { fail = micErr(e); if (prefs.deviceId && fail === 'none') { prefs.deviceId = ''; savePrefs(prefs); try { s = await open(''); } catch (e2) { fail = micErr(e2); } } }
+      if (my !== seq || gone) { if (s) s.getTracks().forEach((x) => x.stop()); return; }
+      if (!s) return paint(fail, () => { const b = host.querySelector('#mcRetry'); if (b) b.onclick = () => run(true); });
+      stream = s; devs = await audioInputs();
+      if (my !== seq || gone) { release(); return; }
+      s.getAudioTracks()[0].addEventListener('ended', () => { if (stream === s && !gone) run(false); });
+      paint('ready', () => {
+        meter();
+        const sel = host.querySelector('#mcSel');
+        if (sel) sel.onchange = () => { prefs.deviceId = sel.value; savePrefs(prefs); run(true); };
+      });
+    }
+    // a microphone plugged in or removed while the dialog is open updates the check by itself
+    const onDev = () => { if (!gone && st !== 'checking' && st !== 'need') run(false); };
+    navigator.mediaDevices && navigator.mediaDevices.addEventListener && navigator.mediaDevices.addEventListener('devicechange', onDev);
+    host.addEventListener('click', (e) => { if (e.target.closest('#mcRetry')) run(true); });
+    run(false);
+    return {
+      state: () => st, retry: run,
+      deviceId: () => prefs.deviceId || '',
+      release,
+      stop() { gone = true; seq++; release(); try { if (perm) perm.onchange = null; navigator.mediaDevices.removeEventListener('devicechange', onDev); } catch { /* ignore */ } },
+    };
+  }
+
   // ---------------- new meeting dialog ----------------
   async function newMeeting(p, info, after) {
-    let mode = canRecord() ? 'record' : 'upload';
+    let mode = canRecord() ? 'record' : 'upload', src = callMode0(), mc = null;
     const att = [];
     const people = info.attendees || [];
     const m = modal({
@@ -315,9 +426,10 @@
         ${info.stt && info.stt.live && canRecord() ? `<label class="row small" style="gap:8px"><input type="checkbox" id="mtLive" checked> ${t('mt_live_on')}</label>` : ''}
         <label class="f">${t('mt_f_notes')}<textarea id="mtN" rows="2" maxlength="4000" ${bidi}></textarea></label>
         <div><div class="small muted" style="font-weight:600;margin-bottom:6px">${t('mt_how')}</div>
-          <div class="seg mt-mode" id="mtMode" role="group" aria-label="${t('mt_how')}">${canRecord() ? `<button data-m="record">${icon('mic')} ${t('mt_record')}</button>` : ''}<button data-m="upload">${icon('up')} ${t('mt_upload')}</button><button data-m="doc">${icon('file')} ${t('mt_doc')}</button><button data-m="text">${icon('file')} ${t('mt_paste')}</button></div>
+          <div class="seg mt-mode" id="mtMode" role="group" aria-label="${t('mt_how')}"><button data-m="record">${icon('mic')} ${t('mt_record')}</button><button data-m="upload">${icon('up')} ${t('mt_upload')}</button><button data-m="doc">${icon('file')} ${t('mt_doc')}</button><button data-m="text">${icon('file')} ${t('mt_paste')}</button></div>
           <div id="mtModeBody" class="mt"></div></div></div>`,
       footer: `<button class="btn" data-close>${t('cancel')}</button><button class="btn primary" id="mtGo"></button>`,
+      onClose: () => { if (mc) { mc.stop(); mc = null; } },
     });
     const drawAtt = () => {
       const isPerson = (x) => att.some((a) => a.name === x.name);
@@ -348,12 +460,31 @@
     const drawMode = () => {
       $$('#mtMode button', m.el).forEach((b) => b.classList.toggle('on', b.dataset.m === mode));
       const body = $('#mtModeBody', m.el);
-      body.innerHTML = mode === 'doc' ? `<input type="file" id="mtD" accept=".txt,.md,.vtt,.srt,.docx,.pdf,text/plain"><p class="small muted">${t('mt_doc_hint')}</p><label class="f">${t('mt_kind')}<select id="mtKind"><option value="auto">${t('mt_kind_auto')}</option><option value="transcript">${t('mt_kind_transcript')}</option><option value="minutes">${t('mt_kind_minutes')}</option></select></label>` : mode === 'record' ? `<p class="small muted">${t('mt_record_hint')}</p><div class="col" style="gap:8px;margin-top:10px"><div class="small" style="font-weight:600">${t('mt_sysm')}</div>${[['dev', t('mt_sysm_dev'), t('mt_sysm_dev_h')], ['share', t('mt_sysm_share'), ''], ['none', t('mt_sysm_none'), '']].map(([v, l, h]) => `<label class="row small" style="gap:8px;align-items:flex-start"><input type="radio" name="mtSysM" value="${v}" ${sysMode0() === v ? 'checked' : ''} ${v === 'share' && !canShare() ? 'disabled' : ''}><span>${l}${h ? `<br><span class="muted">${h}</span>` : ''}</span></label>`).join('')}<a href="#" class="small" id="mtSysHelp">${t('mt_sysdev_help')}</a></div>` : mode === 'upload' ? `<input type="file" id="mtF" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.webm"><p class="small muted">${t('mt_upload_hint')} ${t('mt_audio_deleted')}</p>`
+      body.innerHTML = mode === 'doc' ? `<input type="file" id="mtD" accept=".txt,.md,.vtt,.srt,.docx,.pdf,text/plain"><p class="small muted">${t('mt_doc_hint')}</p><label class="f">${t('mt_kind')}<select id="mtKind"><option value="auto">${t('mt_kind_auto')}</option><option value="transcript">${t('mt_kind_transcript')}</option><option value="minutes">${t('mt_kind_minutes')}</option></select></label>` : mode === 'record' ? `<div class="col" style="gap:10px"><div class="small muted" style="font-weight:600">${t('mt_src_q')}</div><div class="mc-src" id="mcSrc" role="radiogroup" aria-label="${esc(t('mt_src_q'))}">${[['room', 'mic', 'mt_src_room'], ['call', 'globe', 'mt_src_call']].map(([v, ic, k]) => `<button type="button" role="radio" class="mc-card ${src === v ? 'on' : ''}" aria-checked="${src === v}" data-src="${v}">${icon(ic)}<b>${t(k)}</b><span class="small muted">${t(k + '_h')}</span></button>`).join('')}</div><div class="small muted" id="mcCall" role="status"></div><div class="mc-box" id="mcMic"></div></div>` : mode === 'upload' ? `<input type="file" id="mtF" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.webm"><p class="small muted">${t('mt_upload_hint')} ${t('mt_audio_deleted')}</p>`
         : `<textarea id="mtTx" rows="6" style="width:100%" placeholder="${esc(t('mt_paste_hint'))}" ${bidi}></textarea>`;
-      $('#mtGo', m.el).innerHTML = mode === 'record' ? `${icon('mic')} ${t('mt_start')}` : t('mt_create');
+      const go = $('#mtGo', m.el);
+      go.innerHTML = mode === 'record' ? `${icon('mic')} ${t('mt_start')}` : t('mt_create');
+      if (mc) { mc.stop(); mc = null; }
+      go.disabled = false;
+      if (mode === 'record') {
+        go.disabled = true; // Start stays off until the microphone works, so the click that starts it can also open the share picker
+        mc = micCheck($('#mcMic', m.el), (k) => { go.disabled = k !== 'ready'; if (k === 'ready') drawCall(); });
+        drawCall();
+      }
+    };
+    // one line under the two choices says what will happen for an online call, with the fewest steps
+    const drawCall = async () => {
+      const el = $('#mcCall', m.el); if (!el) return;
+      if (src !== 'call') { el.innerHTML = ''; return; }
+      const dev = await findCallInput(); if (!el.isConnected || src !== 'call') return;
+      el.innerHTML = (dev ? t('mt_call_saved', { d: esc(dev.label || t('mt_sysdev')) }) : canShare() ? t('mt_call_pick') : t('mt_call_nosupport')) + ` <a href="#" id="mtSysHelp">${t('mt_call_desktop')}</a>`;
     };
     drawMode();
-    m.el.addEventListener('click', (e) => { if (e.target.closest('#mtSysHelp')) { e.preventDefault(); sysHelp(); } });
+    m.el.addEventListener('click', (e) => {
+      if (e.target.closest('#mtSysHelp')) { e.preventDefault(); sysHelp(); return; }
+      const c = e.target.closest('#mcSrc .mc-card');
+      if (c) { src = c.dataset.src; $$('#mcSrc .mc-card', m.el).forEach((b) => { const on = b === c; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); }); const pr = loadPrefs(); pr.sysMode = src; savePrefs(pr); drawCall(); }
+    });
     $('#mtMode', m.el).onclick = (e) => { const b = e.target.closest('button'); if (b) { mode = b.dataset.m; drawMode(); } };
     $('#mtGo', m.el).onclick = (e) => busy(e.currentTarget, async () => {
       const title = $('#mtT', m.el).value.trim();
@@ -374,10 +505,11 @@
       }
       if (mode === 'record') {
         // the browser only opens its picker straight from the click, so the meeting audio is asked for before anything else
-        const sysMode = ($('input[name=mtSysM]:checked', m.el) || {}).value || 'none';
-        { const pr = loadPrefs(); pr.sysMode = sysMode; savePrefs(pr); }
-        const sys = sysMode === 'share' ? await pickSystemAudio() : null;
-        if (!(await startRecorderFor(p, body, after, !!($('#mtLive', m.el) && $('#mtLive', m.el).checked), sys, sysMode))) { if (sys) sys.getTracks().forEach((x) => x.stop()); return; }
+        const liveOn = !!($('#mtLive', m.el) && $('#mtLive', m.el).checked);
+        { const pr = loadPrefs(); pr.sysMode = src; savePrefs(pr); }
+        if (mc) mc.release(); // the recorder opens the microphone itself, so the check lets go of it first
+        const call = src === 'call' ? await getCallSource() : null;
+        if (!(await startRecorderFor(p, body, after, liveOn, call && call.stream, call))) { if (call) call.stream.getTracks().forEach((x) => x.stop()); if (mc) mc.retry(false); return; }
         m.close(); return;
       }
       const r = await api('POST', `/api/projects/${p.id}/meetings`, body);
@@ -390,7 +522,7 @@
     fd.append('file', blob, blob.name || 'meeting.webm'); fd.append('duration_sec', String(dur || 0));
     await api('POST', `/api/meetings/${id}/audio`, fd);
   }
-  async function startRecorderFor(p, body, after, liveOn, sys, sysMode) {
+  async function startRecorderFor(p, body, after, liveOn, sys, sysInfo) {
     if (PM.rec.active()) { toast(t('mt_rec_only_one'), 'err'); return false; }
     const r = await api('POST', `/api/projects/${p.id}/meetings`, body);
     const meeting = r.meeting, id = meeting.id;
@@ -402,7 +534,7 @@
         toast(t('mt_rec_sent'), 'ok', { label: t('mt_open_meeting'), fn: () => { location.hash = `#/p/${p.id}/meetings?m=${id}`; } });
       } catch (e) { toast(e.message, 'err'); }
       if (here()) window.dispatchEvent(new HashChangeEvent('hashchange'));
-    }, { id, on: liveOn, sysMode }, sys);
+    }, { id, on: liveOn }, sys, sysInfo);
     if (!ok) { try { await api('DELETE', `/api/meetings/${id}`); } catch { /* ignore */ } return false; }
     after(id);
     return true;

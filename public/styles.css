@@ -1688,6 +1688,33 @@ body.chat-open .rec-dock { inset-inline-end: calc(min(var(--chat-w, 420px), 100v
 .lv-x { flex: 1 1 auto; min-width: 0; unicode-bidi: plaintext; text-align: start; overflow-wrap: anywhere; }
 #rcSysDev { flex: 1 1 auto; min-width: 0; } #rcSysDev.attn { outline: 2px solid var(--primary); outline-offset: 2px; }
 
+/* Meeting setup: two clear choices and a live microphone check */
+.mc-src { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.mc-card { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-height: 44px; padding: 12px; text-align: start; border: 1px solid var(--border-strong); border-radius: var(--r-m); background: var(--surface); color: var(--text); font: inherit; cursor: pointer; transition: background .15s, border-color .15s; }
+.mc-card svg, .mc-card .i { width: 18px; height: 18px; color: var(--muted); }
+.mc-card:hover { background: var(--surface-2); }
+.mc-card.on { border-color: var(--primary); background: var(--primary-soft); box-shadow: inset 0 0 0 1px var(--primary); }
+.mc-card.on svg, .mc-card.on .i { color: var(--primary); }
+.mc-box { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-m); background: var(--surface-2); }
+.mc-t { display: flex; align-items: center; gap: 8px; font-size: var(--fs-body); }
+.mc-bad .mc-t { color: var(--danger); }
+.mc-bad { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.mc-need { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.mc-ready { display: flex; align-items: center; gap: 10px; }
+.mc-ok { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--success-soft); color: var(--success); flex: none; }
+.mc-ok svg, .mc-ok .i { width: 14px; height: 14px; }
+.mc-lvl { width: 72px; }
+.mc-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 480px) { .mc-src { grid-template-columns: 1fr; } }
+/* Recording box rows: you, the call, then the rest tucked under More options */
+.rc-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.rc-lbl { min-width: 64px; flex: none; font-size: var(--fs-small); color: var(--muted); }
+.rc-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-small); }
+.rec-dock.has-call #sysLabel { color: var(--success); }
+.rc-more { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+.rc-more > summary { cursor: pointer; font-size: var(--fs-small); color: var(--muted); }
+.rc-more[open] > summary { margin-bottom: 8px; }
+
 /* Add people from the schedule owners */
 .tx-list { display: grid; gap: 2px; max-height: 52vh; overflow: auto; margin-top: 10px; border: 1px solid var(--border); border-radius: var(--r-m); padding: 4px; }
 .tx-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--r-s); cursor: pointer; transition: background .12s var(--ease); } .tx-row:hover { background: var(--surface-2); }
