@@ -43,7 +43,7 @@
   }
   function place() {
     $$('.sidebar .nav').forEach(function (nav) { track('nav', nav, $('a.active', nav), 'y'); });
-    $$('.proj-head .tabs').forEach(function (tabs) { track('tabs', tabs, $('.tab.active', tabs), 'x'); });
+    $$('.proj-head .tabs').forEach(function (tabs) { var on = $('.tab.active', tabs); track('tabs', tabs, on, 'x'); if (on && tabs.scrollWidth > tabs.clientWidth + 2) tabs.scrollTo({ left: Math.max(0, on.offsetLeft - (tabs.clientWidth - on.offsetWidth) / 2), behavior: reduced() ? 'auto' : 'smooth' }); });
   }
   var placeQ = 0;
   function schedule() { if (placeQ) return; placeQ = requestAnimationFrame(function () { placeQ = 0; place(); entrance(); }); }

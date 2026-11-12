@@ -48,3 +48,14 @@ test('text for lazy screens loads with the page so headers never show raw keys',
   const dict = pub('i18n_lazy.js');
   for (const k of ['tab_meetings', 'tab_closure', 'pc_closed', 'cl_banner_head', 'cl_banner_go']) assert.ok(new RegExp('\\b' + k + ':').test(dict), k + ' is defined up front');
 });
+
+test('phone glass layer: floating controls are frosted, touch targets are 44px, headers never squeeze, and solid fallbacks exist', () => {
+  const css = pub('glass.css');
+  const mobile = css.slice(css.indexOf('liquid glass navigation layer'));
+  assert.ok(/\.nav-fab[^}]*backdrop-filter/.test(mobile) && /\.cht-fab[^}]*backdrop-filter/.test(mobile), 'menu and chat buttons are frosted');
+  assert.ok(/\.proj-head \.tabs > \.ui-ind[^}]*var\(--glass-dense\)/.test(mobile), 'tabs use a sliding glass pill');
+  assert.ok(/pointer: coarse[\s\S]*min-height: 44px/.test(mobile), 'touch targets are at least 44px');
+  assert.ok(/\.lg-head > \.grow[^}]*flex: 1 1 100%/.test(mobile), 'the Logs title block gets the full line');
+  assert.ok(/prefers-reduced-transparency[\s\S]*\.nav-fab[^}]*var\(--surface\)/.test(mobile), 'floating controls turn solid on request');
+  assert.ok(!/#[0-9a-f]{3,8}\b/i.test(mobile.replace(/\/\*[\s\S]*?\*\//g, '')), 'no hex colors in the phone layer');
+});
