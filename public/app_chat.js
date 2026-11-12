@@ -513,8 +513,7 @@
   const soon = () => { if (S.raf) return; S.raf = requestAnimationFrame(() => { S.raf = 0; paint(); }); };
 
   // ---------- full screen: the chat covers the whole browser view ----------
-  // The page layout is kept as an overlay so it works everywhere. Where the browser allows it, the real full screen mode is used
-  // as well, which also hides the browser bars on a phone.
+  // The chat is drawn as an overlay over the whole browser window. The browser's own full screen mode is not used.
   function fitFull() {
     const p = $q('#chtPanel'); if (!p || !S.full) return;
     const vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
@@ -530,16 +529,13 @@
   function enterFull() {
     if (S.full) return;
     S.full = true; paintFull(); fitFull();
-    try { const r = document.documentElement.requestFullscreen && document.documentElement.requestFullscreen({ navigationUI: 'hide' }); if (r && r.then) r.then(() => { S.fsApi = true; }).catch(() => {}); } catch (e) { /* the overlay is enough */ }
   }
-  function exitFull(fromBrowser) {
+  function exitFull() {
     if (!S.full) return;
     S.full = false; paintFull();
     const p = $q('#chtPanel'); if (p) { if (S.page) place(); else { ['top', 'left', 'width', 'height'].forEach((k) => { p.style[k] = ''; }); } }
-    if (S.fsApi && !fromBrowser) { try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) { /* already out */ } }
-    S.fsApi = false; grow();
+    grow();
   }
-  document.addEventListener('fullscreenchange', () => { if (S.full && S.fsApi && !document.fullscreenElement) exitFull(true); });
 
   // ---------- the plus menu, shown as a bottom sheet on a phone ----------
   const sheetOpen = () => { const e = $q('#chtSheet'); return !!e && !e.hidden; };
