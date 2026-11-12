@@ -59,3 +59,8 @@ test('phone glass layer: floating controls are frosted, touch targets are 44px, 
   assert.ok(/prefers-reduced-transparency[\s\S]*\.nav-fab[^}]*var\(--surface\)/.test(mobile), 'floating controls turn solid on request');
   assert.ok(!/#[0-9a-f]{3,8}\b/i.test(mobile.replace(/\/\*[\s\S]*?\*\//g, '')), 'no hex colors in the phone layer');
 });
+
+test('project tabs center the active tab only when it changes, so a swipe is never undone', () => {
+  const js = pub('ui.js');
+  assert.ok(/dataset\.centered/.test(js) && /changed &&/.test(js), 'centering is skipped when the active tab is the same');
+});
