@@ -2298,3 +2298,26 @@ body.chat-full { overflow: hidden; }
 }
 @media (min-width: 821px) and (max-width: 1180px) { .cht-panel.page { grid-template-columns: 240px minmax(0, 1fr); } .cht-panel.page.side-off { grid-template-columns: 0 minmax(0, 1fr); } }
 @media (prefers-reduced-motion: reduce) { .cht-box { transition: none; } }
+
+/* Today strip: the first screen of the portfolio, one count and one place to go for each thing that needs the project manager */
+.today-strip { padding: 14px 18px; }
+.today-strip .ts-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.today-strip .ts-head h3 { margin: 0; }
+.today-strip .ts-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.ts-tile { display: grid; gap: 2px; padding: 12px 14px; border: 1px solid var(--border); border-inline-start: 3px solid var(--border-strong); border-radius: 12px; background: var(--surface); color: var(--text); text-decoration: none; transition: background .15s var(--ease), transform .2s var(--ease); min-height: 44px; }
+.ts-tile:hover { background: var(--surface-2); transform: translateY(-1px); }
+.ts-tile:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.ts-tile.bad { border-inline-start-color: var(--danger); } .ts-tile.warn { border-inline-start-color: var(--warning); } .ts-tile.ok { border-inline-start-color: var(--success); }
+.ts-v { font-size: var(--fs-metric); font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.ts-l { font-size: var(--fs-body); font-weight: 600; }
+.ts-h { font-size: var(--fs-small); color: var(--muted); }
+.ts-go { font-size: var(--fs-small); color: var(--primary); font-weight: 600; }
+@media (max-width: 860px) { .today-strip .ts-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 420px) { .today-strip .ts-grid { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .ts-tile { transition: none; } .ts-tile:hover { transform: none; } }
+
+/* empty Owner and Due cells offer the one action that fills them */
+.lg-add { font-size: var(--fs-small); font-weight: 500; color: var(--muted); text-decoration: none; min-height: 24px; }
+.lg-add:hover { color: var(--primary); text-decoration: underline; }
+.linkbtn { background: none; border: 0; padding: 0; font: inherit; color: var(--primary); cursor: pointer; }
+.linkbtn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }

@@ -126,6 +126,7 @@
     'Back to home': 'العودة إلى الرئيسية', 'Create account': 'إنشاء حساب', 'Welcome back': 'مرحبًا بعودتك',
     'Sign in to your project workspace.': 'سجّل الدخول إلى مساحة عمل مشاريعك.',
     'Start your free trial': 'ابدأ تجربتك المجانية', '15 days free. No card needed.': '15 يومًا مجانًا. بدون بطاقة.',
+    'Forgot your password?': 'نسيت كلمة المرور؟', 'Email me a reset link': 'أرسل لي رابط إعادة التعيين',
     'Full name': 'الاسم الكامل', 'Email': 'البريد الإلكتروني', 'Password': 'كلمة المرور',
     'Demo login: pm@example.com and demo1234.': 'دخول تجريبي: pm@example.com و demo1234.', 'Fill demo details': 'تعبئة البيانات التجريبية',
     'You are ready to go': 'أنت جاهز للانطلاق', 'Your trial is ready to start': 'تجربتك جاهزة للبدء',

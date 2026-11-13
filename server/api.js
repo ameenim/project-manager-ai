@@ -788,8 +788,8 @@ module.exports = function createApi(store, auth, connectors, ops) {
       riskP = Pipe.analyzeRisks({ project: proj(), docs: rdocs, items: view(), text: P.texts, checks: preChecks }).catch((e) => { console.error('risk analysis', e); return []; });
     }
     const syn = await synP;
-    if (syn && syn.failed) out.notes.push('The schedule could not be built: ' + syn.reason + '. Use Analyze again.');
-    if (syn && syn.failed && P.analysis && !P.analysis.warning) P.analysis.warning = { code: 'schedule', message: 'The documents were read and the items were filled in, but the schedule could not be built (' + syn.reason + '). Use Analyze again to rebuild it.' };
+    if (syn && syn.failed) out.notes.push('The schedule was only partly built. Use Analyze again to rebuild it.');
+    if (syn && syn.failed && P.analysis && !P.analysis.warning) P.analysis.warning = { code: 'schedule', message: 'The documents were read and the items were filled in, but the schedule was only partly built. Use Analyze again to rebuild it.' };
     if (syn && syn.plan.length >= 3) {
       for (const i of P.items) if (i.kind === 'schedule' && i.status === 'proposed') { i.status = 'ignored'; i.data.superseded = true; }
       const cal = S.calendar(rawProject(P));

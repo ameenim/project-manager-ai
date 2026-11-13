@@ -272,6 +272,7 @@
       var isReset = m === 'reset';
       var tabs = $('.tabs', card); if (tabs) tabs.hidden = isReset;
       var forgot = $('#forgotNote'); if (forgot) forgot.hidden = m !== 'in';
+      var fm = $('#forgotMsg'); if (fm) { fm.hidden = true; fm.textContent = ''; }
       emailF.hidden = isReset;
       tabIn.setAttribute('aria-selected', m === 'in'); tabUp.setAttribute('aria-selected', m === 'up');
       tabIn.tabIndex = m === 'in' ? 0 : -1; tabUp.tabIndex = m === 'up' ? 0 : -1;
@@ -300,6 +301,21 @@
       eye.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
     });
     var submitting = false;
+    // Forgot password: ask for a link by email. If the server has no mail service it says so and we point to support.
+    var forgotBtn = $('#forgotBtn'), forgotMsg = $('#forgotMsg');
+    if (forgotBtn) forgotBtn.addEventListener('click', function () {
+      var em = $('input', emailF).value.trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) { fieldErr(emailF, 'Enter your email address first, then ask for a reset link.'); $('input', emailF).focus(); return; }
+      fieldErr(emailF, ''); forgotBtn.disabled = true; forgotMsg.hidden = false; forgotMsg.textContent = 'Sending';
+      fetch('/api/auth/forgot', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: em }) })
+        .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, d: d }; }); })
+        .then(function (res) {
+          if (!res.ok) { forgotMsg.textContent = (res.d && res.d.error) || 'The request did not go through. Try again.'; return; }
+          forgotMsg.textContent = res.d.mail === false ? 'Email reset is not set up yet. Ask support for a one time reset link.' : 'If an account exists for ' + em + ', a reset link is on its way. It works once and stops working after 30 minutes.';
+        })
+        .catch(function () { forgotMsg.textContent = 'Could not reach the server. Check your connection and try again.'; })
+        .then(function () { forgotBtn.disabled = false; });
+    });
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       if (submitting) return;

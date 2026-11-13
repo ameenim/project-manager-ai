@@ -3,6 +3,7 @@
 // counted from sign in. That limit is checked on every request, so changing it applies to people already signed in.
 'use strict';
 const crypto = require('crypto');
+const mailer = require('./mailer');
 
 const SESSION_DAYS = 30;
 const MAX_SESSIONS = 20;
@@ -128,6 +129,27 @@ function make(db, getSessionMinutes, hooks = {}) {
     await db.query("INSERT INTO password_resets(token_hash, user_id, created_by, expires_at) VALUES ($1, $2, $3, now() + ($4 || ' minutes')::interval)", [sha(token), userId, createdBy || null, String(RESET_MINUTES)]);
     return { token, minutes: RESET_MINUTES, expires_at: new Date(Date.now() + RESET_MINUTES * 60e3).toISOString() };
   }
+  // "Forgot password" from the sign in page. The answer is the same for every address, so it never says who has an account.
+  // Without a mail service it says so, and the page falls back to asking support.
+  async function requestReset(email, ip) {
+    email = String(email || '').trim().toLowerCase();
+    if (!EMAIL_RE.test(email)) throw err(400, 'Enter a valid email address, for example name@company.com.');
+    const rk = [`forgot|${ip || ''}`, `forgotmail|${email}`];
+    if (tooMany(rk, [8, 3])) throw err(429, 'Too many requests. Wait a few minutes and try again.');
+    noteFail(rk);
+    const m = mailer.status();
+    if (!m.configured) return { ok: true, mail: false };
+    const row = (await db.query('SELECT u.id, u.name, COALESCE(f.status, \'active\') AS status FROM users u LEFT JOIN user_flags f ON f.user_id = u.id WHERE u.email = $1', [email])).rows[0];
+    if (row && row.status !== 'suspended') {
+      const r = await createResetLink(row.id, null);
+      const link = `${m.siteUrl}/login.html#reset=${r.token}`;
+      try {
+        await mailer.send({ to: email, subject: 'Reset your Project Manager AI password', text: `Hi ${String(row.name || '').split(' ')[0] || 'there'},\n\nUse this link to choose a new password. It works once and stops working after ${r.minutes} minutes:\n\n${link}\n\nIf you did not ask for this, ignore this email. Your password stays the same.\n\nProject Manager AI` });
+        emit('password_reset_emailed', { ip, userId: row.id, path: '/api/auth/forgot' });
+      } catch (e) { emit('password_reset_mail_failed', { ip, userId: row.id, path: '/api/auth/forgot', detail: { error: String(e.message).slice(0, 120) } }); }
+    }
+    return { ok: true, mail: true };
+  }
   async function resetPassword(token, password, ip) {
     token = String(token || ''); password = String(password || '');
     const bad = () => { emit('password_reset_failed', { ip, path: '/api/auth/reset', throttleMs: 30e3, key: 'bad' }); return err(400, 'This reset link is not valid or has expired. Ask your administrator for a new one.'); };
@@ -151,7 +173,7 @@ function make(db, getSessionMinutes, hooks = {}) {
 
   const purgeExpired = async () => { const m = await minutesNow(); await db.query("DELETE FROM sessions WHERE expires_at < now() OR created_at + ($1 || ' minutes')::interval < now()", [String(m)]); };
   const purgeResets = () => db.query("DELETE FROM password_resets WHERE expires_at < now() - interval '1 day'").catch(() => {});
-  return { register, login, userForToken, logout, logoutEverywhere, changePassword, purgeExpired, createResetLink, resetPassword, purgeResets, EMAIL_RE, RESET_MINUTES };
+  return { register, login, userForToken, logout, logoutEverywhere, changePassword, purgeExpired, createResetLink, resetPassword, requestReset, purgeResets, EMAIL_RE, RESET_MINUTES };
 }
 
 module.exports = { make, err, checkPassword };

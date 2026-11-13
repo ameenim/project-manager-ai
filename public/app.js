@@ -470,6 +470,28 @@
   PM.statusChip = (p) => (p.status === 'closed' ? `<span class="chip">${icon('check')}${t('pc_closed')}</span>` : healthChip(p.stats.health));
 
   // ---------- dashboard ----------
+  // The first thing a project manager sees: what needs them today, each count with one place to go.
+  PM.todayStrip = (d) => {
+    const dayNum = (s) => Math.floor(Date.parse(String(s) + 'T00:00:00Z') / 864e5);
+    const today = dayNum(d.today);
+    const pays = d.payments_all || d.payments || [];
+    const late = pays.filter((x) => x.late && x.state !== 'paid').length;
+    const soon = pays.filter((x) => !x.late && x.state !== 'paid' && dayNum(x.due) - today >= 0 && dayNum(x.due) - today <= 7).length;
+    const od = d.overdueTotal != null ? d.overdueTotal : d.overdue.length;
+    const high = d.radar && d.radar.counts ? d.radar.counts.high : 0;
+    const waiting = d.pendingItems + d.pendingInbox;
+    const busiest = (d.projects || []).slice().sort((a, b) => (b.stats.pendingItems + b.stats.pendingInbox) - (a.stats.pendingItems + a.stats.pendingInbox))[0];
+    const waitGo = !busiest ? '#/notifications' : busiest.stats.pendingItems ? `#/p/${busiest.id}/review` : `#/p/${busiest.id}/inbox`;
+    const tile = (n, label, hint, tone, go, scroll) => `<a class="ts-tile ${n ? tone : 'ok'}" ${go ? `href="${go}"` : `href="#" data-scroll="${scroll}"`}><span class="ts-v">${n}</span><span class="ts-l">${esc(label)}</span><span class="ts-h">${esc(hint)}</span><span class="ts-go">${esc(t('today_open'))}</span></a>`;
+    const all = od + late + soon + high + waiting;
+    return `<section class="card today-strip mb" aria-label="${esc(t('today_title'))}"><div class="ts-head"><h3>${esc(t('today_title'))}</h3>${all ? '' : `<span class="small muted">${icon('check')} ${esc(t('today_clear'))}</span>`}</div>
+      <div class="ts-grid">${tile(od, t('today_late_tasks'), t('today_late_tasks_h'), 'bad', '#/notifications')}${tile(late + soon, t('today_payments'), t('today_payments_h', { late, soon }), late ? 'bad' : 'warn', '#/notifications')}${tile(high, t('today_risks'), t('today_risks_h'), 'warn', '', 'radar')}${tile(waiting, t('today_waiting'), t('today_waiting_h', { items: d.pendingItems, updates: d.pendingInbox }), 'warn', waitGo)}</div></section>`;
+  };
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('.ts-tile[data-scroll]'); if (!a) return; e.preventDefault();
+    const el = document.querySelector(`.dw[data-w="${a.dataset.scroll}"]`); if (el) el.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+  });
+
   PM.views.dashboard = async function () {
     shell('dash', spot());
     const [d] = await Promise.all([api('GET', '/api/dashboard' + PM.dashFilters.query('main')), loadProjects()]);
@@ -487,7 +509,7 @@
     $('#content').innerHTML = `<div class="page dash">
       <div class="page-head"><h1>${t('welcome', { name: esc(S.user.name.split(' ')[0]) })}</h1><button class="btn primary" id="newProj">${icon('plus')}${t('new_project')}</button></div>
       ${PM.onboard ? PM.onboard.banner() : ''}
-      ${d.pendingItems + d.pendingInbox ? `<div class="banner mb">${icon('spark')}<div class="grow"><b>${t('needs_attention')}</b> ${t('attention_detail', { items: d.pendingItems, updates: d.pendingInbox })}</div></div>` : ''}
+      ${S.projects.length ? PM.todayStrip(d) : ''}
       <div id="dashHost"></div>
       ${unassigned.length ? `<div class="card mt"><div class="card-head"><h3>${t('unassigned_msgs')}</h3></div>${unassigned.map((m) => `<div class="list-item"><div class="grow"><div class="small muted">${esc(m.source)} · ${esc(m.sender || '')}</div><div>${esc((m.body || '').slice(0, 200))}</div></div><select data-assign="${m.id}" style="width:180px"><option value="">${t('assign_to')}</option>${d.projects.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></div>`).join('')}</div>` : ''}</div>`;
     if (PM.onboard) PM.onboard.bind($('#content'));
@@ -599,7 +621,13 @@
       <div class="tabs">${TABS.map(([k, ic]) => `<a class="tab ${k === tab ? 'active' : ''}" href="#/p/${id}/${k}">${icon(ic)}${t('tab_' + k)}${badge(k)}</a>`).join('')}</div>${p.status === 'closed' && tab !== 'closure' ? `<div class="banner cl-head-note" role="status"><span class="grow">${t('cl_banner_head')}</span><a class="btn sm" href="#/p/${id}/closure">${t('cl_banner_go')}</a></div>` : ''}</div>`;
     if (soft) $('#main > .proj-head').outerHTML = head; else shell('', spot(), head);
     const view = PM.views['tab_' + tab];
-    if (!view) { $('#content').innerHTML = ''; return; }
+    if (!view) {
+      // an old or mistyped address lands on the nearest tab, or on a page that says what happened and offers the real tabs
+      const alias = { updates: 'inbox', update: 'inbox', suggestions: 'inbox', tasks: 'schedule', gantt: 'schedule', board: 'schedule', risks: 'logs', risk: 'logs', payments: 'logs', deliverables: 'logs', requirements: 'logs', report: 'reports', docs: 'documents', chat: 'thinking' }[String(tab).toLowerCase()];
+      if (alias && PM.views['tab_' + alias]) { location.replace(`#/p/${id}/${alias}`); return; }
+      $('#content').innerHTML = `<div class="page"><div class="card empty" role="alert"><h3>${t('nf_title')}</h3><p class="muted">${t('nf_body')}</p><div class="row wrap" style="justify-content:center;gap:8px;margin-top:12px">${TABS.map(([k]) => `<a class="btn" href="#/p/${id}/${k}">${t('tab_' + k)}</a>`).join('')}</div></div></div>`;
+      return;
+    }
     const token = ++S.nav;
     // a tab that is still fetching its data shows the shape of the page, at once, instead of a loading screen that has to stay a
     // minimum time. A soft refresh keeps what is on screen.

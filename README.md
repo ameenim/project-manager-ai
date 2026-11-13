@@ -16,9 +16,10 @@ Open http://localhost:5000 and create an account. Without a `DATABASE_URL` the s
 1. `DATABASE_URL` is the Postgres connection string. Replit provides it for the Development Database. Local/development startup applies the app's non-destructive migrations. In a published Replit app (`REPLIT_DEPLOYMENT=1`), Replit Publish owns schema changes: startup only verifies the required database objects and never replays schema migrations. A published app requires `DATABASE_URL`; it will not silently fall back to embedded storage.
 2. `ANTHROPIC_API_KEY` turns on AI reading of documents. Optional `ANTHROPIC_MODEL` changes the model. Without a key a rule based reading is used.
 3. `APP_TZ` sets the time zone used for "today" (default Asia/Dubai).
-4. `SITE_URL` sets the public address used in the sitemap.
+4. `SITE_URL` sets the public https address used in the sitemap and in password reset emails. The reset link is always built from this value, never from the request address.
 5. `DEMO_ACCOUNT=1` creates a demo account (pm@example.com with password demo1234) with sample projects. Leave it off in production.
 6. `PORT` sets the port (default 5000).
+8. `RESEND_API_KEY` and `MAIL_FROM` (for example `Project Manager AI <no-reply@yourdomain.com>`) turn on the "Email me a reset link" button on the sign in page, together with `SITE_URL`. Without all three the page keeps the older route where an administrator creates a one time reset link. The answer is the same whether or not the address has an account, and requests are throttled per address and per network address.
 7. `APP_SECRET` is a long random text used to encrypt saved connection tokens. If it is not set, a key is generated once and kept in the database.
 
 ## Connecting Jira and Outlook
@@ -34,6 +35,10 @@ The app owner does a one time setup so that the Connect button can sign people i
 Jira also has a simpler fallback in the wizard: a personal API token, checked live against Jira.
 
 ## Accounts and roles
+
+Forgot password: the sign in page offers an emailed one time link (see settings above). The link works once and expires.
+
+Navigation notes: the overview opens with a Today strip (late tasks, late and upcoming payments, high risks, items waiting for you). Old or alternate project addresses such as `#/p/1/updates` redirect to the right tab, and an unknown tab shows a not found page with links to the real tabs.
 
 Sign up and sign in use the server. Passwords are hashed with scrypt, sessions are random tokens kept in an HttpOnly cookie, stored as hashes and expiring after 30 days, changes are protected by CSRF checks, and repeated failed sign ins are rate limited. Every project has members with one of three roles:
 

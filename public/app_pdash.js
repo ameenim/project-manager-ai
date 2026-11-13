@@ -421,7 +421,7 @@
     if (PM.stale(token)) return;
     const st = d.project.stats || p.stats || {};
     root.innerHTML = `<div class="page"><div class="qa-bar" role="toolbar" aria-label="${esc(t('pw_quick'))}"><span class="qa-lab">${icon('spark')}${t('pw_quick')}</span>
-      <button class="btn sm" data-q="schedule">${icon('cal')}${t('ra_schedule')}</button><button class="btn sm" data-q="review">${icon('check')}${t('ra_review')}${st.pendingItems ? `<span class="badge-count">${st.pendingItems}</span>` : ''}</button><button class="btn sm" data-q="inbox">${icon('inbox')}${t('tab_inbox')}${st.pendingInbox ? `<span class="badge-count">${st.pendingInbox}</span>` : ''}</button><button class="btn sm primary" data-q="report">${icon('file')}${t('ra_report')}</button></div><div id="pdHost"></div></div>`;
+      ${st.overdue ? `<button class="btn sm" data-q="schedule">${icon('cal')}${t('qa_late', { n: st.overdue })}</button>` : ''}${st.pendingItems ? `<button class="btn sm" data-q="review">${icon('check')}${t('ra_review')}<span class="badge-count">${st.pendingItems}</span></button>` : ''}${st.pendingInbox ? `<button class="btn sm" data-q="inbox">${icon('inbox')}${t('tab_inbox')}<span class="badge-count">${st.pendingInbox}</span></button>` : ''}<button class="btn sm primary" data-q="report">${icon('file')}${t('ra_report')}</button></div><div id="pdHost"></div></div>`;
     $$('[data-q]', root).forEach((b) => (b.onclick = () => (b.dataset.q === 'report' ? report(p.id) : nav(b.dataset.q))));
     const widgets = {};
     const order = PORDER.concat(PM.trends ? PM.trends.ids('project') : []);

@@ -421,7 +421,8 @@
         this.firstRender = false;
         const st = this.tasks.map((x) => x.start).filter(Boolean).sort(), fn = this.tasks.map((x) => x.finish).filter(Boolean).sort();
         const inside = st.length && this.today >= st[0] && this.today <= fn[fn.length - 1];
-        this.scrollToDate(st.length && !inside ? st[0] : this.today, !inside ? false : true);
+        this._initialTarget = [st.length && !inside ? st[0] : this.today, !inside ? false : true];
+        this.initialScroll();
       } else { this.scroll.scrollLeft = keepL; this.scroll.scrollTop = keepT; }
       this.bind();
       this._geom = new Map(rows.filter((t) => t.start && t.finish).map((t) => [t.id, this.barGeom(t).left]));
@@ -700,6 +701,19 @@
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { const d = (e.key === 'ArrowRight' ? 1 : -1) * (rtl ? -1 : 1); this.setLeftW(Math.max(160, this.LW + d * step), true); const hh = this.root.querySelector('.gt-left .gt-split'); if (hh) hh.focus(); e.preventDefault(); return true; }
       if (e.key === 'Home' || e.key === 'Enter') { this.setLeftW(null, true); e.preventDefault(); return true; }
       return false;
+    }
+
+    // The first position is today. The Gantt can be drawn while the Board hides it, and a hidden box ignores scrolling,
+    // so wait until it has a width and then move, once.
+    initialScroll() {
+      const tg = this._initialTarget; if (!tg) return;
+      if (this.scroll.clientWidth > 0) { this._initialTarget = null; if (this._ro) { this._ro.disconnect(); this._ro = null; }
+        // the box can report a width before it accepts a scroll position, so try again on the next frames until it holds
+        let n = 0; const go = () => { this.scrollToDate(tg[0], tg[1]); const want = this.scroll.scrollLeft; if (want === 0 && this.scroll.scrollWidth > this.scroll.clientWidth + 40 && n++ < 12) requestAnimationFrame(go); };
+        go(); return; }
+      if (this._ro || typeof ResizeObserver === 'undefined') return;
+      this._ro = new ResizeObserver(() => this.initialScroll());
+      this._ro.observe(this.scroll);
     }
 
     scrollToDate(d, center) {

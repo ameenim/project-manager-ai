@@ -177,7 +177,7 @@
     const eta = !fin && an.eta ? `<div class="ap-eta">${icon('spark')}<div class="grow"><div>${an.eta.low ? t('ap_eta', { lo: an.eta.low, hi: an.eta.high, name: esc(p.name) }) : t('ap_eta_short', { name: esc(p.name) })}</div><div style="margin-top:10px"><a class="btn sm" href="#/projects" id="apKeep">${icon('fwd', 'flip')}${t('ap_keep')}</a></div></div></div>` : !fin ? `<div class="ap-eta">${icon('spark')}<div class="grow">${t('ap_eta_short', { name: esc(p.name) })}</div></div>` : '';
     const total2 = !fin ? `<div class="ap-total"><span class="small muted">${t('ap_total')}</span><div class="progress"><i style="width:${an.pct || 2}%"></i></div><b class="small">${an.pct || 2}%</b></div>` : '';
     return `<div class="page">
-      <div class="card mb"><div class="card-head"><h3>${fin ? (bad ? (an.failed ? t('ap_failed') : t('ap_empty_h')) : an.warning ? t('ap_warn_h') : t('ap_done')) : t('ap_title')}</h3><span class="small muted">${esc(p.name)}</span></div>
+      <div class="card mb"><div class="card-head"><h3>${fin ? (bad ? (an.failed ? t('ap_failed') : t('ap_empty_h')) : t('ap_done')) : t('ap_title')}</h3><span class="small muted">${esc(p.name)}</span></div>
         ${eta}${total2}<div class="ap-grid"><div class="ap-steps">${rows}</div>
           <div class="ap-conf"><div class="small muted">${t('ap_conf')}</div><div class="ap-big conf ${CONF_CLS(cf.overall)}">${pct(cf.overall)}</div>
             ${cf.coverage != null ? `<div class="small muted mb">${t('ap_cov', { n: Math.round(cf.coverage * 100) })}</div>` : ''}${bars}</div></div></div>

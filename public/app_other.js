@@ -112,7 +112,7 @@
       $$('[data-src]', root).forEach((c) => (c.onclick = () => { src = c.dataset.src; draw(); }));
       $$('[data-hide-guide]', root).forEach((c) => (c.onclick = () => { guide = false; try { localStorage.setItem('pm_upd_guide', 'off'); } catch (e) { /* ignore */ } draw(); }));
       $$('[data-more]', root).forEach((c) => (c.onclick = () => { const bq = c.previousElementSibling; const open = bq.classList.toggle('clamp') === false; c.textContent = t(open ? 'upd_less' : 'upd_more'); }));
-      $$('[data-conn]', root).forEach((c) => (c.onclick = () => PM.connect.wizard(c.dataset.conn, async () => { try { S.status = (await api('GET', '/api/me')).status; } catch (e) { /* ignore */ } draw(); })));
+      $$('[data-conn]', root).forEach((c) => (c.onclick = () => PM.connect.wizard(c.dataset.conn, async () => { try { S.status = (await api('GET', '/api/me')).status; } catch (e) { /* ignore */ } draw(); toast(t('upd_after_conn')); })));
       $$('[data-add]', root).forEach((c) => (c.onclick = addDialog));
       $$('[data-view]', root).forEach((c) => (c.onclick = () => { view = c.dataset.view; draw(); }));
       $$('[data-sched]', root).forEach((c) => (c.onclick = schedDialog));
@@ -649,6 +649,7 @@
     function drawTeam() {
       const card = $('#teamCard', root); if (!card) return;
       card.innerHTML = `<div class="card-head"><h3 class="tm-title">${t('team')}</h3><span class="chip" aria-label="${team.length}">${team.length}</span><span class="grow"></span><button type="button" class="btn sm" id="r_extract" data-tip="${esc(t('tx_tip'))}">${icon('spark')}${t('tx_btn')}</button><button type="button" class="btn sm primary" id="r_add">${icon('plus')}${t('tm_add')}</button></div>
+        ${(() => { const gaps = team.filter((r) => !r.role || !r.email).length; return gaps ? `<div class="banner warn small mb" role="status"><span class="grow">${esc(t('tm_gaps', { n: gaps, total: team.length }))}</span></div>` : ''; })()}
         ${team.length ? `<div class="tm-search"><span class="tm-search-i">${icon('search')}</span><input type="search" id="tmQ" value="${esc(tmQ)}" placeholder="${esc(t('tm_search'))}" aria-label="${esc(t('tm_search'))}"></div><div id="tmList"></div>` : `<div class="empty small">${t('no_team')}</div>`}
         <div class="small muted mt">${t('team_hint')}</div>`;
       if (team.length) { drawTeamList(); const q = $('#tmQ', card); q.oninput = PM.debounce(() => { tmQ = q.value; tmPage = 1; drawTeamList(); }, 160); }

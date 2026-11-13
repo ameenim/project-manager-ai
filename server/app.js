@@ -216,7 +216,7 @@ async function createApp(opts = {}) {
     const tooFast = () => { if (!authLimit(ip)) return false; secLog.log('rate_limited', { ip, path: p, throttleMs: 60e3, key: 'auth' }); return true; };
 
     // ----- sign in, no token needed
-    if (method === 'POST' && /^\/api\/auth\/(login|register|logout|reset|session)$/.test(p)) {
+    if (method === 'POST' && /^\/api\/auth\/(login|register|logout|reset|forgot|session)$/.test(p)) {
       const kind = p.split('/')[3];
       if (kind === 'logout') {
         const c = credentials(req);
@@ -237,6 +237,7 @@ async function createApp(opts = {}) {
       let body; try { body = JSON.parse((await readBody(req, 64 * 1024)).toString('utf8') || '{}'); } catch (e) { return json(res, e.status || 400, { error: e.status === 413 ? 'The request is too large' : 'Invalid request' }); }
       if (!body || typeof body !== 'object' || Array.isArray(body)) return json(res, 400, { error: 'Invalid request' });
       if (kind === 'reset') return json(res, 200, await auth.resetPassword(body.token, body.password, ip));
+      if (kind === 'forgot') return json(res, 200, await auth.requestReset(body.email, ip));
       if (kind === 'register') {
         if (!(await ops.config()).signup_enabled) return json(res, 403, { error: 'New sign ups are paused right now. Please try again later.' });
         // a super admin address cannot be claimed by signing up, so nobody can take the admin account by registering first

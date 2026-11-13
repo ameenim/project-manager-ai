@@ -634,3 +634,8 @@ img, svg, video { max-width: 100%; }
 .chip.info { color: color-mix(in srgb, var(--primary) 78%, var(--text)); }
 .site-footer nav a { display: inline-block; padding: 6px 4px; }
 .fmt .ext, .nav a.active { color: color-mix(in srgb, var(--primary) 78%, var(--text)); }
+
+/* a text button that reads as a link, used for Forgot password */
+.linkbtn { background: none; border: 0; padding: 0; margin: 0; font: inherit; color: var(--primary); font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.linkbtn:hover { color: var(--primary-600); } .linkbtn:disabled { opacity: .6; cursor: default; }
+.linkbtn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }

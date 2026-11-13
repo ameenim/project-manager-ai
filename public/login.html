@@ -82,7 +82,8 @@
             <div class="f" id="fPass"><label for="password">Password</label><div class="in-w"><input id="password" name="password" type="password" autocomplete="current-password" placeholder="At least 8 characters" style="padding-inline-end:46px"><button class="eye" id="eyeBtn" type="button" aria-label="Show password"><svg class="ico sm"><use href="#i-eye"/></svg></button></div><span class="err" role="alert"></span></div>
             <button class="btn primary lg" id="submitBtn" type="submit" style="width:100%">Sign in</button>
           </form>
-          <p class="sub" id="forgotNote" style="margin:0;font-size:13px">Forgot your password? Ask support for a one time reset link.</p>
+          <p class="sub" id="forgotNote" style="margin:0;font-size:13px">Forgot your password? <button class="linkbtn" id="forgotBtn" type="button">Email me a reset link</button></p>
+          <p class="sub" id="forgotMsg" role="status" style="margin:0;font-size:13px" hidden></p>
         </div>
 
         <div class="ok-panel" id="okPanel" hidden>
