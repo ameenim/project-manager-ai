@@ -452,6 +452,10 @@ const MIGRATIONS = [
   CREATE INDEX IF NOT EXISTS meeting_audio_created_idx ON meeting_audio(created_at);
   CREATE INDEX IF NOT EXISTS projects_sync_idx ON projects ((data->'sync_cfg'->>'mode')) WHERE (data->'sync_cfg'->>'mode') IS NOT NULL;
   `,
+  // 15: a notification can be pinned, so it stays at the top of the inbox until the person unpins it
+  `
+  ALTER TABLE notifications ADD COLUMN IF NOT EXISTS pinned BOOLEAN NOT NULL DEFAULT false;
+  `,
 ];
 
 async function openPg(url) {

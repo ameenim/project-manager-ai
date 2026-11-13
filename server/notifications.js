@@ -82,8 +82,12 @@ function createNotifications({ db, store, api }) {
     let live;
     try { live = await sync(user); } catch (e) { if (process.env.NOTIFY_DEBUG) console.error(e); return { available: false, items: [], unread: 0 }; } // the table arrives with the next Publish
     const names = new Map(live.map((c) => [c.project_id, c.project]));
-    const rows = (await q('SELECT * FROM notifications WHERE user_id = $1 AND dismissed = false ORDER BY (read_at IS NULL) DESC, updated_at DESC LIMIT 50', [user.id])).rows;
-    const items = rows.map((r) => ({ id: String(r.id), kind: r.kind, sig: r.sig, project_id: Number(r.project_id) || null, project: names.get(Number(r.project_id)) || '', n: r.n, extra: r.extra || {}, read: !!r.read_at, at: r.updated_at }));
+    // pinned ones come first and are never pushed out of the 50 by newer ones. Before the pinned column arrives
+    // with the next Publish, the same list is read without it.
+    let rows;
+    try { rows = (await q('SELECT * FROM notifications WHERE user_id = $1 AND dismissed = false ORDER BY pinned DESC, (read_at IS NULL) DESC, updated_at DESC LIMIT 50', [user.id])).rows; }
+    catch (e) { rows = (await q('SELECT * FROM notifications WHERE user_id = $1 AND dismissed = false ORDER BY (read_at IS NULL) DESC, updated_at DESC LIMIT 50', [user.id])).rows; }
+    const items = rows.map((r) => ({ id: String(r.id), kind: r.kind, sig: r.sig, project_id: Number(r.project_id) || null, project: names.get(Number(r.project_id)) || '', n: r.n, extra: r.extra || {}, read: !!r.read_at, pinned: !!r.pinned, at: r.updated_at }));
     return { available: true, items, unread: items.filter((x) => !x.read).length };
   }
   // The items behind one notification, so the inbox page can show them and act on each: the late tasks of a project
@@ -115,12 +119,20 @@ function createNotifications({ db, store, api }) {
     });
     return { id: String(row.id), kind: row.kind, project_id: pid, entries: out || [] };
   }
+  // read and dismiss (delete) act on one or all of a person's notifications. Pin, unpin and restore (the Undo of a
+  // delete) act on one. A dismissed notification still returns when its condition changes.
+  const SETS = {
+    read: 'read_at = COALESCE(read_at, now())',
+    dismiss: 'dismissed = true, read_at = COALESCE(read_at, now())',
+    restore: 'dismissed = false',
+    pin: 'pinned = true',
+    unpin: 'pinned = false',
+  };
   async function mark(user, body, set) {
-    const all = body.all === true;
+    const all = body.all === true && (set === 'read' || set === 'dismiss');
     const id = all ? null : Number(body.id);
     if (!all && !Number.isFinite(id)) throw err(400, 'Choose a notification');
-    const col = set === 'read' ? 'read_at = COALESCE(read_at, now())' : 'dismissed = true, read_at = COALESCE(read_at, now())';
-    await q(`UPDATE notifications SET ${col} WHERE user_id = $1` + (all ? '' : ' AND id = $2'), all ? [user.id] : [user.id, id]);
+    await q(`UPDATE notifications SET ${SETS[set]} WHERE user_id = $1` + (all ? '' : ' AND id = $2'), all ? [user.id] : [user.id, id]);
     return { ok: true };
   }
 
@@ -131,8 +143,11 @@ function createNotifications({ db, store, api }) {
     if (method === 'GET' && p === '/api/notifications') { io.json(res, 200, await list(user)); return true; }
     const one = /^\/api\/notifications\/(\d+)$/.exec(p);
     if (method === 'GET' && one) { io.json(res, 200, await entries(user, one[1])); return true; }
-    if (method === 'POST' && p === '/api/notifications/read') { try { io.json(res, 200, await mark(user, await read(), 'read')); } catch (e) { if (e.expose) throw e; io.json(res, 503, { error: 'Notifications need a database update that is not in place yet. Publish the latest version, then try again.' }); } return true; }
-    if (method === 'POST' && p === '/api/notifications/dismiss') { try { io.json(res, 200, await mark(user, await read(), 'dismiss')); } catch (e) { if (e.expose) throw e; io.json(res, 503, { error: 'Notifications need a database update that is not in place yet. Publish the latest version, then try again.' }); } return true; }
+    const act = /^\/api\/notifications\/(read|dismiss|restore|pin|unpin)$/.exec(p);
+    if (method === 'POST' && act) {
+      try { io.json(res, 200, await mark(user, await read(), act[1])); } catch (e) { if (e.expose) throw e; io.json(res, 503, { error: 'Notifications need a database update that is not in place yet. Publish the latest version, then try again.' }); }
+      return true;
+    }
     return false;
   }
   return { route, list, entries, mark, planState };

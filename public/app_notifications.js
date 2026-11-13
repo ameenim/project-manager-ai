@@ -9,7 +9,7 @@
   const { esc, t, icon } = PM;
 
   Object.assign(PM.I18N.en, {
-    nc_title: 'Notifications', nc_bell: 'Notifications', nc_unread: '{n} unread', nc_none: 'You are all caught up.', nc_mark_all: 'Mark all read', nc_dismiss: 'Dismiss',
+    nc_title: 'Notifications', nc_bell: 'Notifications', nc_unread: '{n} unread', nc_none: 'You are all caught up.', nc_mark_all: 'Mark all read', nc_dismiss: 'Delete',
     nc_late_tasks: 'Late tasks: {n}', nc_late_payments: 'Late payments: {n}', nc_plan: 'Plan',
     nc_d0: 'less than a day', nc_d1: '1 day', nc_dn: '{n} days',
     nc_trial: 'Your free trial ends in {d}', nc_trial_over: 'Your free trial has ended. Subscribe to keep using the AI.', nc_tokens80: 'You used {pct}% of your tokens', nc_tokens100: 'You reached your token limit',
@@ -21,10 +21,10 @@
     nc_tasks_sub: 'These tasks are past their finish date and not complete.', nc_pay_sub: 'These payments are past due and still pending.',
     nc_more: 'Show {n} more', nc_less: 'Show less', nc_off: 'Notifications are not available right now.', nc_loading: 'Loading the details', nc_detail_failed: 'The details could not be loaded.', nc_retry: 'Try again',
     nc_filter_none: 'Nothing here.', nc_just_now: 'Just now', nc_plan_sub: 'About your plan and AI tokens', nc_unread_dot: 'Unread', nc_list: 'Notifications list', nc_detail: 'Notification details', nc_gone: 'This notification was cleared because nothing is late anymore.', nc_assignee: 'Owner',
-    nc_none_filter: 'No notifications match this filter.',
+    nc_none_filter: 'No notifications match this filter.', nc_pin: 'Pin', nc_unpin: 'Unpin', nc_pinned: 'Pinned', nc_view: 'Sort and group', nc_v_time: 'Newest first', nc_v_project: 'By project', nc_deleted: 'Notification deleted', nc_pin_tip: 'Pin to the top', nc_unpin_tip: 'Remove the pin',
   });
   Object.assign(PM.I18N.ar, {
-    nc_title: 'الإشعارات', nc_bell: 'الإشعارات', nc_unread: '{n} غير مقروء', nc_none: 'لا يوجد شيء جديد.', nc_mark_all: 'تعليم الكل كمقروء', nc_dismiss: 'تجاهل',
+    nc_title: 'الإشعارات', nc_bell: 'الإشعارات', nc_unread: '{n} غير مقروء', nc_none: 'لا يوجد شيء جديد.', nc_mark_all: 'تعليم الكل كمقروء', nc_dismiss: 'حذف',
     nc_late_tasks: 'مهام متأخرة: {n}', nc_late_payments: 'دفعات متأخرة: {n}', nc_plan: 'الباقة',
     nc_d0: 'أقل من يوم', nc_d1: 'يوم واحد', nc_dn: '{n} أيام',
     nc_trial: 'تنتهي تجربتك المجانية بعد {d}', nc_trial_over: 'انتهت تجربتك المجانية. اشترك لمتابعة استخدام الذكاء الاصطناعي.', nc_tokens80: 'استهلكت {pct}% من رموزك', nc_tokens100: 'وصلت إلى حد الرموز',
@@ -36,10 +36,11 @@
     nc_tasks_sub: 'تجاوزت هذه المهام تاريخ انتهائها ولم تكتمل.', nc_pay_sub: 'تجاوزت هذه الدفعات موعد استحقاقها وما زالت قيد الانتظار.',
     nc_more: 'عرض {n} أخرى', nc_less: 'عرض أقل', nc_off: 'الإشعارات غير متاحة الآن.', nc_loading: 'جار تحميل التفاصيل', nc_detail_failed: 'تعذر تحميل التفاصيل.', nc_retry: 'حاول مرة أخرى',
     nc_filter_none: 'لا يوجد شيء هنا.', nc_just_now: 'الآن', nc_plan_sub: 'عن باقتك ورموز الذكاء الاصطناعي', nc_unread_dot: 'غير مقروء', nc_list: 'قائمة الإشعارات', nc_detail: 'تفاصيل الإشعار', nc_gone: 'تم مسح هذا الإشعار لأنه لم يعد هناك شيء متأخر.', nc_assignee: 'المسؤول',
-    nc_none_filter: 'لا توجد إشعارات تطابق هذا الفلتر.',
+    nc_none_filter: 'لا توجد إشعارات تطابق هذا الفلتر.', nc_pin: 'تثبيت', nc_unpin: 'إلغاء التثبيت', nc_pinned: 'المثبتة', nc_view: 'الترتيب والتجميع', nc_v_time: 'الأحدث أولا', nc_v_project: 'حسب المشروع', nc_deleted: 'تم حذف الإشعار', nc_pin_tip: 'تثبيت في الأعلى', nc_unpin_tip: 'إزالة التثبيت',
   });
 
-  const S = { items: [], unread: 0, ok: null, at: 0, busy: false, tok: null, sel: null, filter: 'all', open: false, more: false };
+  function view() { try { return localStorage.getItem('pm_nc_group') === 'project' ? 'project' : 'time'; } catch (e) { return 'time'; } }
+  const S = { items: [], unread: 0, ok: null, at: 0, busy: false, tok: null, sel: null, filter: 'all', group: view(), open: false, more: false };
   const E = { id: null, data: null, state: 'idle', seq: 0 }; // the details of the selected notification
   let timer = 0, soon = 0, host = null;
   const flag = (off) => { try { localStorage.setItem('pm_nc_off', off ? '1' : '0'); } catch (e) { /* ignore */ } };
@@ -122,21 +123,39 @@
   }
   const lateText = (n) => (n === 1 ? t('nc_day_late') : t('nc_days_late', { n }));
   const FILTERS = [['all', 'nc_all'], ['unread', 'nc_f_unread'], ['late_tasks', 'nc_f_tasks'], ['late_payments', 'nc_f_pay'], ['plan', 'nc_f_plan']];
-  const shown = () => S.items.filter((x) => (S.filter === 'all' ? true : S.filter === 'unread' ? !x.read : x.kind === S.filter));
+  const filtered = () => S.items.filter((x) => (S.filter === 'all' ? true : S.filter === 'unread' ? !x.read : x.kind === S.filter));
+  const newer = (a, b) => new Date(b.at) - new Date(a.at);
+  // The list as sections in the order they appear: pinned first, then either one run of newest first or one section per project.
+  function layout() {
+    const rows = filtered().sort(newer);
+    const out = [];
+    const pins = rows.filter((x) => x.pinned);
+    if (pins.length) out.push({ key: 'pin', head: t('nc_pinned'), items: pins });
+    const rest = rows.filter((x) => !x.pinned);
+    if (S.group === 'project') {
+      const by = new Map();
+      for (const x of rest) { const k = x.kind === 'plan' ? 'plan' : String(x.project_id); if (!by.has(k)) by.set(k, { key: k, head: x.kind === 'plan' ? t('nc_plan') : x.project, items: [] }); by.get(k).items.push(x); }
+      out.push(...by.values()); // each section starts with its newest notification, so the sections are newest first too
+    } else if (rest.length) out.push({ key: 'all', head: pins.length ? t('nc_all') : '', items: rest });
+    return out;
+  }
+  const shown = () => layout().flatMap((g) => g.items);
   const current = () => S.items.find((x) => String(x.id) === String(S.sel)) || null;
 
   // ---------- the page ----------
   function listHtml() {
-    const rows = shown();
     const tabs = FILTERS.map(([k, key]) => {
       const n = k === 'all' ? S.items.length : k === 'unread' ? S.unread : S.items.filter((x) => x.kind === k).length;
       return `<button class="ib-tab${S.filter === k ? ' on' : ''}" type="button" role="tab" aria-selected="${S.filter === k}" data-filter="${k}">${esc(t(key))}${n ? `<span class="ib-n">${n}</span>` : ''}</button>`;
     }).join('');
-    const body = rows.length ? rows.map((x) => {
+    const item = (x) => {
       const sel = String(x.id) === String(S.sel);
-      return `<button class="ib-item${x.read ? '' : ' unread'}${sel ? ' sel' : ''}" type="button" role="option" aria-selected="${sel}" data-id="${esc(x.id)}"><span class="nc-ic ${warn(x) ? 'warn' : ''}">${icon(warn(x) ? 'alert' : 'spark')}</span><span class="nc-text"><b>${esc(titleOf(x))}</b><span class="small muted">${esc(textOf(x))}</span></span><span class="ib-side"><span class="small faint">${esc(ago(x.at))}</span>${x.read ? '' : `<span class="nc-dot" role="img" aria-label="${esc(t('nc_unread_dot'))}"></span>`}</span></button>`;
-    }).join('') : `<div class="ib-empty muted small">${icon('check')}<span>${esc(S.items.length ? t('nc_none_filter') : t('nc_none'))}</span></div>`;
-    return `<div class="ib-tabs" role="tablist" aria-label="${esc(t('nc_filters'))}">${tabs}</div><div class="ib-items" role="listbox" aria-label="${esc(t('nc_list'))}">${body}</div>`;
+      return `<div class="ib-w${sel ? ' sel' : ''}"><button class="ib-item${x.read ? '' : ' unread'}${sel ? ' sel' : ''}" type="button" role="option" aria-selected="${sel}" data-id="${esc(x.id)}"><span class="nc-ic ${warn(x) ? 'warn' : ''}">${icon(warn(x) ? 'alert' : 'spark')}</span><span class="nc-text"><b>${esc(titleOf(x))}</b><span class="small muted">${esc(textOf(x))}</span></span><span class="ib-side"><span class="small faint">${esc(ago(x.at))}</span>${x.pinned ? `<span class="ib-pinmark" role="img" aria-label="${esc(t('nc_pinned'))}">${icon('pin')}</span>` : x.read ? '' : `<span class="nc-dot" role="img" aria-label="${esc(t('nc_unread_dot'))}"></span>`}</span></button><span class="ib-quick"><button class="btn ghost icon sm${x.pinned ? ' on' : ''}" type="button" data-act="${x.pinned ? 'unpin' : 'pin'}" data-id="${esc(x.id)}" aria-pressed="${!!x.pinned}" aria-label="${esc(t(x.pinned ? 'nc_unpin' : 'nc_pin'))}" data-tip="${esc(t(x.pinned ? 'nc_unpin' : 'nc_pin'))}">${icon('pin')}</button><button class="btn ghost icon sm" type="button" data-act="del" data-id="${esc(x.id)}" aria-label="${esc(t('nc_dismiss'))}" data-tip="${esc(t('nc_dismiss'))}">${icon('trash')}</button></span></div>`;
+    };
+    const groups = layout();
+    const body = groups.length ? groups.map((g) => `${g.head ? `<div class="ib-grp"><span>${esc(g.head)}</span><span class="ib-n">${g.items.length}</span></div>` : ''}${g.items.map(item).join('')}`).join('') : `<div class="ib-empty muted small">${icon('check')}<span>${esc(S.items.length ? t('nc_none_filter') : t('nc_none'))}</span></div>`;
+    const views = `<div class="ib-view seg" role="radiogroup" aria-label="${esc(t('nc_view'))}">${[['time', 'nc_v_time'], ['project', 'nc_v_project']].map(([k, key]) => `<button type="button" role="radio" aria-checked="${S.group === k}" class="${S.group === k ? 'on' : ''}" data-view="${k}">${esc(t(key))}</button>`).join('')}</div>`;
+    return `<div class="ib-tabs" role="tablist" aria-label="${esc(t('nc_filters'))}">${tabs}</div>${views}<div class="ib-items" role="listbox" aria-label="${esc(t('nc_list'))}">${body}</div>`;
   }
   function rowHtml(x, kind) {
     const late = `<span class="chip red">${icon('clock')}${esc(lateText(x.late_days))}</span>`;
@@ -151,7 +170,7 @@
     const x = current();
     if (!x) return `<div class="ib-blank muted">${icon('bell')}<p>${esc(t('nc_pick'))}</p></div>`;
     const back = `<button class="btn sm ghost ib-back" type="button" data-act="back">${icon('chev_l')}${esc(t('nc_back'))}</button>`;
-    const head = `<header class="ib-dh">${back}<div class="ib-dt"><span class="nc-ic lg ${warn(x) ? 'warn' : ''}">${icon(warn(x) ? 'alert' : 'spark')}</span><div class="nc-text"><h2>${esc(titleOf(x))}</h2><span class="muted">${esc(textOf(x))}</span><span class="small faint">${esc(ago(x.at))}</span></div></div><div class="ib-dtools">${x.kind === 'plan' ? '' : `<a class="btn sm ghost" href="#/p/${x.project_id}">${icon('folder')}${esc(t('nc_open_project'))}</a>`}<button class="btn sm ghost" type="button" data-act="dismiss">${icon('x')}${esc(t('nc_dismiss'))}</button></div></header>`;
+    const head = `<header class="ib-dh">${back}<div class="ib-dt"><span class="nc-ic lg ${warn(x) ? 'warn' : ''}">${icon(warn(x) ? 'alert' : 'spark')}</span><div class="nc-text"><h2>${esc(titleOf(x))}</h2><span class="muted">${esc(textOf(x))}</span><span class="small faint">${esc(ago(x.at))}</span></div></div><div class="ib-dtools">${x.kind === 'plan' ? '' : `<a class="btn sm ghost" href="#/p/${x.project_id}">${icon('folder')}${esc(t('nc_open_project'))}</a>`}<button class="btn sm ghost${x.pinned ? ' on' : ''}" type="button" data-act="${x.pinned ? 'unpin' : 'pin'}" data-id="${esc(x.id)}" aria-pressed="${!!x.pinned}">${icon('pin')}${esc(t(x.pinned ? 'nc_unpin' : 'nc_pin'))}</button><button class="btn sm ghost" type="button" data-act="del" data-id="${esc(x.id)}">${icon('trash')}${esc(t('nc_dismiss'))}</button></div></header>`;
     if (x.kind === 'plan') {
       let pct = null; try { pct = PM.billing && PM.billing.info ? Math.min(100, Math.round(PM.billing.info().pct)) : null; } catch (e) { pct = null; }
       const meter = pct == null ? '' : `<div class="nc-meter" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="${esc(t('nc_tokens'))}"><i style="width:${pct}%"></i></div><span class="small muted">${esc(t('nc_tokens'))}: ${pct}%</span>`;
@@ -247,7 +266,26 @@
     };
   }
 
+  // Pin changes on screen at once and goes back if the server says no.
+  async function pin(id, on) {
+    S.items = S.items.map((x) => (String(x.id) === String(id) ? Object.assign({}, x, { pinned: on }) : x)); repaint();
+    try { await PM.api('POST', '/api/notifications/' + (on ? 'pin' : 'unpin'), { id }); }
+    catch (e) { S.items = S.items.map((x) => (String(x.id) === String(id) ? Object.assign({}, x, { pinned: !on }) : x)); repaint(); PM.toast(e.message || t('nc_failed'), 'err'); }
+  }
+  // Delete removes the notification at once, moves to its neighbor, and offers Undo. It returns by itself only when the condition changes.
+  async function remove(id) {
+    const rows = shown(); const i = rows.findIndex((r) => String(r.id) === String(id));
+    const was = { items: S.items.slice(), unread: S.unread };
+    const next = rows[i + 1] || rows[i - 1] || null;
+    S.items = S.items.filter((x) => String(x.id) !== String(id)); S.unread = S.items.filter((x) => !x.read).length; paintBell();
+    if (String(S.sel) === String(id)) select(next ? next.id : null); else repaint();
+    try { await PM.api('POST', '/api/notifications/dismiss', { id }); }
+    catch (e) { S.items = was.items; S.unread = was.unread; paintBell(); repaint(); PM.toast(e.message || t('nc_failed'), 'err'); return; }
+    PM.toast(t('nc_deleted'), 'ok', { label: t('g_undo'), fn: async () => { try { await PM.api('POST', '/api/notifications/restore', { id }); await load(true); select(id); } catch (er) { PM.toast(er.message || t('nc_failed'), 'err'); } } });
+  }
+
   function onClick(e) {
+    const vw = e.target.closest('[data-view]'); if (vw) { S.group = vw.dataset.view; try { localStorage.setItem('pm_nc_group', S.group); } catch (er) { /* ignore */ } return paintPage(); }
     const it = e.target.closest('.ib-item'); if (it) return select(it.dataset.id);
     const f = e.target.closest('[data-filter]'); if (f) { S.filter = f.dataset.filter; paintPage(); return; }
     if (e.target.closest('[data-all]')) return act('read', { all: true });
@@ -256,7 +294,8 @@
     if (a === 'back') { S.open = false; repaint(); const s = host.querySelector('.ib-item.sel'); if (s) s.focus({ preventScroll: true }); return; }
     if (a === 'retry' && x) return loadEntries(x.id);
     if (a === 'more') { S.more = !S.more; return repaint(); }
-    if (a === 'dismiss' && x) { const rows = shown(); const i = rows.findIndex((r) => r.id === x.id); const next = rows[i + 1] || rows[i - 1] || null; act('dismiss', { id: x.id }); return select(next ? next.id : null); }
+    if (a === 'del') return remove(b.dataset.id);
+    if (a === 'pin' || a === 'unpin') return pin(b.dataset.id, a === 'pin');
     if (a === 'schedule' && x) return PM.act && PM.act.peek ? PM.act.peek(x.project_id, 'schedule') : (location.hash = `#/p/${x.project_id}/schedule`);
     if (a === 'done') { const r = entry('task', b.dataset.task); if (r) markDone(Object.assign({ currency: null }, r)); return; }
     if (a === 'progress') { const r = entry('task', b.dataset.task); if (r) PM.act.progress({ task_id: r.task_id, title: r.title, project: proj().name, project_id: proj().id, progress: r.progress }, afterAction); return; }

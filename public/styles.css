@@ -1840,6 +1840,17 @@ body.chat-page .cht-fab { display: none; }
 .ib-tab.on { background: var(--primary-soft); color: var(--primary); }
 .ib-n { font-size: var(--fs-micro); font-variant-numeric: tabular-nums; opacity: .85; }
 .ib-items { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 2px; padding: 8px; }
+/* one notification in the list: the select button with a pin and a delete button that show on hover or focus */
+.ib-w { position: relative; display: flex; align-items: center; border-radius: var(--r-m); }
+.ib-w .ib-item { flex: 1; min-width: 0; }
+.ib-quick { position: absolute; inset-inline-end: 6px; top: 6px; display: flex; gap: 2px; padding: 2px; border-radius: var(--r-s); background: var(--surface); box-shadow: var(--shadow-1); opacity: 0; pointer-events: none; transition: opacity .15s var(--ease); }
+.ib-w:hover .ib-quick, .ib-w:focus-within .ib-quick { opacity: 1; pointer-events: auto; }
+@media (hover: none) { .ib-quick { opacity: 1; pointer-events: auto; position: static; box-shadow: none; background: none; } .ib-w { padding-inline-end: 2px; } }
+.btn.ghost.on { color: var(--primary); background: var(--primary-soft); }
+.ib-pinmark { display: inline-flex; color: var(--primary); } .ib-pinmark svg { width: 14px; height: 14px; }
+.ib-grp { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 10px 4px; font-size: var(--fs-micro); font-weight: 600; letter-spacing: .04em; color: var(--faint); text-transform: uppercase; }
+.ib-grp span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: none; font-size: var(--fs-small); letter-spacing: 0; color: var(--muted); }
+.ib-view { margin: 8px 10px 0; align-self: flex-start; }
 .ib-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px; border: 1px solid transparent; border-radius: var(--r-m); background: none; color: var(--text); font: inherit; text-align: start; cursor: pointer; transition: background .15s var(--ease), border-color .15s var(--ease); }
 .ib-item:hover { background: var(--surface); }
 .ib-item.unread .nc-text b { font-weight: 700; }

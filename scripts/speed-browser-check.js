@@ -131,7 +131,7 @@ async function main() {
     await bell.click(); await sleep(700);
     const n0 = await page.locator('.ib-item').count();
     if (n0 > 0) {
-      await page.locator('[data-act="dismiss"]').first().click(); await sleep(250);
+      await page.locator('.ib-dh [data-act="del"]').first().click(); await sleep(250);
       const n1 = await page.locator('.ib-item').count();
       check('dismissing a notification removes it at once, before the slow server answers', n1 === n0 - 1, n0 + ' to ' + n1);
     } else console.log('SKIP notification dismiss: no notifications in the seed');

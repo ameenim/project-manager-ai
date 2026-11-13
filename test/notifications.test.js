@@ -103,6 +103,31 @@ test('the details behind a notification list the late tasks and late payments, a
   assert.equal((await s.call('GET', '/api/notifications/1', null)).status, 401);
 });
 
+test('a notification can be pinned, unpinned, deleted and restored, and the pin survives a change of the condition', async () => {
+  const u = await s.user('Pinner'); const p = await s.project(u.token, 'Pin project');
+  await s.call('POST', `/api/projects/${p.id}/tasks`, { name: 'Old task', duration: 2, start: '2020-01-06' }, u.token);
+  const late = (await get(u.token)).data.items.find((x) => x.kind === 'late_tasks');
+  assert.equal(late.pinned, false);
+  assert.equal((await post(u.token, 'pin', { id: late.id })).status, 200);
+  assert.equal((await get(u.token)).data.items.find((x) => x.kind === 'late_tasks').pinned, true);
+  // another task goes late: the notification comes back unread but stays pinned
+  await post(u.token, 'dismiss', { id: late.id });
+  assert.ok(!kinds(await get(u.token)).includes('late_tasks:' + p.id));
+  assert.equal((await post(u.token, 'restore', { id: late.id })).status, 200);
+  assert.ok(kinds(await get(u.token)).includes('late_tasks:' + p.id));
+  await s.call('POST', `/api/projects/${p.id}/tasks`, { name: 'Older task', duration: 2, start: '2020-02-03' }, u.token);
+  const back = (await get(u.token)).data.items.find((x) => x.kind === 'late_tasks');
+  assert.equal(back.read, false); assert.equal(back.pinned, true); assert.equal(back.n, 2);
+  assert.equal((await post(u.token, 'unpin', { id: late.id })).status, 200);
+  assert.equal((await get(u.token)).data.items.find((x) => x.kind === 'late_tasks').pinned, false);
+  // pin and restore act on one notification only, and never on someone else's
+  assert.equal((await post(u.token, 'pin', {})).status, 400);
+  assert.equal((await post(u.token, 'restore', { all: true })).status, 400);
+  const other = await s.user('Other pinner');
+  await post(other.token, 'pin', { id: late.id });
+  assert.equal((await get(u.token)).data.items.find((x) => x.kind === 'late_tasks').pinned, false);
+});
+
 test('without the table the list reports it is unavailable instead of failing', async () => {
   const u = await s.user('Lag');
   await s.app.db.query('DROP TABLE notifications');
