@@ -69,10 +69,16 @@
       let r = null;
       try { r = it.w.render(host, d, ctx); } catch (e) { r = null; }
       if (r && r.kpis) { kpis = r.kpis.slice(0, 6); continue; }
-      const csv = r && typeof r.csv === 'function' ? r.csv() : null;
-      if (!csv || csv.length < 3) continue; // a single row is not a report page
-      const table = tableOf(csv);
-      out.push({ heading: it.label, chart: chartOf(it.label, csv), table, csv });
+      try {
+        const csv = r && typeof r.csv === 'function' ? r.csv() : null;
+        if (!Array.isArray(csv) || csv.length < 3 || !Array.isArray(csv[0])) continue; // a single row is not a report page
+        const clean = csv.map((row) => (Array.isArray(row) ? row : [row]));
+        const table = tableOf(clean);
+        if (!table) continue;
+        let chart = null;
+        try { chart = chartOf(it.label, clean); } catch (e) { chart = null; }
+        out.push({ heading: String(it.label || it.id), chart, table, csv: clean });
+      } catch (e) { console.warn('Widget skipped in report', it.id, e); }
     }
     return { sections: out, kpis };
   }
@@ -80,18 +86,20 @@
   function open(o) {
     const portfolio = o.scope === 'portfolio', f = PM.dashFilters.get(o.fkey), on = PM.dashFilters.isOn(f);
     const items = o.items;
-    const m = PM.modal({ title: t('ex_title'), size: '', body: `<div class="col gap-lg">
-      <div><div class="small muted" style="margin-bottom:6px">${esc(t('ex_format'))}</div><div class="seg" id="exFmt" role="group" aria-label="${esc(t('ex_format'))}">${[['docx', 'Word'], ['pptx', 'PowerPoint'], ['xlsx', 'Excel']].map(([k, l], i) => `<button type="button" data-f="${k}" aria-pressed="${i === 0}" class="${i === 0 ? 'on' : ''}">${l}</button>`).join('')}</div><div class="small muted" id="exHint" style="margin-top:6px"></div></div>
-      <div><div class="row" style="gap:8px"><span class="small muted grow">${esc(t('ex_include'))}</span><button type="button" class="btn sm ghost" id="exAll">${esc(t('ex_all'))}</button><button type="button" class="btn sm ghost" id="exNone">${esc(t('ex_none'))}</button></div>
-        <div class="ex-list" id="exList">${items.map((x) => `<label class="dd-opt"><input type="checkbox" data-id="${esc(x.id)}" checked><span class="grow">${esc(x.label)}</span></label>`).join('')}</div></div>
-      <div class="small muted" id="exNote">${esc(on ? t('ex_filters_on', { f: filterText(f) }) : t('ex_filters_off'))}</div>
-      <div class="small" id="exErr" role="alert" style="color:var(--danger)" hidden></div></div>`,
+    const FM = [['docx', 'Word', 'file'], ['pptx', 'PowerPoint', 'cols'], ['xlsx', 'Excel', 'list']];
+    const m = PM.modal({ title: t('ex_title'), size: 'lg', body: `<div class="ex">
+      <section class="ex-sec"><h3 class="ex-h">${esc(t('ex_format'))}</h3>
+        <div class="ex-fmt" id="exFmt" role="radiogroup" aria-label="${esc(t('ex_format'))}">${FM.map(([k, l, ic], i) => `<button type="button" role="radio" data-f="${k}" aria-checked="${i === 0}" class="ex-card${i === 0 ? ' on' : ''}"><span class="ex-ic">${icon(ic)}</span><span class="ex-t">${l}</span><span class="ex-d small muted">${esc(t('ex_hint_' + k))}</span></button>`).join('')}</div></section>
+      <section class="ex-sec"><div class="row ex-bar"><h3 class="ex-h grow">${esc(t('ex_include'))}<span class="ex-n small muted" id="exCount"></span></h3><button type="button" class="btn sm ghost" id="exAll">${esc(t('ex_all'))}</button><button type="button" class="btn sm ghost" id="exNone">${esc(t('ex_none'))}</button></div>
+        <div class="ex-list" id="exList">${items.map((x) => `<label class="ex-opt"><input type="checkbox" data-id="${esc(x.id)}" checked><span>${esc(x.label)}</span></label>`).join('')}</div></section>
+      <div class="ex-note small ${on ? 'on' : ''}" id="exNote">${icon('filter')}<span>${esc(on ? t('ex_filters_on', { f: filterText(f) }) : t('ex_filters_off'))}</span></div>
+      <div class="small ex-err" id="exErr" role="alert" hidden></div></div>`,
       footer: `<button class="btn" data-close>${esc(t('cancel'))}</button><button class="btn primary" id="exGo">${icon('file')}${esc(t('ex_go'))}</button>` });
     let fmt = 'docx';
-    const hint = () => { $('#exHint', m.el).textContent = t('ex_hint_' + fmt); };
-    hint();
-    $('#exFmt', m.el).onclick = (e) => { const b = e.target.closest('[data-f]'); if (!b) return; fmt = b.dataset.f; $$('#exFmt button', m.el).forEach((x) => { const on2 = x === b; x.classList.toggle('on', on2); x.setAttribute('aria-pressed', String(on2)); }); hint(); };
-    const setAll = (v) => $$('#exList input', m.el).forEach((i) => (i.checked = v));
+    const count = () => { const n = $$('#exList input:checked', m.el).length; $('#exCount', m.el).textContent = ` ${n}/${items.length}`; };
+    $('#exFmt', m.el).onclick = (e) => { const b = e.target.closest('[data-f]'); if (!b) return; fmt = b.dataset.f; $$('#exFmt .ex-card', m.el).forEach((x) => { const on2 = x === b; x.classList.toggle('on', on2); x.setAttribute('aria-checked', String(on2)); }); };
+    $('#exList', m.el).onchange = count; count();
+    const setAll = (v) => { $$('#exList input', m.el).forEach((i) => (i.checked = v)); count(); };
     $('#exAll', m.el).onclick = () => setAll(true); $('#exNone', m.el).onclick = () => setAll(false);
     $('#exGo', m.el).onclick = async () => {
       const ids = new Set($$('#exList input:checked', m.el).map((i) => i.dataset.id)), err = $('#exErr', m.el), go = $('#exGo', m.el);
@@ -108,7 +116,7 @@
         const g = { format: fmt, title, type_title: portfolio ? t('ex_t_portfolio') : t('ex_t_project'), meta, doc_type: 'dashboard', content: '', dashboard: { kpis: S.kpis, sections: S.sections, data: fmt === 'xlsx' ? dataOf(rd, o.mode()) : null } };
         const r = await PM.exporter.download(g);
         m.close(); toast(t('ex_ready') + ': ' + r.filename, 'ok');
-      } catch (e) { console.error('Report export failed', e); err.textContent = t('ex_failed'); err.hidden = false; go.disabled = false; go.removeAttribute('aria-busy'); }
+      } catch (e) { console.error('Report export failed', e); err.textContent = t('ex_failed') + (e && e.message ? ' (' + String(e.message).slice(0, 140) + ')' : ''); err.hidden = false; go.disabled = false; go.removeAttribute('aria-busy'); }
     };
   }
 

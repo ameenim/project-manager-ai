@@ -2134,3 +2134,21 @@ body.chat-full { overflow: hidden; }
 .dw-empty[hidden] { display: none; }
 .dw-grid.dw-load { opacity: .6; transition: opacity .15s var(--ease); pointer-events: none; }
 @media (max-width: 600px) { .gf-f { flex: 1 1 calc(50% - 6px); } .gf-f select, .gf-f .dd-btn { width: 100%; max-width: none; } }
+
+/* Export report dialog */
+.ex { display: flex; flex-direction: column; gap: 18px; }
+.ex-h { margin: 0 0 8px; font-size: var(--fs-body); font-weight: 600; }
+.ex-bar { gap: 8px; align-items: center; margin-bottom: 8px; } .ex-bar .ex-h { margin: 0; }
+.ex-fmt { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.ex-card { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: start; padding: 12px; border: 1px solid var(--border-strong); border-radius: var(--r-m); background: var(--surface); color: var(--text); cursor: pointer; min-width: 0; transition: border-color .15s var(--ease), background .15s var(--ease); }
+.ex-card:hover { border-color: var(--primary); }
+.ex-card.on { border-color: var(--primary); background: var(--primary-soft); box-shadow: 0 0 0 1px var(--primary) inset; }
+.ex-ic { display: inline-flex; width: 32px; height: 32px; align-items: center; justify-content: center; border-radius: var(--r-s); background: var(--primary-soft); color: var(--primary); }
+.ex-card.on .ex-ic { background: var(--primary); color: var(--on-primary); }
+.ex-t { font-size: var(--fs-body); font-weight: 600; }
+.ex-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; max-height: 280px; overflow: auto; padding: 8px; border: 1px solid var(--border); border-radius: var(--r-m); background: var(--surface-2); }
+.ex-opt { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 4px 8px; border-radius: var(--r-s); cursor: pointer; font-size: var(--fs-body); min-width: 0; }
+.ex-opt:hover { background: var(--primary-soft); } .ex-opt span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ex-note { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: var(--r-m); background: var(--surface-2); color: var(--muted); } .ex-note.on { background: var(--primary-soft); color: var(--text); } .ex-note .i { flex: none; width: 16px; height: 16px; }
+.ex-err { padding: 10px 12px; border-radius: var(--r-m); background: var(--danger-soft); color: var(--danger); } .ex-err[hidden] { display: none; }
+@media (max-width: 600px) { .ex-fmt, .ex-list { grid-template-columns: 1fr; } }

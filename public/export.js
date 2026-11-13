@@ -701,7 +701,21 @@
       } else [logo, mark, client] = await Promise.all([asset('brand/full-light.png'), asset('brand/mark-512.png'), clientLogo(g.meta)]);
       const lg = P.layout && P.layout.logoImg ? await brandLogo(P.layout.logoImg) : null;
       if (lg) { logo = lg; mark = lg; client = null; }
-      const blob = await ex.builders[fmt]({ plan: P, logo, mark, client });
+      let blob;
+      if (g.dashboard) {
+        // one odd widget must not stop the whole report: drop a chart that cannot be drawn, then a table that cannot be written
+        for (const sec of P.sections) {
+          const ok = [];
+          for (const sp of sec.specs) { try { await renderSpec(sp); ok.push(sp); } catch (e) { console.warn('Chart skipped', sec.heading, e); } }
+          sec.specs = ok;
+        }
+        try { blob = await ex.builders[fmt]({ plan: P, logo, mark, client }); }
+        catch (e1) {
+          console.warn('Report retry without charts', e1);
+          for (const sec of P.sections) sec.specs = [];
+          blob = await ex.builders[fmt]({ plan: P, logo, mark, client });
+        }
+      } else blob = await ex.builders[fmt]({ plan: P, logo, mark, client });
       return { blob, filename: `${safeName(g.title)}.${FORMATS[fmt].ext}`, format: fmt };
     } finally { if (restore) restore(); }
   }
