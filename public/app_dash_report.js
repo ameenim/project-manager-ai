@@ -60,24 +60,25 @@
     return L.join(', ');
   }
 
-  // render each widget off screen, only to read the table it would export
-  function sections(items, d, ctx, mode) {
+  // Read each widget as it is on screen: the same table the widget exports and the same chart picture.
+  // This keeps the report equal to the dashboard, including the widget filters and the overview filters.
+  async function sections(items, ctx) {
     const out = []; let kpis = [];
-    PM.fx.mode = mode;
     for (const it of items) {
-      const host = document.createElement('div');
-      let r = null;
-      try { r = it.w.render(host, d, ctx); } catch (e) { r = null; }
-      if (r && r.kpis) { kpis = r.kpis.slice(0, 6); continue; }
       try {
-        const csv = r && typeof r.csv === 'function' ? r.csv() : null;
-        if (!Array.isArray(csv) || csv.length < 3 || !Array.isArray(csv[0])) continue; // a single row is not a report page
+        const live = ctx.live(it.id), info = live && live.info;
+        if (!info) continue;
+        if (info.kpis) { kpis = info.kpis.slice(0, 6); continue; }
+        const csv = typeof info.csv === 'function' ? info.csv() : null;
+        if (!Array.isArray(csv) || csv.length < 2 || !Array.isArray(csv[0])) continue;
         const clean = csv.map((row) => (Array.isArray(row) ? row : [row]));
-        const table = tableOf(clean);
-        if (!table) continue;
+        let image = null;
+        try { image = await PM.dash.h.rasterSvg(live.body); } catch (e) { image = null; }
+        const table = clean.length >= 2 ? tableOf(clean) : null;
         let chart = null;
-        try { chart = chartOf(it.label, clean); } catch (e) { chart = null; }
-        out.push({ heading: String(it.label || it.id), chart, table, csv: clean });
+        if (!image) { try { chart = clean.length >= 3 ? chartOf(it.label, clean) : null; } catch (e) { chart = null; } }
+        if (!table && !image && !chart) continue;
+        out.push({ heading: String(it.label || it.id), chart, image, table, csv: clean });
       } catch (e) { console.warn('Widget skipped in report', it.id, e); }
     }
     return { sections: out, kpis };
@@ -108,7 +109,7 @@
       try {
         const qs = PM.dashFilters.query(o.fkey);
         const rd = await api('GET', o.reportUrl + qs);
-        const d = o.ctx.data, S = sections(items.filter((x) => ids.has(x.id)), d, o.ctx, o.mode());
+        const d = o.ctx.data, S = await sections(items.filter((x) => ids.has(x.id)), o.ctx);
         const today = new Date().toISOString().slice(0, 10);
         const proj = portfolio ? t('ex_scope_portfolio') : (d.project && d.project.name) || '';
         const title = portfolio ? t('ex_t_portfolio') : `${t('ex_t_project')} ${proj}`.trim();

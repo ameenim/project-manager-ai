@@ -121,6 +121,7 @@
       if (sp.kind === 'gantt') return Math.min(4.7, 1.3 + (sp.rows.length + (sp.marks.length ? 1 : 0)) * 0.42);
       if (sp.kind === 'heat') return 3.0;
       if (sp.kind === 'flow') return 2.1;
+      if (sp.kind === 'image') return Math.min(4.6, Math.max(2.2, (CWI * sp.h) / sp.w + 0.7));
       return 2;
     };
 
@@ -130,6 +131,11 @@
       if (withTitle) s.addText(sp.title, { x: x + 0.2, y: y + 0.1, w: w - 0.4, h: 0.36, fontFace: F, fontSize: 14, bold: true, color: T.text, margin: 0 });
       const cx = x + 0.15, cy = y + (withTitle ? 0.5 : 0), cw = w - 0.3, ch = h - (withTitle ? 0.6 : 0.1);
       const base = { x: cx, y: cy, w: cw, h: ch, altText: sp.alt, catAxisLabelFontFace: F, catAxisLabelFontSize: 11, catAxisLabelColor: T.text, valAxisLabelFontFace: F, valAxisLabelFontSize: 10, valAxisLabelColor: T.faint, dataLabelFontFace: F, dataLabelFontSize: 11, dataLabelColor: T.text, legendFontFace: F, legendFontSize: 11, legendColor: T.muted, valGridLine: { color: T.border, size: 0.75 }, catGridLine: { style: 'none' } };
+      if (sp.kind === 'image') {
+        const r = sp.w / sp.h, iw = Math.min(cw, ch * r), ih = iw / r;
+        s.addImage({ data: 'image/png;base64,' + X.b64(sp.data), x: cx + (cw - iw) / 2, y: cy, w: iw, h: ih, altText: sp.alt });
+        return;
+      }
       if (sp.kind === 'hbar') {
         const many = sp.series.length > 1;
         const data = sp.series.map((se) => ({ name: se.name, labels: sp.labels, values: se.values.map((v) => v || 0) }));

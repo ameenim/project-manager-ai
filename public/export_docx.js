@@ -34,7 +34,7 @@
             borders: { top: line(X.tone(k.tone), 24), left: line('FFFFFF', 48), right: line('FFFFFF', 48), bottom: none },
             children: [
               new Paragraph({ spacing: { after: 40 }, children: [tr(k.label, { size: 18, color: T.muted })] }),
-              new Paragraph({ spacing: { after: 40 }, children: [tr(k.value, { size: String(k.value).length > 9 ? 26 : 40, bold: true, color: k.tone === 'info' || k.tone === 'idle' ? T.text : X.tone(k.tone) })] }),
+              new Paragraph({ spacing: { after: 40 }, children: [tr(k.value, { size: String(k.value).length > 12 ? 20 : String(k.value).length > 9 ? 26 : 40, bold: true, color: k.tone === 'info' || k.tone === 'idle' ? T.text : X.tone(k.tone) })] }),
               new Paragraph({ children: [tr(k.hint || '', { size: 17, color: T.muted })] }),
             ],
           })),

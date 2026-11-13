@@ -464,6 +464,33 @@
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(clone));
   }
 
+
+  // The chart as it is on screen, drawn as a PNG in the light theme so it reads on paper. Returns null when the widget has no chart.
+  async function rasterSvg(body) {
+    const svg = body && $('svg.viz', body);
+    if (!svg || !svg.viewBox || !svg.viewBox.baseVal || !svg.viewBox.baseVal.width) return null;
+    const root = document.documentElement, prev = root.getAttribute('data-theme');
+    let xml = '', surface = '#ffffff';
+    try {
+      if (prev !== 'light') root.setAttribute('data-theme', 'light');
+      const clone = svg.cloneNode(true);
+      const src = [svg, ...svg.querySelectorAll('*')], dst = [clone, ...clone.querySelectorAll('*')];
+      src.forEach((el, i) => { const cs = getComputedStyle(el); let css = ''; for (const p of STYLE_PROPS) css += `${p}:${cs.getPropertyValue(p)};`; dst[i].setAttribute('style', css); dst[i].removeAttribute('class'); });
+      clone.querySelectorAll('.hit').forEach((n) => n.remove());
+      const vb = svg.viewBox.baseVal, w = 1000, h = Math.round((vb.height / vb.width) * w);
+      clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg'); clone.setAttribute('width', w); clone.setAttribute('height', h);
+      surface = getComputedStyle(root).getPropertyValue('--surface').trim() || '#ffffff';
+      xml = new XMLSerializer().serializeToString(clone);
+      var W = w, H = h;
+    } finally { if (prev !== 'light') { if (prev == null) root.removeAttribute('data-theme'); else root.setAttribute('data-theme', prev); } }
+    const img = new Image();
+    await new Promise((ok, no) => { img.onload = ok; img.onerror = no; img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml); });
+    const sc = 2, cv = document.createElement('canvas'); cv.width = W * sc; cv.height = H * sc;
+    const c = cv.getContext('2d'); c.scale(sc, sc); c.fillStyle = surface; c.fillRect(0, 0, W, H); c.drawImage(img, 0, 0, W, H);
+    const blob = await new Promise((ok) => cv.toBlob(ok, 'image/png'));
+    return { data: new Uint8Array(await blob.arrayBuffer()), w: W, h: H };
+  }
+
   // ---------------- tooltips ----------------
   function bindTips(root) {
     let el = $('#vizTip');
@@ -562,6 +589,7 @@
     const ctx = {
       get data() { return d; },
       async reload() { d = await load(); refreshWidgets(); afterLoad(); return d; },
+      live(id) { const el = $(`.dw[data-w="${id}"]`, grid); return { info: infos[id], body: el && $('.dw-body', el) }; },
       async reloadExcept(id) { d = await load(); refreshWidgets(id); afterLoad(); return d; },
     };
     // filters: the saved filter is sent with every fetch and only the latest answer is used
@@ -896,5 +924,5 @@
     if (animate) setTimeout(() => grid.classList.remove('anim'), 2200);
   }
 
-  PM.dash = { mount, main: MAIN, layout: layoutApi, wf: { range: wfRange, point: wfPoint, on: wfOn }, h: { kpiList, setWidth: (n) => { CW = n; }, bindTips, listRow, projLink, stamp, width: () => CW, tipAttr: tip, hbars, donut, legend, empty, tip, num, dnum, ymd, trunc, countUp, csvOf, reduced, WIDGETS } };
+  PM.dash = { mount, main: MAIN, layout: layoutApi, wf: { range: wfRange, point: wfPoint, on: wfOn }, h: { rasterSvg, kpiList, setWidth: (n) => { CW = n; }, bindTips, listRow, projLink, stamp, width: () => CW, tipAttr: tip, hbars, donut, legend, empty, tip, num, dnum, ymd, trunc, countUp, csvOf, reduced, WIDGETS } };
 })();

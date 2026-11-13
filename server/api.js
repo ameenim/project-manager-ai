@@ -1161,7 +1161,7 @@ module.exports = function createApi(store, auth, connectors, ops) {
   on('GET', '/api/dashboard/report-data', async (m, q) => {
     const f = OF.parse(q), { kept } = dashboard(f);
     const names = new Map(activeList().map((P) => [P.id, P.p.name]));
-    return { scope: 'portfolio', filters: f, filter_text: OF.describe(f, names), ...OR.build(kept.map((P) => ({ P, st: stats(P) })), f) };
+    return { scope: 'portfolio', filters: f, filter_text: OF.describe(f, names).join(', '), ...OR.build(kept.map((P) => ({ P, st: stats(P) })), f) };
   });
   // one project's dashboard: radar, schedule and critical path, deliverables, payments and cash flow
   on('GET', '/api/projects/(\\d+)/dashboard', async (mm, q) => {
@@ -1184,7 +1184,7 @@ module.exports = function createApi(store, auth, connectors, ops) {
   });
   on('GET', '/api/projects/(\\d+)/report-data', async (mm, q) => {
     const P = P_(mm[1]), f = OF.parse(q); delete f.p; delete f.c; delete f.cur; delete f.h;
-    return { scope: 'project', filters: f, filter_text: OF.describe(f), ...OR.build([{ P, st: stats(P) }], f) };
+    return { scope: 'project', filters: f, filter_text: OF.describe(f).join(', '), ...OR.build([{ P, st: stats(P) }], f) };
   });
   // trends over time, drawn only from the daily snapshots. days is one of 7, 14, 30, 90, 180, 365.
   on('GET', '/api/trends', async (m, q) => trendsFor(DB.order.map((id) => DB.projects[id]).filter(isLive), periodOf(q.days)));

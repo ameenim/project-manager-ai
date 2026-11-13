@@ -6,7 +6,7 @@
 (function () {
   'use strict';
   const PM = window.PM;
-  const VERSION = '6';
+  const VERSION = '8';
 
   // ---------- design tokens (light theme of styles.css, hex without the hash) ----------
   const T = {
@@ -277,7 +277,7 @@
         if (s.table.cut > 0) blocks.push({ t: 'p', runs: [{ text: `This table shows the first ${s.table.head.length} columns. The Excel report has the full rows of data.`, italic: true }] });
         if (s.table.more > 0) blocks.push({ t: 'p', runs: [{ text: `Showing the first ${s.table.rows.length} of ${s.table.rows.length + s.table.more} rows. The Excel report has the full rows of data.`, italic: true }] });
       }
-      const spec = s.chart ? chartSpec(s.chart) : null;
+      const spec = s.image ? { id: 'img', kind: 'image', title: s.heading, alt: `${s.heading} chart`, data: s.image.data, w: s.image.w, h: s.image.h } : s.chart ? chartSpec(s.chart) : null;
       return { heading: s.heading, blocks, ids: [], specs: spec ? [spec] : [] };
     });
     if ((D.kpis || []).length && g.format === 'pptx') sections.unshift({ heading: 'Key figures', blocks: [], ids: [], specs: [], glance: true });
@@ -627,6 +627,7 @@
 
   const DRAW = { hbar: drawHBar, column: drawColumn, donut: drawDonut, stack: drawStack, gantt: drawGantt, flow: drawFlow, uchart: drawUChart };
   async function renderSpec(s) {
+    if (s.kind === 'image') return { data: s.data, w: Math.min(s.w, 640), h: Math.round((s.h * Math.min(s.w, 640)) / s.w) };
     const fn = DRAW[s.kind];
     if (!fn) return null;
     if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) { /* draw with the fallback font */ } }
