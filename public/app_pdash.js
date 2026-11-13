@@ -216,7 +216,7 @@
           { k: 'pk_collected', v: d.project.value ? Math.round((S0.paid / (S0.total || 1)) * 100) + '%' : '-', n: d.project.value ? Math.round((S0.paid / (S0.total || 1)) * 100) : null, suffix: '%', sub: money(cv(S0.paid), cur), tone: '' },
         ];
         body.innerHTML = `<div class="kpis">${tiles.map((x, i) => `<div class="kpi-t ${x.tone}" style="--i:${i}"><div class="kv" ${x.n != null ? `data-count="${x.n}" data-suffix="${x.suffix || ''}"` : ''}>${x.v}</div><div class="kl">${esc(t(x.k))}</div><div class="ks small muted">${esc(x.sub)}</div></div>`).join('')}</div>`;
-        return { csv: () => [[t('metric'), t('value')], ...tiles.map((x) => [t(x.k), x.v])] };
+        return { csv: () => [[t('metric'), t('value')], ...tiles.map((x) => [t(x.k), String(x.v).replace(/<[^>]*>/g, '')])], kpis: PM.dash.h.kpiList(tiles) };
       },
     },
 
@@ -415,7 +415,8 @@
   PM.views.tab_overview = async function (root, p, q, token, opts) {
     opts = opts || {};
     const nav = opts.nav || ((tab) => { location.hash = `#/p/${p.id}/${tab}`; });
-    const fetchD = () => api('GET', `/api/projects/${p.id}/dashboard`);
+    const fkey = 'proj:' + p.id;
+    const fetchD = (qs) => api('GET', `/api/projects/${p.id}/dashboard${qs == null ? PM.dashFilters.query(fkey) : qs}`);
     const d = await fetchD();
     if (PM.stale(token)) return;
     const st = d.project.stats || p.stats || {};
@@ -426,6 +427,6 @@
     const order = PORDER.concat(PM.trends ? PM.trends.ids('project') : []);
     if (PM.trends) Object.assign(PW, PM.trends.wrapped('project'));
     for (const id of order) widgets[id] = { ...PW[id], render: (body, dd, ctx) => PW[id].render(body, dd, Object.assign(Object.create(ctx), { nav })) };
-    PM.dash.mount($('#pdHost', root), d, { widgets, order, key: 'proj', always: true, currencyToggle: true, fetch: fetchD });
+    PM.dash.mount($('#pdHost', root), d, { widgets, order, key: 'proj', always: true, currencyToggle: true, filters: 'project', fkey, reportUrl: `/api/projects/${p.id}/report-data`, fetch: fetchD });
   };
 })();

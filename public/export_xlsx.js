@@ -143,7 +143,7 @@
       put(ws, 5, 1, COLS, plan.typeTitle, { size: 12, bold: true, color: T.primary });
       ws.getRow(6).height = 36;
       put(ws, 6, 1, COLS, plan.title, { size: 24, bold: true });
-      const facts = [['Client', meta.client], ['Project', meta.project], ['Project code', meta.code], ['Document date', plan.date], ['Prepared for', meta.audience], ['Prepared by', meta.pm]].filter((f) => f[1]);
+      const facts = [['Client', meta.client], ['Project', meta.project], ['Project code', meta.code], ['Document date', plan.date], ['Prepared for', meta.audience], ['Prepared by', meta.pm], ['Filters', meta.filters]].filter((f) => f[1]);
       let r = 8;
       facts.forEach(([k, v]) => { ws.getRow(r).height = 22; put(ws, r, 1, 2, k, { color: T.muted }); put(ws, r, 3, 8, String(v), { bold: true, size: 12 }); r++; });
       if (client) { const h = Math.min(90, Math.round((client.h / client.w) * 220)), w = Math.round((client.w / client.h) * h); addPic(ws, client, 9, 7, Math.min(w, 220), h, `${meta.client || 'Client'} logo`); }
@@ -183,6 +183,49 @@
           b.items.forEach((it, i) => { const txt = `${b.t === 'ol' ? `${i + 1}.` : '•'}  ${X.plain(it)}`; ws.getRow(r).height = Math.max(20, Math.ceil(txt.length / 145) * 16 + 4); put(ws, r, 1, COLS, txt, { v: 'top', indent: 1 }); r++; });
           r += 1;
         } else if (b.t === 'table') r = table(ws, r, b.head.map(X.plain), b.rows.map((row) => b.head.map((_, c) => X.plain(row[c] || []))));
+      }
+    }
+    // ----- contents and row data sheets -----
+    const D = plan.data;
+    if (D && D.tables && D.tables.length) {
+      const sum = wb.worksheets[0];
+      let r = 4 + (sum.rowCount || 0);
+      put(sum, r, 1, COLS, 'Workbook contents', { bold: true, size: 12 }); sum.getRow(r).height = 22; r++;
+      const list = [...plan.sections.filter((x) => !x.glance).map((x) => [x.heading, 'Dashboard widget with its chart and table']), ...D.tables.map((x) => [x.name, `${x.rows.length} rows of detail`])];
+      list.forEach(([k, v]) => { sum.getRow(r).height = 20; put(sum, r, 1, 4, k, { bold: true, size: 10 }); put(sum, r, 5, COLS, v, { size: 10, color: T.muted }); r++; });
+      if (D.filters) { r++; put(sum, r, 1, 2, 'Filters', { color: T.muted }); put(sum, r, 3, COLS, D.filters, { bold: true, size: 11 }); }
+      const toDate = (v) => { const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])) : null; };
+      for (const tb of D.tables) {
+        const ws = wb.addWorksheet(sheetName(tb.name), {
+          properties: { tabColor: { argb: A(T.c3) }, defaultRowHeight: 16 }, views: [{ state: 'frozen', ySplit: 1, showGridLines: false }],
+          pageSetup: { orientation: 'landscape', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: '1:1', margins: { left: 0.4, right: 0.4, top: 0.7, bottom: 0.7, header: 0.3, footer: 0.3 } },
+          headerFooter: printHF(),
+        });
+        const cols = tb.cols.slice();
+        const moneyAt = cols.findIndex((c) => c.kind === 'money');
+        const cur = tb.conv && moneyAt >= 0 && cols.findIndex((c) => c.h === 'Currency') >= 0 ? cols.findIndex((c) => c.h === 'Currency') : -1;
+        if (cur >= 0) cols.push({ h: `Amount in ${tb.conv}`, kind: 'money', w: 16 });
+        ws.columns = cols.map((c) => ({ width: c.w }));
+        const hr = ws.getRow(1); hr.height = 26;
+        cols.forEach((c, i) => { const x = hr.getCell(i + 1); x.value = c.h; x.font = { name: FONT, size: 10, bold: true, color: { argb: A(T.onPrimary) } }; x.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: A(T.primary) } }; x.alignment = { vertical: 'middle', horizontal: c.kind === 'text' || c.kind === 'date' ? 'left' : 'right', wrapText: true }; });
+        tb.rows.forEach((row, ri) => {
+          const wr = ws.getRow(ri + 2);
+          cols.forEach((c, i) => {
+            let v = i < tb.cols.length ? row[i] : (row[moneyAt] != null && row[moneyAt] !== '' && row[cur] ? plan.convert(Number(row[moneyAt]), row[cur], tb.conv) : null);
+            if (v === true) v = 'Yes'; else if (v === false) v = '';
+            const x = wr.getCell(i + 1);
+            if (c.kind === 'date') { const d = toDate(v); x.value = d || (v == null ? '' : v); if (d) x.numFmt = 'mmm d, yyyy'; }
+            else if (['int', 'dec', 'pct', 'money'].includes(c.kind)) { const n = v === '' || v == null ? null : Number(v); x.value = Number.isFinite(n) ? n : (v == null ? '' : v); x.numFmt = c.kind === 'int' ? '#,##0' : c.kind === 'dec' ? '0.00' : c.kind === 'pct' ? '0"%"' : '#,##0.00'; }
+            else x.value = v == null ? '' : String(v);
+            const st = c.kind === 'text' ? X.statusTone(x.value) : null;
+            x.font = { name: FONT, size: 10, bold: !!st, color: { argb: A(st ? X.tone(st) : T.text) } };
+            x.alignment = { vertical: 'top', horizontal: c.kind === 'text' || c.kind === 'date' ? 'left' : 'right', wrapText: c.kind === 'text' };
+            x.fill = st ? { type: 'pattern', pattern: 'solid', fgColor: { argb: A(X.SOFT[st]) } } : ri % 2 ? { type: 'pattern', pattern: 'solid', fgColor: { argb: A(T.surface2) } } : undefined;
+            x.border = { bottom: thin(T.border) };
+          });
+        });
+        ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: cols.length } };
+        if (D.truncated) { const nr = tb.rows.length + 3; ws.getCell(nr, 1).value = `Showing the first ${D.cap} rows of this table. Narrow the filters to see the rest.`; ws.getCell(nr, 1).font = { name: FONT, size: 10, italic: true, color: { argb: A(T.muted) } }; }
       }
     }
     const buf = await wb.xlsx.writeBuffer();

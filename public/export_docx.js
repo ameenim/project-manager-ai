@@ -34,7 +34,7 @@
             borders: { top: line(X.tone(k.tone), 24), left: line('FFFFFF', 48), right: line('FFFFFF', 48), bottom: none },
             children: [
               new Paragraph({ spacing: { after: 40 }, children: [tr(k.label, { size: 18, color: T.muted })] }),
-              new Paragraph({ spacing: { after: 40 }, children: [tr(k.value, { size: 40, bold: true, color: k.tone === 'info' || k.tone === 'idle' ? T.text : X.tone(k.tone) })] }),
+              new Paragraph({ spacing: { after: 40 }, children: [tr(k.value, { size: String(k.value).length > 9 ? 26 : 40, bold: true, color: k.tone === 'info' || k.tone === 'idle' ? T.text : X.tone(k.tone) })] }),
               new Paragraph({ children: [tr(k.hint || '', { size: 17, color: T.muted })] }),
             ],
           })),
@@ -47,7 +47,9 @@
       const cols = b.head.length;
       const wts = b.head.map((h, c) => Math.min(Math.max(X.plain(h).length, ...b.rows.map((r) => X.plain(r[c] || []).length), 7), 42));
       const tot = wts.reduce((a, v) => a + v, 0);
-      const widths = wts.map((w) => Math.max(1300, Math.round((CW * w) / tot)));
+      const minW = Math.min(1300, Math.floor(CW / cols)), widths = wts.map((w) => Math.max(minW, Math.round((CW * w) / tot)));
+      const wsum = widths.reduce((a, v) => a + v, 0);
+      if (wsum !== CW) for (let i = 0; i < widths.length; i++) widths[i] = Math.max(300, Math.floor((widths[i] * CW) / wsum));
       widths[widths.indexOf(Math.max(...widths))] += CW - widths.reduce((a, v) => a + v, 0);
       const cell = (rs, c, o) => {
         const st = o.header ? null : X.statusTone(X.plain(rs || []));
@@ -123,7 +125,7 @@
       new Paragraph({ spacing: { after: 560 }, indent: { right: 6800 }, border: { bottom: { style: BorderStyle.SINGLE, size: 24, color: T.primary, space: 1 } }, children: [] }),
     ];
     if (client) cover.push(new Paragraph({ spacing: { after: 200, line: 240, lineRule: LineRuleType.AUTO }, children: [img(client, Math.min(180, Math.round((client.w / client.h) * 56)), `${meta.client || 'Client'} logo`)] }));
-    const facts = [['Client', meta.client], ['Project', meta.project], ['Project code', meta.code], ['Document date', plan.date], ['Prepared for', meta.audience], ['Prepared by', meta.pm]].filter((r) => r[1]);
+    const facts = [['Client', meta.client], ['Project', meta.project], ['Project code', meta.code], ['Document date', plan.date], ['Prepared for', meta.audience], ['Prepared by', meta.pm], ['Filters', meta.filters]].filter((r) => r[1]);
     cover.push(new Table({
       width: { size: CW, type: WidthType.DXA }, columnWidths: [2300, CW - 2300], layout: TableLayoutType.FIXED, borders: noBorders,
       rows: facts.map(([k, v]) => new TableRow({

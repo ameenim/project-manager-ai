@@ -12,7 +12,7 @@ function load() {
   const noop = () => '';
   const PM = {
     esc: (x) => String(x), t: (k) => k, icon: noop, $: noop, $$: () => [], api: noop, toast: noop, modal: noop, busy: noop, state: {},
-    money: (n, c) => `${c} ${n}`, views: {}, dash: { h: { empty: () => '', legend: (rows) => rows.map((r) => r.join(':')).join('|'), tipAttr: () => '' } },
+    money: (n, c) => `${c} ${n}`, views: {}, dash: { h: { kpiList: () => [], empty: () => '', legend: (rows) => rows.map((r) => r.join(':')).join('|'), tipAttr: () => '' } },
   };
   const win = { PM, innerWidth: 1200 };
   const ctx = vm.createContext({ window: win, PMCL: new Proxy({}, { get: () => () => ({ on: false }) }), document: {}, console, Math, Object, Number, String, Array, Set, JSON });

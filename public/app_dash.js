@@ -138,6 +138,9 @@
   // ---------------- widgets ----------------
   const csvOf = (rows) => rows.map((r) => r.map((c) => { let s = c == null ? '' : String(c); if (/^[=+\-@\t\r]/.test(s) && !/^[-+]?\d+([.,]\d+)?$/.test(s)) s = "'" + s; return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }).join(',')).join('\r\n');
 
+  // tiles for the report: label, plain value, hint and a status tone the exports understand
+  const kpiList = (tiles) => tiles.map((x) => ({ label: t(x.k), value: String(x.v == null ? '' : x.v).replace(/<[^>]*>/g, '').replace(/&amp;/g, '&'), hint: String(x.sub || ''), tone: x.tone === 'good' ? 'ok' : x.tone === 'warn' ? 'warn' : x.tone === 'bad' ? 'bad' : 'info' }));
+
   const WIDGETS = {
     kpi: {
       size: 'l', title: 'w_kpi',
@@ -156,7 +159,7 @@
           { k: 'kpi_value', v: totals, sub: t('kpi_across', { n: P.length }), tone: '', small: true },
         ];
         body.innerHTML = `<div class="kpis">${tiles.map((x, i) => `<div class="kpi-t ${x.tone}" style="--i:${i}"><div class="kv ${x.small ? 'sm' : ''}" ${x.n != null ? `data-count="${x.n}" data-suffix="${x.suffix || ''}"` : ''}>${esc(String(x.v))}</div><div class="kl">${t(x.k)}</div><div class="ks">${esc(x.sub || '')}</div></div>`).join('')}</div>`;
-        return { csv: () => [[t('metric'), t('value')], ...tiles.map((x) => [t(x.k), x.v])] };
+        return { csv: () => [[t('metric'), t('value')], ...tiles.map((x) => [t(x.k), x.v])], kpis: kpiList(tiles) };
       },
     },
 
@@ -494,7 +497,7 @@
   }
 
   // ---------------- mount ----------------
-  const MAIN = { widgets: WIDGETS, order: DEFAULT_ORDER, key: null, currencyToggle: true, fetch: () => api('GET', '/api/dashboard') };
+  const MAIN = { widgets: WIDGETS, order: DEFAULT_ORDER, key: null, currencyToggle: true, filters: 'portfolio', fkey: 'main', reportUrl: '/api/dashboard/report-data', fetch: (qs) => api('GET', '/api/dashboard' + (qs || '')) };
   function mount(host, d, cfg) {
     cfg = cfg || MAIN;
     const scope = cfg.key ? 'project' : 'portfolio';
@@ -506,7 +509,8 @@
     const modeNow = () => (cfg.currencyToggle ? L.cur : 'native');
     const infos = {};
 
-    host.innerHTML = `<div class="dw-bar"><div class="dw-bar-l"><span class="muted small" id="dwCount"></span></div><div class="row" style="gap:8px">${cfg.currencyToggle ? `<div class="seg" id="dwCur" role="group" aria-label="${esc(t('fx_display'))}" title="${esc(t('fx_note', { r: PM.fx.rateNote('AED') + ', ' + PM.fx.rateNote('SAR') }))}">${PM.fx.choices.map((c) => `<button data-cur="${c}" aria-pressed="${c === L.cur}" class="${c === L.cur ? 'on' : ''}">${c}</button>`).join('')}</div>` : ''}<button class="btn sm ghost" id="dwReset" hidden>${t('dash_reset')}</button>${PM.widgets ? `<a class="btn sm" id="dwAdd" href="#/widgets?scope=${scope}">${icon('plus')}${t('wm_add_widgets')}</a><button class="btn sm" id="dwLayouts" type="button">${icon('list')}${t('wl_layouts')}</button>` : ''}<button class="btn sm" id="dwCustom" aria-expanded="false">${icon('cols')}${t('dash_customize')}</button></div></div>
+    host.innerHTML = `<div class="dw-bar"><div class="dw-bar-l"><span class="muted small" id="dwCount"></span></div><div class="row" style="gap:8px">${cfg.currencyToggle ? `<div class="seg" id="dwCur" role="group" aria-label="${esc(t('fx_display'))}" title="${esc(t('fx_note', { r: PM.fx.rateNote('AED') + ', ' + PM.fx.rateNote('SAR') }))}">${PM.fx.choices.map((c) => `<button data-cur="${c}" aria-pressed="${c === L.cur}" class="${c === L.cur ? 'on' : ''}">${c}</button>`).join('')}</div>` : ''}<button class="btn sm ghost" id="dwReset" hidden>${t('dash_reset')}</button>${PM.widgets ? `<a class="btn sm" id="dwAdd" href="#/widgets?scope=${scope}">${icon('plus')}${t('wm_add_widgets')}</a><button class="btn sm" id="dwLayouts" type="button">${icon('list')}${t('wl_layouts')}</button>` : ''}${cfg.filters && PM.dashReport ? `<button class="btn sm" id="dwExport" type="button">${icon('file')}${t('ex_report')}</button>` : ''}<button class="btn sm" id="dwCustom" aria-expanded="false">${icon('cols')}${t('dash_customize')}</button></div></div>
+      ${cfg.filters ? '<div class="dw-flt" id="dwFlt"></div><div class="dw-empty" id="dwEmpty" role="status" hidden></div>' : ''}
       <div class="dw-panel" id="dwPanel" aria-hidden="true"><div><div class="dw-panel-in" id="dwChips"></div></div></div>
       <div class="dw-grid ${animate ? 'anim' : ''}" id="dwGrid"></div>`;
     const grid = $('#dwGrid', host);
@@ -557,9 +561,19 @@
     // widgets receive a context so an action inside one can refresh the others
     const ctx = {
       get data() { return d; },
-      async reload() { d = await cfg.fetch(); refreshWidgets(); return d; },
-      async reloadExcept(id) { d = await cfg.fetch(); refreshWidgets(id); return d; },
+      async reload() { d = await load(); refreshWidgets(); afterLoad(); return d; },
+      async reloadExcept(id) { d = await load(); refreshWidgets(id); afterLoad(); return d; },
     };
+    // filters: the saved filter is sent with every fetch and only the latest answer is used
+    const fq = () => (cfg.filters && PM.dashFilters ? PM.dashFilters.query(cfg.fkey) : '');
+    let seq = 0, flt = null;
+    const load = async () => { const n = ++seq, r = await cfg.fetch(fq()); if (n !== seq) throw Object.assign(new Error('stale'), { stale: true }); return r; };
+    function afterLoad() {
+      if (flt) flt.update(d);
+      const em = $('#dwEmpty', host); if (!em) return;
+      const none = PM.dashFilters.isOn(PM.dashFilters.get(cfg.fkey)) && (cfg.key ? d.filter_empty === true : !(d.projects && d.projects.length));
+      em.hidden = !none; em.textContent = none ? t(cfg.key ? 'gf_none_project' : 'gf_none_portfolio') : '';
+    }
     function refreshWidgets(except) {
       visible().forEach((id, i) => {
         if (id === except) return;
@@ -861,6 +875,15 @@
       persist(); draw(); const g2 = $(`.dw[data-w="${id}"] .dw-grip`, grid); if (g2) g2.focus();
     });
 
+    if (cfg.filters && PM.dashFilters && $('#dwFlt', host)) {
+      flt = PM.dashFilters.mountBar($('#dwFlt', host), { key: cfg.fkey, scope: cfg.key ? 'project' : 'portfolio', d, onChange: () => {
+        grid.setAttribute('aria-busy', 'true'); grid.classList.add('dw-load');
+        ctx.reload().catch((e) => { if (!e.stale) PM.toast(t('gf_failed'), 'err'); }).finally(() => { grid.removeAttribute('aria-busy'); grid.classList.remove('dw-load'); });
+      } });
+      afterLoad();
+    }
+    const exb = $('#dwExport', host);
+    if (exb) exb.onclick = () => PM.dashReport.open({ scope, fkey: cfg.fkey, ctx, mode: modeNow, reportUrl: cfg.reportUrl, items: visible().map((id) => ({ id, label: wlabel(cfg.widgets[id]), w: cfg.widgets[id] })) });
     bindTips(host);
     lastW = grid.clientWidth;
     if (window.ResizeObserver) {
@@ -873,5 +896,5 @@
     if (animate) setTimeout(() => grid.classList.remove('anim'), 2200);
   }
 
-  PM.dash = { mount, main: MAIN, layout: layoutApi, wf: { range: wfRange, point: wfPoint, on: wfOn }, h: { setWidth: (n) => { CW = n; }, bindTips, listRow, projLink, stamp, width: () => CW, tipAttr: tip, hbars, donut, legend, empty, tip, num, dnum, ymd, trunc, countUp, csvOf, reduced, WIDGETS } };
+  PM.dash = { mount, main: MAIN, layout: layoutApi, wf: { range: wfRange, point: wfPoint, on: wfOn }, h: { kpiList, setWidth: (n) => { CW = n; }, bindTips, listRow, projLink, stamp, width: () => CW, tipAttr: tip, hbars, donut, legend, empty, tip, num, dnum, ymd, trunc, countUp, csvOf, reduced, WIDGETS } };
 })();

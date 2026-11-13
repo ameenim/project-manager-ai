@@ -91,7 +91,7 @@ test('the file is one slide in the platform colors with the platform logo and a 
   for (const text of ['Slide Build', 'Weekly project status', 'Project brief', 'Completion', 'Top risks and issues', 'Reasons for delay', 'Next steps', 'Decisions and support required']) assert.ok(xml.includes(text), 'slide shows ' + text);
   // the template colors (orange, purple, red) are not used. Platform blues are.
   for (const c of ['FF8A65', 'FF7F5C', '4B3DB5', 'D62F3A']) assert.ok(!xml.includes(c), 'no template color ' + c);
-  assert.ok(xml.includes('2457D6') && xml.includes('1C46B0'), 'platform primary colors are used');
+  assert.ok(xml.includes('2F55E4') && xml.includes('2444C4'), 'platform primary colors are used');
   assert.ok(Object.keys(zip.files).some((n) => /^ppt\/media\/.+\.png$/.test(n)), 'the platform logo is embedded');
   assert.ok(Object.keys(zip.files).some((n) => /notesSlide1\.xml$/.test(n)), 'speaker notes exist');
 });

@@ -10,9 +10,9 @@
 
   // ---------- design tokens (light theme of styles.css, hex without the hash) ----------
   const T = {
-    primary: '2457D6', primary600: '1C46B0', primarySoft: 'E8EEFC', onPrimary: 'FFFFFF',
-    text: '1B2437', muted: '5B6680', faint: '626F8A', border: 'E2E7F0', borderStrong: 'CDD5E3', surface: 'FFFFFF', surface2: 'F8F9FD',
-    success: '12784A', successSoft: 'E2F5EC', warning: '9A5700', warningSoft: 'FDF0D9', danger: 'B82F2F', dangerSoft: 'FBE6E6', violet: '6B4FD1', violetSoft: 'ECE8FB',
+    primary: '2F55E4', primary600: '2444C4', primarySoft: 'E9EEFF', onPrimary: 'FFFFFF',
+    text: '14192D', muted: '525C75', faint: '5D6882', border: 'E6E9F1', borderStrong: 'D0D6E4', surface: 'FFFFFF', surface2: 'F8F9FC',
+    success: '0B7A4B', successSoft: 'E3F5EC', warning: '955300', warningSoft: 'FDF1DB', danger: 'C0303B', dangerSoft: 'FDE8EA', violet: '6A45D8', violetSoft: 'EFEAFD',
     c1: '2A78D6', c2: 'EB6834', c3: '1BAF7A', c4: 'EDA100', track: 'E6EAF3', gSum: '1F2F55', gToday: 'E0453A',
   };
   const TONE = { ok: T.success, warn: T.warning, bad: T.danger, info: T.primary, idle: T.faint };
@@ -267,7 +267,24 @@
     if (g.brand && !g.brand.logo && !l.logoImg) { l.logo.cover = 'hidden'; l.logo.header = 'hidden'; }
     return l;
   }
+  // A dashboard report: one section per widget, each with a chart and its table
+  function dashPlan(g) {
+    const D = g.dashboard, meta = g.meta || {};
+    const sections = (D.sections || []).map((s) => {
+      const blocks = [];
+      if (s.table) {
+        blocks.push({ t: 'table', head: s.table.head, rows: s.table.rows });
+        if (s.table.cut > 0) blocks.push({ t: 'p', runs: [{ text: `This table shows the first ${s.table.head.length} columns. The Excel report has the full rows of data.`, italic: true }] });
+        if (s.table.more > 0) blocks.push({ t: 'p', runs: [{ text: `Showing the first ${s.table.rows.length} of ${s.table.rows.length + s.table.more} rows. The Excel report has the full rows of data.`, italic: true }] });
+      }
+      const spec = s.chart ? chartSpec(s.chart) : null;
+      return { heading: s.heading, blocks, ids: [], specs: spec ? [spec] : [] };
+    });
+    if ((D.kpis || []).length && g.format === 'pptx') sections.unshift({ heading: 'Key figures', blocks: [], ids: [], specs: [], glance: true });
+    return { brand: null, brandName: 'Project Manager AI', layout: planLayout(g), title: g.title, typeTitle: g.type_title || '', meta, date: fmtDate(meta.date), kpis: D.kpis || [], sections, onepager: null, oneSlide: false, data: D.data || null, convert: (n, a, b) => (PM.fx ? PM.fx.convert(n, a, b) : n) };
+  }
   function plan(g) {
+    if (g.dashboard) return dashPlan(g);
     const meta = g.meta || {};
     const V = g.visuals || null;
     const def = window.__Reports && window.__Reports.DEFAULTS[g.doc_type];

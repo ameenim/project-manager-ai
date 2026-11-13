@@ -2122,3 +2122,15 @@ body.chat-full { overflow: hidden; }
   .page .card > .row.gap-lg { flex-wrap: wrap; }
   .page .card > .row.gap-lg > .grow { flex: 1 1 160px; min-width: 0; overflow-wrap: anywhere; }
 }
+
+/* Overview filters */
+.dw-flt { margin-bottom: 12px; }
+.gf-row { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: flex-end; }
+.gf-f { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.gf-f select, .gf-f .dd-btn { min-height: 39px; min-width: 120px; max-width: 200px; }
+.gf-f .dd { position: relative; }
+.gf-note { min-height: 18px; margin-top: 6px; }
+.dw-empty { padding: 14px 16px; margin-bottom: 12px; border: 1px dashed var(--border-strong); border-radius: var(--r-l); color: var(--muted); font-size: var(--fs-body); }
+.dw-empty[hidden] { display: none; }
+.dw-grid.dw-load { opacity: .6; transition: opacity .15s var(--ease); pointer-events: none; }
+@media (max-width: 600px) { .gf-f { flex: 1 1 calc(50% - 6px); } .gf-f select, .gf-f .dd-btn { width: 100%; max-width: none; } }

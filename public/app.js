@@ -472,7 +472,7 @@
   // ---------- dashboard ----------
   PM.views.dashboard = async function () {
     shell('dash', spot());
-    const [d] = await Promise.all([api('GET', '/api/dashboard'), loadProjects()]);
+    const [d] = await Promise.all([api('GET', '/api/dashboard' + PM.dashFilters.query('main')), loadProjects()]);
     if (S.projects.length) shell('dash', '<div class="page"></div>');
     const unassigned = d.unassigned ? (await api('GET', '/api/inbox/unassigned')).inbox : [];
     const kpi = (v, l, cls = '') => `<div class="card kpi"><div class="v ${cls}">${v}</div><div class="l">${l}</div></div>`;
@@ -557,7 +557,7 @@
   // ---------- project shell ----------
   // what each tab asks for first, so it can be asked for while the project itself is still on its way
   const TAB_READS = {
-    overview: (id) => [`/api/projects/${id}/dashboard`],
+    overview: (id) => [`/api/projects/${id}/dashboard${PM.dashFilters.query('proj:' + id)}`],
     review: (id) => [`/api/projects/${id}/items`],
     schedule: (id) => [`/api/projects/${id}/schedule`],
     logs: (id) => [`/api/projects/${id}/items`, '/api/me/log-views'],

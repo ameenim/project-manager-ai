@@ -283,12 +283,12 @@ test('the Word file uses the client colors and fonts and none of the platform bl
   const all = (await Promise.all(Object.keys(zip.files).filter((f) => /^word\/.*\.xml$/.test(f)).map((f) => zip.file(f).async('string')))).join('\n');
   assert.match(all, /7B2D8E/, 'primary color is used');
   assert.match(all, /Georgia/); assert.match(all, /Verdana/);
-  assert.ok(!/2457D6/i.test(all), 'platform primary is gone');
+  assert.ok(!/2F55E4/i.test(all), 'platform primary is gone');
   assert.ok(!/IBM Plex/.test(all), 'platform font is gone');
   assert.match(all, /Acme standard logo/, 'logo is described by the template name');
   assert.ok(Object.keys(zip.files).some((f) => /^word\/media\//.test(f)), 'the logo is in the file');
   // nothing leaks to the next build
-  assert.equal(ex.T.primary, '2457D6'); assert.equal(ex.FONT_NAME, 'IBM Plex Sans');
+  assert.equal(ex.T.primary, '2F55E4'); assert.equal(ex.FONT_NAME, 'IBM Plex Sans');
 });
 
 test('a brand with no logo draws no logo at all, and light colors are darkened to stay readable', async () => {
@@ -315,6 +315,6 @@ test('PowerPoint and Excel files use the client brand as well', async () => {
     const blob = await ex.builders.pptx({ plan: ex.plan({ ...doc, format: 'pptx' }), logo: pngAsset(LOGO), mark: pngAsset(LOGO), client: null });
     const zip = await JSZip.loadAsync(Buffer.from(await blob.arrayBuffer()));
     const xml = (await Promise.all(Object.keys(zip.files).filter((f) => /^ppt\/(slides|slideMasters)\/[^/]+\.xml$/.test(f)).map((f) => zip.file(f).async('string')))).join('\n');
-    assert.match(xml, /7B2D8E/); assert.match(xml, /Georgia/); assert.match(xml, /Verdana/); assert.ok(!/2457D6/i.test(xml), 'no platform blue in slides');
+    assert.match(xml, /7B2D8E/); assert.match(xml, /Georgia/); assert.match(xml, /Verdana/); assert.ok(!/2F55E4/i.test(xml), 'no platform blue in slides');
   } finally { restore(); }
 });

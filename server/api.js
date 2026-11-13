@@ -879,37 +879,48 @@ module.exports = function createApi(store, auth, connectors, ops) {
   }
 
   // ---------- dashboard ----------
-  function dashboard() {
-    const projects = DB.order.map((id) => DB.projects[id]).filter(isLive).reverse();
-    const cards = [], payments = [], overdue = [], radarEntries = [];
+  // f holds the overview filters (see overview_filter.js). Without any filter the answer is the whole portfolio, as it always was.
+  // Project level numbers (health, progress, SPI) always describe the whole project. The period and the status narrow the rows
+  // under them: tasks, payments, deliverables, risks, the late list and the activity.
+  function dashboard(f) {
+    f = f || {};
+    const all = DB.order.map((id) => DB.projects[id]).filter(isLive).reverse();
+    const cards = [], payments = [], overdue = [], radarEntries = [], kept = [];
     const next60 = S.addDays(TODAY(), 60);
+    const range = OF.range(f);
     let pendingInbox = 0, pendingItems = 0;
-    for (const P of projects) {
-      const st = stats(P); pendingInbox += st.pendingInbox; pendingItems += st.pendingItems;
-      cards.push({ ...clone(P.p), stats: st });
+    const entries = all.map((P) => ({ P, st: stats(P) }));
+    for (const { P, st } of entries) {
+      if (!OF.projectPasses(P, st, f)) continue;
       const mm = S.progressMetrics(P.tasks, rawProject(P), TODAY()); // once per project, the radar and the late list read the same rows
-      radarEntries.push({ p: { ...clone(P.p), id: P.id }, stats: st, items: P.items.filter((i) => i.kind === 'risk' || i.kind === 'milestone' || i.kind === 'deliverable').map((i) => ({ ...i, data: i.data || {} })), rows: mm.rows, sched: S.schedule(P.tasks, rawProject(P)) });
-      for (const m of P.items.filter((i) => i.kind === 'milestone' && i.status !== 'ignored' && i.state !== 'paid')) {
+      const sc = OF.scope(P, f, mm.rows, TODAY());
+      if (!OF.includeProject(P, st, f, sc)) continue;
+      kept.push(P);
+      pendingInbox += st.pendingInbox; pendingItems += st.pendingItems;
+      cards.push({ ...clone(P.p), stats: st });
+      radarEntries.push({ p: { ...clone(P.p), id: P.id }, stats: st, items: sc.items.map((i) => ({ ...i, data: i.data || {} })), rows: sc.rows, sched: S.schedule(P.tasks, rawProject(P)) });
+      for (const m of sc.items.filter((i) => i.kind === 'milestone' && (i.state !== 'paid' || f.s === 'done'))) {
         const d = m.data;
         if (d.due_date) {
           const amount = d.amount ?? (d.percent != null && P.p.value ? Math.round((P.p.value * d.percent) / 100) : null);
           payments.push({ item_id: m.id, project_id: P.id, project: P.p.name, currency: P.p.currency, title: m.title, due: d.due_date, amount, state: m.state, late: d.due_date < TODAY() && m.state === 'pending' });
         }
       }
-      for (const r of mm.rows) if (r.overdue) overdue.push({ task_id: r.id, project_id: P.id, project: P.p.name, task: r.name, finish: r.finish, progress: r.progress, assignee: r.assignee });
+      for (const r of sc.rows) if (r.overdue) overdue.push({ task_id: r.id, project_id: P.id, project: P.p.name, task: r.name, finish: r.finish, progress: r.progress, assignee: r.assignee });
     }
     payments.sort((a, b) => a.due.localeCompare(b.due));
     const soon = payments.filter((x) => x.due <= next60);
-    const shown = soon.length >= 4 ? soon : payments.slice(0, 5);
+    const shown = OF.active(f) ? payments : (soon.length >= 4 ? soon : payments.slice(0, 5));
     overdue.sort((a, b) => a.finish.localeCompare(b.finish));
     const activity = [];
-    for (const P of projects) for (const a of P.audit) activity.push({ ...clone(a), project: P.p.name });
+    for (const P of kept) for (const a of P.audit) if (OF.inRange(String(a.ts || a.created_at || '').slice(0, 10), range)) activity.push({ ...clone(a), project: P.p.name });
     activity.sort((a, b) => (b.ts || '').localeCompare(a.ts || '') || b.id - a.id);
     const totalValue = {};
-    for (const P of projects) if (P.p.value) totalValue[P.p.currency] = (totalValue[P.p.currency] || 0) + P.p.value;
+    for (const P of kept) if (P.p.value) totalValue[P.p.currency] = (totalValue[P.p.currency] || 0) + P.p.value;
     return {
       today: TODAY(), radar: win.__Radar.buildRadar(radarEntries, TODAY()), analytics: win.__Analytics.buildAnalytics(radarEntries, TODAY()), projects: cards, payments: shown.slice(0, 10), overdue: overdue.slice(0, 12), overdueTotal: overdue.length, payments_all: payments.slice(0, 500), overdue_all: overdue.slice(0, 500), activity: activity.slice(0, 12), pendingInbox, pendingItems, totalValue, unassigned: 0,
-      counts: { active: projects.filter((p) => p.p.status === 'active').length, red: cards.filter((c) => c.stats.health === 'red').length, amber: cards.filter((c) => c.stats.health === 'amber').length, green: cards.filter((c) => c.stats.health === 'green').length },
+      counts: { active: kept.filter((p) => p.p.status === 'active').length, red: cards.filter((c) => c.stats.health === 'red').length, amber: cards.filter((c) => c.stats.health === 'amber').length, green: cards.filter((c) => c.stats.health === 'green').length },
+      filters: f, filter_options: OF.options(entries), kept,
     };
   }
 
@@ -1139,17 +1150,41 @@ module.exports = function createApi(store, auth, connectors, ops) {
   // the overview carries a 30 day trend so its trend widgets draw from the same response
   const activeList = () => DB.order.map((id) => DB.projects[id]).filter(isLive);
   // the widget marketplace. The overviews also carry the custom widgets the person added and the data those read.
+  const OF = require('./overview_filter')({ err, TODAY });
+  const OR = require('./overview_rows')({ OF, S, rawProject, TODAY });
   const WIDGETS = require('./widgets')({ on, ctx, err, store, WS: win.__WidgetSpec, S, rawProject, stats, TODAY, P_, activeList });
-  on('GET', '/api/dashboard', async () => ({ ...dashboard(), trends: await trendsFor(activeList(), 30), ...(await WIDGETS.extras('portfolio', activeList())) }));
+  on('GET', '/api/dashboard', async (m, q) => {
+    const f = OF.parse(q), { kept, ...d } = dashboard(f);
+    return { ...d, trends: await trendsFor(kept, 30), ...(await WIDGETS.extras('portfolio', kept)) };
+  });
+  // The row level data behind the overview, for the Excel report. It reads the same filters as the screen.
+  on('GET', '/api/dashboard/report-data', async (m, q) => {
+    const f = OF.parse(q), { kept } = dashboard(f);
+    const names = new Map(activeList().map((P) => [P.id, P.p.name]));
+    return { scope: 'portfolio', filters: f, filter_text: OF.describe(f, names), ...OR.build(kept.map((P) => ({ P, st: stats(P) })), f) };
+  });
   // one project's dashboard: radar, schedule and critical path, deliverables, payments and cash flow
-  on('GET', '/api/projects/(\\d+)/dashboard', async (mm) => {
+  on('GET', '/api/projects/(\\d+)/dashboard', async (mm, q) => {
     const P = P_(mm[1]), raw = rawProject(P), st = stats(P);
-    const sched = S.schedule(P.tasks, raw);
-    const items = P.items.map((i) => ({ ...i, data: i.data || {} }));
-    const entry = { p: { ...clone(P.p), id: P.id }, stats: st, items: items.filter((i) => i.status !== 'ignored' && ['risk', 'milestone', 'deliverable'].includes(i.kind)), rows: S.progressMetrics(P.tasks, raw, TODAY()).rows, sched };
-    const audit = P.audit.slice(0, 12).map((a) => ({ ...a, detail: a.detail || {} }));
-    return { project: { ...projectView(P) }, radar: win.__Radar.buildRadar([entry], TODAY()), analytics: win.__Analytics.buildAnalytics([entry], TODAY()),
-      ...win.__ProjDash.buildProjectDash({ project: raw, tasks: sched, items, inbox: P.inbox, audit, today: TODAY() }), trends: await trendsFor([P], 30), ...(await WIDGETS.extras('project', [P])) };
+    // a project overview reads the period and the status. The portfolio filters (project, client, currency, health) have no meaning here.
+    const f = OF.parse(q); delete f.p; delete f.c; delete f.cur; delete f.h;
+    const sched = S.schedule(P.tasks, raw), today = TODAY(), range = OF.range(f);
+    const sc = OF.scope(P, f, S.progressMetrics(P.tasks, raw, today).rows, today);
+    const all = P.items.map((i) => ({ ...i, data: i.data || {} }));
+    // the filtered items feed the dashboard. Decisions and other kinds keep their place, the review list reads them.
+    const keep = new Set(sc.items.map((i) => i.id));
+    const items = all.filter((i) => !['risk', 'milestone', 'deliverable'].includes(i.kind) || keep.has(i.id));
+    const entry = { p: { ...clone(P.p), id: P.id }, stats: st, items: items.filter((i) => i.status !== 'ignored' && ['risk', 'milestone', 'deliverable'].includes(i.kind)), rows: sc.rows, sched };
+    const audit = P.audit.filter((a) => OF.inRange(String(a.ts || a.created_at || '').slice(0, 10), range)).slice(0, 12).map((a) => ({ ...a, detail: a.detail || {} }));
+    const entries = [{ P, st }];
+    const dash = win.__ProjDash.buildProjectDash({ project: raw, tasks: OF.active(f) ? OF.scheduleFor(sched, sc.rows) : sched, items, inbox: P.inbox, audit, today });
+    if (range) dash.phases = dash.phases.filter((ph) => OF.overlaps(ph.start, ph.finish, range));
+    return { project: { ...projectView(P) }, radar: win.__Radar.buildRadar([entry], today), analytics: win.__Analytics.buildAnalytics([entry], today), ...dash,
+      filters: f, filter_empty: OF.active(f) && !sc.rows.length && !sc.items.length, filter_options: OF.options(entries), trends: await trendsFor([P], 30), ...(await WIDGETS.extras('project', [P])) };
+  });
+  on('GET', '/api/projects/(\\d+)/report-data', async (mm, q) => {
+    const P = P_(mm[1]), f = OF.parse(q); delete f.p; delete f.c; delete f.cur; delete f.h;
+    return { scope: 'project', filters: f, filter_text: OF.describe(f), ...OR.build([{ P, st: stats(P) }], f) };
   });
   // trends over time, drawn only from the daily snapshots. days is one of 7, 14, 30, 90, 180, 365.
   on('GET', '/api/trends', async (m, q) => trendsFor(DB.order.map((id) => DB.projects[id]).filter(isLive), periodOf(q.days)));

@@ -83,7 +83,7 @@
       s.addText(plan.typeTitle, { x: 0.7, y: 2.1, w: 7.3, h: 0.4, fontFace: F, fontSize: 16, bold: true, color: T.primary, margin: 0 });
       s.addText(plan.title, { x: 0.7, y: 2.55, w: 7.3, h: 1.7, fontFace: FH, fontSize: 38, bold: true, color: T.text, valign: 'top', margin: 0, fit: 'shrink' });
       s.addShape(SH_.rect, { x: 0.7, y: 4.4, w: 1.2, h: 0.07, fill: { color: T.primary }, line: { color: T.primary, width: 0 } });
-      const facts = [['Client', meta.client], ['Project', meta.project], ['Project code', meta.code], ['Document date', plan.date], ['Prepared for', meta.audience], ['Prepared by', meta.pm]].filter((r) => r[1]);
+      const facts = [['Client', meta.client], ['Project', meta.project], ['Project code', meta.code], ['Document date', plan.date], ['Prepared for', meta.audience], ['Prepared by', meta.pm], ['Filters', meta.filters]].filter((r) => r[1]);
       facts.forEach(([k, v], i) => {
         const y = 4.75 + i * 0.44;
         s.addText(k, { x: 0.7, y, w: 1.8, h: 0.36, fontFace: F, fontSize: 12, color: T.muted, valign: 'middle', margin: 0 });
