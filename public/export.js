@@ -6,7 +6,7 @@
 (function () {
   'use strict';
   const PM = window.PM;
-  const VERSION = '5';
+  const VERSION = '6';
 
   // ---------- design tokens (light theme of styles.css, hex without the hash) ----------
   const T = {
