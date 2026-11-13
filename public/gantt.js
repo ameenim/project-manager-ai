@@ -423,11 +423,11 @@
         const inside = st.length && this.today >= st[0] && this.today <= fn[fn.length - 1];
         this._initialTarget = [st.length && !inside ? st[0] : this.today, !inside ? false : true];
         this.initialScroll();
-      } else { this.scroll.scrollLeft = keepL; this.scroll.scrollTop = keepT; }
+      } else { const sb = this.scroll.style.scrollBehavior; this.scroll.style.scrollBehavior = 'auto'; this.scroll.scrollLeft = keepL; this.scroll.scrollTop = keepT; this.scroll.style.scrollBehavior = sb; }
       this.bind();
       this._geom = new Map(rows.filter((t) => t.start && t.finish).map((t) => [t.id, this.barGeom(t).left]));
       this.placeBar(prevSel);
-      this.animate(prevIdx, prevGeom);
+      if (!this.root.classList.contains('gt-resizing')) this.animate(prevIdx, prevGeom);
     }
 
     colTitle(k) { return { wbs: '#', mode: '', pred: this.t('g_pred'), task: this.t('g_task'), start: this.t('g_start'), dur: this.t('g_dur'), finish: this.t('g_finish'), pct: '%', owner: this.t('g_owner') }[k]; }
@@ -650,20 +650,30 @@
     }
     fitAll() { const keys = this.cols().map((c) => c[1]).filter((k) => k !== 'mode'); const out = {}; for (const k of keys) { const w = this.fitWidth(k); if (w) out[k] = w; } this.ui.colW = { ...(this.ui.colW || {}), ...out }; this.ui.leftW = null; this.saveCols(); this.render(); }
     resetCols() { this.ui.colW = {}; this.ui.leftW = null; try { localStorage.removeItem('pm_gt_leftw'); } catch (e) { /* ignore */ } this.saveCols(); this.render(); }
+    // Freeze the widths every column currently shows, so changing one column never rescales the others.
+    freezeCols() { const cw = { ...(this.ui.colW || {}) }; for (const c of this.cols()) cw[c[1]] = c[2]; this.ui.colW = cw; this.ui.leftW = null; try { localStorage.removeItem('pm_gt_leftw'); } catch (e) { /* ignore */ } }
+    // Each press is judged on its own: a drag only resizes, and only a clean click counts toward a double click.
     onColDown(e) {
       const h = e.target.closest('.hc-rs'); if (!h || e.button > 0) return;
       e.preventDefault(); e.stopPropagation();
-      const key = h.dataset.col; const now = Date.now();
-      if (this._colAt && this._colKey === key && now - this._colAt < 400) { this._colAt = 0; const w = this.fitWidth(key); if (w) this.setColW(key, w, true); return; }
-      this._colAt = now; this._colKey = key;
-      const x0 = e.clientX; const w0 = this.cols().find((c) => c[1] === key)[2]; let raf = 0, next = w0, moved = false;
+      const key = h.dataset.col;
+      const rtl = getComputedStyle(this.root).direction === 'rtl';
+      const x0 = e.clientX, w0 = this.cols().find((c) => c[1] === key)[2]; let raf = 0, next = w0, moved = false;
       const min = key === 'mode' ? 30 : 40;
-      this.root.classList.add('gt-resizing'); document.body.style.cursor = 'col-resize';
-      const move = (ev) => { moved = true; next = Math.max(min, Math.min(700, w0 + ev.clientX - x0)); if (!raf) raf = requestAnimationFrame(() => { raf = 0; this.ui.colW = this.ui.colW || {}; this.ui.colW[key] = next; this.ui.leftW = null; this.render(); }); };
+      const move = (ev) => {
+        const dx = (rtl ? x0 - ev.clientX : ev.clientX - x0);
+        if (!moved) { if (Math.abs(dx) < 3) return; moved = true; this.freezeCols(); this.root.classList.add('gt-resizing'); document.body.style.cursor = 'col-resize'; }
+        next = Math.max(min, Math.min(700, w0 + dx));
+        if (!raf) raf = requestAnimationFrame(() => { raf = 0; this.ui.colW[key] = next; this.render(); });
+      };
       const up = () => {
         window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
-        this.root.classList.remove('gt-resizing'); document.body.style.cursor = ''; if (raf) cancelAnimationFrame(raf);
-        if (moved) this.setColW(key, next, true);
+        if (raf) { cancelAnimationFrame(raf); raf = 0; }
+        this.root.classList.remove('gt-resizing'); document.body.style.cursor = '';
+        if (moved) { this._colClick = null; this.setColW(key, next, true); return; }
+        const now = Date.now();
+        if (this._colClick && this._colClick.key === key && now - this._colClick.at < 400) { this._colClick = null; const w = this.fitWidth(key); if (w) { this.freezeCols(); this.setColW(key, w, true); } return; }
+        this._colClick = { key, at: now };
       };
       window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
     }
@@ -675,23 +685,26 @@
       if (save) { try { if (w == null) localStorage.removeItem('pm_gt_leftw'); else localStorage.setItem('pm_gt_leftw', String(this.ui.leftW)); } catch (e) { /* storage blocked */ } }
       this.render();
     }
+    splitClamp(w) { return Math.max(160, Math.min(w, Math.max(240, this.scroll.clientWidth - 160))); }
     onSplitDown(e) {
       const h = e.target.closest('.gt-split'); if (!h || e.button > 0) return;
       e.preventDefault();
-      const now = Date.now();
-      if (this._splitAt && now - this._splitAt < 400) { this._splitAt = 0; this.setLeftW(null, true); return; } // double click or double tap resets
-      this._splitAt = now;
       const rtl = getComputedStyle(this.root).direction === 'rtl';
-      const x0 = e.clientX, w0 = this.LW; let raf = 0, next = w0;
-      this.root.classList.add('gt-resizing'); document.body.style.cursor = 'col-resize';
-      let moved = false;
-      const move = (ev) => { moved = true; next = w0 + (rtl ? x0 - ev.clientX : ev.clientX - x0); if (!raf) raf = requestAnimationFrame(() => { raf = 0; this.ui.leftW = next; this.render(); }); };
+      const x0 = e.clientX, w0 = this.LW; let raf = 0, next = w0, moved = false;
+      const move = (ev) => {
+        const dx = rtl ? x0 - ev.clientX : ev.clientX - x0;
+        if (!moved) { if (Math.abs(dx) < 3) return; moved = true; this.root.classList.add('gt-resizing'); document.body.style.cursor = 'col-resize'; }
+        next = this.splitClamp(w0 + dx);
+        if (!raf) raf = requestAnimationFrame(() => { raf = 0; this.ui.leftW = next; this.render(); });
+      };
       const up = () => {
         window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+        if (raf) { cancelAnimationFrame(raf); raf = 0; }
         this.root.classList.remove('gt-resizing'); document.body.style.cursor = '';
-        if (raf) cancelAnimationFrame(raf);
-        if (!moved) return;
-        this.setLeftW(Math.max(160, Math.min(next, Math.max(240, this.scroll.clientWidth - 160))), true);
+        if (moved) { this._splitClick = 0; this.setLeftW(next, true); return; }
+        const now = Date.now();
+        if (this._splitClick && now - this._splitClick < 400) { this._splitClick = 0; this.setLeftW(null, true); return; } // double click or double tap resets
+        this._splitClick = now;
       };
       window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
     }
