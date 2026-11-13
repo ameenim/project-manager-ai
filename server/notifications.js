@@ -86,6 +86,35 @@ function createNotifications({ db, store, api }) {
     const items = rows.map((r) => ({ id: String(r.id), kind: r.kind, sig: r.sig, project_id: Number(r.project_id) || null, project: names.get(Number(r.project_id)) || '', n: r.n, extra: r.extra || {}, read: !!r.read_at, at: r.updated_at }));
     return { available: true, items, unread: items.filter((x) => !x.read).length };
   }
+  // The items behind one notification, so the inbox page can show them and act on each: the late tasks of a project
+  // or its late payments. Computed fresh with the same rules as the counts, so the detail always matches the number.
+  async function entries(user, id) {
+    const row = (await q('SELECT id, project_id, kind FROM notifications WHERE user_id = $1 AND id = $2', [user.id, Number(id)])).rows[0];
+    if (!row) throw err(404, 'This notification is no longer there');
+    if (row.kind === 'plan') return { id: String(row.id), kind: 'plan', entries: [] };
+    const pid = Number(row.project_id);
+    const out = await api.runAs({
+      user,
+      async fn(h) {
+        const today = h.TODAY();
+        const ago = (day) => Math.max(1, Math.round((Date.parse(today + 'T00:00:00Z') - Date.parse(day + 'T00:00:00Z')) / DAY));
+        h.P(pid);
+        const p = ((await h.call('GET', '/api/projects')).projects || []).find((x) => Number(x.id) === pid);
+        if (!p) return null;
+        if (row.kind === 'late_tasks') {
+          const sc = await h.call('GET', `/api/projects/${pid}/schedule`);
+          return (sc.tasks || []).filter((t) => !t.summary && (t.progress || 0) < 100 && t.finish && t.finish < today)
+            .sort((a, b) => a.finish.localeCompare(b.finish))
+            .map((t) => ({ task_id: t.id, title: t.name, due: t.finish, late_days: ago(t.finish), progress: t.progress || 0, assignee: t.assignee || null }));
+        }
+        const it = await h.call('GET', `/api/projects/${pid}/items`);
+        return (it.items || []).filter((i) => i.status !== 'ignored' && i.kind === 'milestone' && i.state === 'pending' && i.data && i.data.due_date && i.data.due_date < today)
+          .sort((a, b) => a.data.due_date.localeCompare(b.data.due_date))
+          .map((i) => ({ item_id: i.id, title: i.title, due: i.data.due_date, late_days: ago(i.data.due_date), amount: i.data.amount ?? null, currency: p.currency || null, state: i.state }));
+      },
+    });
+    return { id: String(row.id), kind: row.kind, project_id: pid, entries: out || [] };
+  }
   async function mark(user, body, set) {
     const all = body.all === true;
     const id = all ? null : Number(body.id);
@@ -100,11 +129,13 @@ function createNotifications({ db, store, api }) {
     if (!p.startsWith('/api/notifications')) return false;
     const read = async () => { const raw = await io.readBody(req, 8 * 1024); if (!raw.length) return {}; try { return JSON.parse(raw.toString('utf8')); } catch (e) { throw err(400, 'The request body is not valid JSON'); } };
     if (method === 'GET' && p === '/api/notifications') { io.json(res, 200, await list(user)); return true; }
+    const one = /^\/api\/notifications\/(\d+)$/.exec(p);
+    if (method === 'GET' && one) { io.json(res, 200, await entries(user, one[1])); return true; }
     if (method === 'POST' && p === '/api/notifications/read') { try { io.json(res, 200, await mark(user, await read(), 'read')); } catch (e) { if (e.expose) throw e; io.json(res, 503, { error: 'Notifications need a database update that is not in place yet. Publish the latest version, then try again.' }); } return true; }
     if (method === 'POST' && p === '/api/notifications/dismiss') { try { io.json(res, 200, await mark(user, await read(), 'dismiss')); } catch (e) { if (e.expose) throw e; io.json(res, 503, { error: 'Notifications need a database update that is not in place yet. Publish the latest version, then try again.' }); } return true; }
     return false;
   }
-  return { route, list, mark, planState };
+  return { route, list, entries, mark, planState };
 }
 
 module.exports = { createNotifications, planState };

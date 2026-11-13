@@ -657,6 +657,7 @@
     if (parts[0] === 'brand') { S.project = null; return PM.views.brand(); }
     if (parts[0] === 'projects') { S.project = null; return PM.views.projects(); }
     if (parts[0] === 'trends') { location.hash = '#/'; return; }
+    if (parts[0] === 'notifications') { S.project = null; return PM.views.notifications(parts[1] || null); }
     if (parts[0] === 'thinking') { S.project = null; return PM.views.thinking(); }
     if (parts[0] === 'calendar') { S.project = null; return PM.views.calendar(); }
     if (parts[0] === 'widgets') {

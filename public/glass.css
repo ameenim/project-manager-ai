@@ -29,7 +29,7 @@ body { background: transparent; }
 .sidebar, .proj-head, .modal, .drawer, .card, .dw, .an-card, .upd, .upd-stat, .cht-card, .cht-panel, .wm-card, .bd-card, .site-header, .ls-ch, .q, .dash, .vis, .form-card, .ls-cmp { --faint: var(--glass-faint); }
 
 /* chrome tier */
-.sidebar, .proj-head, .modal, .drawer, .toast:not(.err):not(.ok), .dw-menu, .cl-menu, .dd-pop, .dp-pop, .nc-pop, .fly, .sg-pop, .lg-pop, .bd-menu, .ded-pop, .rec-dock {
+.sidebar, .proj-head, .modal, .drawer, .toast:not(.err):not(.ok), .dw-menu, .cl-menu, .dd-pop, .dp-pop, .ib-detail, .ib-list, .fly, .sg-pop, .lg-pop, .bd-menu, .ded-pop, .rec-dock {
   background: var(--glass-chrome); border-color: var(--glass-line); box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-rim);
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)); backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)); }
 .sidebar { border-inline-end-color: var(--glass-line); }

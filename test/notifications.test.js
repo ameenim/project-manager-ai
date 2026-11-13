@@ -74,6 +74,35 @@ test('a notification goes away when the condition is gone, and people only see t
   assert.equal((await s.call('GET', '/api/notifications')).status, 401);
 });
 
+test('the details behind a notification list the late tasks and late payments, and clear when they are fixed', async () => {
+  const u = await s.user('Detail'); const p = await s.project(u.token, 'Detail project');
+  const t1 = await s.call('POST', `/api/projects/${p.id}/tasks`, { name: 'Old task', duration: 2, start: '2020-01-06' }, u.token);
+  await s.call('POST', `/api/projects/${p.id}/tasks`, { name: 'Older task', duration: 2, start: '2020-02-03' }, u.token);
+  const pay = await s.call('POST', `/api/projects/${p.id}/items`, { kind: 'milestone', title: 'First payment', data: { due_date: '2020-03-02', amount: 5000 } }, u.token);
+  const list = (await get(u.token)).data.items;
+  const lateT = list.find((x) => x.kind === 'late_tasks'); const lateP = list.find((x) => x.kind === 'late_payments');
+  assert.ok(lateT && lateP);
+  const dt = await s.call('GET', '/api/notifications/' + lateT.id, null, u.token);
+  assert.equal(dt.status, 200); assert.equal(dt.data.entries.length, 2);
+  assert.deepEqual(dt.data.entries.map((e) => e.title), ['Old task', 'Older task']);
+  assert.ok(dt.data.entries.every((e) => e.late_days > 0 && e.task_id && e.due));
+  const dp = await s.call('GET', '/api/notifications/' + lateP.id, null, u.token);
+  assert.equal(dp.data.entries.length, 1); assert.equal(dp.data.entries[0].title, 'First payment'); assert.equal(dp.data.entries[0].amount, 5000);
+  assert.equal(dp.data.entries[0].item_id, pay.data.item.id);
+  // the quick actions use the normal APIs: paying clears the payment notification, finishing a task lowers the count
+  await s.call('PUT', `/api/items/${pay.data.item.id}`, { state: 'paid' }, u.token);
+  await s.call('POST', `/api/projects/${p.id}/schedule/apply`, { changes: { [t1.data.created]: { progress: 100 } }, slim: true }, u.token);
+  const after = (await get(u.token)).data.items;
+  assert.ok(!after.some((x) => x.kind === 'late_payments'));
+  assert.equal(after.find((x) => x.kind === 'late_tasks').n, 1);
+  assert.equal((await s.call('GET', '/api/notifications/' + lateT.id, null, u.token)).data.entries.length, 1);
+  // a notification that is gone, or belongs to someone else, is not found
+  const other = await s.user('Stranger');
+  assert.equal((await s.call('GET', '/api/notifications/' + lateT.id, null, other.token)).status, 404);
+  assert.equal((await s.call('GET', '/api/notifications/' + lateP.id, null, u.token)).status, 404);
+  assert.equal((await s.call('GET', '/api/notifications/1', null)).status, 401);
+});
+
 test('without the table the list reports it is unavailable instead of failing', async () => {
   const u = await s.user('Lag');
   await s.app.db.query('DROP TABLE notifications');

@@ -128,11 +128,11 @@ async function main() {
   await sleep(800);
   const bell = page.locator('#ntBell');
   if (await bell.count()) {
-    await bell.click(); await sleep(500);
-    const n0 = await page.locator('.nc-item').count();
+    await bell.click(); await sleep(700);
+    const n0 = await page.locator('.ib-item').count();
     if (n0 > 0) {
-      await page.locator('[data-dismiss]').first().click(); await sleep(250);
-      const n1 = await page.locator('.nc-item').count();
+      await page.locator('[data-act="dismiss"]').first().click(); await sleep(250);
+      const n1 = await page.locator('.ib-item').count();
       check('dismissing a notification removes it at once, before the slow server answers', n1 === n0 - 1, n0 + ' to ' + n1);
     } else console.log('SKIP notification dismiss: no notifications in the seed');
   } else console.log('SKIP notification dismiss: no bell');
