@@ -2203,3 +2203,98 @@ body.chat-full { overflow: hidden; }
 @media (max-width: 600px) { .ex-fmt, .ex-list { grid-template-columns: 1fr; } }
 
 .btn[hidden] { display: none; }
+
+/* =====================================================================
+   Thinking Area, Claude style (v3)
+   A calm centered conversation, replies without bubbles, one rounded message box with its tools underneath,
+   and a flat thread list grouped by day. Tokens only. The phone layout above already follows the Claude app,
+   so everything that could clash with it lives in the min-width block.
+   ===================================================================== */
+.cht-panel.page .cht-threads[hidden] { display: none; }
+.th-gh { padding: 14px 10px 4px; font-size: var(--fs-small); font-weight: 600; color: var(--muted); }
+.th-group:first-child .th-gh { padding-top: 6px; }
+.th-head h3 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (min-width: 821px) {
+  /* the workspace */
+  .cht-panel.page { padding: 0; max-width: none; margin: 0; grid-template-columns: 280px minmax(0, 1fr); border-radius: var(--r-l); box-shadow: var(--shadow-2); background: var(--surface); }
+  .cht-panel.page.side-off { grid-template-columns: 0 minmax(0, 1fr); }
+  .cht-panel.page .cht-head { border-bottom: 0; padding: 10px 14px; min-height: 56px; }
+  [dir="rtl"] .cht-panel.page .cht-head { padding: 10px 14px; }
+  .cht-panel.page .cht-head .grow { min-width: 0; padding-inline: 4px; }
+  .cht-panel.page .cht-head h2 { font-size: var(--fs-heading); font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cht-panel.page .cht-ctx { max-width: 100%; }
+  .cht-side-btn[aria-pressed="true"] { color: var(--primary); }
+
+  /* thread list: flat rows, actions appear on hover */
+  .cht-panel.page .cht-threads { gap: 2px; padding: 12px 8px; background: var(--surface-2); scrollbar-width: thin; }
+  .th-head { display: block; }
+  .th-head .btn.primary { width: 100%; justify-content: flex-start; gap: 8px; min-height: 38px; padding-inline: 10px; border: 0; border-radius: var(--r-m); background: var(--primary-soft); color: var(--primary); font-weight: 600; }
+  .th-head .btn.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--primary) 16%, var(--surface-2)); transform: none; box-shadow: none; border-color: transparent; }
+  .th-search { margin: 8px 0 2px; border-color: transparent; border-radius: var(--r-m); background: var(--surface); }
+  .th-list { gap: 0; }
+  .th-group { display: flex; flex-direction: column; gap: 1px; }
+  .th-item { --th-bg: transparent; position: relative; min-height: 38px; padding: 6px 10px; border: 0; border-radius: var(--r-m); background: var(--th-bg); }
+  .th-item:hover, .th-item:focus-within { --th-bg: color-mix(in srgb, var(--text) 7%, var(--surface-2)); background: var(--th-bg); }
+  .th-item.cur { --th-bg: var(--primary-soft); background: var(--th-bg); }
+  .th-t { font-weight: 500; font-size: var(--fs-body); }
+  .th-item.cur .th-t { font-weight: 600; }
+  .th-end { position: absolute; inset-inline-end: 4px; top: 50%; transform: translateY(-50%); gap: 0; padding-inline-start: 6px; border-radius: var(--r-s); background: var(--th-bg); }
+  .th-item.cur:not(:hover):not(:focus-within) .th-end { opacity: 0; }
+  .th-item.sure .th-end { opacity: 1; }
+  .th-end .btn.icon.sm { min-width: 30px; min-height: 30px; width: 30px; height: 30px; padding: 0; color: var(--muted); }
+  .th-end .btn.icon.sm.on { color: var(--primary); }
+  .th-end .btn.icon.sm:hover:not(:disabled) { transform: none; color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
+
+  /* the conversation: one centered column */
+  .cht-body { scrollbar-width: thin; }
+  .cht-panel.page .cht-body { padding: 8px max(20px, calc((100% - 768px) / 2)) 28px; gap: 28px; }
+  .cht-msg.user .cht-bub { max-width: 85%; padding: 10px 16px; border: 1px solid var(--border); border-radius: var(--r-l); background: var(--surface-2); }
+  .cht-msg.bot { width: 100%; }
+  .cht-msg.bot .cht-bub { padding: 0; border: 0; border-radius: 0; background: none; line-height: 1.7; }
+  .cht-bub .md p { margin: 0 0 10px; }
+  .cht-bub .md p:last-child { margin-bottom: 0; }
+  .cht-bub .md ul, .cht-bub .md ol { margin: 4px 0 10px; padding-inline-start: 22px; }
+  .cht-bub .md li { margin: 4px 0; }
+  .cht-bub .md li::marker { color: var(--faint); }
+  .cht-msg.bot .cht-srcs { margin-top: 12px; }
+  .cht-src { background: var(--surface); }
+  .cht-acts { margin-inline-start: -8px; gap: 0; }
+  .cht-acts .btn.icon.sm { width: 32px; height: 32px; min-width: 32px; min-height: 32px; padding: 0; color: var(--faint); }
+  .cht-acts .btn.icon.sm:hover:not(:disabled) { color: var(--text); background: var(--surface-2); transform: none; }
+  .cht-acts .btn.on { color: var(--primary); }
+
+  /* empty state: a greeting in the middle, starters as pills */
+  .cht-panel.page .cht-empty { margin: auto; max-width: 640px; padding: 0 0 6vh; gap: 10px; }
+  .cht-panel.page .cht-empty-ic { width: 48px; height: 48px; margin-bottom: 4px; background: var(--violet-soft); }
+  .cht-panel.page .cht-empty h3 { margin: 0; font-size: var(--fs-title); font-weight: 650; letter-spacing: -.02em; }
+  .cht-panel.page .cht-empty p { max-width: 520px; margin: 0 0 6px; }
+  .cht-panel.page .cht-starters { margin-top: 8px; text-align: center; }
+  .cht-panel.page .cht-starter-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+  .cht-panel.page .cht-starter { min-height: 38px; padding: 6px 14px; border-color: var(--border); border-radius: var(--r-pill); background: var(--surface); font-size: var(--fs-body); }
+  .cht-panel.page .cht-starter:hover { border-color: var(--border-strong); background: var(--surface-2); transform: none; }
+  .cht-panel.page .cht-brief { max-width: 560px; justify-content: center; }
+  .cht-panel.page .cht-sugs { max-width: 560px; }
+
+  /* the message box: text on top, tools underneath, send is a round button */
+  .cht-foot { gap: 4px; border-top: 0; padding: 6px 14px 14px; }
+  .cht-panel.page .cht-foot { padding-inline: max(14px, calc((100% - 768px) / 2)); padding-bottom: 14px; }
+  .cht-note { order: 1; text-align: center; }
+  .cht-box { order: 2; padding: 10px 10px 8px; border: 1px solid var(--border-strong); border-radius: var(--r-l); background: var(--surface); box-shadow: var(--shadow-1); transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease); }
+  .cht-box:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+  .cht-ctxbar { order: 3; justify-content: center; padding: 4px 2px 0; color: var(--faint); }
+  .cht-ctxbar .chip { background: none; border: 1px solid var(--border); color: var(--muted); font-weight: 500; }
+  .cht-composer { flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+  .cht-composer textarea { order: -1; flex: 1 1 100%; min-height: 48px; max-height: 200px; padding: 6px 8px; border: 0; border-radius: 0; background: transparent; line-height: 1.6; }
+  .cht-composer textarea:focus, .cht-composer textarea:focus-visible { outline: 0; box-shadow: none; border-color: transparent; }
+  .cht-composer .btn.icon { width: 36px; height: 36px; min-width: 36px; padding: 0; color: var(--muted); }
+  .cht-composer .btn.icon:hover:not(:disabled) { color: var(--text); background: var(--surface-2); transform: none; }
+  .cht-composer .btn.cht-deep.on { background: var(--violet-soft); color: var(--violet); }
+  .cht-composer #chtSend { margin-inline-start: auto; border-radius: 50%; color: var(--on-primary); background: var(--primary); }
+  .cht-composer #chtSend:hover:not(:disabled) { background: var(--primary-600); color: var(--on-primary); }
+  .cht-composer #chtMic:not([hidden]) { margin-inline-start: auto; }
+  .cht-composer #chtMic:not([hidden]) + #chtSend { margin-inline-start: 0; }
+  .cht-box:not(.has):not(.busy) #chtSend { opacity: .4; }
+  .cht-atts { padding: 0 2px 8px; }
+}
+@media (min-width: 821px) and (max-width: 1180px) { .cht-panel.page { grid-template-columns: 240px minmax(0, 1fr); } .cht-panel.page.side-off { grid-template-columns: 0 minmax(0, 1fr); } }
+@media (prefers-reduced-motion: reduce) { .cht-box { transition: none; } }

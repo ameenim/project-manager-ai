@@ -86,9 +86,16 @@
     th_deep_off: 'إيقاف التفكير بعمق', th_sheet_x: 'إغلاق', th_full: 'ملء الشاشة', th_full_off: 'الخروج من ملء الشاشة',
   });
 
+  Object.assign(PM.I18N.en, {
+    th_g_today: 'Today', th_g_yest: 'Yesterday', th_g_week: 'Previous 7 days', th_g_older: 'Older', th_side_hide: 'Hide threads', th_side_show: 'Show threads',
+  });
+  Object.assign(PM.I18N.ar, {
+    th_g_today: 'اليوم', th_g_yest: 'أمس', th_g_week: 'آخر 7 أيام', th_g_older: 'أقدم', th_side_hide: 'إخفاء المحادثات', th_side_show: 'إظهار المحادثات',
+  });
+
   const pref = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* storage blocked */ } return null; };
   const DEF_W = 420, MIN_W = 340, WIDE_W = 760, MIN_IN = 38;
-  const S = { open: false, busy: false, ctl: null, ctx: { projectId: null, screen: 'portfolio' }, data: null, msgs: [], confirming: null, raf: 0, mode: 'chat', hist: null, w: Number(pref('pm_chat_w')) || DEF_W, inH: Number(pref('pm_chat_inh')) || 0, dragging: false, page: false, att: [], upl: false, deep: pref('pm_think_deep') === '1', th: { items: null, q: '', confirm: null } };
+  const S = { open: false, busy: false, ctl: null, ctx: { projectId: null, screen: 'portfolio' }, data: null, msgs: [], confirming: null, raf: 0, mode: 'chat', hist: null, w: Number(pref('pm_chat_w')) || DEF_W, inH: Number(pref('pm_chat_inh')) || 0, dragging: false, page: false, att: [], upl: false, deep: pref('pm_think_deep') === '1', side: pref('pm_th_side') !== '0', th: { items: null, q: '', confirm: null } };
   let root = null;
   const $q = (sel) => (root ? root.querySelector(sel) : null);
   const ctxFromHash = () => {
@@ -133,6 +140,7 @@
         <aside class="cht-threads" id="chtThreads" aria-label="${esc(t('th_threads'))}" hidden></aside>
         <div class="cht-resize" id="chtResize" role="separator" aria-orientation="vertical" aria-label="${esc(t('cht_resize'))}" data-tip="${esc(t('cht_resize'))}"></div>
         <header class="cht-head">
+          <button class="btn ghost icon cht-side-btn" type="button" data-act="tside" id="chtSideBtn" aria-label="${esc(t('th_side_hide'))}" data-tip="${esc(t('th_side_hide'))}" hidden>${icon('cols')}</button>
           <div class="grow"><h2 id="chtHead">${esc(t('cht_title'))}</h2><div class="small muted cht-ctx" id="chtCtx"></div></div>
           <button class="btn ghost icon cht-full-btn" type="button" data-act="full" id="chtFullBtn" aria-label="${esc(t('th_full'))}" data-tip="${esc(t('th_full'))}">${icon('expand')}</button>
           <button class="btn ghost icon" type="button" data-act="hist" id="chtHistBtn" aria-label="${esc(t('cht_history'))}" data-tip="${esc(t('cht_history'))}">${icon('clock')}</button>
@@ -195,8 +203,8 @@
     root.addEventListener('keydown', (e) => { if (e.key === 'Escape' && sheetOpen()) { e.stopPropagation(); closeSheet(); $q('#chtPlus').focus(); } else if (e.key === 'Escape' && V) { e.stopPropagation(); cancelVoice(); } else if (e.key === 'Escape' && S.full) { e.stopPropagation(); exitFull(); } else if (e.key === 'Escape' && S.open && !S.page) { e.stopPropagation(); close(); } else if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('cht-h-item')) { e.preventDefault(); openChat(e.target.dataset.id); } else if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('th-item')) { e.preventDefault(); openThread(e.target.dataset.id); } });
   }
   // the message box grows with the text up to a cap. A person can raise the base height by dragging its top line.
-  function grow() { const i = $q('#chtIn'); if (!i) return; syncHas(); const base = S.inH || 0; i.style.height = 'auto'; i.style.height = Math.max(base, Math.min(i.scrollHeight, Math.max(base, 120))) + 'px'; }
-  function applyInputHeight() { const i = $q('#chtIn'); if (!i) return; i.style.minHeight = S.inH ? S.inH + 'px' : ''; i.style.maxHeight = S.inH ? Math.max(S.inH, 120) + 'px' : ''; grow(); }
+  function grow() { const i = $q('#chtIn'); if (!i) return; syncHas(); const base = S.inH || 0; i.style.height = 'auto'; i.style.height = Math.max(base, Math.min(i.scrollHeight, Math.max(base, 200))) + 'px'; }
+  function applyInputHeight() { const i = $q('#chtIn'); if (!i) return; i.style.minHeight = S.inH ? S.inH + 'px' : ''; i.style.maxHeight = S.inH ? Math.max(S.inH, 200) + 'px' : ''; grow(); }
   const maxWidth = () => Math.max(MIN_W, Math.min(1000, window.innerWidth - 280));
   function applyWidth() {
     S.w = Math.round(Math.max(MIN_W, Math.min(maxWidth(), S.w || DEF_W)));
@@ -365,13 +373,20 @@
       return `<div class="cht-h-item ${x.current ? 'cur' : ''}" role="button" tabindex="0" data-act="hopen" data-id="${x.id}"><div class="cht-h-body"><div class="cht-h-t" dir="auto">${esc(x.title || t('cht_untitled'))}</div><div class="small muted">${esc(when(x.updated_at))} · ${esc(t('cht_hist_msgs', { n: x.messages }))}${x.current ? ` <span class="chip blue">${esc(t('cht_hist_now'))}</span>` : ''}</div></div>${end}</div>`;
     }).join('')}</div>`;
   }
+  // the header names the open thread on the full page, like the Claude app
+  function headTitle(hist) {
+    const h = $q('#chtHead'); if (!h) return;
+    const cur = S.page && !hist && S.msgs.length ? (S.th.items || []).find((x) => x.current && x.title) : null;
+    h.textContent = cur ? cur.title : t(hist ? 'cht_history' : 'cht_title');
+    if (cur) h.setAttribute('dir', 'auto'); else h.removeAttribute('dir');
+  }
   function paint(toEnd) {
     if (!root) return;
     $q('#chtCtx').textContent = ctxName();
     paintShell();
     const hist = S.mode === 'history' && (!S.page || window.matchMedia('(max-width: 820px)').matches);
     root.classList.toggle('hist', hist);
-    $q('#chtHead').textContent = t(hist ? 'cht_history' : 'cht_title');
+    headTitle(hist);
     const hb = $q('#chtHistBtn'); const hl = t(hist ? 'cht_hist_back' : 'cht_history');
     hb.innerHTML = icon(hist ? 'back' : 'clock'); hb.setAttribute('aria-label', hl); hb.dataset.tip = hl; hb.classList.toggle('on', hist);
     const body = $q('#chtBody');
@@ -402,7 +417,9 @@
     const hb = $q('#chtHistBtn'); if (hb) hb.hidden = S.page && !narrow;
     const wb = $q('#chtWideBtn'); if (wb) wb.hidden = S.page;
     const cl = root.querySelector('[data-act="close"]'); if (cl) cl.hidden = S.page;
-    const th = $q('#chtThreads'); if (th) { th.hidden = !S.page; if (S.page) th.innerHTML = threadsHtml(); }
+    const th = $q('#chtThreads'); if (th) { th.hidden = !S.page || !S.side; if (S.page) th.innerHTML = threadsHtml(); }
+    if (pnl) pnl.classList.toggle('side-off', S.page && !S.side);
+    const sb = $q('#chtSideBtn'); if (sb) { sb.hidden = !S.page || narrow; const sl = t(S.side ? 'th_side_hide' : 'th_side_show'); sb.setAttribute('aria-label', sl); sb.dataset.tip = sl; sb.setAttribute('aria-pressed', String(S.side)); }
     const cb = $q('#chtCtxBar');
     if (cb) {
       const chips = S.ctx.projectId ? [ctxName(), t('th_ctx_data'), t('th_ctx_docs')] : [t('th_ctx_portfolio')];
@@ -462,20 +479,27 @@
       const q = new URLSearchParams(); if (S.ctx.projectId) q.set('project_id', S.ctx.projectId); if (S.th.q) q.set('q', S.th.q);
       S.th.items = (await PM.api('GET', '/api/chat/history?' + q)).items; S.th.error = '';
     } catch (e) { S.th.items = S.th.items || []; S.th.error = t('cht_hist_fail'); if (!S.th.retried) { S.th.retried = true; setTimeout(() => { S.th.retried = false; if (S.th.error) loadThreads(); }, 3000); } }
-    if (S.page) { const th = $q('#chtThreads'); if (th && !th.contains(document.activeElement)) th.innerHTML = threadsHtml(); else if (th) { const l = th.querySelector('.th-list'); if (l) l.innerHTML = threadRows(); } }
+    if (S.page) { const th = $q('#chtThreads'); if (th && !th.contains(document.activeElement)) th.innerHTML = threadsHtml(); else if (th) { const l = th.querySelector('.th-list'); if (l) l.innerHTML = threadRows(); } headTitle(S.mode === 'history'); }
   }
   function threadRows() {
     const T = S.th; const items = T.items || [];
     if (T.items == null) return `<div class="cht-h-wait">${PM.skeleton.list(4)}</div>`;
     if (T.error && !items.length) return `<div class="small muted th-none" role="alert">${esc(T.error)} <button class="btn sm" type="button" data-act="treload">${esc(t('fly_retry'))}</button></div>`;
     if (!items.length) return `<div class="small muted th-none">${esc(T.q ? t('th_no_match') : t('cht_hist_empty'))}</div>`;
-    return items.map((x) => {
+    const row = (x) => {
       const sure = T.confirm === x.id;
       const end = sure
         ? `<button class="btn danger sm" type="button" data-act="tdel2" data-id="${x.id}">${esc(t('cht_hist_sure'))}</button><button class="btn ghost sm" type="button" data-act="tkeep">${esc(t('cht_back'))}</button>`
         : `<button class="btn ghost icon sm ${x.pinned ? 'on' : ''}" type="button" data-act="tpin" data-id="${x.id}" aria-pressed="${!!x.pinned}" aria-label="${esc(t(x.pinned ? 'th_unpin' : 'th_pin'))}" data-tip="${esc(t(x.pinned ? 'th_unpin' : 'th_pin'))}">${icon('pin')}</button><button class="btn ghost icon sm" type="button" data-act="tren" data-id="${x.id}" aria-label="${esc(t('th_rename'))}" data-tip="${esc(t('th_rename'))}">${icon('edit')}</button><button class="btn ghost icon sm" type="button" data-act="tdel" data-id="${x.id}" aria-label="${esc(t('cht_hist_del'))}" data-tip="${esc(t('cht_hist_del'))}">${icon('trash')}</button>`;
-      return `<div class="th-item ${x.current ? 'cur' : ''}" role="button" tabindex="0" data-act="topen" data-id="${x.id}"><div class="th-body"><div class="th-t" dir="auto">${esc(x.title || t('cht_untitled'))}</div><div class="small muted">${esc(when(x.updated_at))} · ${esc(t('cht_hist_msgs', { n: x.messages }))}${x.pinned ? ` <span class="chip blue">${esc(t('th_pinned'))}</span>` : ''}</div></div><div class="th-end">${end}</div></div>`;
-    }).join('');
+      return `<div class="th-item ${x.current ? 'cur' : ''} ${sure ? 'sure' : ''}" role="button" tabindex="0" data-act="topen" data-id="${x.id}" ${x.current ? 'aria-current="true"' : ''}><div class="th-body"><div class="th-t" dir="auto" title="${esc(when(x.updated_at) + ' · ' + t('cht_hist_msgs', { n: x.messages }))}">${esc(x.title || t('cht_untitled'))}</div></div><div class="th-end">${end}</div></div>`;
+    };
+    // like the Claude app: pinned threads first, then the rest grouped by how recently they were used
+    const day = 86400000; const now = new Date(); const t0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const bucket = (x) => { if (x.pinned) return 'pin'; const d = new Date(x.updated_at).getTime(); if (!d || d >= t0) return 'today'; if (d >= t0 - day) return 'yest'; if (d >= t0 - 7 * day) return 'week'; return 'older'; };
+    const names = { pin: 'th_pinned', today: 'th_g_today', yest: 'th_g_yest', week: 'th_g_week', older: 'th_g_older' };
+    const groups = { pin: [], today: [], yest: [], week: [], older: [] };
+    items.forEach((x) => groups[bucket(x)].push(x));
+    return Object.keys(groups).filter((k) => groups[k].length).map((k) => `<div class="th-group" role="group" aria-label="${esc(t(names[k]))}"><div class="th-gh">${esc(t(names[k]))}</div>${groups[k].map(row).join('')}</div>`).join('');
   }
   function threadsHtml() {
     return `<div class="th-head"><h3>${esc(t('th_threads'))}</h3><button class="btn primary sm" type="button" data-act="tnew">${icon('plus')}${esc(t('th_new'))}</button></div><label class="th-search">${icon('search')}<input type="search" id="thSearch" value="${esc(S.th.q || '')}" placeholder="${esc(t('th_search'))}" aria-label="${esc(t('th_search'))}"></label><div class="th-list">${threadRows()}</div>`;
@@ -864,6 +888,7 @@
     if (act === 'micno') return cancelVoice();
     if (act === 'cam') { closeSheet(); const f = $q('#chtCam'); if (f) f.click(); return; }
     if (act === 'deep') { closeSheet(); S.deep = !S.deep; pref('pm_think_deep', S.deep ? '1' : null); paintShell(); return; }
+    if (act === 'tside') { S.side = !S.side; pref('pm_th_side', S.side ? null : '0'); return paintShell(); }
     if (act === 'topen') return openThread(id);
     if (act === 'tpin') return pinThread(id);
     if (act === 'tren') return renameThread(id);
