@@ -36,13 +36,47 @@
 
     const pickFields = (x) => ({ start: x.start, duration: x.duration, progress: x.progress, deps: x.deps, name: x.name, assignee: x.assignee || '', mode: x.mode || 'auto', flag: x.flag ? 1 : 0, links: x.links || [], deliverable_id: x.deliverable_id || null });
 
-    async function applyChanges(changes, undo) {
-      try { data = await api('POST', `${base}/schedule/apply`, { changes }); } catch (e) { toast(e.message, 'err'); g.render(); return false; }
-      if (undo) { undoStack.push(undo); if (undoStack.length > 30) undoStack.shift(); }
-      g.canUndo = undoStack.length > 0;
-      g.setData(data);
-      banner();
-      return true;
+    // Board moves are optimistic: the local task changes in the same frame and the request follows in order.
+    // Responses only reconcile when no other optimistic request is still on its way, so a slow reply never flicks a card back.
+    let chain = Promise.resolve(), pending = 0;
+    const queued = (fn) => { const r = chain.then(fn); chain = r.then(() => {}, () => {}); return r; };
+    // true when progress is the only thing that really differs from the task now (an undo snapshot carries every field)
+    const norm = (v) => (!v || (Array.isArray(v) && !v.length) ? '' : JSON.stringify(v));
+    const progressOnly = (changes) => Object.entries(changes).every(([id, c]) => {
+      const x = g.tasks.find((k) => k.id === Number(id));
+      return !!x && Object.keys(c).every((k) => k === 'progress' || norm(c[k]) === norm(k === 'mode' ? x.mode || 'auto' : x[k]));
+    });
+    const fastOk = (changes) => view === 'board' && progressOnly(changes);
+    function patchLocal(changes) {
+      const before = [];
+      for (const [id, ch] of Object.entries(changes)) {
+        const x = g.tasks.find((k) => k.id === Number(id));
+        if (x && 'progress' in ch) { before.push([x, x.progress]); x.progress = ch.progress; }
+      }
+      board.render();
+      return () => { for (const [x, v] of before) x.progress = v; board.render(); };
+    }
+
+    async function applyChanges(changes, undo, opt) {
+      return queued(async () => {
+        let res;
+        try { res = await api('POST', `${base}/schedule/apply`, { changes }); } catch (e) {
+          toast(e.message, 'err');
+          if (opt) {
+            pending--;
+            if (opt.undo) { const i = undoStack.indexOf(opt.undo); if (i >= 0) undoStack.splice(i, 1); }
+            if (opt.restore) undoStack.push(opt.restore);
+            g.canUndo = undoStack.length > 0;
+            opt.revert();
+          } else g.render();
+          return false;
+        }
+        if (opt) pending--;
+        else if (undo) { undoStack.push(undo); if (undoStack.length > 30) undoStack.shift(); }
+        g.canUndo = undoStack.length > 0;
+        if (!opt || pending === 0) { data = res; g.setData(res); banner(); }
+        return true;
+      });
     }
 
     function impactDialog(pv) {
@@ -97,12 +131,24 @@
       }
       const inverse = {};
       for (const id of impactIds) { const x = g.tasks.find((k) => k.id === id); if (x) inverse[id] = pickFields(x); }
-      const done = await applyChanges(changes, { label: meta.label, changes: inverse, ops });
-      if (done && ops.length) {
-        await PM.completion.commit(ops);
-        data = await api('GET', `${base}/schedule`); g.setData(data);
-        toast(t('cm_done'), 'ok');
+      const undo = { label: meta.label, changes: inverse, ops };
+      const after = async (done) => {
+        if (done && ops.length) {
+          await PM.completion.commit(ops);
+          data = await api('GET', `${base}/schedule`); g.setData(data);
+          toast(t('cm_done'), 'ok');
+        }
+        return done;
+      };
+      if (fastOk(changes)) {
+        // instant: the board shows the move now, the server catches up behind it
+        undoStack.push(undo); if (undoStack.length > 30) undoStack.shift();
+        g.canUndo = true; pending++;
+        const revert = patchLocal(changes);
+        applyChanges(changes, null, { undo, revert }).then(after);
+        return;
       }
+      await after(await applyChanges(changes, undo));
     }
 
     // ----- dependency editor and schedule check -----
@@ -545,10 +591,12 @@
       onUndo: async () => {
         const u = undoStack.pop();
         if (!u) return;
-        const ok = await applyChanges(u.changes, null);
+        let opt;
+        if (fastOk(u.changes)) { g.canUndo = undoStack.length > 0; pending++; opt = { restore: u, revert: patchLocal(u.changes) }; toast(t('undone'), 'ok'); }
+        const ok = await applyChanges(u.changes, null, opt);
         if (ok && u.ops && u.ops.length) { await PM.completion.revert(u.ops); data = await api('GET', `${base}/schedule`); g.setData(data); }
         g.canUndo = undoStack.length > 0; g.updateToolbar();
-        if (ok) toast(t('undone'), 'ok');
+        if (ok && !opt) toast(t('undone'), 'ok');
       },
       onToggleImpact: async () => {
         g.impactOn = !g.impactOn;

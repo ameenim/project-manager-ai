@@ -148,6 +148,7 @@
     function flip(prev) {
       if (noMotion() || !prev.size) return;
       for (const el of $$('.bd-card', host)) {
+        if (st.hl && el.dataset.id === String(st.hl)) continue; // the card you moved lands at once, with the highlight
         const o = prev.get(el.dataset.id); if (!o) continue;
         const r = el.getBoundingClientRect(), dx = o.l - r.left, dy = o.t - r.top;
         if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
