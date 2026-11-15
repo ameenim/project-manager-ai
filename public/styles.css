@@ -1417,9 +1417,9 @@ svg.i.fill { fill: currentColor; }
 .wb-viz { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
 .wb-vcard { display: grid; gap: 4px; justify-items: start; text-align: start; padding: 12px; border: 1px solid var(--border-strong); border-radius: var(--r-m); background: var(--surface); color: var(--text); font: inherit; cursor: pointer; transition: border-color .15s, background .15s; }
 .wb-vcard:hover { border-color: var(--primary); } .wb-vcard.on { border-color: var(--primary); background: var(--primary-soft); } .wb-vcard b { font-size: var(--fs-body); font-weight:var(--fw); } .wb-vcard .i { color: var(--primary); }
-.wb-side { min-width: 0; } .wb-sticky { position: sticky; top: 16px; } .wb-stage { padding: 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); min-height: 160px; }
+.wb-side { min-width: 0; align-self: stretch; } .wb-side .wb-sticky.card { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; } .wb-stage { padding: 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); min-height: 160px; }
 .wb-msg { color: var(--danger); font-size: var(--fs-small); font-weight:var(--fw); } .wb-actions { gap: 8px; flex-wrap: wrap; } .wb-back { display: inline-flex; align-items: center; gap: 4px; margin-bottom: 6px; color: var(--muted); }
-@media (max-width: 1180px) { .wb-grid { grid-template-columns: 1fr; } .wb-sticky { position: static; } }
+@media (max-width: 1180px) { .wb-grid { grid-template-columns: 1fr; } .wb-side .wb-sticky.card { position: static; max-height: none; overflow: visible; } }
 
 /* Widget builder upgrade: alert colors, more charts, builder sections. Colors come from tokens only. */
 .k-good { --tc: var(--success); } .k-warn { --tc: var(--warning); } .k-bad { --tc: var(--danger); } .k-info { --tc: var(--c1); } .k-violet { --tc: var(--violet); } .k-neutral { --tc: var(--faint); }
