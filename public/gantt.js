@@ -88,15 +88,8 @@
       for (const x of b) if (cw[x[1]]) x[2] = cw[x[1]];
       return b;
     }
-    // The width of the table can be dragged. Extra width goes to the task column, and a narrower table clips the right hand columns.
-    cols() {
-      const base = this.baseCols().map((c) => c.slice());
-      if (this.ui.leftW) {
-        const nat = base.reduce((a, c) => a + c[2], 0), i = base.findIndex((c) => c[0] === 'nm');
-        base[i][2] = Math.max(120, base[i][2] + this.leftTarget() - nat);
-      }
-      return base;
-    }
+    // The table width (the splitter) and each column width are independent. A narrower table clips the right hand columns, a wider one leaves free space.
+    cols() { return this.baseCols().map((c) => c.slice()); }
     leftTarget() { return Math.max(160, Math.min(Number(this.ui.leftW) || 0, Math.max(240, (this.scroll ? this.scroll.clientWidth : 1200) - 160))); }
     leftW() { return this.ui.leftW ? this.leftTarget() : this.baseCols().reduce((s, c) => s + c[2], 0); }
 
@@ -644,14 +637,18 @@
     setColW(key, w, save) {
       this.ui.colW = this.ui.colW || {};
       if (w == null) delete this.ui.colW[key]; else this.ui.colW[key] = Math.round(w);
-      this.ui.leftW = null; try { localStorage.removeItem('pm_gt_leftw'); } catch (e) { /* ignore */ }
       if (save) this.saveCols();
       this.render();
     }
     fitAll() { const keys = this.cols().map((c) => c[1]).filter((k) => k !== 'mode'); const out = {}; for (const k of keys) { const w = this.fitWidth(k); if (w) out[k] = w; } this.ui.colW = { ...(this.ui.colW || {}), ...out }; this.ui.leftW = null; this.saveCols(); this.render(); }
     resetCols() { this.ui.colW = {}; this.ui.leftW = null; try { localStorage.removeItem('pm_gt_leftw'); } catch (e) { /* ignore */ } this.saveCols(); this.render(); }
-    // Freeze the widths every column currently shows, so changing one column never rescales the others.
-    freezeCols() { const cw = { ...(this.ui.colW || {}) }; for (const c of this.cols()) cw[c[1]] = c[2]; this.ui.colW = cw; this.ui.leftW = null; try { localStorage.removeItem('pm_gt_leftw'); } catch (e) { /* ignore */ } }
+    // With a fixed table width, a column that outgrows it pushes the table wider so the column stays visible. Other columns never change.
+    keepColsVisible(base, save) {
+      if (!base) return;
+      const sum = this.baseCols().reduce((a, c) => a + c[2], 0);
+      this.ui.leftW = Math.round(Math.max(base, sum));
+      if (save) { try { localStorage.setItem('pm_gt_leftw', String(this.ui.leftW)); } catch (e) { /* storage blocked */ } this.render(); }
+    }
     // Each press is judged on its own: a drag only resizes, and only a clean click counts toward a double click.
     onColDown(e) {
       const h = e.target.closest('.hc-rs'); if (!h || e.button > 0) return;
@@ -659,20 +656,20 @@
       const key = h.dataset.col;
       const rtl = getComputedStyle(this.root).direction === 'rtl';
       const x0 = e.clientX, w0 = this.cols().find((c) => c[1] === key)[2]; let raf = 0, next = w0, moved = false;
-      const min = key === 'mode' ? 30 : 40;
+      const min = key === 'mode' ? 30 : 40; const lw0 = this.ui.leftW || 0;
       const move = (ev) => {
         const dx = (rtl ? x0 - ev.clientX : ev.clientX - x0);
-        if (!moved) { if (Math.abs(dx) < 3) return; moved = true; this.freezeCols(); this.root.classList.add('gt-resizing'); document.body.style.cursor = 'col-resize'; }
+        if (!moved) { if (Math.abs(dx) < 3) return; moved = true; this.ui.colW = this.ui.colW || {}; this.root.classList.add('gt-resizing'); document.body.style.cursor = 'col-resize'; }
         next = Math.max(min, Math.min(700, w0 + dx));
-        if (!raf) raf = requestAnimationFrame(() => { raf = 0; this.ui.colW[key] = next; this.render(); });
+        if (!raf) raf = requestAnimationFrame(() => { raf = 0; this.ui.colW[key] = next; this.keepColsVisible(lw0); this.render(); });
       };
       const up = () => {
         window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
         if (raf) { cancelAnimationFrame(raf); raf = 0; }
         this.root.classList.remove('gt-resizing'); document.body.style.cursor = '';
-        if (moved) { this._colClick = null; this.setColW(key, next, true); return; }
+        if (moved) { this._colClick = null; this.setColW(key, next, true); this.keepColsVisible(lw0, true); return; }
         const now = Date.now();
-        if (this._colClick && this._colClick.key === key && now - this._colClick.at < 400) { this._colClick = null; const w = this.fitWidth(key); if (w) { this.freezeCols(); this.setColW(key, w, true); } return; }
+        if (this._colClick && this._colClick.key === key && now - this._colClick.at < 400) { this._colClick = null; const w = this.fitWidth(key); if (w) { this.setColW(key, w, true); this.keepColsVisible(lw0, true); } return; }
         this._colClick = { key, at: now };
       };
       window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
@@ -693,14 +690,14 @@
       const x0 = e.clientX, w0 = this.LW; let raf = 0, next = w0, moved = false;
       const move = (ev) => {
         const dx = rtl ? x0 - ev.clientX : ev.clientX - x0;
-        if (!moved) { if (Math.abs(dx) < 3) return; moved = true; this.root.classList.add('gt-resizing'); document.body.style.cursor = 'col-resize'; }
+        if (!moved) { if (Math.abs(dx) < 3) return; moved = true; this.root.classList.add('gt-resizing', 'gt-rs-split'); document.body.style.cursor = 'col-resize'; }
         next = this.splitClamp(w0 + dx);
         if (!raf) raf = requestAnimationFrame(() => { raf = 0; this.ui.leftW = next; this.render(); });
       };
       const up = () => {
         window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
         if (raf) { cancelAnimationFrame(raf); raf = 0; }
-        this.root.classList.remove('gt-resizing'); document.body.style.cursor = '';
+        this.root.classList.remove('gt-resizing', 'gt-rs-split'); document.body.style.cursor = '';
         if (moved) { this._splitClick = 0; this.setLeftW(next, true); return; }
         const now = Date.now();
         if (this._splitClick && now - this._splitClick < 400) { this._splitClick = 0; this.setLeftW(null, true); return; } // double click or double tap resets
