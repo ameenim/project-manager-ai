@@ -47,6 +47,8 @@ A secret scanner (npm run scan:secrets) checks the files and, with --history, th
 
 SheetJS (`xlsx`) is pinned to version 0.20.3 from its official CDN, following the [SheetJS installation guidance](https://docs.sheetjs.com/docs/getting-started/installation/nodejs/). The npm registry release remains at 0.18.5 and must not be used: the prototype pollution flaw (GHSA-4r6h-8v6p-xvw6) was fixed in 0.19.3 and the regular expression denial of service flaw (GHSA-5pgg-2g8v-p4x9) was fixed in 0.20.2. The lockfile records the tarball integrity hash. Spreadsheet imports retain worker isolation, memory and size limits, and a timeout as additional safeguards.
 
+The upstream advisories list affected versions as [below 0.19.3 for prototype pollution](https://github.com/advisories/GHSA-4r6h-8v6p-xvw6) and [below 0.20.2 for ReDoS](https://github.com/advisories/GHSA-5pgg-2g8v-p4x9). Their “Patched versions: None” field refers to releases on the npm registry, not the patched CDN release used here. Findings that flag this official 0.20.3 tarball for either advisory are false positives; check the resolved source and installed version rather than replacing it with npm's older release. Regression tests enforce the safe version, official tarball source, manifest/lockfile agreement and SHA-512 integrity metadata.
+
 ## Known items
 
 Styles still allow inline style attributes, so the Content Security Policy keeps style-src 'unsafe-inline'. Scripts never do.

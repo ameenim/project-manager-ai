@@ -123,6 +123,21 @@ test('SheetJS stays outside both vulnerable version ranges', () => {
   for (const [name, entry] of entries) assert.equal(entry.version, version, `${name} must use the patched version`);
 });
 
+test('SheetJS is pinned to the official patched tarball with lockfile integrity', () => {
+  const pkg = require('../package.json');
+  const lock = require('../package-lock.json');
+  const version = require('xlsx').version;
+  const source = `https://cdn.sheetjs.com/xlsx-${version}/xlsx-${version}.tgz`;
+  assert.equal(pkg.dependencies.xlsx, source, 'do not fall back to the unpatched npm registry release');
+  assert.equal(lock.packages[''].dependencies.xlsx, source, 'manifest and lockfile must agree');
+  const entries = Object.entries(lock.packages).filter(([name]) => /(^|\/)node_modules\/xlsx$/.test(name));
+  assert.ok(entries.length > 0);
+  for (const [name, entry] of entries) {
+    assert.equal(entry.resolved, source, `${name} must come from the official CDN`);
+    assert.match(entry.integrity || '', /^sha512-[A-Za-z0-9+/]{86}==$/, `${name} must have a SHA-512 integrity hash`);
+  }
+});
+
 test('spreadsheets are read in a separate thread and time out', async () => {
   const XLSX = require('xlsx');
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Task', 'Owner'], ['Design', 'Ann']]), 'Plan');
