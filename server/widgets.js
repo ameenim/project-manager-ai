@@ -19,6 +19,7 @@ module.exports = function createWidgets({ on, ctx, err, store, WS, S, rawProject
   const clean = (o) => JSON.parse(JSON.stringify(o)); // out of the sandbox realm, into plain objects
 
   // ---------- datasets: the rows a widget reads, from the signed in person's own projects ----------
+  const LEVEL = { High: 3, Medium: 2, Low: 1 };
   const dnum = (d) => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10)) / 864e5;
   function datasetsFor(list) {
     const today = TODAY();
@@ -31,10 +32,11 @@ module.exports = function createWidgets({ on, ctx, err, store, WS, S, rawProject
         overdue: st.overdue, pending_review: st.pendingItems + st.pendingInbox, value: P.p.value || 0, currency: P.p.currency || '',
         forecast_end: st.forecast_end || null, contract_end: P.p.end_date || null,
         slip_days: st.forecast_end && P.p.end_date ? Math.round(dnum(st.forecast_end) - dnum(P.p.end_date)) : null,
+        days_left: P.p.end_date ? Math.round(dnum(P.p.end_date) - dnum(today)) : null,
       });
       for (const r of S.progressMetrics(P.tasks, raw, today).rows) {
         const p = r.progress || 0;
-        push('tasks', { project_id: P.id, project: pname, task_id: r.id, name: r.name, owner: r.assignee || '', start: r.start || null, finish: r.finish || null, duration: r.duration || 0, progress: p, status: p >= 100 ? 'done' : r.overdue ? 'late' : p > 0 ? 'active' : 'todo', critical: r.critical ? 'yes' : 'no', milestone: r.is_milestone ? 'yes' : 'no' });
+        push('tasks', { project_id: P.id, project: pname, task_id: r.id, name: r.name, owner: r.assignee || '', start: r.start || null, finish: r.finish || null, duration: r.duration || 0, progress: p, status: p >= 100 ? 'done' : r.overdue ? 'late' : p > 0 ? 'active' : 'todo', critical: r.critical ? 'yes' : 'no', milestone: r.is_milestone ? 'yes' : 'no', days_late: r.overdue && r.finish ? Math.max(0, Math.round(dnum(today) - dnum(r.finish))) : 0 });
       }
       for (const i of P.items) {
         if (i.status === 'ignored') continue;
@@ -42,12 +44,12 @@ module.exports = function createWidgets({ on, ctx, err, store, WS, S, rawProject
         if (i.kind === 'milestone') {
           const amount = d.amount != null ? d.amount : (d.percent != null && P.p.value ? Math.round((P.p.value * d.percent) / 100) : null);
           const state = i.state || 'pending';
-          push('payments', { project_id: P.id, project: pname, item_id: i.id, title: i.title, due: d.due_date || null, amount, currency: P.p.currency || '', state, late: d.due_date && d.due_date < today && state === 'pending' ? 'yes' : 'no' });
+          push('payments', { project_id: P.id, project: pname, item_id: i.id, title: i.title, due: d.due_date || null, amount, currency: P.p.currency || '', state, late: d.due_date && d.due_date < today && state === 'pending' ? 'yes' : 'no', days_late: d.due_date && d.due_date < today && state === 'pending' ? Math.round(dnum(today) - dnum(d.due_date)) : 0 });
         } else if (i.kind === 'risk') {
-          push('risks', { project_id: P.id, project: pname, item_id: i.id, title: i.title, probability: d.probability || 'Medium', impact: d.impact || 'Medium', state: i.state || 'open' });
+          push('risks', { project_id: P.id, project: pname, item_id: i.id, title: i.title, probability: d.probability || 'Medium', impact: d.impact || 'Medium', state: i.state || 'open', score: (LEVEL[d.probability] || 2) * (LEVEL[d.impact] || 2) });
         } else if (i.kind === 'deliverable') {
           const state = i.state === 'closed' ? 'closed' : 'open';
-          push('deliverables', { project_id: P.id, project: pname, item_id: i.id, title: i.title, due: d.due_date || null, state, late: d.due_date && d.due_date < today && state !== 'closed' ? 'yes' : 'no' });
+          push('deliverables', { project_id: P.id, project: pname, item_id: i.id, title: i.title, due: d.due_date || null, state, late: d.due_date && d.due_date < today && state !== 'closed' ? 'yes' : 'no', days_late: d.due_date && d.due_date < today && state !== 'closed' ? Math.round(dnum(today) - dnum(d.due_date)) : 0 });
         }
       }
     }

@@ -15,7 +15,7 @@ test('a spec is checked against a fixed whitelist and bad input is refused with 
   assert.throws(() => W.normalize({ dataset: 'payments', viz: 'kpi', agg: 'sum', measure: 'title' }), /number field/);
   assert.throws(() => W.normalize({ dataset: 'payments', viz: 'table', columns: [] }), /at least one column/);
   assert.throws(() => W.normalize({ dataset: 'payments', viz: 'kpi', filters: [{ field: 'state', op: 'eq', value: 'weird' }] }), /not available/);
-  assert.throws(() => W.normalize({ dataset: 'tasks', viz: 'kpi', filters: Array(6).fill({ field: 'status', op: 'eq', value: 'done' }) }), /at most 5 filters/);
+  assert.throws(() => W.normalize({ dataset: 'tasks', viz: 'kpi', filters: Array(9).fill({ field: 'status', op: 'eq', value: 'done' }) }), /at most 8 filters/);
   assert.throws(() => W.normalize({ dataset: 'payments', viz: 'kpi', format: 'money' }), /Money format/);
   assert.throws(() => W.normalize({ dataset: 'payments', viz: 'donut', agg: 'avg', measure: 'amount', groupBy: 'state' }), /shares of a whole/);
   assert.throws(() => W.meta({ title: '', group: 'overview' }), /title is required/);

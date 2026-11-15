@@ -20,7 +20,10 @@
   const specMsg = (e) => (e && e.code ? tx('wk_e_' + e.code, e.vars, e.message) : (e && e.message) || '');
   const TONE_CHIP = { ok: 'green', warn: 'amber', bad: 'red', c1: 'blue', idle: '' };
   const PALETTE = ['c1', 'c2', 'c3', 'c4'];
-  const SIZE_OF = { kpi: 's', donut: 's', bar: 'm', column: 'm', line: 'm', area: 'm', combo: 'm', radar: 'm', funnel: 'm', table: 'm' };
+  const SIZE_OF = { kpi: 's', gauge: 's', donut: 's', pie: 's', bar: 'm', column: 'm', cluster: 'm', stacked: 'm', stackedbar: 'm', pct: 'm', waterfall: 'm', line: 'm', lines: 'm', area: 'm', combo: 'm', radar: 'm', funnel: 'm', scatter: 'm', heatmap: 'l', table: 'm', pivot: 'l' };
+  const sizeOf = (spec) => (spec && (spec.size || SIZE_OF[spec.viz])) || 'm';
+  const RULE_CLS = { good: 'ok', warn: 'warn', bad: 'bad', info: 'c1', violet: 'violet', neutral: 'idle' };
+  const TONE_CHIP2 = { good: 'green', warn: 'amber', bad: 'red', info: 'blue', violet: 'violet', neutral: '' };
   const blank = () => {};
 
   // ---------------- viewer filter ----------------
@@ -58,18 +61,42 @@
     const set = new Set((pack.datasets[spec.dataset] || []).map((r) => r.currency).filter(Boolean));
     return set.size === 1 ? [...set][0] : '';
   };
-  function fmtValue(v, fd, cur, format) {
+  // o carries the display choices of a number or a gauge: decimals, a unit label and the compact format
+  function fmtValue(v, fd, cur, format, o) {
     if (v == null) return t('wk_none');
-    const unit = format || (fd && fd.unit === 'percent' ? 'percent' : fd && fd.money ? 'money' : 'number');
-    if (unit === 'percent') return fmtNum(v) + '%';
-    if (unit === 'money') return fmtNum(v) + (cur ? ' ' + cur : '');
-    return fmtNum(v);
+    const compact = format === 'compact', unit = format && format !== 'compact' ? format : (fd && fd.unit === 'percent' ? 'percent' : fd && fd.money ? 'money' : 'number');
+    const dec = o && o.decimals != null ? o.decimals : null;
+    const n = compact ? new Intl.NumberFormat(lang(), { notation: 'compact', maximumFractionDigits: dec == null ? 1 : dec }).format(v) : Number(v).toLocaleString(lang(), dec == null ? { maximumFractionDigits: 1 } : { minimumFractionDigits: dec, maximumFractionDigits: dec });
+    const tail = o && o.unit ? ' ' + o.unit : '';
+    if (unit === 'percent') return n + '%' + tail;
+    if (unit === 'money') return n + (cur ? ' ' + cur : '') + tail;
+    return n + tail;
   }
+  const subject = (d, field) => (field ? fieldLabel(field).toLowerCase() : dsLabel(d).toLowerCase());
   function aggLabel(spec) {
+    if (spec.agg === 'calc') { const c = spec.calc, p = (x) => aggLabel({ dataset: spec.dataset, ...x }); return t('wk_calc_' + c.op, { a: p(c.a), b: p(c.b) }); }
     if (spec.agg === 'count' || !spec.agg) return t('wk_agg_count', { ds: dsLabel(spec.dataset).toLowerCase() });
-    return t('wk_agg_' + spec.agg, { field: fieldLabel(spec.measure).toLowerCase() });
+    return t('wk_agg_' + spec.agg, { field: subject(spec.dataset, spec.measure) });
   }
-  const groupName = (g, res) => (g.key === '__other' ? t('wk_other') : g.key === '' ? t('wk_blank') : res.dateBuckets ? monthLabel(g.key) : valueLabel(g.key));
+  const periodLabel = (key, by) => {
+    if (by === 'quarter') return t('wk_quarter', { q: key.slice(6), y: key.slice(0, 4) });
+    if (by === 'year') return key;
+    if (by === 'day') return new Date(Date.UTC(+key.slice(0, 4), +key.slice(5, 7) - 1, +key.slice(8, 10))).toLocaleDateString(lang(), { day: 'numeric', month: 'short', timeZone: 'UTC' });
+    return monthLabel(key);
+  };
+  const groupName = (g, res) => {
+    if (g.key === '__other') return t('wk_other');
+    if (g.key === '') return t('wk_blank');
+    if (res.dateBuckets) return periodLabel(g.key, res.by || 'month');
+    if (res.bin) return t('wk_to', { a: fmtNum(Number(g.key)), b: fmtNum(Number(g.key) + res.bin) });
+    return valueLabel(g.key);
+  };
+  const ruleText = (r) => t('wk_rule_' + r.op, { v: fmtNum(r.value), v2: fmtNum(r.value2) });
+  const ruleLegend = (spec) => (spec.rules ? `<div class="wx-legend">${spec.rules.map((r) => `<span class="k-${r.tone}"><i class="wx-sw"></i>${esc(t('wk_tone_' + r.tone))}: ${esc(ruleText(r))}</span>`).join('')}</div>` : '');
+  const wireMore = (body) => {
+    const more = $('[data-wk-more]', body);
+    if (more) more.onclick = () => { const open = more.dataset.open !== '1'; more.dataset.open = open ? '1' : ''; $$('.wk-extra', body).forEach((r) => (r.hidden = !open)); more.textContent = t(open ? 'wk_less' : 'wk_more'); };
+  };
 
   // own.limit: the preview and the builder show five rows themselves. On an overview the grid applies the same five row rule.
   function renderSpec(body, w, pack, ctx, own) {
@@ -79,13 +106,15 @@
     let res;
     try { res = WS.run(spec, rows, { today: pack.today, convert: conv }); } catch (e) { body.innerHTML = h.empty(t('wk_broken')); return { csv: () => [] }; }
     const cur = curOf(spec, pack), note = pack.truncated && pack.truncated[spec.dataset] ? `<div class="small muted wk-note">${esc(t('wk_truncated'))}</div>` : '';
-    const mfd = spec.measure ? WS.fieldOf(spec.dataset, spec.measure) : null;
+    const mfd = spec.measure && spec.agg !== 'distinct' ? WS.fieldOf(spec.dataset, spec.measure) : null;
     const title = w.title;
 
     if (res.kind === 'kpi') {
-      const text = fmtValue(res.value, mfd, cur, spec.format);
-      const intCount = res.value != null && Number.isInteger(res.value) && (spec.format || 'number') === 'number';
-      body.innerHTML = `<div class="wk-kpi ${res.tone || ''}"><b class="wk-v" ${intCount ? `data-count="${res.value}"` : ''}>${esc(text)}</b><span class="small muted">${esc(aggLabel(spec))}</span><span class="small muted">${esc(t('wk_rows_n', { n: fmtNum(res.count) }))}</span></div>${note}`;
+      const text = fmtValue(res.value, mfd, cur, spec.format, spec);
+      const intCount = res.value != null && Number.isInteger(res.value) && (spec.format || 'number') === 'number' && spec.decimals == null && !spec.unit;
+      const mark = res.tone ? `<span class="wk-mark k-${res.tone}"><i></i>${esc(t('wk_tone_' + res.tone))}</span>` : '';
+      const prog = res.progress != null ? `<span class="wk-prog" role="img" aria-label="${esc(t('wk_of_target', { p: fmtNum(res.progress) + '%' }))}"><i style="width:${Math.max(0, Math.min(100, res.progress)).toFixed(1)}%"></i></span><span class="small muted">${esc(t('wk_target', { v: fmtValue(res.target, mfd, cur, spec.format, spec) }))} · ${esc(t('wk_of_target', { p: fmtNum(res.progress) + '%' }))}</span>` : '';
+      body.innerHTML = `<div class="wk-kpi ${res.tone || ''}"><b class="wk-v" ${intCount ? `data-count="${res.value}"` : ''}>${esc(text)}</b>${mark}<span class="small muted">${esc(aggLabel(spec))}</span><span class="small muted">${esc(t('wk_rows_n', { n: fmtNum(res.count) }))}</span>${prog}</div>${note}`;
       return { csv: () => [[title, aggLabel(spec)], [text, '']] };
     }
 
@@ -95,38 +124,73 @@
         const v = r[fd.name];
         if (v == null || v === '') return '';
         if (fd.type === 'enum') { const c = TONE_CHIP[fd.values[v]]; return `<span class="chip ${c || ''}">${esc(valueLabel(v))}</span>`; }
-        if (fd.type === 'number') return esc(fd.unit === 'percent' ? fmtNum(v) + '%' : fd.money ? fmtNum(conv(v, r)) + (mode !== 'native' ? ' ' + mode : r.currency ? ' ' + r.currency : '') : fmtNum(v));
+        if (fd.type === 'number') {
+          const txt = fd.unit === 'percent' ? fmtNum(v) + '%' : fd.money ? fmtNum(conv(v, r)) + (mode !== 'native' ? ' ' + mode : r.currency ? ' ' + r.currency : '') : fmtNum(v);
+          const rt = spec.rules && spec.ruleField === fd.name ? WS.toneOf(spec.rules, v) : '';
+          return rt ? `<span class="chip ${TONE_CHIP2[rt]}">${esc(txt)}</span>` : esc(txt);
+        }
         if ((fd.name === 'project' || (spec.dataset === 'projects' && fd.name === 'name')) && r.project_id) return `<span class="li-link" data-go="#/p/${r.project_id}/overview">${esc(v)}</span>`;
         return esc(v);
       };
       if (!res.rows.length) { body.innerHTML = h.empty(t('wk_empty')) + note; return { csv: () => [] }; }
       const lim = !!(own && own.limit);
+      const foot = res.totals ? `<tfoot><tr>${cols.map((fd, i) => (fd.type === 'number' && fd.unit !== 'percent' && res.totals[fd.name] != null ? `<td class="num">${esc(fmtValue(res.totals[fd.name], fd, cur))}</td>` : `<td>${i === 0 ? esc(t('wk_total')) : ''}</td>`)).join('')}</tr></tfoot>` : '';
       const trs = res.rows.map((r, i) => `<tr class="${lim && i >= 5 ? 'wk-extra' : ''}" ${lim && i >= 5 ? 'hidden' : ''}>${cols.map((fd) => `<td class="${fd.type === 'number' ? 'num' : ''}">${cell(fd, r)}</td>`).join('')}</tr>`).join('');
-      body.innerHTML = `<div class="table-wrap"><table class="wk-table"><thead><tr>${cols.map((fd) => `<th class="${fd.type === 'number' ? 'num' : ''}">${esc(fieldLabel(fd.name))}</th>`).join('')}</tr></thead><tbody>${trs}</tbody></table></div>${lim && res.rows.length > 5 ? `<button class="btn sm ghost wk-more" type="button" data-wk-more>${esc(t('wk_more'))}</button>` : ''}<div class="small muted wk-note">${esc(t('wk_showing', { n: res.rows.length, total: res.total }))}</div>${note}`;
-      const more = $('[data-wk-more]', body);
-      if (more) more.onclick = () => { const open = more.dataset.open !== '1'; more.dataset.open = open ? '1' : ''; $$('.wk-extra', body).forEach((r) => (r.hidden = !open)); more.textContent = t(open ? 'wk_less' : 'wk_more'); };
+      body.innerHTML = `<div class="table-wrap"><table class="wk-table"><thead><tr>${cols.map((fd) => `<th class="${fd.type === 'number' ? 'num' : ''}">${esc(fieldLabel(fd.name))}</th>`).join('')}</tr></thead><tbody>${trs}</tbody>${foot}</table></div>${ruleLegend(spec)}${lim && res.rows.length > 5 ? `<button class="btn sm ghost wk-more" type="button" data-wk-more>${esc(t('wk_more'))}</button>` : ''}<div class="small muted wk-note">${esc(t('wk_showing', { n: res.rows.length, total: res.total }))}</div>${note}`;
+      wireMore(body);
       return { csv: () => [cols.map((fd) => fieldLabel(fd.name)), ...res.rows.map((r) => cols.map((fd) => (r[fd.name] == null ? '' : r[fd.name])))] };
     }
 
-    // groups: bar, column or donut
-    const groups = res.groups.filter((g) => g.value > 0 || spec.viz !== 'donut');
-    if (!groups.length || (spec.viz === 'donut' && !groups.some((g) => g.value > 0))) { body.innerHTML = h.empty(t('wk_empty')) + note; return { csv: () => [] }; }
-    const val = (g) => fmtValue(g.value, mfd, cur);
-    const csv = () => [[fieldLabel(res.grouped), aggLabel(spec)], ...groups.map((g) => [groupName(g, res), g.value])];
+    // the chart families that read a whole result of their own
+    if (['gauge', 'waterfall', 'points', 'matrix'].includes(res.kind)) {
+      const C = PM.wchart;
+      const sfd = res.split ? WS.fieldOf(spec.dataset, res.split) : null;
+      const serFd = (i) => (spec.series ? (spec.series[i] && spec.series[i].measure && spec.series[i].agg !== 'distinct' ? WS.fieldOf(spec.dataset, spec.series[i].measure) : null) : mfd);
+      const base = (v, fd) => fmtValue(v, fd, cur, null, spec);
+      const shown = (v, fd) => { const m = res.showAs; if (!m) return base(v, fd); if (m === 'rank') return '#' + fmtNum(v); if (/^pct/.test(m)) return (m === 'pct_diff_prev' && v > 0 ? '+' : '') + fmtNum(v) + '%'; if (m === 'diff_prev' && v > 0) return '+' + base(v, fd); return base(v, fd); };
+      const metric = aggLabel(spec) + (res.showAs ? ` (${t('wb_sa_' + res.showAs)})` : '');
+      const x = {
+        spec, res, h, title, metric, aria: '', limit: !!(own && own.limit), groupLabel: res.grouped ? fieldLabel(res.grouped) : '',
+        fmt: (v) => fmtValue(v, mfd, cur, null, spec), fmtPlain: (v) => fmtNum(v), num: fmtNum, valueLabel, fieldLabel,
+        name: (g) => groupName(g, res), clip: (txt, n) => (String(txt).length > n ? String(txt).slice(0, n - 1) + '…' : String(txt)),
+        ser: (sr, i) => (sr.key === '__other' ? t('wk_other') : res.split ? (sr.key === '' ? t('wk_blank') : sfd.type === 'date' ? periodLabel(sr.key, spec.splitDateBy || 'month') : valueLabel(sr.key)) : aggLabel({ dataset: spec.dataset, ...spec.series[i] })),
+        fv: (v, i) => shown(v, serFd(i || 0)), fvTotal: (v) => (v == null ? t('wk_none') : base(v, mfd)),
+        short: (v, i) => { const fd = serFd(i || 0), pc = (res.showAs && /^pct/.test(res.showAs)) || (!res.showAs && fd && fd.unit === 'percent'); return new Intl.NumberFormat(lang(), { notation: 'compact', maximumFractionDigits: 1 }).format(v) + (pc ? '%' : ''); },
+        ruleLegend: () => ruleLegend(spec),
+      };
+      if (res.kind === 'gauge') x.aria = `${title}: ${x.fmt(res.value)} ${t('wk_gauge_of', { max: fmtNum(res.max) })}`;
+      else if (res.kind === 'waterfall') x.aria = `${title}: ${res.steps.map((q) => `${x.name(q)} ${x.fmt(q.value)}`).join(', ')}`;
+      else if (res.kind === 'points') x.aria = `${title}: ${t('wk_rows_n', { n: fmtNum(res.points.length) })}`;
+      else x.aria = `${title}: ${res.cats.map((q) => x.name(q)).join(', ')}`;
+      const out = res.kind === 'gauge' ? C.gauge(x) : res.kind === 'waterfall' ? C.waterfall(x) : res.kind === 'points' ? C.scatter(x) : C.matrix(x);
+      if (out.empty) { body.innerHTML = h.empty(out.need ? t('wk_need_points', { n: out.need }) : t('wk_empty')) + note; return { csv: () => [] }; }
+      body.innerHTML = out.html + (res.kind === 'points' && res.cut ? `<div class="small muted wk-note">${esc(t('wk_h_points_cut', { n: WS.MAX_POINTS }))}</div>` : '') + note;
+      if (out.more) wireMore(body);
+      return { csv: () => out.csv, chart: !(res.kind === 'matrix' && ['heatmap', 'pivot'].includes(spec.viz)) };
+    }
+
+    // groups: bar, column, pie or donut
+    const share = spec.viz === 'donut' || spec.viz === 'pie';
+    const groups = res.groups.filter((g) => g.value > 0 || !share);
+    if (!groups.length || (share && !groups.some((g) => g.value > 0))) { body.innerHTML = h.empty(t('wk_empty')) + note; return { csv: () => [] }; }
+    const sm = res.showAs, rawBase = (v) => fmtValue(v, mfd, cur);
+    const val = (g) => (!sm ? rawBase(g.value) : sm === 'rank' ? '#' + fmtNum(g.value) : /^pct/.test(sm) ? (sm === 'pct_diff_prev' && g.value > 0 ? '+' : '') + fmtNum(g.value) + '%' : sm === 'diff_prev' && g.value > 0 ? '+' + rawBase(g.value) : rawBase(g.value));
+    const csv = () => [[fieldLabel(res.grouped), aggLabel(spec) + (sm ? ` (${t('wb_sa_' + sm)})` : '')], ...groups.map((g) => [groupName(g, res), g.value])];
     const aria = `${title}: ${groups.map((g) => `${groupName(g, res)} ${val(g)}`).join(', ')}`;
     if (spec.viz === 'bar') {
-      const svg = h.hbars(groups.map((g) => ({ label: groupName(g, res), segs: [{ v: Math.max(g.value, 0), cls: g.tone || 'c1', label: '' }], valueLabel: val(g), tipHtml: `${groupName(g, res)}: ${val(g)} (${t('wk_rows_n', { n: fmtNum(g.count) })})` })), { aria, labelW: 120, max: Math.max(1, ...groups.map((g) => g.value)) });
-      body.innerHTML = svg + note;
+      const svg = h.hbars(groups.map((g) => ({ label: groupName(g, res), segs: [{ v: Math.max(g.value, 0), cls: g.rule ? RULE_CLS[g.rule] : g.tone || 'c1', label: '' }], valueLabel: val(g), tipHtml: `${groupName(g, res)}: ${val(g)} (${t('wk_rows_n', { n: fmtNum(g.count) })})` })), { aria, labelW: 120, max: Math.max(1, ...groups.map((g) => g.value)) });
+      body.innerHTML = svg + ruleLegend(spec) + note;
       return { csv, chart: true };
     }
     if (spec.viz === 'column') {
-      const max = Math.max(1, ...groups.map((g) => g.value));
+      const max = Math.max(1, ...groups.map((g) => g.value), spec.target || 0);
       const cl = PMCL.get('htmlcol'), tot = groups.reduce((a, g) => a + Math.max(g.value, 0), 0);
       const lab = (g) => esc(PMCL.str(cl, { text: val(g), pct: PMCL.pctOf(g.value, tot) }));
-      body.innerHTML = `<div class="wk-cols" role="img" aria-label="${esc(aria)}">${groups.map((g) => `<div class="wk-col" data-tip="${esc(`${groupName(g, res)}: ${val(g)} (${t('wk_rows_n', { n: fmtNum(g.count) })})`)}"><span class="wk-cv cl-t">${cl.on && cl.pos === 'above' ? lab(g) : ''}</span><span class="wk-bar-wrap"><i class="wk-bar ${g.tone || 'c1'}" style="height:${Math.max(0, (g.value / max) * 100).toFixed(1)}%">${cl.on && cl.pos === 'center' ? `<span class="cl-t cl-mid">${lab(g)}</span>` : ''}</i></span><span class="wk-cl">${cl.on && cl.pos === 'below' ? `<b class="cl-t">${lab(g)}</b><br>` : ''}${esc(groupName(g, res))}</span></div>`).join('')}</div>${note}`;
+      const tline = (last) => (spec.target != null && spec.target <= max ? `<i class="wx-target" style="bottom:${Math.min(100, (spec.target / max) * 100).toFixed(1)}%">${last ? `<b>${esc(t('wk_target', { v: fmtNum(spec.target) }))}</b>` : ''}</i>` : '');
+      body.innerHTML = `<div class="wk-cols" role="img" aria-label="${esc(aria)}">${groups.map((g, gi) => `<div class="wk-col" data-tip="${esc(`${groupName(g, res)}: ${val(g)} (${t('wk_rows_n', { n: fmtNum(g.count) })})`)}"><span class="wk-cv cl-t">${cl.on && cl.pos === 'above' ? lab(g) : ''}</span><span class="wk-bar-wrap"><i class="wk-bar ${g.rule ? 'k-' + g.rule : g.tone || 'c1'}" style="height:${Math.max(0, (g.value / max) * 100).toFixed(1)}%">${cl.on && cl.pos === 'center' ? `<span class="cl-t cl-mid">${lab(g)}</span>` : ''}</i>${tline(gi === groups.length - 1)}</span><span class="wk-cl">${cl.on && cl.pos === 'below' ? `<b class="cl-t">${lab(g)}</b><br>` : ''}${esc(groupName(g, res))}</span></div>`).join('')}</div>${ruleLegend(spec)}${note}`;
       return { csv };
     }
-    const short = (v) => { const u = mfd && mfd.unit === 'percent' ? '%' : ''; return new Intl.NumberFormat(lang(), { notation: 'compact', maximumFractionDigits: 1 }).format(v) + u; };
+    const short = (v) => { const u = (sm && /^pct/.test(sm)) || (!sm && mfd && mfd.unit === 'percent') ? '%' : ''; return new Intl.NumberFormat(lang(), { notation: 'compact', maximumFractionDigits: 1 }).format(v) + u; };
     const clip = (txt, n) => (String(txt).length > n ? String(txt).slice(0, n - 1) + '…' : String(txt));
     const niceMax = (v) => { const p = Math.pow(10, Math.floor(Math.log10(Math.max(v, 1)))), m = v / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p; };
     const tipOf = (g, extra) => `${groupName(g, res)}: ${val(g)}${extra || ''} (${t('wk_rows_n', { n: fmtNum(g.count) })})`;
@@ -138,10 +202,11 @@
       const mfd2 = combo && res.line === 'second' && spec.measure2 ? WS.fieldOf(spec.dataset, spec.measure2) : mfd;
       const lineLabel = combo ? (res.line === 'second' ? aggLabel({ ...spec, agg: spec.agg2, measure: spec.measure2 }) : t('wk_running')) : '';
       const Wd = Math.max(240, Math.round(h.width())), Ht = 220, L = 46, R = 14, T = 18, B = 34, pw = Wd - L - R, ph = Ht - T - B, band = pw / n;
-      const all = groups.map((g) => g.value).concat(combo ? groups.map((g) => g.value2) : []);
+      const all = groups.map((g) => g.value).concat(combo ? groups.map((g) => g.value2) : [], spec.target != null ? [spec.target] : []);
       const hi = niceMax(Math.max(1, ...all)), lo = Math.min(0, ...all);
       const x = (i) => L + band * (i + 0.5), y = (v) => T + ph - ((v - lo) / (hi - lo || 1)) * ph;
       let g = [lo, (lo + hi) / 2, hi].map((v) => `<line class="tl-grid" x1="${L}" x2="${L + pw}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text x="${L - 6}" y="${(y(v) + 4).toFixed(1)}" text-anchor="end" direction="ltr">${esc(short(v))}</text>`).join('');
+      if (spec.target != null) g += `<line class="wx-ref" x1="${L}" x2="${L + pw}" y1="${y(spec.target).toFixed(1)}" y2="${y(spec.target).toFixed(1)}"/><text x="${L + pw}" y="${(y(spec.target) - 4).toFixed(1)}" text-anchor="end" direction="ltr">${esc(t('wk_target', { v: fmtNum(spec.target) }))}</text>`;
       const step = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(pw / 58))));
       groups.forEach((gr, i) => { if (i % step === 0 || i === n - 1 && step === 1) g += `<text x="${x(i).toFixed(1)}" y="${Ht - 12}" text-anchor="middle" direction="ltr">${esc(clip(groupName(gr, res), 9))}</text>`; });
       const cl = PMCL.get(combo ? 'column' : 'line', { percent: false });
@@ -224,6 +289,12 @@
       }).join('')}</div>${note}`;
       return { csv };
     }
+    if (spec.viz === 'pie') {
+      const ps = groups.filter((g) => g.value > 0), tt = ps.reduce((a, g) => a + g.value, 0);
+      const pp = ps.map((g, i) => ({ v: g.value, cls: g.tone || PALETTE[i % PALETTE.length], label: groupName(g, res), lab: val(g), raw: g, tip: `${groupName(g, res)}: ${val(g)} (${PMCL.pctOf(g.value, tt)})` }));
+      body.innerHTML = `<div class="wx-pie-wrap" role="img" aria-label="${esc(aria)}">${PM.wchart.pie(pp)}${h.legend(pp.map((p) => [p.cls, p.label, esc(p.lab)]))}</div>${note}`;
+      return { csv, chart: true };
+    }
     // donut
     const parts = groups.filter((g) => g.value > 0).map((g, i) => ({ v: g.value, cls: g.tone || PALETTE[i % PALETTE.length], label: groupName(g, res), lab: val(g), raw: g }));
     const total = parts.reduce((s, p) => s + p.v, 0);
@@ -238,7 +309,7 @@
     const widgets = { ...cfg.widgets }, order = cfg.order.slice();
     for (const w of d.widgets) {
       const id = 'cw_' + w.id;
-      widgets[id] = { size: SIZE_OF[w.spec.viz] || 'm', title: '', label: w.title, community: { id: w.id, author: w.author, version: w.version, title: w.title, mine: w.mine }, wf: specWF(w.spec, pack), render: (body, dd, ctx, F) => renderSpec(body, w, pack, ctx, { f: F }) };
+      widgets[id] = { size: sizeOf(w.spec), title: '', label: w.title, community: { id: w.id, author: w.author, version: w.version, title: w.title, mine: w.mine }, wf: specWF(w.spec, pack), render: (body, dd, ctx, F) => renderSpec(body, w, pack, ctx, { f: F }) };
       order.push(id);
     }
     return { ...cfg, widgets, order };
@@ -379,7 +450,7 @@
     if (!isBuilt && !w.spec) { try { w = (await api('GET', `/api/widgets/${w.id}`)).widget; } catch (e) { toast(e.message, 'err'); return; } }
     const title = isBuilt ? item.title : w.title;
     const needProject = scope === 'project';
-    const st = { pid: needProject ? (projects[0] ? projects[0].id : '') : '', size: isBuilt ? (item.def.size || 'm') : SIZE_OF[w.spec.viz] || 'm', seq: 0 };
+    const st = { pid: needProject ? (projects[0] ? projects[0].id : '') : '', size: isBuilt ? (item.def.size || 'm') : sizeOf(w.spec), seq: 0 };
     const prevMode = PM.fx.mode;
     const canPick = !isBuilt || needProject;
     const opts = (needProject ? '' : `<option value="">${esc(t('wp_all'))}</option>`) + projects.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
@@ -635,5 +706,5 @@
     drawBody();
   };
 
-  PM.widgets = { extend, layoutsDialog, removeFromOverview, renderSpec, stars, labels: { group: groupLabel, ds: dsLabel, field: fieldLabel, value: valueLabel, scope: scopeLabel }, specMsg, fmtNum, openPreview, SIZE_OF };
+  PM.widgets = { extend, layoutsDialog, removeFromOverview, renderSpec, stars, labels: { group: groupLabel, ds: dsLabel, field: fieldLabel, value: valueLabel, scope: scopeLabel }, specMsg, fmtNum, openPreview, SIZE_OF, sizeOf, ruleText, TONE_CHIP2 };
 })();
