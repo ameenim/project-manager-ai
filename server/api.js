@@ -216,10 +216,24 @@ module.exports = function createApi(store, auth, connectors, ops) {
     notes: t.notes, is_milestone: t.is_milestone, jira_key: t.jira_key, color: t.color, summary: t.summary, critical: t.critical,
     mode: t.mode === 'manual' ? 'manual' : 'auto', source: t.source || null, meeting_id: t.meeting_id || null, flag: t.flag ? 1 : 0, conflict: t.conflict ? 1 : 0, links: Array.isArray(t.links) ? t.links : [],
   });
+  // Every Set baseline press keeps its own copy of the task dates, so the table can show the start and finish of every earlier baseline.
+  // A project that only has the old single baseline gets it as Baseline 1.
+  const MAX_BASELINES = 11;
+  function ensureBaselines(P) {
+    if (!Array.isArray(P.baselines)) P.baselines = [];
+    if (!P.baselines.length && P.tasks.some((t) => t.b_start)) {
+      const tasks = {};
+      for (const t of P.tasks) if (t.b_start && t.b_end) tasks[t.id] = [t.b_start, t.b_end];
+      P.baselines.push({ n: 1, at: null, tasks });
+    }
+    return P.baselines;
+  }
   function scheduleResponse(P) {
     const computed = S.schedule(P.tasks, rawProject(P));
+    const bls = ensureBaselines(P);
     return {
-      tasks: computed.map(taskView),
+      baselines: bls.map((b) => ({ n: b.n, at: b.at })),
+      tasks: computed.map((t) => ({ ...taskView(t), bl: bls.map((b) => b.tasks[t.id] || null) })),
       calendar: { work_days: P.p.work_days, holidays: P.p.holidays },
       impact_check: !!P.p.impact_check, today: TODAY(), has_baseline: computed.some((t) => t.b_start),
       deliverables: P.items.filter((i) => i.kind === 'deliverable' && i.status !== 'ignored').map((i) => ({ id: i.id, title: i.title })),
@@ -1799,7 +1813,10 @@ Rules:
   });
   on('POST', '/api/projects/(\\d+)/schedule/baseline', async (m) => {
     const P = P_(m[1]); const computed = S.schedule(P.tasks, rawProject(P));
-    for (const c of computed) { const t = P.tasks.find((x) => x.id === c.id); if (t) { t.b_start = c.start; t.b_end = c.finish; } }
+    const bls = ensureBaselines(P), snap = {};
+    for (const c of computed) { const t = P.tasks.find((x) => x.id === c.id); if (t) { t.b_start = c.start; t.b_end = c.finish; if (c.start && c.finish) snap[t.id] = [c.start, c.finish]; } }
+    bls.push({ n: (bls.length ? bls[bls.length - 1].n : 0) + 1, at: nowTs(), tasks: snap });
+    while (bls.length > MAX_BASELINES) bls.shift();
     audit(P, ACTOR(), 'baseline_set', { summary: `Baseline set for ${computed.length} tasks` });
     recordVersion(P, 'baseline');
     return scheduleResponse(P);

@@ -399,8 +399,9 @@
     function exportCsv() {
       const q = (v) => { let x = String(v ?? ''); if (/^[=+\-@\t\r]/.test(x) && !/^[-+]?\d+([.,]\d+)?$/.test(x)) x = "'" + x; return `"${x.replace(/"/g, '""')}"`; };
       const wb = g._wbsAll || new Map();
-      const head = [t('g_wbs'), t('g_task'), t('start'), t('g_finish'), t('duration_days'), t('progress'), t('g_owner'), t('predecessors'), t('g_mode'), t('g_link_items')];
-      const rows = g.tasks.slice().sort((a, b2) => String(wb.get(a.id)).localeCompare(String(wb.get(b2.id)), undefined, { numeric: true })).map((x) => [wb.get(x.id), x.name, x.start, x.finish, x.duration, x.progress, x.assignee, (x.deps || []).map((d) => wb.get(d.id)).join(' '), x.mode, g.linkIds(x).map((id) => (g.itemMap.get(id) || {}).title).join(' | ')]);
+      const xk = g.extraFieldKeys();
+      const head = [t('g_wbs'), t('g_task'), t('start'), t('g_finish'), t('duration_days'), t('progress'), t('g_owner'), t('predecessors'), t('g_mode'), t('g_link_items'), ...xk.map((k) => g.fieldTitle(k))];
+      const rows = g.tasks.slice().sort((a, b2) => String(wb.get(a.id)).localeCompare(String(wb.get(b2.id)), undefined, { numeric: true })).map((x) => [wb.get(x.id), x.name, x.start, x.finish, x.duration, x.progress, x.assignee, (x.deps || []).map((d) => wb.get(d.id)).join(' '), x.mode, g.linkIds(x).map((id) => (g.itemMap.get(id) || {}).title).join(' | '), ...xk.map((k) => g.fieldValue(x, k))]);
       const csv = '﻿' + [head, ...rows].map((r) => r.map(q).join(',')).join('\r\n');
       const a2 = document.createElement('a'); a2.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a2.download = `${(p.code || 'schedule').replace(/[^\w-]+/g, '_')}-schedule.csv`;
       document.body.appendChild(a2); a2.click(); a2.remove(); setTimeout(() => URL.revokeObjectURL(a2.href), 5000);
@@ -582,7 +583,7 @@
     }
 
     g = new window.Gantt($('#gt', root), {
-      t, lang: S.lang, commit,
+      t, lang: S.lang, commit, toast,
       onInsert: insertBetween, onMoveTo: moveTo, onAdd: () => addDialog(false), onAddMilestone: () => addDialog(true), onEdit: editDialog, onDelete: del,
       onIndent: () => reorder(indentAll, 'cant_indent'),
       onOutdent: () => reorder(outdentAll, 'cant_outdent'),

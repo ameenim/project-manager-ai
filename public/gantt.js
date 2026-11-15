@@ -44,6 +44,8 @@
       this.today = F(new Date());
       this.ui = { zoom: 'week', critical: true, baseline: true, compact: false, z: 1, selected: null, multi: new Set(), anchor: null, collapsed: new Set(), legend: true, filter: 'all', q: '', tab: 'task', ribbon: true };
       try { this.ui.colW = JSON.parse(localStorage.getItem('pm_gt_cols') || '{}') || {}; } catch (e) { this.ui.colW = {}; }
+      this.baselines = [];
+      this.ui.fields = this.loadFields();
       try { const sv = localStorage.getItem('pm_rb_tab'); if (sv) this.ui.tab = sv; if (localStorage.getItem('pm_rb_open') === '0') this.ui.ribbon = false; const lw = Number(localStorage.getItem('pm_gt_leftw')); if (lw >= 160) this.ui.leftW = lw; } catch (e) { /* storage blocked */ }
       this.items = [];
       this.impactOn = true;
@@ -66,6 +68,7 @@
       this.cal = { days: new Set(d.calendar.work_days), holidays: new Set(d.calendar.holidays) };
       this.today = d.today;
       this.hasBaseline = d.has_baseline;
+      this.baselines = d.baselines || [];
       this.resources = d.resources || [];
       this.deliverables = d.deliverables || [];
       this.items = d.items || [];
@@ -81,13 +84,91 @@
     }
 
     // ---------- layout ----------
-    baseCols() {
-      const c = this.ui.compact;
-      const b = c ? [['num', 'wbs', 58], ['md', 'mode', 34], ['nm', 'task', 250]] : [['num', 'wbs', 64], ['md', 'mode', 36], ['nm', 'task', 260], ['pd', 'pred', 112], ['dt', 'start', 106], ['du', 'dur', 56], ['dt', 'finish', 106], ['pc', 'pct', 62], ['ow', 'owner', 140]];
-      const cw = this.ui.colW || {};
-      for (const x of b) if (cw[x[1]]) x[2] = cw[x[1]];
-      return b;
+    // ---------- table fields: the user picks which fields the table shows, and where ----------
+    // key: [cell class, default width, group, locked]. Baseline fields (bs1, bf1, bs2 ...) are added from the baselines the project has.
+    static FIELDS = {
+      wbs: ['num', 64, 'core', 1], mode: ['md', 36, 'core'], task: ['nm', 260, 'core', 1], pred: ['pd', 112, 'core'], start: ['dt', 106, 'core'], dur: ['du', 56, 'core'], finish: ['dt', 106, 'core'], pct: ['pc', 62, 'core'], owner: ['ow', 140, 'core'],
+      svar: ['dt', 112, 'var'], fvar: ['dt', 112, 'var'],
+      notes: ['nt', 220, 'more'], status: ['st', 100, 'more'], crit: ['cr', 76, 'more'], links: ['lk', 70, 'more'], jira: ['jr', 96, 'more'],
+    };
+    static DEFAULT_FIELDS = ['wbs', 'mode', 'task', 'pred', 'start', 'dur', 'finish', 'pct', 'owner'];
+    fieldDef(k) {
+      const f = Gantt.FIELDS[k]; if (f) return { key: k, cls: f[0], w: f[1], group: f[2], lock: !!f[3] };
+      const m = /^b([sf])(\d+)$/.exec(k);
+      if (m && this.baselines.some((b) => b.n === Number(m[2]))) return { key: k, cls: 'dt', w: 128, group: 'baseline', lock: false, bl: Number(m[2]), end: m[1] === 'f' };
+      return null;
     }
+    loadFields() {
+      let a = null;
+      try { a = JSON.parse(localStorage.getItem('pm_gt_fields') || 'null'); } catch (e) { a = null; }
+      a = Array.isArray(a) ? a.filter((k) => typeof k === 'string') : [...Gantt.DEFAULT_FIELDS];
+      for (const need of ['task', 'wbs']) if (!a.includes(need)) a.unshift(need);
+      return [...new Set(a)];
+    }
+    saveFields() { try { if (this.sameFields(this.ui.fields, Gantt.DEFAULT_FIELDS)) localStorage.removeItem('pm_gt_fields'); else localStorage.setItem('pm_gt_fields', JSON.stringify(this.ui.fields)); } catch (e) { /* storage blocked */ } }
+    sameFields(a, b) { return a.length === b.length && a.every((k, i) => k === b[i]); }
+    // every field the user can pick, grouped, with the baselines the project has
+    fieldList() {
+      const L = Object.keys(Gantt.FIELDS).map((k) => this.fieldDef(k));
+      for (const b of this.baselines) { L.push(this.fieldDef(`bs${b.n}`), this.fieldDef(`bf${b.n}`)); }
+      return L;
+    }
+    baseCols() {
+      const cw = this.ui.colW || {};
+      const keys = this.ui.compact ? ['wbs', 'mode', 'task'] : this.ui.fields;
+      const out = [];
+      for (const k of keys) { const d = this.fieldDef(k); if (d) out.push([d.cls, k, cw[k] || d.w]); }
+      return out;
+    }
+    // plain text of an optional field, used by the CSV export so it matches what the table shows
+    fieldValue(t, k) {
+      const d = this.fieldDef(k); if (!d) return '';
+      if (d.bl) { const v = (t.bl || [])[this.baselines.findIndex((b) => b.n === d.bl)]; return v ? v[d.end ? 1 : 0] : ''; }
+      switch (k) {
+        case 'notes': return t.notes || '';
+        case 'status': return this.t({ todo: 'g_l_todo', prog: 'g_l_prog', done: 'g_l_done', late: 'g_l_late' }[this.status(t)]);
+        case 'crit': return t.critical && !t.summary ? this.t('g_f_yes') : '';
+        case 'links': return this.linkCount(t) || '';
+        case 'jira': return t.jira_key || '';
+        case 'svar': return t.start && t.b_start ? diff(t.b_start, t.start) : '';
+        case 'fvar': return t.finish && t.b_end ? diff(t.b_end, t.finish) : '';
+      }
+      return '';
+    }
+    extraFieldKeys() { return this.baseCols().map((c) => c[1]).filter((k) => !Gantt.DEFAULT_FIELDS.includes(k)); }
+    addField(key, afterKey) {
+      if (!this.fieldDef(key) || this.ui.fields.includes(key)) return;
+      const f = this.ui.fields.slice(), at = afterKey ? f.indexOf(afterKey) : -1;
+      if (at >= 0) f.splice(at + 1, 0, key); else f.push(key);
+      this.ui.fields = f; this.ui.compact = false; this.saveFields();
+      this.fitNewField(key);
+      this.render();
+    }
+    // A new field must be visible at once. When the table gets wider than the room it has, the new field and then the task column give up width,
+    // and any rest is clipped at the divider. Nothing else changes and the user can drag the widths back.
+    fitNewField(key) {
+      const avail = Math.max(240, (this.scroll ? this.scroll.clientWidth : 1200) - 160);
+      const cw = this.ui.colW = this.ui.colW || {}, sumNow = () => this.baseCols().reduce((a, c) => a + c[2], 0);
+      let over = sumNow() - Math.max(avail, this.ui.leftW ? this.leftTarget() : 0);
+      if (over <= 0) { if (this.ui.leftW) { this.ui.leftW = Math.max(this.leftTarget(), sumNow()); try { localStorage.setItem('pm_gt_leftw', String(this.ui.leftW)); } catch (e) { /* storage blocked */ } } return; }
+      const d = this.fieldDef(key), w = cw[key] || d.w, cut = Math.min(over, Math.max(0, w - 90));
+      if (cut) { cw[key] = w - cut; over -= cut; }
+      if (over > 0) { const tw = cw.task || 260, c2 = Math.min(over, Math.max(0, tw - 180)); if (c2) { cw.task = tw - c2; over -= c2; } }
+      this.saveCols();
+      if (over > 0 || this.ui.leftW) { this.ui.leftW = Math.min(sumNow(), avail); try { localStorage.setItem('pm_gt_leftw', String(this.ui.leftW)); } catch (e) { /* storage blocked */ } }
+    }
+    removeField(key, quiet) {
+      const d = this.fieldDef(key); if (!d || d.lock || !this.ui.fields.includes(key)) return;
+      const before = this.ui.fields.slice();
+      this.ui.fields = before.filter((k) => k !== key); this.saveFields(); this.render();
+      if (!quiet && this.o.toast) this.o.toast(this.t('g_f_removed', { name: this.fieldTitle(key) }), '', { label: this.t('g_undo'), fn: () => { this.ui.fields = before; this.saveFields(); this.render(); } });
+    }
+    resetFields() { this.ui.fields = [...Gantt.DEFAULT_FIELDS]; this.saveFields(); this.render(); }
+    fieldTitle(k) {
+      const d = this.fieldDef(k); if (d && d.bl) return this.t(d.end ? 'g_f_bf' : 'g_f_bs', { n: d.bl });
+      return this.colTitle(k) || this.t('g_mode');
+    }
+
     // The table width (the splitter) and each column width are independent. A narrower table clips the right hand columns, a wider one leaves free space.
     cols() { return this.baseCols().map((c) => c.slice()); }
     leftTarget() { return Math.max(160, Math.min(Number(this.ui.leftW) || 0, Math.max(240, (this.scroll ? this.scroll.clientWidth : 1200) - 160))); }
@@ -220,6 +301,7 @@
             <div class="rb-panel" data-panel="view" hidden>
               ${grp(t('g_grp_zoom'), `<div class="rb-stack"><div class="rb-seg"><button type="button" class="rb chip" data-g="zoom-day">${t('g_day')}</button><button type="button" class="rb chip" data-g="zoom-week">${t('g_week')}</button><button type="button" class="rb chip" data-g="zoom-month">${t('g_month')}</button></div><div class="rb-row"><button type="button" class="rb sm icon" data-g="zout" data-tip="${esc(t('g_zoom_out'))}" aria-label="${esc(t('g_zoom_out'))}">${ic('minus')}</button><span class="gt-zl" data-zl data-g="zreset" data-tip="${esc(t('g_zoom_reset'))}" role="button" tabindex="0">100%</span><button type="button" class="rb sm icon" data-g="zin" data-tip="${esc(t('g_zoom_in'))}" aria-label="${esc(t('g_zoom_in'))}">${ic('plus')}</button></div></div>` + L('today', 'today', t('g_today')) + L('goto', 'target', t('g_go_selected')) + L('fit', 'full', t('g_fit')))}
               ${grp(t('g_grp_show'), col(Sm('critical', 'zap', t('g_critical')) + Sm('baseline', 'layers', t('g_baseline_show')) + Sm('legend', 'flag', t('g_legend_short'), t('g_legend'))) + col(Sm('cols', 'cols', t('g_columns_short'), t('g_columns')) + `<select class="gt-level" data-g="level" title="${esc(t('g_show_level'))}" aria-label="${esc(t('g_show_level'))}"></select>`)) + col(Sm('fitcols', 'full', t('g_fit_cols'), t('g_fit_cols_tip')) + Sm('resetcols', 'undo', t('g_reset_cols'), t('g_reset_cols_tip')))}
+              ${grp(t('g_grp_fields'), L('fields', 'cols', t('g_fields'), t('g_fields_tip')))}
               ${grp(t('g_grp_filter'), `<div class="rb-stack wide"><select class="rb-sel" data-g="filter" aria-label="${esc(t('g_filter'))}">${FILTERS.map(([k, label]) => `<option value="${k}">${esc(t(label))}</option>`).join('')}</select><label class="rb-search">${ic('search')}<input type="search" data-g="q" placeholder="${esc(t('g_find'))}" aria-label="${esc(t('g_find'))}"></label></div>`)}
             </div>
             <div class="rb-panel" data-panel="project" hidden>
@@ -383,7 +465,7 @@
 
       // header
       const { h1, h2 } = this.headers(R);
-      const headLeft = this.cols().map((c) => `<div class="hc" style="width:${c[2]}px" data-tip="${esc(this.colTitle(c[1]))}">${esc(this.colTitle(c[1]))}<i class="hc-rs" data-col="${c[1]}" data-tip="${esc(this.t('g_col_drag'))}"></i></div>`).join('');
+      const headLeft = this.cols().map((c) => `<div class="hc" data-k="${c[1]}" style="width:${c[2]}px" data-tip="${esc(this.fieldTitle(c[1]))}">${c[1] === 'mode' ? '' : esc(this.fieldTitle(c[1]))}<i class="hc-rs" data-col="${c[1]}" data-tip="${esc(this.t('g_col_drag'))}"></i></div>`).join('');
       // grid rows
       const dl = `<datalist id="gt-res">${this.resources.map((r) => `<option value="${esc(r)}">`).join('')}</datalist>`;
       const cells = rows.map((t) => this.rowHtml(t)).join('');
@@ -423,7 +505,10 @@
       if (!this.root.classList.contains('gt-resizing')) this.animate(prevIdx, prevGeom);
     }
 
-    colTitle(k) { return { wbs: '#', mode: '', pred: this.t('g_pred'), task: this.t('g_task'), start: this.t('g_start'), dur: this.t('g_dur'), finish: this.t('g_finish'), pct: '%', owner: this.t('g_owner') }[k]; }
+    colTitle(k) {
+      const d = this.fieldDef(k); if (d && d.bl) return this.t(d.end ? 'g_f_bf' : 'g_f_bs', { n: d.bl });
+      return { wbs: '#', mode: '', pred: this.t('g_pred'), task: this.t('g_task'), start: this.t('g_start'), dur: this.t('g_dur'), finish: this.t('g_finish'), pct: '%', owner: this.t('g_owner'), notes: this.t('g_f_notes'), status: this.t('g_f_status'), crit: this.t('g_f_crit'), links: this.t('g_f_links'), jira: this.t('g_f_jira'), svar: this.t('g_f_svar'), fvar: this.t('g_f_fvar') }[k];
+    }
 
     headers(R) {
       const ppd = this.ppd;
@@ -526,7 +611,14 @@
           case 'finish': return `<div class="c dt" ${w}>${t.finish || ''}</div>`;
           case 'pct': return `<div class="c pc ${leaf ? 'ed' : ''}" ${w} data-f="progress" title="${t.progress || 0}%">${t.progress || 0}%</div>`;
           case 'owner': return `<div class="c dt ed" ${w} data-f="assignee" title="${esc(t.assignee || '')}">${esc(t.assignee || '')}</div>`;
+          case 'notes': return `<div class="c nt ed" ${w} data-f="notes" ${t.notes ? `data-tip="${esc(t.notes)}"` : ''}>${esc(t.notes || '')}</div>`;
+          case 'status': { const st = this.status(t); const lbl = this.t({ todo: 'g_l_todo', prog: 'g_l_prog', done: 'g_l_done', late: 'g_l_late' }[st]); return `<div class="c st" ${w}><i class="gt-dot" style="background:var(--g-${st})"></i>${esc(lbl)}</div>`; }
+          case 'crit': return `<div class="c cr" ${w}>${t.critical && !t.summary ? esc(this.t('g_f_yes')) : ''}</div>`;
+          case 'links': return `<div class="c lk" ${w}>${this.linkCount(t) || ''}</div>`;
+          case 'jira': return `<div class="c jr" ${w} title="${esc(t.jira_key || '')}">${esc(t.jira_key || '')}</div>`;
+          case 'svar': case 'fvar': { const a = c[1] === 'svar' ? t.start : t.finish, b = c[1] === 'svar' ? t.b_start : t.b_end; if (!a || !b) return `<div class="c dt" ${w}></div>`; const n = diff(b, a); return `<div class="c dt var ${n > 0 ? 'bad' : n < 0 ? 'good' : ''}" ${w} data-tip="${esc(this.t('g_f_var_tip', { d: b }))}">${n > 0 ? '+' : ''}${n}d</div>`; }
         }
+        { const d = this.fieldDef(c[1]); if (d && d.bl) { const v = (t.bl || [])[this.baselines.findIndex((b) => b.n === d.bl)]; return `<div class="c dt" ${w}>${v ? v[d.end ? 1 : 0] : ''}</div>`; } }
         return '';
       };
       return `<div class="gt-cells ${sel} ${t.summary ? 'sum' : ''} ${t.flag ? 'flag' : ''}" data-row="${t.id}" style="height:${ROW}px">${cols.map(cell).join('')}</div>`;
@@ -675,6 +767,99 @@
       window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
     }
 
+    // ---------- hover between two headers: a small control adds a field there or removes the field before it ----------
+    bindHeadGap() {
+      const hl = this.inner.querySelector('.gt-head-left'); if (!hl) return;
+      const ctl = document.createElement('div');
+      ctl.className = 'gt-gapctl'; ctl.hidden = true;
+      hl.appendChild(ctl);
+      let cur = null;
+      const hide = () => { ctl.hidden = true; cur = null; };
+      hl.addEventListener('pointerleave', hide);
+      hl.addEventListener('pointermove', (e) => {
+        if (e.pointerType === 'touch' || e.target.closest('.gt-gapctl') || this.root.classList.contains('gt-resizing')) return;
+        const hr = hl.getBoundingClientRect(), rtl = getComputedStyle(hl).direction === 'rtl';
+        let hit = null;
+        for (const hc of hl.querySelectorAll('.hc')) {
+          const r = hc.getBoundingClientRect(), edge = rtl ? r.left : r.right;
+          if (Math.abs(e.clientX - edge) <= 12 && edge > hr.left + 4 && edge < hr.right + 4) { hit = { key: hc.dataset.k, edge }; break; }
+        }
+        if (!hit) return hide();
+        if (cur === hit.key && !ctl.hidden) return;
+        cur = hit.key;
+        const d = this.fieldDef(hit.key), rm = d && !d.lock && !this.ui.compact;
+        const name = this.fieldTitle(hit.key);
+        ctl.innerHTML = `<button type="button" class="gt-gap-b" data-act="add" aria-label="${esc(this.t('g_f_add_here'))}" data-tip="${esc(this.t('g_f_add_here'))}">${ic('plus')}</button>${rm ? `<button type="button" class="gt-gap-b rm" data-act="rm" aria-label="${esc(this.t('g_f_remove', { name }))}" data-tip="${esc(this.t('g_f_remove', { name }))}">${ic('x')}</button>` : ''}`;
+        ctl.dataset.k = hit.key;
+        ctl.style.left = `${Math.min(Math.max(hit.edge - hr.left, 26), hr.width - 26)}px`;
+        ctl.hidden = false;
+      });
+      ctl.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-act]'); if (!b) return;
+        e.stopPropagation();
+        const key = ctl.dataset.k;
+        if (b.dataset.act === 'add') this.openFieldMenu(b, key); else { ctl.hidden = true; this.removeField(key); }
+      });
+      ctl.addEventListener('pointerdown', (e) => e.stopPropagation());
+    }
+
+    closeFieldMenu() {
+      if (!this._fm) return;
+      this._fm.el.remove(); document.removeEventListener('pointerdown', this._fm.down, true); document.removeEventListener('keydown', this._fm.key, true);
+      const a = this._fm.anchor; this._fm = null;
+      if (a && a.isConnected) a.focus?.({ preventScroll: true });
+    }
+    // The same menu opens from the toolbar (adds at the end) and from the hover control (adds after that header).
+    openFieldMenu(anchor, afterKey) {
+      this.closeFieldMenu();
+      const t = this.t, el = document.createElement('div');
+      el.className = 'gt-fieldmenu'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', t('g_fields_title'));
+      let after = afterKey;
+      const groups = [['core', 'g_grp_f_core'], ['baseline', 'g_grp_f_baseline'], ['var', 'g_grp_f_var'], ['more', 'g_grp_f_more']];
+      const row = (d) => {
+        const on = this.ui.fields.includes(d.key) && !this.ui.compact || (d.lock && this.ui.compact && ['wbs', 'task'].includes(d.key));
+        let hint = '';
+        if (d.lock) hint = t('g_f_locked');
+        else if (d.bl) { const b = this.baselines.find((x) => x.n === d.bl); hint = b && b.at ? t('g_f_bl_set', { d: String(b.at).slice(0, 10) }) : t('g_f_bl_legacy'); }
+        return `<label class="gt-fm-row${d.lock ? ' lock' : ''}"><input type="checkbox" data-k="${d.key}" ${on ? 'checked' : ''} ${d.lock ? 'disabled' : ''}><span class="n">${esc(this.fieldTitle(d.key))}</span>${hint ? `<small>${esc(hint)}</small>` : ''}</label>`;
+      };
+      const list = this.fieldList();
+      el.innerHTML = `<div class="gt-fm-h"><b>${esc(t('g_fields_title'))}</b>${afterKey ? `<small>${esc(t('g_f_add_here'))}</small>` : ''}</div><div class="gt-fm-body">${groups.map(([g, lbl]) => {
+        const items = list.filter((d) => d.group === g);
+        return `<div class="gt-fm-g"><div class="gt-fm-t">${esc(t(lbl))}</div>${items.length ? items.map(row).join('') : `<div class="gt-fm-empty">${esc(t('g_f_no_bl'))}</div>`}</div>`;
+      }).join('')}</div><div class="gt-fm-f"><button type="button" class="btn small" data-fm="reset">${esc(t('g_f_reset'))}</button><button type="button" class="btn small primary" data-fm="done">${esc(t('g_fm_done'))}</button></div>`;
+      (document.fullscreenElement || document.body).appendChild(el);
+      const place = () => {
+        const r = anchor.getBoundingClientRect(), w = el.offsetWidth, rtl = getComputedStyle(el).direction === 'rtl';
+        let left = rtl ? r.right - w : r.left; left = Math.max(8, Math.min(left, innerWidth - w - 8));
+        const top = Math.max(8, Math.min(r.bottom + 6, innerHeight - 160));
+        el.style.left = `${left}px`; el.style.top = `${top}px`; el.style.maxHeight = `${innerHeight - top - 12}px`;
+      };
+      place();
+      el.addEventListener('change', (e) => {
+        const cb = e.target.closest('input[data-k]'); if (!cb) return;
+        const k = cb.dataset.k;
+        if (cb.checked) { this.addField(k, after); after = k; } else this.removeField(k, true);
+      });
+      el.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-fm]'); if (!b) return;
+        if (b.dataset.fm === 'done') return this.closeFieldMenu();
+        this.resetFields(); this.closeFieldMenu();
+      });
+      const down = (e) => { if (!el.contains(e.target) && !(anchor.contains && anchor.contains(e.target))) this.closeFieldMenu(); };
+      const key = (e) => {
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); this.closeFieldMenu(); return; }
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          const boxes = [...el.querySelectorAll('input:not(:disabled)')], i = boxes.indexOf(document.activeElement);
+          if (i < 0 && !boxes.length) return;
+          e.preventDefault(); boxes[(i + (e.key === 'ArrowDown' ? 1 : -1) + boxes.length) % boxes.length].focus();
+        }
+      };
+      document.addEventListener('pointerdown', down, true); document.addEventListener('keydown', key, true);
+      this._fm = { el, anchor, down, key };
+      el.querySelector('input:not(:disabled)')?.focus({ preventScroll: true });
+    }
+
     // ---------- draggable divider between the table and the timeline ----------
     splitHtml() { return `<div class="gt-split" role="separator" aria-orientation="vertical" tabindex="0" title="${esc(this.t('g_split'))}" aria-label="${esc(this.t('g_split'))}"></div>`; }
     setLeftW(w, save) {
@@ -748,6 +933,7 @@
       if (id === 'critical') { this.ui.critical = !this.ui.critical; return this.render(); }
       if (id === 'baseline') { this.ui.baseline = !this.ui.baseline; return this.render(); }
       if (id === 'cols') { this.ui.compact = !this.ui.compact; return this.render(); }
+      if (id === 'fields') return this.openFieldMenu(b, null);
       if (id === 'fitcols') return this.fitAll();
       if (id === 'resetcols') return this.resetCols();
       if (id === 'expandall') return this.showLevel(0);
@@ -823,6 +1009,7 @@
 
     bind() {
       const left = this.inner.querySelector('.gt-left');
+      this.bindHeadGap();
       left.addEventListener('click', (e) => {
         const car = e.target.closest('[data-caret]');
         if (car) { const id = Number(car.dataset.caret); this.ui.collapsed.has(id) ? this.ui.collapsed.delete(id) : this.ui.collapsed.add(id); this.ui.level = null; this.render(); return; }
@@ -1001,7 +1188,7 @@
     // ---------- inline cell editing ----------
     editCell(cell, t, f) {
       if (!f) return;
-      if (t.summary && f !== 'name' && f !== 'assignee') return;
+      if (t.summary && f !== 'name' && f !== 'assignee' && f !== 'notes') return;
       const orig = f === 'duration' ? t.duration : f === 'progress' ? t.progress : (t[f] || '');
       const input = document.createElement(f === 'assignee' ? 'input' : 'input');
       input.type = f === 'start' ? 'date' : f === 'duration' || f === 'progress' ? 'number' : 'text';
