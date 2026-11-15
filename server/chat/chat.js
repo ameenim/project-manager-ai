@@ -454,7 +454,7 @@ function createChat({ db, store, api, auth, ops, model }) {
   }
   // The person's own thumbs down answers, with the question that led to each, so quality problems can be reviewed.
   async function feedbackList(user) {
-    const r = await q("SELECT m.id, m.text AS answer, m.created_at, t.project_id, (SELECT u.text FROM chat_messages u WHERE u.thread_id = m.thread_id AND u.role = 'user' AND u.id < m.id ORDER BY u.id DESC LIMIT 1) AS question FROM chat_messages m JOIN chat_threads t ON t.id = m.thread_id WHERE t.user_id = $1 AND m.feedback = -1 ORDER BY m.id DESC LIMIT 50", [user.id]);
+    const r = await q("SELECT m.id, m.text AS answer, m.created_at, t.project_id, (SELECT u.text FROM chat_messages u WHERE u.thread_id = m.thread_id AND u.role = 'user' AND u.id < m.id ORDER BY u.id DESC LIMIT 1) AS question FROM chat_messages m JOIN chat_threads t ON t.id = m.thread_id WHERE t.user_id = $1 AND m.feedback = -1 AND (t.project_id IS NULL OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = t.project_id AND pm.user_id = t.user_id)) ORDER BY m.id DESC LIMIT 50", [user.id]);
     return { items: r.rows.map((x) => ({ id: x.id, project_id: x.project_id, question: x.question, answer: clip(x.answer, 600), created_at: x.created_at })) };
   }
   async function clear(user, projectId) {
