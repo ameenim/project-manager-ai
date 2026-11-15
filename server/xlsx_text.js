@@ -1,7 +1,6 @@
 // Reads a spreadsheet into text inside a worker thread.
-// The spreadsheet library has known flaws on crafted files (prototype pollution and slow pattern matching) and no fixed
-// release on npm. In a worker, a polluted object or a runaway match stays in that thread's own memory and the thread is
-// stopped after a time limit, so the server itself is never affected.
+// Keep worker isolation, memory limits and a timeout as defense in depth when
+// parsing untrusted files, even with the patched SheetJS release.
 'use strict';
 const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
 

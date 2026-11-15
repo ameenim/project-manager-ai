@@ -22,7 +22,7 @@
     "pg": "^8.23.1",
     "pptxgenjs": "^4.0.1",
     "ws": "^8.22.1",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "overrides": {
     "image-size": "^2.0.3"

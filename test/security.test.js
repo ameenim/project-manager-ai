@@ -112,6 +112,17 @@ test('an archive that claims to unpack to too much is refused before it is read'
   assert.equal(await openSafeZip(Buffer.from('not a zip')), null);
 });
 
+test('SheetJS stays outside both vulnerable version ranges', () => {
+  const version = require('xlsx').version;
+  const [major, minor, patch] = version.split('.').map(Number);
+  assert.ok(major > 0 || (major === 0 && (minor > 20 || (minor === 20 && patch >= 2))),
+    `SheetJS ${version} must include the prototype pollution and ReDoS fixes`);
+  const lock = require('../package-lock.json');
+  const entries = Object.entries(lock.packages).filter(([name]) => /(^|\/)node_modules\/xlsx$/.test(name));
+  assert.ok(entries.length > 0);
+  for (const [name, entry] of entries) assert.equal(entry.version, version, `${name} must use the patched version`);
+});
+
 test('spreadsheets are read in a separate thread and time out', async () => {
   const XLSX = require('xlsx');
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Task', 'Owner'], ['Design', 'Ann']]), 'Plan');
@@ -120,6 +131,20 @@ test('spreadsheets are read in a separate thread and time out', async () => {
   assert.match(r.text, /Design \| Ann/); assert.equal(r.kind, 'xlsx');
   await assert.rejects(() => readSpreadsheet(buf, { timeoutMs: 1 }), (e) => e.status === 422);
   await assert.rejects(() => readSpreadsheet(Buffer.alloc(26 * 1024 * 1024)), (e) => e.status === 413, 'an oversized workbook is refused');
+});
+
+test('patched SheetJS preserves legacy and modern spreadsheet imports', async () => {
+  const XLSX = require('xlsx');
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Task', 'Budget'], ['تصميم', 123.5]]), 'Plan');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Owner'], ['Ann']]), 'Team');
+  for (const [bookType, ext] of [['biff8', 'xls'], ['xlsx', 'xlsx']]) {
+    const buf = XLSX.write(wb, { type: 'buffer', bookType });
+    const r = await extractText(buf, `plan.${ext}`);
+    assert.equal(r.sheets, 2);
+    assert.match(r.text, /تصميم \| 123\.5/);
+    assert.match(r.text, /Sheet: Team\n\| Owner \|\n\| Ann \|/);
+  }
 });
 
 test('saved connection tokens survive moving from the database key to APP_SECRET', async () => {

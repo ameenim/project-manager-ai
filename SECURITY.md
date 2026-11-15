@@ -43,9 +43,11 @@ Plan changes cannot be made from the browser in production. Prices and plan limi
 
 A secret scanner (npm run scan:secrets) checks the files and, with --history, the whole Git history. CI runs it on every push.
 
-## Known items
+## Spreadsheet dependency
 
-The xlsx package has two published flaws and no fixed release on npm. The app reads spreadsheets in an isolated thread to contain them. When SheetJS publishes a fixed build you can install it from https://cdn.sheetjs.com and remove this note.
+SheetJS (`xlsx`) is pinned to version 0.20.3 from its official CDN, following the [SheetJS installation guidance](https://docs.sheetjs.com/docs/getting-started/installation/nodejs/). The npm registry release remains at 0.18.5 and must not be used: the prototype pollution flaw (GHSA-4r6h-8v6p-xvw6) was fixed in 0.19.3 and the regular expression denial of service flaw (GHSA-5pgg-2g8v-p4x9) was fixed in 0.20.2. The lockfile records the tarball integrity hash. Spreadsheet imports retain worker isolation, memory and size limits, and a timeout as additional safeguards.
+
+## Known items
 
 Styles still allow inline style attributes, so the Content Security Policy keeps style-src 'unsafe-inline'. Scripts never do.
 
