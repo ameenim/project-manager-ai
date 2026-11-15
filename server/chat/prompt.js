@@ -112,6 +112,7 @@ const SUGGESTIONS = {
   documents: { en: ['What does the contract say about penalties?', 'Which documents are in this project?', 'What are the payment terms?'], ar: ['ماذا يقول العقد عن الغرامات؟', 'ما هي المستندات في هذا المشروع؟', 'ما هي شروط الدفع؟'] },
   reports: { en: ['Draft a status update for the steering committee', 'What changed since Monday?', 'How do I generate a report?'], ar: ['صغ تحديث حالة للجنة التوجيهية', 'ما الذي تغير منذ الاثنين؟', 'كيف أنشئ تقريرا؟'] },
   review: { en: ['What is waiting for review?', 'Which items have no source quote?', 'How does the review work?'], ar: ['ما الذي ينتظر المراجعة؟', 'ما العناصر التي ليس لها اقتباس مصدر؟', 'كيف تعمل المراجعة؟'] },
+  widgets: { en: ['Build me a delivery health dashboard', 'Make a widget of late tasks by owner with alert colors', 'Add a risk heat map to this overview'], ar: ['ابنِ لي لوحة متابعة لصحة التسليم', 'أنشئ أداة للمهام المتأخرة حسب المسؤول بألوان تنبيه', 'أضف خريطة حرارية للمخاطر إلى هذه الصفحة'] },
   settings: { en: ['What can each role do?', 'How do I export this project?', 'What can you do?'], ar: ['ماذا يستطيع كل دور أن يفعل؟', 'كيف أصدّر هذا المشروع؟', 'ماذا تستطيع أن تفعل؟'] },
 };
 
@@ -124,6 +125,7 @@ const STARTERS = [
   { id: 'requirements', ready: true, en: { label: 'Cover requirements', q: 'Which requirements have no task and which deliverables have no requirement?' }, ar: { label: 'غطِّ المتطلبات', q: 'ما المتطلبات التي ليس لها مهمة وما المخرجات التي ليس لها متطلب؟' } },
   { id: 'status', ready: true, en: { label: 'Review status', q: 'Give me a short status of where things stand, what changed, and what needs a decision.' }, ar: { label: 'راجع الحالة', q: 'أعطني حالة مختصرة لما وصلنا إليه وما الذي تغير وما الذي يحتاج إلى قرار.' } },
   { id: 'connect', ready: true, en: { label: 'Connect Jira or Outlook', q: 'Guide me step by step through connecting Jira or Outlook.' }, ar: { label: 'اربط Jira أو Outlook', q: 'أرشدني خطوة بخطوة لربط Jira أو Outlook.' } },
+  { id: 'dashboard', ready: true, en: { label: 'Build a dashboard', q: 'Build me a dashboard for this overview that shows delivery health, late work, payments and risks, with alert colors.' }, ar: { label: 'ابنِ لوحة متابعة', q: 'ابنِ لي لوحة متابعة لهذه الصفحة تعرض صحة التسليم والأعمال المتأخرة والدفعات والمخاطر مع ألوان تنبيه.' } },
   { id: 'report', ready: true, en: { label: 'Prepare a report', q: 'Draft a status update for the steering committee.' }, ar: { label: 'جهّز تقريرا', q: 'صغ تحديث حالة للجنة التوجيهية.' } },
 ];
 const startersFor = (lang) => STARTERS.filter((x) => x.ready).map((x) => ({ id: x.id, label: x[lang === 'ar' ? 'ar' : 'en'].label, q: x[lang === 'ar' ? 'ar' : 'en'].q }));
