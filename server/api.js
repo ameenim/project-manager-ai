@@ -1079,8 +1079,12 @@ module.exports = function createApi(store, auth, connectors, ops) {
     return { billing: await billingView() };
   });
   on('GET', '/api/connections', async () => { await connectors.loadConfig(); return { connections: connView() }; });
-  // the owner pastes the app id and secret once, so nobody has to edit secrets or restart
-  on('POST', '/api/connections/(jira|outlook)/setup', async (mm, q, b) => { await connectors.saveConfig(mm[1], b.client_id, b.client_secret); return { connections: connView() }; });
+  // Shared OAuth credentials affect every account, so only a super admin may change them.
+  on('POST', '/api/connections/(jira|outlook)/setup', async (mm, q, b) => {
+    if (!ctx().user.is_super) throw err(403, 'Only super admins can configure shared integrations.');
+    await connectors.saveConfig(mm[1], b.client_id, b.client_secret);
+    return { connections: connView() };
+  });
   // starts the sign in at the service. The browser opens the returned address in a new window.
   on('POST', '/api/connections/(jira|outlook)/start', async (mm) => ({ url: await connectors.begin(ctx().user.id, mm[1], ctx().origin) }));
   // saves a finished connection into this request's view of the person's settings

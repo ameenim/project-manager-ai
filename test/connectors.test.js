@@ -143,17 +143,36 @@ test('connections need a signed in user', async () => {
   assert.equal((await s.call('GET', '/api/connections')).status, 401);
 });
 
-test('the owner can paste the app id and secret in the app, no restart and no environment secrets', async () => {
-  clearEnv(); const u = await s.user();
-  assert.equal((await s.call('POST', '/api/connections/outlook/setup', { client_id: '', client_secret: '' }, u.token)).status, 400);
-  const r = await s.call('POST', '/api/connections/outlook/setup', { client_id: 'pasted-id', client_secret: 'pasted-secret-value' }, u.token);
-  assert.equal(r.status, 200); assert.equal(r.data.connections.outlook.configured, true);
-  assert.ok(!r.buf.toString().includes('pasted-secret-value'), 'the secret is never sent back');
-  const { url } = await connect(u, 'outlook');
+test('only super admins can change shared Jira and Outlook OAuth credentials', async () => {
+  clearEnv();
+  const u = await s.user('Ordinary user');
+  for (const kind of ['jira', 'outlook']) {
+    const denied = await s.call('POST', `/api/connections/${kind}/setup`, { client_id: 'attacker-id', client_secret: 'attacker-secret' }, u.token);
+    assert.equal(denied.status, 403, `${kind} setup is forbidden for regular users`);
+    const row = await s.app.db.query('SELECT value FROM app_secrets WHERE key = $1', [`oauth_${kind}`]);
+    assert.equal(row.rows.length, 0, `${kind} credentials were not saved`);
+    assert.equal((await s.call('POST', `/api/connections/${kind}/setup`, { client_id: '', client_secret: '' }, u.token)).status, 403, 'authorization is checked before credentials are processed');
+  }
+
+  const owner = await s.user('App owner');
+  await s.app.db.query('INSERT INTO user_flags(user_id, is_super) VALUES ($1, true) ON CONFLICT (user_id) DO UPDATE SET is_super = true', [owner.id]);
+  for (const [kind, clientId, clientSecret] of [['jira', 'jira-id', 'jira-secret'], ['outlook', 'pasted-id', 'pasted-secret-value']]) {
+    const saved = await s.call('POST', `/api/connections/${kind}/setup`, { client_id: clientId, client_secret: clientSecret }, owner.token);
+    assert.equal(saved.status, 200);
+    assert.equal(saved.data.connections[kind].configured, true);
+    assert.ok(!saved.buf.toString().includes(clientSecret), `${kind} secret is never sent back`);
+    const before = (await s.app.db.query('SELECT value FROM app_secrets WHERE key = $1', [`oauth_${kind}`])).rows[0].value;
+    assert.ok(!before.includes(clientSecret), `${kind} secret is stored encrypted`);
+
+    const denied = await s.call('POST', `/api/connections/${kind}/setup`, { client_id: 'attacker-id', client_secret: 'attacker-secret' }, u.token);
+    assert.equal(denied.status, 403);
+    const after = (await s.app.db.query('SELECT value FROM app_secrets WHERE key = $1', [`oauth_${kind}`])).rows[0].value;
+    assert.equal(after, before, `${kind} credentials remain unchanged after a denied request`);
+  }
+
+  const { url } = await connect(owner, 'outlook');
   assert.equal(url.searchParams.get('client_id'), 'pasted-id');
-  const row = await s.app.db.query("SELECT value FROM app_secrets WHERE key = 'oauth_outlook'");
-  assert.ok(!row.rows[0].value.includes('pasted-secret-value'), 'stored encrypted');
-  await s.app.db.query("DELETE FROM app_secrets WHERE key = 'oauth_outlook'");
+  await s.app.db.query("DELETE FROM app_secrets WHERE key IN ('oauth_jira', 'oauth_outlook')");
 });
 
 test('Sync now reads new mail and Jira work for the project and never repeats a message', async () => {
