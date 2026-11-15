@@ -903,8 +903,28 @@
       persist(); draw(); const g2 = $(`.dw[data-w="${id}"] .dw-grip`, grid); if (g2) g2.focus();
     });
 
+    // The top filters rule the page: a widget filter that disagrees with a changed top filter is rewritten to match it,
+    // and the viewer is told which widgets were changed.
+    function syncWidgetFilters(f, prev) {
+      if (!flt) return;
+      const names = {};
+      for (const x of (d && d.filter_options && d.filter_options.projects) || []) names[x.id] = x.name;
+      const touched = [];
+      for (const id of Object.keys(cfg.widgets)) {
+        const w = cfg.widgets[id]; if (!w.wf) continue;
+        const wkey = (cfg.key || 'main') + ':' + id, cur = wfGet(wkey);
+        if (!wfOn(cur)) continue;
+        let st = null; try { st = w.wf.statuses ? w.wf.statuses(d).map((x) => x.v) : null; } catch { st = null; }
+        const next = PM.dashFilters.align(cur, f, prev, st, names);
+        if (!next) continue;
+        wfPut(wkey, next); touched.push(wlabel(w));
+      }
+      closeFilter();
+      flt.warn(touched.length ? t('gf_sync_warn', { n: touched.length, list: touched.join(', ') }) : '');
+    }
     if (cfg.filters && PM.dashFilters && $('#dwFlt', host)) {
-      flt = PM.dashFilters.mountBar($('#dwFlt', host), { key: cfg.fkey, scope: cfg.key ? 'project' : 'portfolio', d, onChange: () => {
+      flt = PM.dashFilters.mountBar($('#dwFlt', host), { key: cfg.fkey, scope: cfg.key ? 'project' : 'portfolio', d, onChange: (f, prev) => {
+        syncWidgetFilters(f, prev);
         grid.setAttribute('aria-busy', 'true'); grid.classList.add('dw-load');
         ctx.reload().catch((e) => { if (!e.stale) PM.toast(t('gf_failed'), 'err'); }).finally(() => { grid.removeAttribute('aria-busy'); grid.classList.remove('dw-load'); });
       } });

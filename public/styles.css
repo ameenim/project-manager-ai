@@ -2179,6 +2179,9 @@ body.chat-full { overflow: hidden; }
 .gf-f select, .gf-f .dd-btn { min-height: 39px; min-width: 120px; max-width: 200px; }
 .gf-f .dd { position: relative; }
 .gf-note { min-height: 18px; margin-top: 6px; }
+.gf-warn { display: flex; align-items: center; gap: 8px; margin-top: 6px; padding: 6px 6px 6px 10px; border-radius: var(--r-pill); background: var(--warning-soft); color: var(--warning); font-weight: 600; width: fit-content; max-width: 100%; }
+.gf-warn[hidden] { display: none; }
+.gf-warn > span { display: inline-flex; align-items: center; gap: 6px; min-width: 0; } .gf-warn .i { width: 14px; height: 14px; flex: none; }
 .dw-empty { padding: 14px 16px; margin-bottom: 12px; border: 1px dashed var(--border-strong); border-radius: var(--r-l); color: var(--muted); font-size: var(--fs-body); }
 .dw-empty[hidden] { display: none; }
 .dw-grid.dw-load { opacity: .6; transition: opacity .15s var(--ease); pointer-events: none; }
