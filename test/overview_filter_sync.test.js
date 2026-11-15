@@ -56,3 +56,14 @@ test('the dashboard wires the sync into the top filter and shows a dismissible w
   const i18n = fs.readFileSync(path.join(PUB, 'i18n.js'), 'utf8');
   assert.equal((i18n.match(/gf_sync_warn:/g) || []).length, 2, 'English and Arabic');
 });
+
+test('the export dialog opens the same filters, edits apply to the overview and the export waits for them', () => {
+  const rep = fs.readFileSync(path.join(PUB, 'app_dash_report.js'), 'utf8');
+  assert.match(rep, /mountBar\(box, \{ key: o\.fkey/);
+  assert.match(rep, /o\.apply\(nf, prev\)/);
+  assert.match(rep, /await pending;/);
+  const dash = fs.readFileSync(path.join(PUB, 'app_dash.js'), 'utf8');
+  assert.match(dash, /apply: \(f, prev\) => \(applyFilters/);
+  assert.match(dash, /applyFilters = \(f, prev\) => \{\s*syncWidgetFilters\(f, prev\)/);
+  assert.equal((fs.readFileSync(path.join(PUB, 'i18n.js'), 'utf8').match(/ex_filters_edit:/g) || []).length, 2);
+});

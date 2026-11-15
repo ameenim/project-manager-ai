@@ -594,7 +594,7 @@
     };
     // filters: the saved filter is sent with every fetch and only the latest answer is used
     const fq = () => (cfg.filters && PM.dashFilters ? PM.dashFilters.query(cfg.fkey) : '');
-    let seq = 0, flt = null;
+    let seq = 0, flt = null, applyFilters = null;
     const load = async () => { const n = ++seq, r = await cfg.fetch(fq()); if (n !== seq) throw Object.assign(new Error('stale'), { stale: true }); return r; };
     function afterLoad() {
       if (flt) flt.update(d);
@@ -923,15 +923,17 @@
       flt.warn(touched.length ? t('gf_sync_warn', { n: touched.length, list: touched.join(', ') }) : '');
     }
     if (cfg.filters && PM.dashFilters && $('#dwFlt', host)) {
-      flt = PM.dashFilters.mountBar($('#dwFlt', host), { key: cfg.fkey, scope: cfg.key ? 'project' : 'portfolio', d, onChange: (f, prev) => {
+      // one entry for every place that edits the top filters (the bar and the export dialog): align the widgets, then reload
+      applyFilters = (f, prev) => {
         syncWidgetFilters(f, prev);
         grid.setAttribute('aria-busy', 'true'); grid.classList.add('dw-load');
-        ctx.reload().catch((e) => { if (!e.stale) PM.toast(t('gf_failed'), 'err'); }).finally(() => { grid.removeAttribute('aria-busy'); grid.classList.remove('dw-load'); });
-      } });
+        return ctx.reload().catch((e) => { if (!e.stale) PM.toast(t('gf_failed'), 'err'); }).finally(() => { grid.removeAttribute('aria-busy'); grid.classList.remove('dw-load'); });
+      };
+      flt = PM.dashFilters.mountBar($('#dwFlt', host), { key: cfg.fkey, scope: cfg.key ? 'project' : 'portfolio', d, onChange: (f, prev) => { applyFilters(f, prev); } });
       afterLoad();
     }
     const exb = $('#dwExport', host);
-    if (exb) exb.onclick = () => PM.dashReport.open({ scope, fkey: cfg.fkey, ctx, mode: modeNow, reportUrl: cfg.reportUrl, items: visible().map((id) => ({ id, label: wlabel(cfg.widgets[id]), w: cfg.widgets[id] })) });
+    if (exb) exb.onclick = () => PM.dashReport.open({ scope, fkey: cfg.fkey, ctx, apply: (f, prev) => (applyFilters ? applyFilters(f, prev) : Promise.resolve()), mode: modeNow, reportUrl: cfg.reportUrl, items: visible().map((id) => ({ id, label: wlabel(cfg.widgets[id]), w: cfg.widgets[id] })) });
     bindTips(host);
     lastW = grid.clientWidth;
     if (window.ResizeObserver) {

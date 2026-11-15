@@ -93,7 +93,8 @@
         <div class="ex-fmt" id="exFmt" role="radiogroup" aria-label="${esc(t('ex_format'))}">${FM.map(([k, l, ic], i) => `<button type="button" role="radio" data-f="${k}" aria-checked="${i === 0}" class="ex-card${i === 0 ? ' on' : ''}"><span class="ex-ic">${icon(ic)}</span><span class="ex-t">${l}</span><span class="ex-d small muted">${esc(t('ex_hint_' + k))}</span></button>`).join('')}</div></section>
       <section class="ex-sec"><div class="row ex-bar"><h3 class="ex-h grow">${esc(t('ex_include'))}<span class="ex-n small muted" id="exCount"></span></h3><button type="button" class="btn sm ghost" id="exAll">${esc(t('ex_all'))}</button><button type="button" class="btn sm ghost" id="exNone">${esc(t('ex_none'))}</button></div>
         <div class="ex-list" id="exList">${items.map((x) => `<label class="ex-opt"><input type="checkbox" data-id="${esc(x.id)}" checked><span>${esc(x.label)}</span></label>`).join('')}</div></section>
-      <div class="ex-note small ${on ? 'on' : ''}" id="exNote">${icon('filter')}<span>${esc(on ? t('ex_filters_on', { f: filterText(f) }) : t('ex_filters_off'))}</span></div>
+      <button type="button" class="ex-note small ${on ? 'on' : ''}" id="exNote" aria-expanded="false" aria-controls="exFlt" title="${esc(t('ex_filters_edit'))}">${icon('filter')}<span class="grow" id="exNoteT">${esc(on ? t('ex_filters_on', { f: filterText(f) }) : t('ex_filters_off'))}</span><span class="ex-edit">${esc(t('ex_filters_edit'))}${icon('chev_d')}</span></button>
+      <div class="ex-flt" id="exFlt" hidden></div>
       <div class="small ex-err" id="exErr" role="alert" hidden></div></div>`,
       footer: `<button class="btn" data-close>${esc(t('cancel'))}</button><button class="btn primary" id="exGo">${icon('file')}${esc(t('ex_go'))}</button>` });
     let fmt = 'docx';
@@ -102,18 +103,35 @@
     $('#exList', m.el).onchange = count; count();
     const setAll = (v) => { $$('#exList input', m.el).forEach((i) => (i.checked = v)); count(); };
     $('#exAll', m.el).onclick = () => setAll(true); $('#exNone', m.el).onclick = () => setAll(false);
+    // the filter note opens the same filters as the overview. Edits apply to the overview too and the report follows them.
+    let bar = null, pending = Promise.resolve();
+    const showNote = () => {
+      const cur = PM.dashFilters.get(o.fkey), nowOn = PM.dashFilters.isOn(cur), n = $('#exNote', m.el);
+      n.classList.toggle('on', nowOn); $('#exNoteT', m.el).textContent = nowOn ? t('ex_filters_on', { f: filterText(cur) }) : t('ex_filters_off');
+    };
+    $('#exNote', m.el).onclick = () => {
+      const box = $('#exFlt', m.el), n = $('#exNote', m.el), open2 = box.hidden;
+      box.hidden = !open2; n.setAttribute('aria-expanded', String(open2));
+      if (open2 && !bar) {
+        bar = PM.dashFilters.mountBar(box, { key: o.fkey, scope: o.scope, d: o.ctx.data, onChange: (nf, prev) => {
+          showNote();
+          pending = Promise.resolve(o.apply ? o.apply(nf, prev) : null).then(() => { if (bar) bar.update(o.ctx.data); showNote(); });
+        } });
+      }
+    };
     $('#exGo', m.el).onclick = async () => {
       const ids = new Set($$('#exList input:checked', m.el).map((i) => i.dataset.id)), err = $('#exErr', m.el), go = $('#exGo', m.el);
       if (!ids.size) { err.textContent = t('ex_need_one'); err.hidden = false; return; }
       err.hidden = true; go.disabled = true; go.setAttribute('aria-busy', 'true');
       try {
+        await pending;
         const qs = PM.dashFilters.query(o.fkey);
         const rd = await api('GET', o.reportUrl + qs);
         const d = o.ctx.data, S = await sections(items.filter((x) => ids.has(x.id)), o.ctx);
         const today = new Date().toISOString().slice(0, 10);
         const proj = portfolio ? t('ex_scope_portfolio') : (d.project && d.project.name) || '';
         const title = portfolio ? t('ex_t_portfolio') : `${t('ex_t_project')} ${proj}`.trim();
-        const meta = { project: proj, client: portfolio ? '' : (d.project && d.project.client) || '', code: portfolio ? '' : (d.project && d.project.code) || '', date: today, pm: PM.state.user && PM.state.user.name || '', filters: rd.filter_text || (on ? filterText(f) : '') };
+        const meta = { project: proj, client: portfolio ? '' : (d.project && d.project.client) || '', code: portfolio ? '' : (d.project && d.project.code) || '', date: today, pm: PM.state.user && PM.state.user.name || '', filters: rd.filter_text || (PM.dashFilters.isOn(PM.dashFilters.get(o.fkey)) ? filterText(PM.dashFilters.get(o.fkey)) : '') };
         const g = { format: fmt, title, type_title: portfolio ? t('ex_t_portfolio') : t('ex_t_project'), meta, doc_type: 'dashboard', content: '', dashboard: { kpis: S.kpis, sections: S.sections, data: fmt === 'xlsx' ? dataOf(rd, o.mode()) : null } };
         const r = await PM.exporter.download(g);
         m.close(); toast(t('ex_ready') + ': ' + r.filename, 'ok');

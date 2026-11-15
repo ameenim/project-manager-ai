@@ -2202,6 +2202,9 @@ body.chat-full { overflow: hidden; }
 .ex-opt { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 4px 8px; border-radius: var(--r-s); cursor: pointer; font-size: var(--fs-body); min-width: 0; }
 .ex-opt:hover { background: var(--primary-soft); } .ex-opt span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ex-note { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: var(--r-m); background: var(--surface-2); color: var(--muted); } .ex-note.on { background: var(--primary-soft); color: var(--text); } .ex-note .i { flex: none; width: 16px; height: 16px; }
+button.ex-note { width: 100%; border: 0; text-align: start; font: inherit; align-items: center; cursor: pointer; transition: box-shadow var(--dur, .18s) ease; } button.ex-note:hover { box-shadow: 0 0 0 1px var(--primary); } button.ex-note:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.ex-edit { display: inline-flex; align-items: center; gap: 4px; flex: none; font-weight: 600; color: var(--primary); } .ex-note[aria-expanded="true"] .ex-edit .i { transform: rotate(180deg); }
+.ex-flt { margin-top: 8px; padding: 12px; border-radius: var(--r-m); background: var(--surface-2); } .ex-flt[hidden] { display: none; }
 .ex-err { padding: 10px 12px; border-radius: var(--r-m); background: var(--danger-soft); color: var(--danger); } .ex-err[hidden] { display: none; }
 @media (max-width: 600px) { .ex-fmt, .ex-list { grid-template-columns: 1fr; } }
 
