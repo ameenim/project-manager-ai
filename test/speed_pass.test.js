@@ -118,14 +118,14 @@ test('lists are paged only when asked, and a page says how many there are and wh
 });
 
 test('fonts and pictures are kept by the browser, scripts and styles keep their year long version cache', async () => {
-  const font = await raw('/fonts/tajawal-latin-400-normal.woff2');
+  const font = await raw('/fonts/tajawal-latin-500-normal.woff2');
   assert.equal(font.status, 200); assert.match(font.headers['cache-control'], /max-age=2592000/);
   const pic = await raw('/landing/en-light-hero.webp');
   assert.equal(pic.status, 200); assert.match(pic.headers['cache-control'], /max-age=86400.*stale-while-revalidate/);
-  assert.equal((await raw('/fonts/tajawal-latin-400-normal.woff2', { 'if-none-match': font.headers.etag })).status, 304);
+  assert.equal((await raw('/fonts/tajawal-latin-500-normal.woff2', { 'if-none-match': font.headers.etag })).status, 304);
   assert.equal((await raw('/fonts/tajawal-arabic-800-normal.woff2')).status, 404, 'the unused weight is gone');
   const page = (await raw('/app.html')).body.toString();
-  assert.match(page, /rel="preload" href="\/fonts\/tajawal-latin-400-normal\.woff2" as="font"/);
+  assert.match(page, /rel="preload" href="\/fonts\/tajawal-latin-500-normal\.woff2" as="font"/);
   assert.equal(/font-weight: 800/.test(fs.readFileSync(path.join(PUB, 'tokens.css'), 'utf8')), false);
 });
 
@@ -196,7 +196,7 @@ test('with CDN_URL set, pages name their scripts and styles from the CDN, which 
     const js = await get('/app.js?v=abc');
     assert.equal(js.headers['cross-origin-resource-policy'], 'cross-origin');
     assert.equal(js.headers['access-control-allow-origin'], '*');
-    const font = await get('/fonts/tajawal-latin-400-normal.woff2');
+    const font = await get('/fonts/tajawal-latin-500-normal.woff2');
     assert.equal(font.headers['access-control-allow-origin'], '*');
   } finally {
     await s2.close();
@@ -213,4 +213,19 @@ test('the skeleton markup and styles exist for both text directions and reduced 
   const js = fs.readFileSync(path.join(PUB, 'app_loader.js'), 'utf8');
   for (const k of ['list', 'cards', 'table', 'page']) assert.match(js, new RegExp(k + ':'));
   assert.match(js, /role="status" aria-busy="true"/);
+});
+
+test('every interface weight is Tajawal Medium, only formatted bold in documents and answers stays Bold', () => {
+  const dir = PUB;
+  const css = fs.readdirSync(dir).filter((f) => f.endsWith('.css'));
+  for (const f of css) {
+    const src = fs.readFileSync(path.join(dir, f), 'utf8');
+    if (f === 'tokens.css') continue;
+    assert.equal(/font-weight\s*:[ \t]*(?![ \t])(?!var\(--fw\)|var\(--fw-strong\))/.test(src), false, `${f} sets a raw font weight`);
+  }
+  const tokens = fs.readFileSync(path.join(dir, 'tokens.css'), 'utf8');
+  assert.match(tokens, /--fw:\s*500/);
+  for (const f of ['site.css', 'styles.css']) assert.match(fs.readFileSync(path.join(dir, f), 'utf8'), /\nbody \{[^}]*font: var\(--fw\) /, `${f} body shorthand keeps Medium`);
+  assert.equal(/font-weight:\s*400/.test(tokens), false, 'the Regular weight is gone');
+  assert.equal(fs.existsSync(path.join(dir, 'fonts', 'tajawal-latin-400-normal.woff2')), false);
 });

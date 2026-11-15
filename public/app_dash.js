@@ -290,7 +290,7 @@
       size: 'l', title: 'portfolio',
       render(body, d) {
         if (!d.projects.length) { body.innerHTML = PM.data.emptyState(); PM.data.bindEmpty(body); return { csv: () => [] }; }
-        const rows = d.projects.map((p) => `<tr style="cursor:pointer" data-go="#/p/${p.id}/overview"><td><div style="font-weight:600">${esc(p.name)}</div><div class="small muted">${esc(p.client || '')}</div></td><td>${PM.healthChip(p.stats.health)}</td>
+        const rows = d.projects.map((p) => `<tr style="cursor:pointer" data-go="#/p/${p.id}/overview"><td><div style="font-weight:var(--fw)">${esc(p.name)}</div><div class="small muted">${esc(p.client || '')}</div></td><td>${PM.healthChip(p.stats.health)}</td>
           <td style="min-width:150px"><div class="row small"><span class="grow">${p.stats.progress}%</span>${p.stats.planned != null ? `<span class="muted">${t('planned')} ${p.stats.planned}%</span>` : ''}</div><div class="progress"><i style="width:${p.stats.progress}%"></i></div></td>
           <td class="nowrap">${p.stats.forecast_end || '-'}</td><td>${p.stats.overdue ? `<span class="chip red">${p.stats.overdue}</span>` : '<span class="muted">0</span>'}</td>
           <td>${p.stats.pendingItems + p.stats.pendingInbox ? `<span class="badge-count">${p.stats.pendingItems + p.stats.pendingInbox}</span>` : ''}</td></tr>`).join('');
@@ -456,7 +456,7 @@
       const cv = document.createElement('canvas'); cv.width = (w + pad * 2) * scale; cv.height = (h + pad * 2 + head) * scale;
       const c = cv.getContext('2d'); c.scale(scale, scale);
       c.fillStyle = surface; c.fillRect(0, 0, cv.width, cv.height);
-      c.fillStyle = ink; c.font = '700 20px Tajawal, sans-serif'; c.fillText(wlabel(cfg.widgets[id]), pad, pad + 16);
+      c.fillStyle = ink; c.font = '500 20px Tajawal, sans-serif'; c.fillText(wlabel(cfg.widgets[id]), pad, pad + 16);
       c.drawImage(img, pad, pad + head, w, h);
       cv.toBlob((b) => fileOut(`${slug(wlabel(cfg.widgets[id]))}.png`, b), 'image/png');
     };

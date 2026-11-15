@@ -338,7 +338,7 @@
     function body() {
       if (step === 0) return `<div class="ob-hero"><h3>${t('ob_welcome_h')}</h3><p class="muted" style="margin:0">${t('ob_welcome_p')}</p>
         <div class="ob-trial"><b>${t('ob_trial_h')}</b><span>${t('ob_trial_p')}</span></div>
-        <div><div class="sub" style="font-weight:600;margin-bottom:4px">${t('ob_next_h')}</div><ol class="cw-list" style="margin:0"><li>${t('ob_n1')}</li><li>${t('ob_n2')}</li><li>${t('ob_n3')}</li></ol></div></div>`;
+        <div><div class="sub" style="font-weight:var(--fw);margin-bottom:4px">${t('ob_next_h')}</div><ol class="cw-list" style="margin:0"><li>${t('ob_n1')}</li><li>${t('ob_n2')}</li><li>${t('ob_n3')}</li></ol></div></div>`;
       if (step === 1) return `<h3 style="margin-bottom:4px">${t('ob_details_h')}</h3><p class="muted" style="margin-top:0">${t('ob_details_p')}</p>
         <div class="form-grid">
           <div class="f full"><label for="obName">${t('ob_name')}</label><input type="text" id="obName" value="${esc(d.name)}" autocomplete="name" aria-describedby="obErrName"><div class="ob-err" id="obErrName" role="alert"></div></div>
@@ -486,7 +486,7 @@
           <div class="bl-metric">${tok(B.tokens)}</div><div class="small muted">${esc(t('rb_tokens_of', { used: t('bl_used'), limit: tok(LIMIT) }))}</div>
           <div class="progress ${meterTone === 'red' ? '' : ''} bl-meter ${meterTone}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${i.pct}" aria-label="${esc(t('bl_tokens'))}"><i style="width:${i.pct}%"></i></div>
           <div class="row small muted"><span class="grow">${esc(t('bl_remaining', { n: tok(i.tokensLeft) }))}</span><span>${esc(t(i.paid ? 'bl_reset' : 'bl_ends', { date: dfmt(i.end) }))}</span></div>
-          <div class="sub" style="font-weight:600;margin:14px 0 4px">${t('bl_uses_h')}</div>
+          <div class="sub" style="font-weight:var(--fw);margin:14px 0 4px">${t('bl_uses_h')}</div>
           <ul class="bl-uses">${['bl_u1', 'bl_u2', 'bl_u3', 'bl_u4'].map((k) => `<li>${t(k)}</li>`).join('')}</ul>
         </section>
       </div>

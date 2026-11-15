@@ -7,14 +7,14 @@
 .ribbon.paid { background: var(--success-soft); }
 .ribbon.warn { background: var(--warning-soft); }
 .ribbon.bad { background: var(--danger-soft); }
-.rb-status { display: flex; align-items: center; gap: 8px; flex: 1 1 220px; min-width: 0; font-weight: 600; }
+.rb-status { display: flex; align-items: center; gap: 8px; flex: 1 1 220px; min-width: 0; font-weight:var(--fw); }
 .rb-status span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ribbon.ok .rb-status svg { color: var(--primary); }
 .ribbon.paid .rb-status svg { color: var(--success); }
 .ribbon.warn .rb-status svg { color: var(--warning); }
 .ribbon.bad .rb-status svg { color: var(--danger); }
 .rb-tokens { display: flex; align-items: center; gap: 8px; font-size: var(--fs-small); color: var(--muted); border-radius: var(--r-s); padding: 2px 4px; }
-.rb-tokens b { color: var(--text); font-size: var(--fs-body); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rb-tokens b { color: var(--text); font-size: var(--fs-body); font-weight:var(--fw); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .rb-tokens:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .rb-meter { width: 110px; flex: none; }
 .rb-tokens.warn .progress > i { background: var(--warning); }
@@ -44,7 +44,7 @@
 /* first login setup */
 .ob-hero { display: grid; gap: 14px; }
 .ob-trial { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 14px; padding: 16px 18px; border-radius: var(--radius); background: var(--primary-soft); }
-.ob-trial b { font-size: var(--fs-metric); font-weight: 650; color: var(--primary); line-height: 1.1; }
+.ob-trial b { font-size: var(--fs-metric); font-weight:var(--fw); color: var(--primary); line-height: 1.1; }
 .ob-trial span { color: var(--text); flex: 1 1 220px; }
 .ob-body { min-height: 260px; }
 .ob-phone { display: grid; grid-template-columns: minmax(220px, 290px) 1fr; gap: 10px; }
@@ -70,18 +70,18 @@ input[aria-invalid="true"] { border-color: var(--danger); }
 .sub-plan { padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
 .sub-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .sub-price { display: flex; align-items: baseline; gap: 6px; color: var(--muted); }
-.sub-price b { font-size: var(--fs-metric); font-weight: 650; color: var(--text); line-height: 1.1; }
+.sub-price b { font-size: var(--fs-metric); font-weight:var(--fw); color: var(--text); line-height: 1.1; }
 .sub-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
 .sub-list li { display: flex; align-items: center; gap: 8px; }
 .sub-list svg { color: var(--success); }
 .sub-sum { display: grid; gap: 6px; margin: 16px 0 0; padding: 12px 14px; border-radius: var(--radius); background: var(--surface-2); border: 1px solid var(--border); }
 .sub-sum div { display: flex; justify-content: space-between; gap: 12px; }
 .sub-sum dt { color: var(--muted); }
-.sub-sum dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sub-sum dd { margin: 0; font-weight:var(--fw); font-variant-numeric: tabular-nums; }
 
 /* billing page */
 .bl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 16px; }
-.bl-metric { font-size: var(--fs-metric); font-weight: 650; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.bl-metric { font-size: var(--fs-metric); font-weight:var(--fw); line-height: 1.1; font-variant-numeric: tabular-nums; }
 .bl-meter { margin: 12px 0 8px; }
 .bl-meter.amber > i { background: var(--warning); }
 .bl-meter.red > i { background: var(--danger); }

@@ -341,7 +341,7 @@
 
   function authView(mode) {
     $('#app').innerHTML = `<div class="auth"><div class="card"><div class="brand" style="padding-inline:0"><div class="logo">${PM.logo.mark()}</div><span>${t('app_name')}</span></div>
-      <h2 style="margin:6px 0 4px">${mode === 'login' ? t('sign_in') : t('create_account')}</h2><p class="muted" style="margin:0 0 ${mode === 'register' ? '8px' : '16px'}">${t('auth_sub')}</p>${mode === 'register' ? `<p class="small" style="margin:0 0 16px;color:var(--primary-600);font-weight:600">${t('ob_trial_note')}</p>` : ''}
+      <h2 style="margin:6px 0 4px">${mode === 'login' ? t('sign_in') : t('create_account')}</h2><p class="muted" style="margin:0 0 ${mode === 'register' ? '8px' : '16px'}">${t('auth_sub')}</p>${mode === 'register' ? `<p class="small" style="margin:0 0 16px;color:var(--primary-600);font-weight:var(--fw)">${t('ob_trial_note')}</p>` : ''}
       <form id="authForm" class="col">
         ${mode === 'register' ? `<label class="f">${t('name')}<input type="text" name="name" required autocomplete="name"></label>` : ''}
         <label class="f">${t('email')}<input type="email" name="email" required autocomplete="email"></label>
@@ -386,7 +386,7 @@
         <div class="pref"><span class="pref-ic">${icon(S.theme === 'dark' ? 'moon' : 'sun')}</span><span class="grow">${t('dark_mode')}</span><button type="button" class="tgl ${S.theme === 'dark' ? 'on' : ''}" id="themeBtn" role="switch" aria-checked="${S.theme === 'dark'}" aria-label="${t('dark_mode')}" data-tip="${t('dark_mode')}"><i>${icon(S.theme === 'dark' ? 'moon' : 'sun')}</i></button></div>
         <div class="pref"><span class="pref-ic">${icon('globe')}</span><span class="grow">${t('language')}</span><button type="button" class="seg2" id="langBtn" aria-label="${t('language')}" data-tip="${t('language')}"><span class="${S.lang !== 'ar' ? 'on' : ''}">EN</span><span class="${S.lang === 'ar' ? 'on' : ''}">عربي</span></button></div>
       </div>
-      <div class="user-row"><a class="user-chip grow" href="#/account" style="text-decoration:none;color:inherit">${avatarHtml(S.user)}<div class="grow" style="min-width:0"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(S.user.name)}</div><div class="small muted">${t('account_settings')}</div></div></a>
+      <div class="user-row"><a class="user-chip grow" href="#/account" style="text-decoration:none;color:inherit">${avatarHtml(S.user)}<div class="grow" style="min-width:0"><div style="font-weight:var(--fw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(S.user.name)}</div><div class="small muted">${t('account_settings')}</div></div></a>
         <button type="button" class="btn ghost icon" id="logoutBtn" aria-label="${t('sign_out')}" data-tip="${t('sign_out')}">${icon('logout')}</button></div></aside>
       <main class="main" id="main">${projHead || ''}<div id="content">${content}</div></main></div>`;
     // hide and show the side menu, remembered between visits
@@ -499,12 +499,12 @@
     const unassigned = d.unassigned ? (await api('GET', '/api/inbox/unassigned')).inbox : [];
     const kpi = (v, l, cls = '') => `<div class="card kpi"><div class="v ${cls}">${v}</div><div class="l">${l}</div></div>`;
     const totals = Object.entries(d.totalValue).map(([c, v]) => money(v, c)).join(' + ') || '0';
-    const rows = d.projects.map((p) => `<tr style="cursor:pointer" data-go="#/p/${p.id}/overview"><td><div style="font-weight:600">${esc(p.name)}</div><div class="small muted">${esc(p.client || '')}</div></td><td>${healthChip(p.stats.health)}</td>
+    const rows = d.projects.map((p) => `<tr style="cursor:pointer" data-go="#/p/${p.id}/overview"><td><div style="font-weight:var(--fw)">${esc(p.name)}</div><div class="small muted">${esc(p.client || '')}</div></td><td>${healthChip(p.stats.health)}</td>
       <td style="min-width:150px"><div class="row small"><span class="grow">${p.stats.progress}%</span>${p.stats.planned != null ? `<span class="muted">${t('planned')} ${p.stats.planned}%</span>` : ''}</div><div class="progress"><i style="width:${p.stats.progress}%"></i></div></td>
       <td class="nowrap">${p.stats.forecast_end || '-'}</td><td>${p.stats.overdue ? `<span class="chip red">${p.stats.overdue}</span>` : '<span class="muted">0</span>'}</td>
       <td>${p.stats.pendingItems + p.stats.pendingInbox ? `<span class="badge-count">${p.stats.pendingItems + p.stats.pendingInbox}</span>` : ''}</td></tr>`).join('');
-    const pay = d.payments.map((x) => `<div class="list-item"><div class="grow"><div style="font-weight:600">${esc(x.title)}</div><div class="small muted">${esc(x.project)}</div></div><div class="right"><div>${x.amount != null ? money(x.amount, x.currency) : ''}</div><div class="small ${x.late ? '' : 'muted'}" style="${x.late ? 'color:var(--danger)' : ''}">${x.due}${x.late ? ` (${t('late')})` : ''}</div></div></div>`).join('');
-    const od = d.overdue.map((x) => `<div class="list-item"><div class="grow"><div style="font-weight:600">${esc(x.task)}</div><div class="small muted">${esc(x.project)}${x.assignee ? ` · ${esc(x.assignee)}` : ''}</div></div><div class="right small" style="color:var(--danger)">${x.finish}<div class="muted">${x.progress}%</div></div></div>`).join('');
+    const pay = d.payments.map((x) => `<div class="list-item"><div class="grow"><div style="font-weight:var(--fw)">${esc(x.title)}</div><div class="small muted">${esc(x.project)}</div></div><div class="right"><div>${x.amount != null ? money(x.amount, x.currency) : ''}</div><div class="small ${x.late ? '' : 'muted'}" style="${x.late ? 'color:var(--danger)' : ''}">${x.due}${x.late ? ` (${t('late')})` : ''}</div></div></div>`).join('');
+    const od = d.overdue.map((x) => `<div class="list-item"><div class="grow"><div style="font-weight:var(--fw)">${esc(x.task)}</div><div class="small muted">${esc(x.project)}${x.assignee ? ` · ${esc(x.assignee)}` : ''}</div></div><div class="right small" style="color:var(--danger)">${x.finish}<div class="muted">${x.progress}%</div></div></div>`).join('');
     const act = d.activity.map((a) => `<div class="list-item"><div class="grow"><div>${esc(a.detail.summary || a.action)}</div><div class="small muted">${esc(a.project)} · ${esc(a.actor)} · ${esc((a.ts || '').slice(0, 16))}</div></div></div>`).join('');
     $('#content').innerHTML = `<div class="page dash">
       <div class="page-head"><h1>${t('welcome', { name: esc(S.user.name.split(' ')[0]) })}</h1><button class="btn primary" id="newProj">${icon('plus')}${t('new_project')}</button></div>
@@ -533,7 +533,7 @@
   function newProjectDialog() {
     let files = [];
     const m = modal({ title: t('new_project'), size: 'lg', body: `<form id="npForm" class="col gap-lg"><label class="f">${t('project_name')}<input type="text" id="npName" required placeholder="${t('project_name_ph')}"></label>
-      <div><div style="font-weight:600;margin-bottom:4px">${t('attach_docs')}</div><div class="small muted" style="margin-bottom:8px">${t('attach_docs_hint')}</div><div id="npDrop"></div><div class="filelist" id="npFiles"></div></div>
+      <div><div style="font-weight:var(--fw);margin-bottom:4px">${t('attach_docs')}</div><div class="small muted" style="margin-bottom:8px">${t('attach_docs_hint')}</div><div id="npDrop"></div><div class="filelist" id="npFiles"></div></div>
       <div class="banner">${icon('spark')}<div class="small">${t('np_explain')}</div></div></form>`, footer: `<button class="btn" data-close>${t('cancel')}</button><button class="btn primary" id="npGo">${icon('spark')}${t('create_analyze')}</button>` });
     const list = () => { m.$('#npFiles').innerHTML = files.map((f, i) => `<div class="fi">${icon('file')}<span class="grow">${esc(f.name)}</span><span class="small muted">${(f.size / 1024).toFixed(0)} KB</span><button type="button" class="btn ghost icon sm" data-rm="${i}">${icon('x')}</button></div>`).join(''); m.$$('[data-rm]').forEach((b) => (b.onclick = () => { files.splice(Number(b.dataset.rm), 1); list(); })); };
     dropzone(m.$('#npDrop'), { accept: '.pdf,.docx,.pptx,.xlsx,.xls,.csv,.txt,.md,.png,.jpg,.jpeg,.webp,.gif,.xml,.mpp', onFiles: (f) => { files = files.concat(f).slice(0, 12); list(); } });
@@ -557,7 +557,7 @@
     shell('', '');
     const u = S.user;
     $('#content').innerHTML = `<div class="page" style="max-width:760px"><div class="page-head"><h1>${t('account_settings')}</h1></div>
-      <div class="card"><div class="row gap-lg">${avatarHtml(u, 'lg')}<div class="grow"><div style="font-weight:600;font-size:var(--fs-heading)">${esc(u.name)}</div><div class="muted">${esc(u.email)}</div></div><label class="btn"><input type="file" id="avFile" accept="image/*" class="hidden">${icon('upload')}${t('upload_photo')}</label></div></div>
+      <div class="card"><div class="row gap-lg">${avatarHtml(u, 'lg')}<div class="grow"><div style="font-weight:var(--fw);font-size:var(--fs-heading)">${esc(u.name)}</div><div class="muted">${esc(u.email)}</div></div><label class="btn"><input type="file" id="avFile" accept="image/*" class="hidden">${icon('upload')}${t('upload_photo')}</label></div></div>
       <div class="card mt"><div class="card-head"><h3>${t('profile')}</h3></div><div class="form-grid"><label class="f">${t('name')}<input type="text" id="acName" value="${esc(u.name)}"></label><label class="f">${t('email')}<input type="text" value="${esc(u.email)}" disabled></label>
         <label class="f">${t('ob_mobile')}<input type="tel" id="acPhone" dir="ltr" value="${esc(PM.onboard ? PM.onboard.phone() : '')}" placeholder="+971501234567" inputmode="tel" autocomplete="tel"></label><span></span>
         <label class="f">${t('interface_language')}<select id="acLang"><option value="en" ${S.lang === 'en' ? 'selected' : ''}>English</option><option value="ar" ${S.lang === 'ar' ? 'selected' : ''}>العربية</option></select></label>

@@ -226,7 +226,7 @@
     try { var len = Math.ceil(line.getTotalLength()) + 2; line.style.setProperty('--len', len); } catch (e) { /* length unavailable */ }
     el('circle', { 'class': 'endpt', cx: X(5), cy: Y(68), r: 5 }, svg);
     var l1 = text(svg, X(5), Y(72) - 12, 'Plan 72%', 'middle', 'lbl');
-    var l2 = text(svg, X(5), Y(68) + 24, 'Actual 68%', 'middle', 'lbl'); l2.style.fill = 'var(--primary)'; l2.style.fontWeight = '600';
+    var l2 = text(svg, X(5), Y(68) + 24, 'Actual 68%', 'middle', 'lbl'); l2.style.fill = 'var(--primary)'; l2.style.fontWeight = '500';
   }
 
   var barBox = $('#barChart');

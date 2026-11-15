@@ -9,7 +9,7 @@
 
   // One dialog for closing a deliverable or requirement as not delivered. The Logs tab uses it too.
   PM.askNotDelivered = function (r, done) {
-    const m = modal({ title: t('cl_nd_title'), size: 'md', body: `<div class="form-grid"><div class="full" style="font-weight:600;unicode-bidi:plaintext">${esc(r.title)}</div>
+    const m = modal({ title: t('cl_nd_title'), size: 'md', body: `<div class="form-grid"><div class="full" style="font-weight:var(--fw);unicode-bidi:plaintext">${esc(r.title)}</div>
       <label class="f full">${t('cl_nd_reason')}<textarea id="clWhy" rows="4" maxlength="600" placeholder="${esc(t('cl_nd_ph'))}">${esc(r.reason || '')}</textarea><span class="small muted">${t('cl_nd_help')}</span><span class="small" id="clWhyErr" role="alert" style="color:var(--danger)"></span></label></div>`,
     footer: `<button class="btn" data-close>${t('cancel')}</button><button class="btn primary" id="clWhySave">${t('save')}</button>` });
     const box = m.$('#clWhy'); box.focus();
@@ -79,7 +79,7 @@
           ? `<button class="btn sm ghost" data-not="${r.id}" ${tip('cl_tip_not')}>${icon('x')}${t('cl_a_not')}</button><button class="btn sm ghost" data-reopen="${r.id}" ${tip('cl_tip_reopen')}>${icon('undo')}${t('cl_a_reopen')}</button>`
           : `<button class="btn sm ghost" data-not="${r.id}" ${tip('cl_tip_edit')}>${icon('edit')}${t('cl_a_edit')}</button><button class="btn sm ghost" data-deliver="${r.id}" ${tip('cl_tip_deliver')}>${icon('check')}${t('cl_a_deliver')}</button><button class="btn sm ghost" data-reopen="${r.id}" ${tip('cl_tip_reopen')}>${icon('undo')}${t('cl_a_reopen')}</button>`;
       return `<tr><td class="nowrap"><span class="chip">${t('cl_kind_' + r.kind)}</span></td>
-        <td style="min-width:200px"><div style="font-weight:600;unicode-bidi:plaintext">${esc(r.title)}</div>${r.outcome === 'not_delivered' ? `<div class="cl-reason">${esc(r.reason)}</div>` : ''}</td>
+        <td style="min-width:200px"><div style="font-weight:var(--fw);unicode-bidi:plaintext">${esc(r.title)}</div>${r.outcome === 'not_delivered' ? `<div class="cl-reason">${esc(r.reason)}</div>` : ''}</td>
         <td class="nowrap small">${esc(r.due || '')}</td><td class="nowrap"><span class="chip ${chipOf(r.outcome)}">${t(r.outcome === 'open' ? 'cl_open' : r.outcome === 'delivered' ? 'cl_delivered' : 'cl_not_delivered')}</span></td>
         <td><div class="cl-actions">${acts}</div></td></tr>`;
     }

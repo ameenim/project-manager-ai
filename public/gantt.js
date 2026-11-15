@@ -651,7 +651,7 @@
       }
       if (t.summary) {
         html += `<div class="gt-bar gt-sum ${sel}" data-id="${t.id}" style="left:${g.left}px;top:${i * ROW + 12}px;width:${g.width}px;height:10px"><div class="fill" style="width:${t.progress}%"></div></div>`;
-        html += `<div class="gt-ext" style="left:${g.left + g.width + 8}px;top:${i * ROW + 8}px;line-height:18px;font-weight:600">${esc(t.name)}</div>`;
+        html += `<div class="gt-ext" style="left:${g.left + g.width + 8}px;top:${i * ROW + 8}px;line-height:18px;font-weight:var(--fw)">${esc(t.name)}</div>`;
         return html;
       }
       const label = g.width > 70 ? esc(t.name) : '';

@@ -20,7 +20,7 @@ body { background: transparent; }
   .main:has(.page.wide) .proj-head { width: calc(100% - 56px); }
   .proj-head .cl-head-note { margin-block: 12px; }
 }
-.nav a.active { background: var(--glass-dense); font-weight: 700; }
+.nav a.active { background: var(--glass-dense); font-weight:var(--fw); }
 .nav > .ui-ind { background: var(--glass-dense); box-shadow: var(--glass-shadow); }
 .nav a:hover:not(.active) { background: var(--glass-hover); }
 .brand .logo { box-shadow: 0 6px 16px -6px var(--primary), inset 0 1px 0 var(--glass-rim); }
@@ -101,7 +101,7 @@ body { background: transparent; }
     -webkit-mask-image: linear-gradient(to right, transparent 0, black 14px, black calc(100% - 14px), transparent 100%); mask-image: linear-gradient(to right, transparent 0, black 14px, black calc(100% - 14px), transparent 100%); }
   .proj-head .tabs::-webkit-scrollbar { display: none; }
   .proj-head .tab { position: relative; z-index: 1; min-height: 40px; padding: 0 14px; border-radius: var(--r-pill); border-bottom: 0; scroll-snap-align: center; flex: none; }
-  .proj-head .tab.active { color: var(--primary); font-weight: 700; }
+  .proj-head .tab.active { color: var(--primary); font-weight:var(--fw); }
   .proj-head .tabs > .ui-ind { top: 4px; bottom: 4px; height: auto; border-radius: var(--r-pill); background: var(--glass-dense); box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-rim); }
   .proj-head .tabs:not(.has-ind) .tab.active { background: var(--glass-dense); box-shadow: var(--glass-shadow); }
 

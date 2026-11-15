@@ -191,7 +191,7 @@
       const score = st.score ?? 100, band = score >= 85 ? 'good' : score >= 65 ? 'mid' : 'bad';
       const cov = (k, label) => { const c = (st.coverage || {})[k] || { total: 0, linked: 0 }; const pc = c.total ? Math.round(100 * c.linked / c.total) : 100; return `<button type="button" class="chk-tile" data-cat="links"><span class="small muted">${t(label)}</span><b>${c.total ? `${c.linked}/${c.total}` : '-'}</b><div class="progress"><i style="width:${pc}%"></i></div></button>`; };
       const tiles = `<div class="chk-tiles"><div class="chk-score ${band}" style="--v:${score}"><b>${score}</b></div>
-        <div class="grow"><div style="font-weight:600">${t('chk_band_' + band)}</div><div class="small muted">${t('validate_summary', { e: r.errors, w: r.warnings })}${st.finish ? ` &middot; ${t('chk_finish', { d: st.finish })}${st.contract_end ? ` ${t('chk_vs_contract', { d: st.contract_end })}` : ''}` : ''}</div></div></div>
+        <div class="grow"><div style="font-weight:var(--fw)">${t('chk_band_' + band)}</div><div class="small muted">${t('validate_summary', { e: r.errors, w: r.warnings })}${st.finish ? ` &middot; ${t('chk_finish', { d: st.finish })}${st.contract_end ? ` ${t('chk_vs_contract', { d: st.contract_end })}` : ''}` : ''}</div></div></div>
         <div class="chk-tiles four"><button type="button" class="chk-tile" data-cat="logic"><span class="small muted">${t('chk_logic')}</span><b>${st.logic_ok ?? 100}%</b><div class="progress"><i style="width:${st.logic_ok ?? 100}%"></i></div></button>${cov('deliverable', 'kind_deliverable')}${cov('milestone', 'kind_milestone')}${cov('requirement', 'kind_requirement')}</div>`;
         counts_ = counts; return tiles;
       };
