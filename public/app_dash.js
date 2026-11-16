@@ -536,8 +536,8 @@
     const modeNow = () => (cfg.currencyToggle ? L.cur : 'native');
     const infos = {};
 
-    host.innerHTML = `<div class="dw-bar"><div class="dw-bar-l"><span class="muted small" id="dwCount"></span></div><div class="row" style="gap:8px">${cfg.currencyToggle ? `<div class="seg" id="dwCur" role="group" aria-label="${esc(t('fx_display'))}" title="${esc(t('fx_note', { r: PM.fx.rateNote('AED') + ', ' + PM.fx.rateNote('SAR') }))}">${PM.fx.choices.map((c) => `<button data-cur="${c}" aria-pressed="${c === L.cur}" class="${c === L.cur ? 'on' : ''}">${c}</button>`).join('')}</div>` : ''}<button class="btn sm ghost" id="dwReset" hidden>${t('dash_reset')}</button>${PM.widgets ? `<a class="btn sm" id="dwAdd" href="#/widgets?scope=${scope}">${icon('plus')}${t('wm_add_widgets')}</a><button class="btn sm" id="dwLayouts" type="button">${icon('list')}${t('wl_layouts')}</button>` : ''}${cfg.filters && PM.dashReport ? `<button class="btn sm" id="dwExport" type="button">${icon('file')}${t('ex_report')}</button>` : ''}<button class="btn sm" id="dwCustom" aria-expanded="false">${icon('cols')}${t('dash_customize')}</button></div></div>
-      ${cfg.filters ? '<div class="dw-flt" id="dwFlt"></div><div class="dw-empty" id="dwEmpty" role="status" hidden></div>' : ''}
+    host.innerHTML = `<div class="dw-bar"><div class="dw-bar-l"><span class="muted small" id="dwCount"></span></div><div class="row" style="gap:8px">${cfg.currencyToggle ? `<div class="seg" id="dwCur" role="group" aria-label="${esc(t('fx_display'))}" title="${esc(t('fx_note', { r: PM.fx.rateNote('AED') + ', ' + PM.fx.rateNote('SAR') }))}">${PM.fx.choices.map((c) => `<button data-cur="${c}" aria-pressed="${c === L.cur}" class="${c === L.cur ? 'on' : ''}">${c}</button>`).join('')}</div>` : ''}${cfg.filters ? `<button class="btn sm" id="dwFltTog" type="button" aria-controls="dwFltWrap" aria-expanded="false">${icon('filter')}<span id="dwFltLbl">${t('gf_filters')}</span><span class="gf-badge" id="dwFltBadge" hidden></span></button>` : ''}<button class="btn sm ghost" id="dwReset" hidden>${t('dash_reset')}</button>${PM.widgets ? `<a class="btn sm" id="dwAdd" href="#/widgets?scope=${scope}">${icon('plus')}${t('wm_add_widgets')}</a><button class="btn sm" id="dwLayouts" type="button">${icon('list')}${t('wl_layouts')}</button>` : ''}${cfg.filters && PM.dashReport ? `<button class="btn sm" id="dwExport" type="button">${icon('file')}${t('ex_report')}</button>` : ''}<button class="btn sm" id="dwCustom" aria-expanded="false">${icon('cols')}${t('dash_customize')}</button></div></div>
+      ${cfg.filters ? '<div class="dw-fwrap" id="dwFltWrap"><div class="dw-fwrap-in"><div class="dw-flt" id="dwFlt"></div></div></div><div class="gf-sum" id="dwFltSum" aria-live="polite" hidden></div><div class="dw-empty" id="dwEmpty" role="status" hidden></div>' : ''}
       <div class="dw-panel" id="dwPanel" aria-hidden="true"><div><div class="dw-panel-in" id="dwChips"></div></div></div>
       <div class="dw-grid ${animate ? 'anim' : ''}" id="dwGrid"></div>`;
     const grid = $('#dwGrid', host);
@@ -597,7 +597,7 @@
     let seq = 0, flt = null, applyFilters = null;
     const load = async () => { const n = ++seq, r = await cfg.fetch(fq()); if (n !== seq) throw Object.assign(new Error('stale'), { stale: true }); return r; };
     function afterLoad() {
-      if (flt) flt.update(d);
+      if (flt) { flt.update(d); fltUi(); }
       const em = $('#dwEmpty', host); if (!em) return;
       const none = PM.dashFilters.isOn(PM.dashFilters.get(cfg.fkey)) && (cfg.key ? d.filter_empty === true : !(d.projects && d.projects.length));
       em.hidden = !none; em.textContent = none ? t(cfg.key ? 'gf_none_project' : 'gf_none_portfolio') : '';
@@ -922,14 +922,47 @@
       closeFilter();
       flt.warn(touched.length ? t('gf_sync_warn', { n: touched.length, list: touched.join(', ') }) : '');
     }
+    // Hide or show the filter bar. The filters keep working while hidden: a badge counts them and a chip row names them.
+    const fwrap = $('#dwFltWrap', host), ftog = $('#dwFltTog', host), fsum = $('#dwFltSum', host);
+    function fltUi(first) {
+      if (!fwrap || !ftog || !PM.dashFilters) return;
+      const open = PM.dashFilters.isOpen(cfg.fkey), n = PM.dashFilters.count(PM.dashFilters.get(cfg.fkey));
+      fwrap.classList.toggle('open', open);
+      if (first || reduced()) fwrap.classList.toggle('settled', open);
+      else if (!open) fwrap.classList.remove('settled');
+      fwrap.inert = !open; fwrap.setAttribute('aria-hidden', String(!open));
+      ftog.setAttribute('aria-expanded', String(open));
+      ftog.title = open ? t('gf_hide') : t('gf_show');
+      const bd = $('#dwFltBadge', host); bd.hidden = !n; bd.textContent = n ? String(n) : '';
+      $('#dwFltLbl', host).textContent = open ? t('gf_hide_short') : t('gf_filters');
+      const chips = !open && n ? PM.dashFilters.summary(cfg.fkey, d) : [];
+      fsum.hidden = !chips.length;
+      fsum.innerHTML = chips.length ? `<span class="small muted">${esc(t('gf_showing_by'))}</span>${chips.map((c) => `<button type="button" class="gf-chip" data-k="${c.k}" title="${esc(t('gf_remove', { f: c.label }))}" aria-label="${esc(t('gf_remove', { f: c.label }))}">${esc(c.label)}${icon('x')}</button>`).join('')}<button type="button" class="btn sm ghost" data-clear="1">${esc(t('gf_clear'))}</button>` : '';
+    }
+    if (ftog) {
+      ftog.onclick = () => {
+        const open = !PM.dashFilters.isOpen(cfg.fkey);
+        PM.dashFilters.setOpen(cfg.fkey, open);
+        if (!open && fwrap.contains(document.activeElement)) ftog.focus();
+        fltUi();
+        if (open) setTimeout(() => { if (PM.dashFilters.isOpen(cfg.fkey)) fwrap.classList.add('settled'); }, reduced() ? 0 : 320);
+      };
+      fsum.addEventListener('click', (e) => {
+        if (!flt) return;
+        if (e.target.closest('[data-clear]')) { flt.clear(); return; }
+        const c = e.target.closest('.gf-chip'); if (!c) return;
+        flt.patch(c.dataset.k === 'p' ? { p: [] } : { [c.dataset.k]: '' });
+      });
+    }
     if (cfg.filters && PM.dashFilters && $('#dwFlt', host)) {
       // one entry for every place that edits the top filters (the bar and the export dialog): align the widgets, then reload
       applyFilters = (f, prev) => {
-        syncWidgetFilters(f, prev);
+        syncWidgetFilters(f, prev); fltUi();
         grid.setAttribute('aria-busy', 'true'); grid.classList.add('dw-load');
         return ctx.reload().catch((e) => { if (!e.stale) PM.toast(t('gf_failed'), 'err'); }).finally(() => { grid.removeAttribute('aria-busy'); grid.classList.remove('dw-load'); });
       };
-      flt = PM.dashFilters.mountBar($('#dwFlt', host), { key: cfg.fkey, scope: cfg.key ? 'project' : 'portfolio', d, onChange: (f, prev) => { applyFilters(f, prev); } });
+      flt = PM.dashFilters.mountBar($('#dwFlt', host), { key: cfg.fkey, scope: cfg.key ? 'project' : 'portfolio', d, onChange: (f, prev) => { applyFilters(f, prev); fltUi(); } });
+      fltUi(true);
       afterLoad();
     }
     const exb = $('#dwExport', host);

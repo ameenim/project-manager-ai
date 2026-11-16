@@ -41,7 +41,42 @@
     if (made && !(prev && !reduced())) requestAnimationFrame(function () { ind.style.transition = ''; });
     memo[key] = pos;
   }
+  /* project tabs: arrows and edge fades only where more tabs are hidden, wheel and drag scroll, no native scrollbar */
+  function tabsState(wrap) {
+    var tabs = $('.tabs', wrap); if (!tabs) return;
+    var max = tabs.scrollWidth - tabs.clientWidth, pos = Math.abs(tabs.scrollLeft), rtl = getComputedStyle(tabs).direction === 'rtl';
+    var over = max > 2, more = over && pos < max - 2, less = over && pos > 2;
+    // scrollLeft is physical: in a right to left page the start is the right edge
+    wrap.classList.toggle('can-l', rtl ? more : less);
+    wrap.classList.toggle('can-r', rtl ? less : more);
+    wrap.classList.toggle('is-over', over);
+  }
+  function tabsBind(wrap) {
+    if (wrap.dataset.tb) return; wrap.dataset.tb = '1';
+    var tabs = $('.tabs', wrap), step = function (dir) { tabs.scrollBy({ left: dir * Math.max(120, tabs.clientWidth * 0.7), behavior: reduced() ? 'auto' : 'smooth' }); };
+    var upd = function () { tabsState(wrap); };
+    tabs.addEventListener('scroll', upd, { passive: true });
+    if (window.ResizeObserver) { var ro = new ResizeObserver(function () { if (!wrap.isConnected) { ro.disconnect(); return; } upd(); }); ro.observe(tabs); }
+    $$('.tabs-nav', wrap).forEach(function (b) { b.addEventListener('click', function () { step(b.classList.contains('nl') ? -1 : 1); }); });
+    // a mouse wheel over the bar scrolls it sideways while there is more to see
+    tabs.addEventListener('wheel', function (e) {
+      if (!wrap.classList.contains('is-over') || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      var max = tabs.scrollWidth - tabs.clientWidth, rtl = getComputedStyle(tabs).direction === 'rtl', pos = tabs.scrollLeft, d = e.deltaY;
+      var lo = rtl ? -max : 0, hi = rtl ? 0 : max; // physical scroll range
+      if ((d < 0 && pos <= lo + 1) || (d > 0 && pos >= hi - 1)) return; // already at that end: let the page scroll
+      e.preventDefault(); tabs.scrollLeft = Math.min(hi, Math.max(lo, pos + d));
+    }, { passive: false });
+    // drag with a mouse, a click that ends a drag does not open a tab
+    var down = null, moved = false;
+    tabs.addEventListener('pointerdown', function (e) { if (e.pointerType !== 'mouse' || e.button !== 0 || !wrap.classList.contains('is-over')) return; down = { x: e.clientX, l: tabs.scrollLeft }; moved = false; });
+    window.addEventListener('pointermove', function (e) { if (!down || !wrap.isConnected) return; var dx = e.clientX - down.x; if (!moved && Math.abs(dx) < 5) return; moved = true; wrap.classList.add('dragging'); tabs.scrollLeft = down.l - dx; });
+    window.addEventListener('pointerup', function () { if (!down) return; down = null; wrap.classList.remove('dragging'); if (moved) setTimeout(function () { moved = false; }, 0); });
+    tabs.addEventListener('click', function (e) { if (moved) { e.preventDefault(); e.stopPropagation(); } }, true);
+    // keyboard focus on a hidden tab brings it into view
+    tabs.addEventListener('focusin', function (e) { var a = e.target.closest && e.target.closest('.tab'); if (a) a.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: reduced() ? 'auto' : 'smooth' }); });
+  }
   function place() {
+    $$('.proj-head .tabs-wrap').forEach(function (w) { tabsBind(w); tabsState(w); });
     $$('.sidebar .nav').forEach(function (nav) { track('nav', nav, $('a.active', nav), 'y'); });
     $$('.proj-head .tabs').forEach(function (tabs) { var on = $('.tab.active', tabs); track('tabs', tabs, on, 'x'); var href = on ? on.getAttribute('href') : ''; var changed = tabs.dataset.centered !== href; tabs.dataset.centered = href; if (on && changed && tabs.scrollWidth > tabs.clientWidth + 2) tabs.scrollTo({ left: Math.max(0, on.offsetLeft - (tabs.clientWidth - on.offsetWidth) / 2), behavior: reduced() ? 'auto' : 'smooth' }); });
   }
@@ -59,7 +94,7 @@
   }
   /* phone project header: everything above the tabs scrolls away and the tab bar stays, so the page keeps its room */
   function headUp() {
-    var h = $('.proj-head'), tabs = h && $('.tabs', h); if (!h || !tabs) { document.documentElement.classList.remove('ph-stuck'); return; }
+    var h = $('.proj-head'), tabs = h && ($('.tabs-wrap', h) || $('.tabs', h)); if (!h || !tabs) { document.documentElement.classList.remove('ph-stuck'); return; }
     var up = Math.max(0, tabs.offsetTop - 8); h.style.setProperty('--ph-up', up + 'px');
     document.documentElement.classList.toggle('ph-stuck', h.getBoundingClientRect().top <= -up + 1);
   }

@@ -46,6 +46,23 @@ svg.i { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-widt
 .proj-links .btn.icon:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 @media (max-width: 600px) { .proj-links .btn.icon { width: 44px; height: 44px; } }
 .tabs { display: flex; gap: 2px; margin-top: 10px; overflow-x: auto; }
+/* project tabs: no native scrollbar, soft fades and round arrows appear only on the side that has more tabs */
+.tabs-wrap { position: relative; margin-top: 10px; }
+.tabs-wrap .tabs { margin-top: 0; scrollbar-width: none; overscroll-behavior-x: contain; scroll-padding-inline: 44px; --fl: 0px; --fr: 0px;
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--fl), #000 calc(100% - var(--fr)), transparent 100%); mask-image: linear-gradient(to right, transparent 0, #000 var(--fl), #000 calc(100% - var(--fr)), transparent 100%); }
+.tabs-wrap .tabs::-webkit-scrollbar { display: none; }
+.tabs-wrap.is-over .tabs { cursor: grab; }
+.tabs-wrap.dragging .tabs { cursor: grabbing; user-select: none; }
+.tabs-wrap.dragging .tab { pointer-events: none; }
+.tabs-wrap.can-l .tabs { --fl: 56px; } .tabs-wrap.can-r .tabs { --fr: 56px; }
+@property --fl { syntax: '<length>'; inherits: true; initial-value: 0px; } @property --fr { syntax: '<length>'; inherits: true; initial-value: 0px; }
+.tabs-wrap .tabs { transition: --fl .2s var(--ease), --fr .2s var(--ease); }
+.tabs-nav { position: absolute; top: 50%; translate: 0 -50%; z-index: 2; width: 30px; height: 30px; padding: 0; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); box-shadow: var(--shadow); cursor: pointer; opacity: 0; pointer-events: none; transition: opacity .18s var(--ease), background .15s, color .15s; }
+.tabs-nav .i { width: 16px; height: 16px; } .tabs-nav .i.mir { transform: scaleX(-1); }
+.tabs-nav.nl { left: 2px; } .tabs-nav.nr { right: 2px; }
+.tabs-wrap.can-l .tabs-nav.nl, .tabs-wrap.can-r .tabs-nav.nr { opacity: 1; pointer-events: auto; }
+.tabs-nav:hover { background: var(--primary-soft); color: var(--primary); }
+@media (prefers-reduced-motion: reduce) { .tabs-wrap .tabs, .tabs-nav { transition: none; } }
 .tab { padding: 10px 12px; color: var(--muted); border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 7px; text-decoration: none; background: none; border-top: 0; border-inline: 0; }
 .tab:hover { color: var(--text); text-decoration: none; }
 .tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight:var(--fw); }
@@ -2205,9 +2222,9 @@ body.chat-full { overflow: hidden; }
 @media (max-width: 820px) {
   /* everything above the tabs scrolls away, the tab bar stays pinned (ui.js sets --ph-up) */
   .proj-head { top: calc(var(--ph-up, 0px) * -1); }
-  html.ph-stuck .proj-head .tabs { margin-inline-start: 50px; }
+  html.ph-stuck .proj-head .tabs-wrap { margin-inline-start: 50px; }
   /* the Thinking tab already names the project in its own header, so the chat gets the room */
-  body.chat-page .proj-head > *:not(.tabs):not(.banner) { display: none; }
+  body.chat-page .proj-head > *:not(.tabs-wrap):not(.banner) { display: none; }
   body.chat-page .proj-head { padding-top: 56px; }
 }
 @media (max-width: 700px) {
@@ -2257,7 +2274,19 @@ body.chat-full { overflow: hidden; }
 }
 
 /* Overview filters */
-.dw-flt { margin-bottom: 12px; }
+.dw-flt { margin: 0; }
+/* the filter bar folds away: the grid row animates from zero to its natural height */
+.dw-fwrap { display: grid; grid-template-rows: 0fr; opacity: 0; margin-bottom: 0; transition: grid-template-rows .28s var(--ease), opacity .2s var(--ease), margin-bottom .28s var(--ease); }
+.dw-fwrap.open { grid-template-rows: 1fr; opacity: 1; margin-bottom: 12px; }
+.dw-fwrap-in { min-height: 0; overflow: hidden; }
+.dw-fwrap.open.settled .dw-fwrap-in { overflow: visible; }
+.gf-badge { min-width: 18px; padding: 0 6px; border-radius: var(--r-pill); background: var(--primary); color: var(--on-solid); font-size: var(--fs-micro); line-height: 18px; text-align: center; }
+.dw-bar .btn.sm .gf-badge { width: auto; height: auto; }
+.gf-sum { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0 0 12px; }
+.gf-chip { display: inline-flex; align-items: center; gap: 4px; min-height: 30px; padding: 2px 8px 2px 12px; border: 0; border-radius: var(--r-pill); background: var(--primary-soft); color: var(--primary); font: inherit; font-size: var(--fs-small); font-weight: var(--fw); cursor: pointer; }
+.gf-chip .i { width: 14px; height: 14px; opacity: .7; } .gf-chip:hover .i { opacity: 1; }
+.gf-chip:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .dw-fwrap { transition: none; } }
 .gf-row { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: flex-end; }
 .gf-f { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .gf-f select, .gf-f .dd-btn { min-height: 39px; min-width: 120px; max-width: 200px; }

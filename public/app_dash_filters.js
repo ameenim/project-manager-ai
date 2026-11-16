@@ -29,7 +29,27 @@
     const same = ['y', 'q', 'm', 's', 'p'].every((k) => String(cur[k] || '') === String(next[k] || ''));
     return same ? null : next;
   }
+  // The filter panel can be hidden. The choice is saved per overview. A phone starts hidden to keep its room.
+  const OK = 'pm_gf_open';
+  const isOpen = (key) => { try { const v = (JSON.parse(localStorage.getItem(OK) || '{}') || {})[key]; if (typeof v === 'boolean') return v; } catch { /* private mode */ } return !(typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 700px)').matches); };
+  const setOpen = (key, v) => { try { const a = JSON.parse(localStorage.getItem(OK) || '{}') || {}; a[key] = !!v; localStorage.setItem(OK, JSON.stringify(a)); } catch { /* private mode */ } };
+  const count = (f) => ['y', 'q', 'm', 's', 'h', 'cur', 'c'].filter((k) => f[k]).length + (f.p && f.p.length ? 1 : 0);
   const monthName = (m) => new Date(2024, m - 1, 1).toLocaleDateString(PM.state.lang === 'ar' ? 'ar-AE' : 'en-US', { month: 'long' });
+
+  // One short label for every filter that is on, so a hidden panel still says what the page is showing.
+  function summary(key, d) {
+    const f = get(key), out = [], names = {};
+    for (const x of (d && d.filter_options && d.filter_options.projects) || []) names[x.id] = x.name;
+    if (f.y) out.push({ k: 'y', label: f.y });
+    if (f.q) out.push({ k: 'q', label: 'Q' + f.q });
+    if (f.m) out.push({ k: 'm', label: monthName(f.m) });
+    if (f.s) out.push({ k: 's', label: t('gf_s_' + f.s) });
+    if (f.h) out.push({ k: 'h', label: t('health_' + f.h) });
+    if (f.cur) out.push({ k: 'cur', label: f.cur });
+    if (f.c) out.push({ k: 'c', label: f.c });
+    if (f.p.length) out.push({ k: 'p', label: f.p.length === 1 && names[f.p[0]] ? names[f.p[0]] : t('gf_n_projects', { n: f.p.length }) });
+    return out;
+  }
 
   function sel(id, label, all, opts, val) {
     return `<label class="gf-f"><span class="small muted">${esc(label)}</span><select id="${id}" aria-label="${esc(label)}"><option value="">${esc(all)}</option>${opts.map(([v, l]) => `<option value="${esc(String(v))}" ${String(v) === String(val) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>`;
@@ -78,8 +98,9 @@
     });
     document.addEventListener('click', (e) => { if (!el.isConnected) return; if (open && !e.target.closest('#gfP')) { open = false; const p = $('#gfP .dd-pop', el); if (p) p.hidden = true; const b = $('#gfP .dd-btn', el); if (b) b.setAttribute('aria-expanded', 'false'); } });
     draw();
-    return { warn(msg) { warn = msg || ''; draw(); }, update(nd) { d = nd; note(); const c = $('#gfClear', el); if (c) c.hidden = !isOn(get(key)); } };
+    const blank = { y: '', q: '', m: '', s: '', h: '', cur: '', c: '', p: [] };
+    return { warn(msg) { warn = msg || ''; draw(); }, patch(p) { set(p); }, clear() { set(blank); }, update(nd) { d = nd; note(); const c = $('#gfClear', el); if (c) c.hidden = !isOn(get(key)); } };
   }
 
-  PM.dashFilters = { get, put, query, isOn, mountBar, align, K };
+  PM.dashFilters = { get, put, query, isOn, mountBar, align, summary, count, isOpen, setOpen, K };
 })();
