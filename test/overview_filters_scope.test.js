@@ -57,3 +57,23 @@ test('a custom widget redraws from the data of the latest load, not the first on
   const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'public', 'app_widgets.js'), 'utf8');
   assert.match(src, /render: \(body, dd, ctx, F\) => \{ if \(dd && dd\.datasets\) \{ pack\.datasets = dd\.datasets;/);
 });
+
+test('the schedule view takes the period as its axis and drops phases outside it', async () => {
+  const all = await dash(), year = all.filter_options.years[all.filter_options.years.length - 1];
+  const one = await dash('?y=' + year), T = one.analytics.timeline;
+  assert.deepEqual(T.range, { lo: year + '-01-01', hi: year + '-12-31' });
+  assert.equal(T.min, year + '-01-01'); assert.equal(T.max, year + '-12-31');
+  const count = (d) => d.analytics.timeline.projects.reduce((n, p) => n + p.phases.length, 0);
+  assert.ok(count(one) <= count(all));
+  for (const p of T.projects) for (const ph of p.phases) assert.ok(ph.start <= T.max && ph.finish >= T.min, 'every phase overlaps the period');
+  assert.equal(all.analytics.timeline.range, undefined);
+});
+
+test('the value tile adds up the payments inside the period and status', async () => {
+  const all = await dash(), year = all.filter_options.years[all.filter_options.years.length - 1];
+  assert.equal(all.valueScoped, false);
+  const one = await dash('?y=' + year);
+  assert.equal(one.valueScoped, true);
+  const sum = (v) => Object.values(v).reduce((a, b) => a + b, 0);
+  assert.equal(sum(one.totalValue), one.analytics.payments.reduce((n, m) => n + m.total, 0), 'same payments as the payments widget');
+});

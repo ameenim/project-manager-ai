@@ -156,7 +156,7 @@
           { k: 'kpi_spi', v: spi == null ? '-' : spi.toFixed(2), sub: t('kpi_spi_hint'), tone: spi == null ? '' : spi >= 0.95 ? 'good' : spi >= 0.8 ? 'warn' : 'bad' },
           { k: 'kpi_high_risks', v: high, n: high, sub: t('kpi_of_signals', { n: d.radar.items.length }), tone: high ? 'bad' : 'good' },
           { k: 'kpi_overdue', v: od, n: od, sub: od ? t('kpi_late_tasks') : t('nothing_overdue'), tone: od ? 'bad' : 'good' },
-          { k: 'kpi_value', v: totals, sub: t('kpi_across', { n: P.length }), tone: '', small: true },
+          { k: d.valueScoped ? 'kpi_value_view' : 'kpi_value', v: totals, sub: t('kpi_across', { n: P.length }), tone: '', small: true },
         ];
         body.innerHTML = `<div class="kpis">${tiles.map((x, i) => `<div class="kpi-t ${x.tone}" style="--i:${i}"><div class="kv ${x.small ? 'sm' : ''}" ${x.n != null ? `data-count="${x.n}" data-suffix="${x.suffix || ''}"` : ''}>${esc(String(x.v))}</div><div class="kl">${t(x.k)}</div><div class="ks">${esc(x.sub || '')}</div></div>`).join('')}</div>`;
         return { csv: () => [[t('metric'), t('value')], ...tiles.map((x) => [t(x.k), x.v])], kpis: kpiList(tiles) };
@@ -177,10 +177,13 @@
         const T = d.analytics.timeline;
         if (!T.projects.length || !T.min) { body.innerHTML = empty(t('no_tasks_hint')); return { csv: () => [] }; }
         const today = dnum(T.today);
-        let lo = Math.min(dnum(T.min), today) - 12, hi = Math.max(dnum(T.max), today) + 18;
+        // a picked period is the axis: nothing outside it is drawn
+        const R = T.range ? { lo: dnum(T.range.lo), hi: dnum(T.range.hi) + 1 } : null;
+        let lo = R ? R.lo : Math.min(dnum(T.min), today) - 12, hi = R ? R.hi : Math.max(dnum(T.max), today) + 18;
         const W = Math.max(720, Math.round(CW)), LW = 180, PR = 18, PW = W - LW - PR, RH = 62, AX = 34;
         const H = AX + T.projects.length * RH + 18;
-        const x = (n) => LW + ((n - lo) / (hi - lo)) * PW;
+        const x = (n) => LW + (Math.min(Math.max(n, lo), hi) - lo) / (hi - lo) * PW;
+        const inR = (n) => !R || (n >= lo && n <= hi);
         const months = [];
         const dt = new Date(lo * DAY); let y = dt.getUTCFullYear(), m = dt.getUTCMonth() + 1;
         const step = (hi - lo) > 800 ? 3 : (hi - lo) > 400 ? 2 : 1;
@@ -210,7 +213,7 @@
             g += `<g ${tip(`<b>${esc(ph.name)}</b><br>${ph.start} ${t('to')} ${ph.finish}<br>${ph.progress}% ${t('complete_word')}`)}><rect class="tl-bar" x="${x1}" y="${y0 + 22}" width="${w}" height="16" rx="4"/><rect class="tl-fill" x="${x1}" y="${y0 + 22}" width="${w * (ph.progress / 100)}" height="16" rx="4" style="--i:${k}"/></g>`;
             rows.push([p.name, ph.name, ph.start, ph.finish, ph.progress]);
           });
-          if (p.contract_end) {
+          if (p.contract_end && inR(dnum(p.contract_end))) {
             const cx = x(dnum(p.contract_end));
             g += `<line class="tl-end" x1="${cx}" x2="${cx}" y1="${y0 + 17}" y2="${y0 + 44}"/>`;
             if (p.forecast && p.forecast > p.contract_end) g += `<rect class="tl-over" x="${cx}" y="${y0 + 40}" width="${Math.max(x(dnum(p.forecast)) - cx, 2)}" height="3" rx="1.5" ${tip(`${t('contract_end')} ${p.contract_end}<br>${t('forecast_end')} ${p.forecast}<br>${t('rd_days_late', { n: dnum(p.forecast) - dnum(p.contract_end) })}`)}/>`;
@@ -221,7 +224,7 @@
             g += `<path class="tl-pay ${st}" d="M${px} ${y0 + 45} l4.5 4.5 l-4.5 4.5 l-4.5 -4.5 Z" ${tip(`<b>${esc(pay.title)}</b><br>${pay.due}${pay.amount != null ? `<br>${PM.fmt(pay.amount, p.currency)}` : ''}<br>${t('state_' + pay.state)}`)}/>`;
           }
         });
-        g += `<line class="tl-today" x1="${x(today)}" x2="${x(today)}" y1="${AX - 4}" y2="${H}"/><text class="tl-todaylab" x="${x(today)}" y="${H + 10}" text-anchor="middle">${esc(t('g_today'))}</text>`;
+        if (inR(today)) g += `<line class="tl-today" x1="${x(today)}" x2="${x(today)}" y1="${AX - 4}" y2="${H}"/><text class="tl-todaylab" x="${x(today)}" y="${H + 10}" text-anchor="middle">${esc(t('g_today'))}</text>`;
         body.innerHTML = `<svg class="viz timeline" style="width:${W}px;max-width:none;min-width:100%" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(t('w_schedule'))}">${g}</svg>${legend([['tl-l-prog', t('g_l_prog')], ['tl-l-diamond paid', t('state_paid')], ['tl-l-diamond inv', t('state_invoiced')], ['tl-l-diamond pend', t('state_pending')], ['tl-l-diamond late', t('late')], ['tl-l-end', t('contract_end')]])}`;
         return { csv: () => [[t('project'), t('phase'), t('start'), t('finish'), t('progress')], ...rows], chart: true };
       },
@@ -345,7 +348,7 @@
       const r = wfRange(F), T = d.analytics.timeline;
       const P = tpOf(d, F).map((p) => ({ ...p, phases: r ? p.phases.filter((ph) => wfSpan(ph.start, ph.finish, r)) : p.phases, payments: r ? p.payments.filter((x) => wfPoint(x.due, r)) : p.payments }));
       const all = P.flatMap((p) => [p.start, p.forecast, p.contract_end, ...p.phases.flatMap((ph) => [ph.start, ph.finish])]).filter(Boolean).sort();
-      return { ...d, analytics: { ...d.analytics, timeline: { ...T, min: all[0] || null, max: all[all.length - 1] || null, projects: P } } };
+      return { ...d, analytics: { ...d.analytics, timeline: { ...T, min: all[0] || null, max: all[all.length - 1] || null, range: r || T.range || null, projects: P } } };
     },
   });
   WIDGETS.payments.wf = {

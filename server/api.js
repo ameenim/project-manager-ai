@@ -899,9 +899,9 @@ module.exports = function createApi(store, auth, connectors, ops) {
   function dashboard(f) {
     f = f || {};
     const all = DB.order.map((id) => DB.projects[id]).filter(isLive).reverse();
-    const cards = [], payments = [], overdue = [], radarEntries = [], kept = [];
+    const cards = [], payments = [], overdue = [], radarEntries = [], kept = [], scs = new Map();
     const next60 = S.addDays(TODAY(), 60);
-    const range = OF.range(f);
+    const range = OF.range(f), scoped = !!(f.y || f.s), inView = {};
     let pendingInbox = 0, pendingItems = 0;
     const entries = all.map((P) => ({ P, st: stats(P) }));
     for (const { P, st } of entries) {
@@ -913,6 +913,9 @@ module.exports = function createApi(store, auth, connectors, ops) {
       const ss = OF.scopedStats(st, sc, f); // the figures inside the picked period and status
       pendingInbox += ss.pendingInbox; pendingItems += ss.pendingItems;
       cards.push({ ...clone(P.p), stats: ss });
+      scs.set(P.id, sc);
+      // with a period or status on, the value tile adds up the payments inside it instead of the whole contract
+      if (scoped) for (const m of sc.items) if (m.kind === 'milestone') { const dd = m.data || {}, amt = dd.amount ?? (dd.percent != null && P.p.value ? Math.round((P.p.value * dd.percent) / 100) : 0); if (amt) inView[P.p.currency] = (inView[P.p.currency] || 0) + amt; }
       radarEntries.push({ p: { ...clone(P.p), id: P.id }, stats: ss, items: sc.items.map((i) => ({ ...i, data: i.data || {} })), rows: sc.rows, sched: S.schedule(P.tasks, rawProject(P)) });
       for (const m of sc.items.filter((i) => i.kind === 'milestone' && (i.state !== 'paid' || f.s === 'done'))) {
         const d = m.data;
@@ -933,7 +936,7 @@ module.exports = function createApi(store, auth, connectors, ops) {
     const totalValue = {};
     for (const P of kept) if (P.p.value) totalValue[P.p.currency] = (totalValue[P.p.currency] || 0) + P.p.value;
     return {
-      today: TODAY(), radar: win.__Radar.buildRadar(radarEntries, TODAY()), analytics: win.__Analytics.buildAnalytics(radarEntries, TODAY()), projects: cards, payments: shown.slice(0, 10), overdue: overdue.slice(0, 12), overdueTotal: overdue.length, payments_all: payments.slice(0, 500), overdue_all: overdue.slice(0, 500), activity: activity.slice(0, 12), pendingInbox, pendingItems, totalValue, unassigned: 0,
+      today: TODAY(), radar: win.__Radar.buildRadar(radarEntries, TODAY()), analytics: (() => { const A = win.__Analytics.buildAnalytics(radarEntries, TODAY()); OF.fitTimeline(A.timeline, f, scs); return A; })(), projects: cards, payments: shown.slice(0, 10), overdue: overdue.slice(0, 12), overdueTotal: overdue.length, payments_all: payments.slice(0, 500), overdue_all: overdue.slice(0, 500), activity: activity.slice(0, 12), pendingInbox, pendingItems, totalValue: scoped ? inView : totalValue, valueScoped: scoped, unassigned: 0,
       counts: { active: kept.filter((p) => p.p.status === 'active').length, red: cards.filter((c) => c.stats.health === 'red').length, amber: cards.filter((c) => c.stats.health === 'amber').length, green: cards.filter((c) => c.stats.health === 'green').length },
       filters: f, filter_options: OF.options(entries), kept,
     };
@@ -1205,8 +1208,8 @@ module.exports = function createApi(store, auth, connectors, ops) {
     const audit = P.audit.filter((a) => OF.inRange(String(a.ts || a.created_at || '').slice(0, 10), range)).slice(0, 12).map((a) => ({ ...a, detail: a.detail || {} }));
     const entries = [{ P, st }];
     const dash = win.__ProjDash.buildProjectDash({ project: raw, tasks: OF.active(f) ? OF.scheduleFor(sched, sc.rows) : sched, items, inbox: P.inbox, audit, today });
-    if (range) dash.phases = dash.phases.filter((ph) => OF.overlaps(ph.start, ph.finish, range));
-    return { project: { ...projectView(P) }, radar: win.__Radar.buildRadar([entry], today), analytics: win.__Analytics.buildAnalytics([entry], today), ...dash,
+    if (range || f.s) dash.phases = dash.phases.filter((ph) => OF.overlaps(ph.start, ph.finish, range) && (!f.s || sc.rows.some((x) => OF.overlaps(x.start, x.finish, { lo: String(ph.start).slice(0, 10), hi: String(ph.finish).slice(0, 10) }))));
+    return { project: { ...projectView(P) }, radar: win.__Radar.buildRadar([entry], today), analytics: (() => { const A = win.__Analytics.buildAnalytics([entry], today); OF.fitTimeline(A.timeline, f, new Map([[P.id, sc]])); return A; })(), ...dash,
       filters: f, filter_empty: OF.active(f) && !sc.rows.length && !sc.items.length, filter_options: OF.options(entries), trends: await trendsFor([P], 30, range), ...(await WIDGETS.extras('project', [P], f)) };
   });
   on('GET', '/api/projects/(\\d+)/report-data', async (mm, q) => {

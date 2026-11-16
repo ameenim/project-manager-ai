@@ -139,6 +139,22 @@ module.exports = function createOverviewFilter({ err, TODAY }) {
     return { ...st, progress, planned, spi, overdue: late, tasks: sc.rows.length, pendingItems: sc.items.filter((i) => i.status === 'proposed').length };
   }
 
+  // The schedule view reads a timeline built from the whole schedule. With a period or a status on, its phases are narrowed to the
+  // ones that overlap the period and hold a matching task, and the axis takes the period. scs maps a project id to its scope().
+  function fitTimeline(T, f, scs) {
+    const r = range(f);
+    if (!T || !(r || (f && f.s))) return T;
+    let min = null, max = null;
+    for (const p of T.projects) {
+      const rows = (scs.get(p.id) || { rows: [] }).rows;
+      p.phases = p.phases.filter((ph) => (!r || overlaps(ph.start, ph.finish, r)) && (!f.s || rows.some((x) => overlaps(x.start, x.finish, { lo: day(ph.start), hi: day(ph.finish) }))));
+      p.payments = p.payments.filter((x) => !r || inRange(x.due, r));
+      for (const v of [...p.phases.flatMap((ph) => [ph.start, ph.finish]), ...p.payments.map((x) => x.due)]) { if (!min || v < min) min = v; if (!max || v > max) max = v; }
+    }
+    if (r) { T.min = r.lo; T.max = r.hi; T.range = r; } else { T.min = min; T.max = max; }
+    return T;
+  }
+
   // The tasks of a computed schedule that stay in a project view: every summary row (they carry the phases) and the leaf rows that match.
   function scheduleFor(sched, rows) {
     const keep = new Set(rows.map((x) => x.id));
@@ -161,5 +177,5 @@ module.exports = function createOverviewFilter({ err, TODAY }) {
     return { years: [...years].sort((a, b) => a - b), clients: [...clients].sort(by), currencies: [...currencies].sort(by), projects: projects.sort((a, b) => by(a.name, b.name)) };
   }
 
-  return { parse, active, hasPeriod, hasProject, range, describe, inRange, overlaps, taskStatus, payStatus, delStatus, riskStatus, projectPasses, scope, scopedStats, includeProject, scheduleFor, options, STATUSES, HEALTH, STATUS_LABEL, HEALTH_LABEL };
+  return { parse, active, hasPeriod, hasProject, range, describe, inRange, overlaps, taskStatus, payStatus, delStatus, riskStatus, projectPasses, scope, scopedStats, fitTimeline, includeProject, scheduleFor, options, STATUSES, HEALTH, STATUS_LABEL, HEALTH_LABEL };
 };
