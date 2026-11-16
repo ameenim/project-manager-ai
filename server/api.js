@@ -2159,9 +2159,64 @@ Rules:
     const g = { id: nid(), project_id: P.id, doc_type: b.type, title: cleanName(b.title, 120) || out.title, template: out.template, content: out.markdown, created_at: nowTs(), format, folder_id: b.folder_id ? Number(b.folder_id) : null, meta: { ...docMeta(P, today), ...(cu ? { audience: cu.audience } : {}) }, ...(tpl && usesDesign(tpl) && tpl.layout ? { layout: tpl.layout } : {}), ...(tpl && usesDesign(tpl) && tpl.brand ? { brand: clone(tpl.brand) } : {}), visuals: snap.visuals };
     if (cu) g.custom = { audience: cu.audience, description: cu.description };
     if (def.closure && !cu) g.closure_stamp = stampOf(P, b.type);
+    // A draft is built the same way but not filed. The Thinking Area keeps it on its card until the manager saves it to the project.
+    if (b.draft === true) return { generated: clone(g), engine: out.engine, unconfirmed: snap.ctx.unconfirmed, draft: true };
     P.generated.unshift(g);
     audit(P, ACTOR(), 'document_generated', { summary: `Generated ${g.title}${tpl ? ` from template "${tpl.name}"` : cu ? ' as a custom document' : ''}` });
     return { generated: clone(g), engine: out.engine, unconfirmed: snap.ctx.unconfirmed };
+  });
+
+  // ---------- portfolio documents: a document that covers several projects and belongs to none ----------
+  // The facts come from the same figures the dashboards and the daily snapshots use. The document is returned, never filed,
+  // because it has no project to be filed in. The Thinking Area keeps it on its card.
+  const fmtMoney = (v, cur) => (v == null || v === '' ? 'n/a' : `${Number(v).toLocaleString('en-US')}${cur ? ' ' + cur : ''}`);
+  function portfolioFacts(live) {
+    const rows = live.slice(0, 40).map((P) => ({ P, f: snapshotFigures(P) }));
+    const head = '| Project | Client | Status | Health | Progress | Planned | SPI | Open overdue tasks | High risks | Forecast end | Contract end | Slip days | Late payments |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |';
+    const cell = (v) => String(v == null ? '' : v).replace(/[|\r\n]+/g, ' ').trim();
+    const line = ({ P, f }) => `| ${cell(P.p.name)} | ${cell(P.p.client)} | ${P.p.status || ''} | ${f.health} | ${f.progress}% | ${f.planned != null ? f.planned + '%' : 'n/a'} | ${f.spi != null ? f.spi : 'n/a'} | ${f.overdue} | ${f.high_risks} | ${f.forecast_end || 'n/a'} | ${f.contract_end || 'n/a'} | ${f.slip_days != null ? f.slip_days : 'n/a'} | ${f.pay.late} |`;
+    const table = [head, ...rows.map(line)].join('\n');
+    const dash = dashboard({});
+    const lines = [`Date: ${TODAY()}`, `Projects in the portfolio: ${live.length}${live.length > rows.length ? ` (the ${rows.length} newest are listed)` : ''}`, `Health: ${dash.counts.green} green, ${dash.counts.amber} amber, ${dash.counts.red} red`, `Waiting for review: ${dash.pendingItems} items and ${dash.pendingInbox} updates`];
+    const totals = Object.entries(dash.totalValue || {}).map(([c, v]) => fmtMoney(v, c));
+    if (totals.length) lines.push(`Contract value by currency: ${totals.join(', ')}`);
+    const late = (dash.payments_all || []).filter((x) => x.late).slice(0, 12).map((x) => `- ${cell(x.project)}: ${cell(x.title)}, due ${x.due}, ${fmtMoney(x.amount, x.currency)}`);
+    const over = (dash.overdue_all || []).slice(0, 12).map((x) => `- ${cell(x.project)}: ${cell(x.task)}, finish ${x.finish}, ${x.progress || 0}% done${x.assignee ? ', ' + x.assignee : ''}`);
+    return { table, summary: lines.join('\n'), late, over, count: live.length };
+  }
+  async function portfolioSection(facts, name, audience, brief, s) {
+    if (!process.env.ANTHROPIC_API_KEY) return null;
+    const system = 'You write sections of professional portfolio reports for project managers in US English. Use only the supplied facts. Do not invent figures, dates or names. Do not do your own arithmetic, quote the figures as given. Write concise, specific, plain prose. Use markdown tables or bullets where they help. Do not use dashes as punctuation and do not use semicolons. Output only the section body, no heading.';
+    const user = `Document: ${name}\nAudience: ${audience}\n${brief ? `Brief from the project manager:\n${brief}\n` : ''}Section: ${s.heading}\n${s.guidance ? `What the section must cover: ${s.guidance}\n` : ''}\nPortfolio facts:\n${facts.summary}\n\nProjects:\n${facts.table}\n\nOverdue tasks:\n${facts.over.join('\n') || '(none)'}\n\nLate payments:\n${facts.late.join('\n') || '(none)'}`;
+    try {
+      if (meter) { const stop = await meter.before(); if (stop) return null; }
+      const r = await callClaude({ system, user, max_tokens: 1500 });
+      if (meter) await meter.after('portfolio document', r);
+      return r.text && r.text.trim() ? r.text.trim() : null;
+    } catch (e) { console.error('Portfolio section by Claude failed:', e.message); return null; }
+  }
+  on('POST', '/api/portfolio/generate', async (m, q, b) => {
+    const c = b.custom || {};
+    const cu = { name: cleanName(c.name, 120), audience: cleanName(c.audience, 160), description: cleanName(c.description, 1200), sections: cleanSections(c.sections) };
+    if (!cu.name) throw err(400, 'Give the document a name');
+    if (!cu.sections.length) throw err(400, 'Choose at least one section');
+    const live = DB.order.map((id) => DB.projects[id]).filter((P) => P && isLive(P)).reverse();
+    if (!live.length) throw err(400, 'Create a project first. A portfolio document is written from your projects.');
+    const format = FORMATS.includes(b.format) ? b.format : 'docx';
+    const facts = portfolioFacts(live);
+    const parts = new Array(cu.sections.length);
+    let next = 0;
+    const worker = async () => {
+      while (next < cu.sections.length) {
+        const i = next++; const s = cu.sections[i];
+        const body = await portfolioSection(facts, cu.name, cu.audience, cu.description, s);
+        parts[i] = `# ${s.heading}\n\n${body || `${s.guidance ? `_${s.guidance}_\n\n` : ''}${i === 0 ? facts.table : '_To be completed by the project manager._'}`}`;
+      }
+    };
+    await Promise.all(Array.from({ length: 3 }, worker));
+    const today = TODAY();
+    const g = { id: nid(), project_id: null, doc_type: 'pm_plan', title: cu.name, template: 'Custom document', content: parts.join('\n\n'), created_at: nowTs(), format, folder_id: null, meta: { client: '', project: 'Portfolio', code: '', date: today, pm: DB.user.name, currency: '', client_logo: null, audience: cu.audience }, visuals: null, custom: { audience: cu.audience, description: cu.description }, portfolio: true };
+    return { generated: clone(g), engine: process.env.ANTHROPIC_API_KEY ? 'claude' : 'rules', draft: true };
   });
   on('GET', '/api/projects/(\\d+)/generated', async (m, q) => paged(P_(m[1]).generated, q, 'generated', gSummary));
   const findGen = (id) => { for (const k of DB.order) { const P = DB.projects[k]; const g = P && P.generated.find((x) => x.id === Number(id)); if (g) { need(P, ctx().level); touch(P); return [P, g]; } } throw err(404, 'Not found'); };

@@ -61,7 +61,7 @@ const LIMIT = {
 function systemPrompt({ today, tz, ctx, lang, role, projects, declined, skill, deep }) {
   const where = ctx.project
     ? `The conversation is about the project "${ctx.project.name}" (id ${ctx.project.id}). The user's role on it is ${role}.`
-    : 'The conversation is about the whole portfolio (All projects). A change must name one project, and the user\'s role on that project is checked.';
+    : 'The conversation is about the whole portfolio (All projects). A change must name one project, and the user\'s role on that project is checked. The exception is a document: a document that covers several or all projects needs no project, and a document about one project is created first and then saved to that project from its card.';
   const list = projects.length ? projects.map((p) => `- ${p.name} (id ${p.id}, role ${p.role})`).join('\n') : '(no projects yet)';
   return [
     'You are the Thinking Area, the project management thinking partner inside Project Manager AI. You serve one person, the project manager, and only about their own projects and this platform.',
@@ -104,7 +104,7 @@ function systemPrompt({ today, tz, ctx, lang, role, projects, declined, skill, d
 }
 
 const SUGGESTIONS = {
-  portfolio: { en: ['What needs my attention today?', 'Which projects are at risk?', 'Which payments are overdue?', 'What is waiting in Updates?'], ar: ['ما الذي يحتاج إلى انتباهي اليوم؟', 'أي المشاريع معرضة للخطر؟', 'ما هي الدفعات المتأخرة؟', 'ما الذي ينتظر في التحديثات؟'] },
+  portfolio: { en: ['What needs my attention today?', 'Which projects are at risk?', 'Which payments are overdue?', 'What is waiting in Updates?', 'Create a portfolio report for all my projects'], ar: ['ما الذي يحتاج إلى انتباهي اليوم؟', 'أي المشاريع معرضة للخطر؟', 'ما هي الدفعات المتأخرة؟', 'ما الذي ينتظر في التحديثات؟', 'أنشئ تقرير محفظة لكل مشاريعي'] },
   overview: { en: ['How is this project doing?', 'Which tasks are late?', 'What is on the critical path?', 'Which payments are overdue?'], ar: ['كيف يسير هذا المشروع؟', 'ما هي المهام المتأخرة؟', 'ما هو المسار الحرج؟', 'ما هي الدفعات المتأخرة؟'] },
   schedule: { en: ['Which tasks are late this week?', 'When will we finish?', 'What is on the critical path?', 'How far are we from the baseline?'], ar: ['ما هي المهام المتأخرة هذا الأسبوع؟', 'متى سننتهي؟', 'ما هو المسار الحرج؟', 'ما مدى انحرافنا عن خط الأساس؟'] },
   logs: { en: ['Show the high risks', 'Which risks have no mitigation?', 'Which payments are overdue?', 'Which requirements have no task?'], ar: ['اعرض المخاطر العالية', 'ما هي المخاطر بلا خطة معالجة؟', 'ما هي الدفعات المتأخرة؟', 'ما هي المتطلبات التي ليس لها مهمة؟'] },

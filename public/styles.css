@@ -1277,6 +1277,7 @@ body.chat-open .an-dock { inset-inline-end: calc(var(--chat-w) + 16px); inset-bl
 .cht-ex { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .cht-exn { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
 .cht-card-foot { display: flex; flex-wrap: wrap; gap: 8px; }
+.cht-draft-note { margin-top: 8px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .cht-warn { background: var(--warning-soft); color: var(--warning); border-radius: var(--r-s); padding: 8px 10px; }
 .cht-empty { margin: auto 0; text-align: center; padding: 8px 4px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .cht-empty p { max-width: 320px; margin: 0 0 8px; font-size: var(--fs-body); }

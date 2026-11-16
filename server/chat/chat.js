@@ -26,8 +26,8 @@ const DICTATE_PER_MINUTE = 12;
 
 // Messages the person can see on a card or in a refusal, in both languages. The server picks by the person's language.
 const MSG = {
-  en: { stale: 'That record changed after I prepared this. Nothing was saved. Ask me again to refresh it.', gone: 'That record no longer exists. Nothing was saved.', perm: 'You no longer have permission to make this change. Nothing was saved.', missing: 'The project or record is gone. Nothing was saved.', generic: 'The change could not be saved, so nothing was changed. Try again.', second: 'This change needs a second confirmation.', canceled: 'This was canceled.', undone: 'This was undone.', closed: 'This card can no longer be applied.', expired: 'This card expired. Ask again and I will prepare a fresh one.', nothing: 'There is nothing to undo here.', window: 'Undo is available for 7 days after a change. Use the screens to change it now.', partial: 'Some records had changed or were gone, so they were left as they are.', undofail: 'The undo could not be saved, so nothing was changed. Try again.', fail: 'Something went wrong. Try again.' },
-  ar: { stale: 'تغير هذا السجل بعد أن أعددت الاقتراح. لم يُحفظ شيء. اطلب مني مرة أخرى لتحديثه.', gone: 'هذا السجل لم يعد موجودا. لم يُحفظ شيء.', perm: 'لم تعد لديك صلاحية لإجراء هذا التغيير. لم يُحفظ شيء.', missing: 'المشروع أو السجل لم يعد موجودا. لم يُحفظ شيء.', generic: 'تعذر حفظ التغيير ولم يتغير شيء. حاول مرة أخرى.', second: 'هذا التغيير يحتاج إلى تأكيد ثان.', canceled: 'تم إلغاء هذا الاقتراح.', undone: 'تم التراجع عن هذا الاقتراح.', closed: 'لم يعد بالإمكان تطبيق هذه البطاقة.', expired: 'انتهت صلاحية هذه البطاقة. اطلب مرة أخرى وسأجهز بطاقة جديدة.', nothing: 'لا يوجد شيء للتراجع عنه هنا.', window: 'يمكن التراجع خلال 7 أيام من التغيير. استخدم الشاشات لتغييره الآن.', partial: 'بعض السجلات تغيّرت أو حُذفت، لذلك تُركت كما هي.', undofail: 'تعذر حفظ التراجع ولم يتغير شيء. حاول مرة أخرى.', fail: 'حدث خطأ ما. حاول مرة أخرى.' },
+  en: { stale: 'That record changed after I prepared this. Nothing was saved. Ask me again to refresh it.', gone: 'That record no longer exists. Nothing was saved.', perm: 'You no longer have permission to make this change. Nothing was saved.', missing: 'The project or record is gone. Nothing was saved.', generic: 'The change could not be saved, so nothing was changed. Try again.', second: 'This change needs a second confirmation.', canceled: 'This was canceled.', undone: 'This was undone.', closed: 'This card can no longer be applied.', expired: 'This card expired. Ask again and I will prepare a fresh one.', nothing: 'There is nothing to undo here.', window: 'Undo is available for 7 days after a change. Use the screens to change it now.', partial: 'Some records had changed or were gone, so they were left as they are.', undofail: 'The undo could not be saved, so nothing was changed. Try again.', fail: 'Something went wrong. Try again.', noproject: 'This document covers more than one project, so it cannot be saved to a single project.', savefail: 'The document could not be saved to the project. Nothing was changed.' },
+  ar: { stale: 'تغير هذا السجل بعد أن أعددت الاقتراح. لم يُحفظ شيء. اطلب مني مرة أخرى لتحديثه.', gone: 'هذا السجل لم يعد موجودا. لم يُحفظ شيء.', perm: 'لم تعد لديك صلاحية لإجراء هذا التغيير. لم يُحفظ شيء.', missing: 'المشروع أو السجل لم يعد موجودا. لم يُحفظ شيء.', generic: 'تعذر حفظ التغيير ولم يتغير شيء. حاول مرة أخرى.', second: 'هذا التغيير يحتاج إلى تأكيد ثان.', canceled: 'تم إلغاء هذا الاقتراح.', undone: 'تم التراجع عن هذا الاقتراح.', closed: 'لم يعد بالإمكان تطبيق هذه البطاقة.', expired: 'انتهت صلاحية هذه البطاقة. اطلب مرة أخرى وسأجهز بطاقة جديدة.', nothing: 'لا يوجد شيء للتراجع عنه هنا.', window: 'يمكن التراجع خلال 7 أيام من التغيير. استخدم الشاشات لتغييره الآن.', partial: 'بعض السجلات تغيّرت أو حُذفت، لذلك تُركت كما هي.', undofail: 'تعذر حفظ التراجع ولم يتغير شيء. حاول مرة أخرى.', fail: 'حدث خطأ ما. حاول مرة أخرى.', noproject: 'يشمل هذا المستند أكثر من مشروع، لذلك لا يمكن حفظه في مشروع واحد.', savefail: 'تعذر حفظ المستند في المشروع. لم يتغير شيء.' },
 };
 const err = (status, message) => Object.assign(new Error(message), { status, expose: true });
 const PROJECTISH = /\b(?:project|projects|task|tasks|risk|risks|deliverable|deliverables|requirement|requirements|payment|payments|milestone|schedule|gantt|baseline|status|update|updates|inbox|report|document|documents|contract|late|overdue|critical|budget|invoice|portfolio|owner|assignee|steering|sponsor|client|item|items|close|closed|mitigation|mitigate|progress|complete|completed|assign|assigned|due|dashboard|dashboards|widget|widgets|kpi|kpis|gauge|chart|charts|scorecard)\b|لوحة متابعة|لوحة معلومات|ودجت|مشروع|مشاريع|مهمة|مهام|خطر|مخاطر|دفعة|دفعات|مخرج|متطلب|جدول|تقرير|عقد|متأخر/i;
@@ -50,7 +50,7 @@ function createChat({ db, store, api, auth, ops, model }) {
     let status = c.status;
     if (status === 'pending' && Date.now() - Date.parse(c.created_at) > CARD_HOURS * 3600e3) status = 'expired';
     if (status === 'applied' && Date.now() - Date.parse(c.applied_at) > UNDO_DAYS * 86400e3) status = 'applied_final';
-    return { id, status, strong: !!c.strong, items: c.items, note: c.note || '', message: c.message || '', created_at: c.created_at, applied_at: c.applied_at || null, projects: c.projects || [], docs: status === 'applied' || status === 'applied_final' ? (c.results || []).map((r, i) => (r && r.generated_id ? { id: r.generated_id, title: (c.items[i] && c.items[i].sum && c.items[i].sum.title) || '' } : null)).filter(Boolean) : [], widgets: status === 'applied' || status === 'applied_final' ? (c.results || []).map((r, i) => (r && r.widget_id ? { ix: i, id: r.widget_id, title: (c.items[i] && c.items[i].sum && c.items[i].sum.title) || '' } : null)).filter(Boolean) : [] };
+    return { id, status, strong: !!c.strong, items: c.items, note: c.note || '', message: c.message || '', created_at: c.created_at, applied_at: c.applied_at || null, projects: c.projects || [], docs: status === 'applied' || status === 'applied_final' ? (c.results || []).map((r, i) => (r && r.generated_id ? { id: r.generated_id, title: (c.items[i] && c.items[i].sum && c.items[i].sum.title) || '' } : null)).filter(Boolean) : [], drafts: status === 'applied' || status === 'applied_final' ? (c.results || []).map((r, i) => (r && r.draft ? { ix: i, id: r.draft.id, title: r.draft.title || '', format: r.draft.format || 'docx', related_project_id: r.related_project_id || null, related_project: r.related_project || null, saved: r.saved || null } : null)).filter(Boolean) : [], widgets: status === 'applied' || status === 'applied_final' ? (c.results || []).map((r, i) => (r && r.widget_id ? { ix: i, id: r.widget_id, title: (c.items[i] && c.items[i].sum && c.items[i].sum.title) || '' } : null)).filter(Boolean) : [] };
   }
   async function activeThread(userId, projectId, create) {
     const pid = projectId || null;
@@ -415,6 +415,51 @@ function createChat({ db, store, api, auth, ops, model }) {
     }
   }
 
+  // ---------- draft documents ----------
+  // A document made in All projects is a draft kept on its card. It can be read, and saved to its related project. A document
+  // that covers the whole portfolio has no related project, so it is never saved to one.
+  const saving = new Set();
+  async function draftOf(user, id, ix) {
+    const m = await fresh(user, id); const card = m.card;
+    const r = (card.results || [])[Number(ix)];
+    if (card.status !== 'applied' || !r || !r.draft) throw err(404, 'Not found');
+    if (r.related_project_id) { const { roles } = await store.forUser(user.id); if (!roles[r.related_project_id]) throw err(404, 'Not found'); }
+    return { m, card, r, ix: Number(ix) };
+  }
+  async function getDraft(user, id, ix) { const d = await draftOf(user, id, ix); return { generated: d.r.draft }; }
+  async function saveDraft(user, id, ix, lang) {
+    const M = MSG[lang] || MSG.en;
+    const d = await draftOf(user, id, ix);
+    if (d.r.saved) return { card: cardView(id, d.card), already: true };
+    const pid = d.r.related_project_id;
+    if (!pid) throw err(409, M.noproject);
+    const key = id + ':' + d.ix; if (saving.has(key)) return { card: cardView(id, d.card), already: true };
+    saving.add(key);
+    try {
+      let saved = null;
+      await api.runAs({ user, write: true, async fn(h) {
+        const P = h.P(pid, 'editor');
+        const before = new Set(P.audit.map((a) => a.id));
+        const g = { ...h.clone(d.r.draft), project_id: P.id, folder_id: null };
+        if (P.generated.some((x) => x.id === g.id)) g.id = h.nid();
+        P.generated.unshift(g);
+        h.audit(P, h.ACTOR(), 'document_generated', { summary: `Saved ${g.title} from the Thinking Area` });
+        for (const a of P.audit) if (!before.has(a.id)) a.detail = { ...(a.detail || {}), source: 'chat', chat_thread: d.m.tid };
+        saved = { project_id: P.id, project: P.p.name, generated_id: g.id };
+      } });
+      const results = (d.card.results || []).map((x, i) => (i === d.ix ? { ...x, saved } : x));
+      const undo = (d.card.undo || []).concat([{ op: 'remove_generated', project_id: saved.project_id, generated_id: saved.generated_id }]);
+      const upd = await setCard(id, 'applied', { results, undo });
+      if (!upd) { await tools.undoOps(api, user, [{ op: 'remove_generated', project_id: saved.project_id, generated_id: saved.generated_id }], d.m.tid).catch(() => {}); throw err(409, M.closed); }
+      await log(user, d.m.project_id, 'apply', { category: 'draft_save', outcome: 'ok', billable: false });
+      return { card: cardView(id, upd.card), saved };
+    } catch (e) {
+      if (e.status && e.status < 500) throw e;
+      console.error('chat draft save', e);
+      throw err(500, M.savefail);
+    } finally { saving.delete(key); }
+  }
+
   // ---------- thread views ----------
   async function view(user, projectId, screen) {
     const A = await access(user, projectId);
@@ -555,6 +600,8 @@ function createChat({ db, store, api, auth, ops, model }) {
     if (method === 'POST' && (m = p.match(/^\/api\/chat\/threads\/(\d+)\/open$/))) { io.json(res, 200, await openThread(user, m[1])); return true; }
     if (method === 'DELETE' && (m = p.match(/^\/api\/chat\/threads\/(\d+)$/))) { io.json(res, 200, await deleteThread(user, m[1])); return true; }
     if (method === 'POST' && p === '/api/chat/clear') { const b = await read(); io.json(res, 200, await clear(user, pid(b.project_id))); return true; }
+    if (method === 'GET' && (m = p.match(/^\/api\/chat\/messages\/(\d+)\/drafts\/(\d+)$/))) { io.json(res, 200, await getDraft(user, m[1], m[2])); return true; }
+    if (method === 'POST' && (m = p.match(/^\/api\/chat\/messages\/(\d+)\/drafts\/(\d+)\/save$/))) { await read(); io.json(res, 200, await saveDraft(user, m[1], m[2], uiLang(user))); return true; }
     if (method === 'POST' && (m = p.match(/^\/api\/chat\/messages\/(\d+)\/(apply|cancel|undo|feedback)$/))) {
       const b = await read(); const lang = uiLang(user);
       const out = m[2] === 'apply' ? await applyCard(user, m[1], b, lang) : m[2] === 'cancel' ? await cancelCard(user, m[1]) : m[2] === 'undo' ? await undoCard(user, m[1], lang) : await feedback(user, m[1], b.value);
@@ -581,7 +628,7 @@ function createChat({ db, store, api, auth, ops, model }) {
     throw err(404, 'Not found');
   }
 
-  return { route, message, view, brief, feedbackList, historyList, openThread, updateThread, deleteThread, clear, applyCard, cancelCard, undoCard, feedback, purge };
+  return { route, message, view, brief, getDraft, saveDraft, feedbackList, historyList, openThread, updateThread, deleteThread, clear, applyCard, cancelCard, undoCard, feedback, purge };
 }
 
 module.exports = { createChat };

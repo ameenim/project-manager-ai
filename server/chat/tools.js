@@ -66,7 +66,7 @@ WRITE_TOOLS.push(
   { name: 'add_update', description: 'Propose adding a pasted message or note to the Updates inbox, where it becomes suggestions to review.', input_schema: { type: 'object', properties: { ...proj, body: str('The message text'), sender: str('Who sent it, optional'), subject: str('Optional subject') }, required: ['body'] } },
 );
 WRITE_TOOLS.push(
-  { name: 'generate_report', description: 'Propose generating a standard project document from the project data: charter, pm_plan, risk_plan, comms_plan, governance, quality_plan, progress_weekly or progress_biweekly. It appears in the Reports tab. Custom documents and templates are not available here.', input_schema: { type: 'object', properties: { ...proj, type: { type: 'string', enum: ['charter', 'pm_plan', 'risk_plan', 'comms_plan', 'governance', 'quality_plan', 'progress_weekly', 'progress_biweekly'] }, format: { type: 'string', enum: ['docx', 'xlsx', 'pptx'], description: 'Word, Excel or PowerPoint. Default docx.' }, template: str('Optional. Id or name of an uploaded template from list_templates.') }, required: ['type'] } },
+  { name: 'generate_report', description: 'Propose generating a standard project document from the project data: charter, pm_plan, risk_plan, comms_plan, governance, quality_plan, progress_weekly or progress_biweekly. Inside a project it appears in the Reports tab. In All projects it is created first as a draft for that project, and the manager can then save it to the project from the card.', input_schema: { type: 'object', properties: { ...proj, type: { type: 'string', enum: ['charter', 'pm_plan', 'risk_plan', 'comms_plan', 'governance', 'quality_plan', 'progress_weekly', 'progress_biweekly'] }, format: { type: 'string', enum: ['docx', 'xlsx', 'pptx'], description: 'Word, Excel or PowerPoint. Default docx.' }, template: str('Optional. Id or name of an uploaded template from list_templates.') }, required: ['type'] } },
 );
 WRITE_TOOLS.push(
   { name: 'propose_schedule_plan', description: 'Propose a new or updated schedule as one set of changes to the start date, duration (working days) or progress of up to 12 existing tasks. The card shows every change, how many other tasks move and the project end before and after. Use it after reading get_schedule_detail. Links, baselines and new tasks are not part of it. For a single task use change_task_schedule.', input_schema: { type: 'object', properties: { ...proj, title: str('Short name of the plan'), reason: str('Why this plan, in one or two sentences'), changes: { type: 'array', items: { type: 'object', properties: { task: str('Task id, or its exact name'), start: str('YYYY-MM-DD'), duration: num('Working days'), progress: num('0 to 100') }, required: ['task'] } } }, required: ['title', 'changes'] } },
@@ -79,7 +79,7 @@ WRITE_TOOLS.push(
   { name: 'restore_schedule_version', description: 'Propose restoring the schedule to an earlier saved version. Use list_schedule_versions first for the id. The current schedule is saved first so Undo can bring it back.', input_schema: { type: 'object', properties: { ...proj, version_id: num('The version id from list_schedule_versions') }, required: ['version_id'] } },
   { name: 'set_task_links', description: 'Propose the predecessors of one task, replacing its current list (an empty list removes them all). Each predecessor is another task with a type FS, SS, FF or SF (default FS) and a lag in working days (default 0). Loops are refused. The card shows the effect on the project end.', input_schema: { type: 'object', properties: { ...proj, task: str('Task id, or its exact name'), predecessors: { type: 'array', maxItems: 10, items: { type: 'object', properties: { task: str('Predecessor task id or exact name'), type: { type: 'string', enum: ['FS', 'SS', 'FF', 'SF'] }, lag: num('Working days, may be negative') }, required: ['task'] } } }, required: ['task', 'predecessors'] } },
   { name: 'create_widget', description: 'Propose a new custom widget for the Overview pages. It is saved as a private draft and, if you ask for a scope, added to that overview. It is never published to others. For a dashboard call it once per widget, up to 12, after checking each spec with preview_widget. The spec is plain data over these datasets and fields: '+Object.entries(WS.DATASETS).map(([k, v]) => k + ' (' + v.map((x) => x.name).join(', ') + ')').join('; ') + '. viz is one of ' + WS.VIZ.join(', ') + '. Charts need groupBy and agg (count, sum, avg, min, max, median, distinct, stdev with a number measure, or agg calc with calc {op ratio, pct, diff, sum or product, a and b each {agg, measure}}). Stacked, stackedbar, pct, heatmap and pivot need splitBy (another field, splitLimit up to 8). Cluster and lines take either splitBy or series (2 to 4 of {agg, measure}). showAs is value, pct_total, pct_cat, pct_series, running, diff_prev, pct_diff_prev or rank. Date groupBy takes dateBy day, month, quarter or year, a number groupBy takes bin. A kpi needs agg. A gauge needs agg and max. Scatter needs numeric x and y, optional colorBy and trend. A table needs columns (up to 8), sortBy, sortDir, rows up to 50 and optional totals. Alert colors are rules, up to 6 of {op gt, gte, lt, lte, eq or between, value, value2, tone good, warn, bad, info, violet or neutral}, first match wins, for kpi, gauge, bar, column and table (with ruleField). Also target, decimals, unit, legend, size (s, m or l) and match (all or any). Filters are {field, op, value} with op eq, ne, contains, not_contains, starts_with, empty, not_empty, in, not_in (value is a list), gt, gte, lt, lte, between (value2), before_today, within_days, last_days, this_month, this_quarter or this_year.', input_schema: { type: 'object', properties: { ...proj, title: str('Widget title, up to 60 characters'), description: str('Up to 200 characters'), group: { type: 'string', enum: WS.GROUPS }, add_to: { type: 'string', enum: ['portfolio', 'project'], description: 'Optional. Which Overview to add it to.' }, spec: { type: 'object', description: 'The widget definition: dataset, viz, filters, match, groupBy, dateBy, bin, agg, measure, calc, series, splitBy, splitLimit, showAs, target, rules, columns, sortBy, sortDir, rows, totals, limit, sort, format, decimals, unit, legend, size, max, x, y, colorBy, trend.' } }, required: ['title', 'group', 'spec'] } },
-  { name: 'create_custom_document', description: 'Propose a new custom document for the Reports tab. Give it a name, the audience, a short brief and 3 to 15 sections, each with a heading and one line of guidance on what it must cover. Use it for anything beyond the standard types, including documents related to an attached file. The person reviews the plan and presses Apply before anything is created.', input_schema: { type: 'object', properties: { ...proj, name: str('Document name'), audience: str('Who it is for'), description: str('What it is for and the facts to carry over. Up to 1000 characters.'), sections: { type: 'array', items: { type: 'object', properties: { heading: str('Section heading'), guidance: str('What the section must cover') }, required: ['heading'] } }, format: { type: 'string', enum: ['docx', 'xlsx', 'pptx'], description: 'Word, Excel or PowerPoint. Default docx.' } }, required: ['name', 'audience', 'sections'] } },
+  { name: 'create_custom_document', description: 'Propose a new custom document. Give it a name, the audience, a short brief and 3 to 15 sections, each with a heading and one line of guidance on what it must cover. Use it for anything beyond the standard types, including documents related to an attached file. Inside a project it is added to the Reports tab. In All projects, give project_id when the document is about one project, and leave project_id out for a document that covers several or all projects, such as a portfolio report. It is created first as a draft. A document about one project can then be saved to that project from the card, and a portfolio document cannot. The person reviews the plan and presses Apply before anything is created.', input_schema: { type: 'object', properties: { ...proj, name: str('Document name'), audience: str('Who it is for'), description: str('What it is for and the facts to carry over. Up to 1000 characters.'), sections: { type: 'array', items: { type: 'object', properties: { heading: str('Section heading'), guidance: str('What the section must cover') }, required: ['heading'] } }, format: { type: 'string', enum: ['docx', 'xlsx', 'pptx'], description: 'Word, Excel or PowerPoint. Default docx.' } }, required: ['name', 'audience', 'sections'] } },
 );
 const WRITE_NAMES = new Set(WRITE_TOOLS.map((t) => t.name));
 const catalog = (canWrite) => (canWrite ? READ_TOOLS.concat(WRITE_TOOLS) : READ_TOOLS.concat(WRITE_TOOLS.filter((t) => USER_LEVEL.has(t.name)))).map((t) => ({ name: t.name, description: t.description, input_schema: t.input_schema }));
@@ -474,7 +474,9 @@ WRITE.generate_report = async function (h, input, scope) {
     if (!tpl) throw bad('That template was not found. The available templates are: ' + (all.map((x) => `${x.id} (${x.name})`).join(', ') || 'none uploaded') + '.', { not_found: true });
     if (!(tpl.mode === 'design' || tpl.doc_type === '*' || tpl.doc_type === ty.id)) throw bad(`The template "${tpl.name}" fits ${tpl.doc_type}, not ${ty.title}.`, { not_found: true });
   }
-  return { op: { op: 'generate_report', project_id: pid, type: ty.id, format, ...(tpl ? { template_id: tpl.id } : {}) }, summary: `Generate "${ty.title}" as ${FORMAT_LABEL[format]}${tpl ? ` with the template "${tpl.name}"` : ''}`, sum: { op: 'generate', title: ty.title }, project: P.p.name, changes: [['type', null, ty.title], ['format', null, FORMAT_LABEL[format]], ...(tpl ? [['template', null, clip(tpl.name, 80)]] : [])] };
+  // In All projects the document is a draft first. The manager saves it to the project from the card afterwards.
+  const draft = !scope.projectId;
+  return { op: { op: 'generate_report', project_id: pid, type: ty.id, format, ...(draft ? { draft: true } : {}), ...(tpl ? { template_id: tpl.id } : {}) }, summary: `Generate "${ty.title}" as ${FORMAT_LABEL[format]}${tpl ? ` with the template "${tpl.name}"` : ''}`, sum: { op: 'generate', title: ty.title }, project: P.p.name, changes: [['type', null, ty.title], ['format', null, FORMAT_LABEL[format]], ...(tpl ? [['template', null, clip(tpl.name, 80)]] : []), ...(draft ? [['related_project', null, P.p.name]] : [])] };
 };
 
 WRITE.propose_schedule_plan = async function (h, input, scope) {
@@ -640,7 +642,12 @@ WRITE.create_widget = async function (h, input, scope) {
   return { op: { op: 'create_widget', project_id: pid, meta, spec, add_to: add }, summary: `Create the widget "${meta.title}"`, sum: { op: 'create_widget', title: meta.title }, project: P.p.name, changes: rows };
 };
 WRITE.create_custom_document = async function (h, input, scope) {
-  const pid = pickProject(h, scope, input); const P = h.P(pid, 'editor');
+  // Inside a project the project is known. In All projects a document may name one project, or none when it covers the portfolio.
+  const named = input.project_id != null && input.project_id !== '';
+  const draft = !scope.projectId;
+  let pid = null, P = null;
+  if (scope.projectId || named) { pid = pickProject(h, scope, input); P = h.P(pid, 'editor'); }
+  else if (!h.order.length) throw bad('Create a project first. A portfolio document is written from your projects.', { needs_project: true });
   const name = cleanText(input.name, 120); if (!name) throw bad('Give the document a name.');
   const audience = cleanText(input.audience, 160); if (!audience) throw bad('Say who the document is for.');
   const seen = new Set(); const sections = [];
@@ -652,8 +659,17 @@ WRITE.create_custom_document = async function (h, input, scope) {
   if (sections.length < 3) throw bad('A document needs at least 3 sections with different headings.');
   const format = input.format && FORMAT_LABEL[input.format] ? input.format : 'docx';
   const description = cleanText(input.description, 1000);
-  return { op: { op: 'generate_custom', project_id: pid, name, audience, description, sections, format }, summary: `Create the document "${name}" as ${FORMAT_LABEL[format]}`, sum: { op: 'generate', title: name }, project: P.p.name, changes: [['name', null, name], ['for', null, audience], ['sections', null, sections.map((x) => x.heading).join(', ')], ['format', null, FORMAT_LABEL[format]]] };
+  return { op: { op: 'generate_custom', project_id: pid, name, audience, description, sections, format, ...(draft ? { draft: true } : {}) }, summary: `Create the document "${name}" as ${FORMAT_LABEL[format]}`, sum: { op: 'generate', title: name }, project: P ? P.p.name : undefined, changes: [['name', null, name], ['for', null, audience], ['sections', null, sections.map((x) => x.heading).join(', ')], ['format', null, FORMAT_LABEL[format]], ...(draft ? [['related_project', null, P ? P.p.name : 'none']] : [])] };
 };
+
+// A draft document is built but not filed. It stays on the card (in the card's results) until the manager saves it to the
+// related project. A document that covers the whole portfolio has no related project, so it can never be saved to one.
+const MAX_DRAFT = 400000;
+function draftResult(P, g) {
+  const draft = { ...g, content: String(g.content || '').slice(0, MAX_DRAFT) };
+  if (P) draft.project_id = P.id; else draft.project_id = null;
+  return { undo: { op: 'discard_draft' }, refs: { draft, related_project_id: P ? P.id : null, related_project: P ? P.p.name : null }, label: g.title };
+}
 
 // ---------- applying and undoing ----------
 // Apply runs inside one runAs, so every operation succeeds or none is kept. Each operation returns what it needs to be undone.
@@ -703,7 +719,8 @@ async function applyOp(h, op) {
     return { undo: { op: 'restore_deleted_task', project_id: P.id, task: snap, kids, links }, refs: { task_id: t.id }, label: `task "${t.name}"` };
   }
   if (op.op === 'generate_report') {
-    const r = await h.call('POST', `/api/projects/${P.id}/generate`, { type: op.type, format: op.format, ...(op.template_id ? { template_id: op.template_id } : {}) });
+    const r = await h.call('POST', `/api/projects/${P.id}/generate`, { type: op.type, format: op.format, ...(op.template_id ? { template_id: op.template_id } : {}), ...(op.draft ? { draft: true } : {}) });
+    if (op.draft) return draftResult(P, r.generated);
     return { undo: { op: 'remove_generated', project_id: P.id, generated_id: r.generated.id }, refs: { generated_id: r.generated.id }, label: r.generated.title, generated: r.generated.id };
   }
   if (op.op === 'schedule_plan') {
@@ -771,7 +788,10 @@ async function applyOp(h, op) {
     return { undo: { op: 'remove_widget', project_id: P.id, widget_id: r.widget.id }, refs: { widget_id: r.widget.id }, label: `widget "${op.meta.title}"` };
   }
   if (op.op === 'generate_custom') {
-    const r = await h.call('POST', `/api/projects/${P.id}/generate`, { type: 'pm_plan', format: op.format, custom: { name: op.name, audience: op.audience, description: op.description, sections: op.sections } });
+    const custom = { name: op.name, audience: op.audience, description: op.description, sections: op.sections };
+    if (!P) { const r = await h.call('POST', '/api/portfolio/generate', { format: op.format, custom }); return draftResult(null, r.generated); }
+    const r = await h.call('POST', `/api/projects/${P.id}/generate`, { type: 'pm_plan', format: op.format, custom, ...(op.draft ? { draft: true } : {}) });
+    if (op.draft) return draftResult(P, r.generated);
     return { undo: { op: 'remove_generated', project_id: P.id, generated_id: r.generated.id }, refs: { generated_id: r.generated.id }, label: r.generated.title, generated: r.generated.id };
   }
   if (op.op === 'change_schedule') {
