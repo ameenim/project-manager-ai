@@ -7,7 +7,7 @@ const MAX_ADDED_PER_SCOPE = 40;
 const MAX_LAYOUTS_PER_SCOPE = 20;
 const ROW_CAP = { tasks: 3000, default: 2000 };
 
-module.exports = function createWidgets({ on, ctx, err, store, WS, S, rawProject, stats, TODAY, P_, activeList }) {
+module.exports = function createWidgets({ OF, on, ctx, err, store, WS, S, rawProject, stats, TODAY, P_, activeList }) {
   const q = (sql, params) => store.db.query(sql, params);
   const uid = () => ctx().user.id;
   const num = (v) => (v == null ? 0 : Number(v));
@@ -21,12 +21,17 @@ module.exports = function createWidgets({ on, ctx, err, store, WS, S, rawProject
   // ---------- datasets: the rows a widget reads, from the signed in person's own projects ----------
   const LEVEL = { High: 3, Medium: 2, Low: 1 };
   const dnum = (d) => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10)) / 864e5;
-  function datasetsFor(list) {
-    const today = TODAY();
+  // f is the overview filter. With one on, every dataset keeps only the rows inside the period and status, the same rows the
+  // built in widgets read, so a widget a person added follows the top filters like every other widget.
+  function datasetsFor(list, f) {
+    const today = TODAY(), fOn = !!(f && (f.y || f.s));
     const out = { projects: [], tasks: [], payments: [], risks: [], deliverables: [] }, truncated = {};
     const push = (name, row) => { const cap = ROW_CAP[name] || ROW_CAP.default; if (out[name].length >= cap) { truncated[name] = true; return; } out[name].push(row); };
     for (const P of list) {
-      const raw = rawProject(P), st = stats(P), pname = P.p.name;
+      const raw = rawProject(P), pname = P.p.name, mm = S.progressMetrics(P.tasks, raw, today);
+      const sc = fOn ? OF.scope(P, f, mm.rows, today) : null;
+      const st = sc ? OF.scopedStats(stats(P), sc, f) : stats(P);
+      const keepItem = sc ? new Set(sc.items.map((i) => i.id)) : null;
       push('projects', {
         project_id: P.id, name: pname, client: P.p.client || '', health: st.health, status: P.p.status || '', progress: st.progress, planned: st.planned, spi: st.spi,
         overdue: st.overdue, pending_review: st.pendingItems + st.pendingInbox, value: P.p.value || 0, currency: P.p.currency || '',
@@ -34,12 +39,13 @@ module.exports = function createWidgets({ on, ctx, err, store, WS, S, rawProject
         slip_days: st.forecast_end && P.p.end_date ? Math.round(dnum(st.forecast_end) - dnum(P.p.end_date)) : null,
         days_left: P.p.end_date ? Math.round(dnum(P.p.end_date) - dnum(today)) : null,
       });
-      for (const r of S.progressMetrics(P.tasks, raw, today).rows) {
+      for (const r of (sc ? sc.rows : mm.rows)) {
         const p = r.progress || 0;
         push('tasks', { project_id: P.id, project: pname, task_id: r.id, name: r.name, owner: r.assignee || '', start: r.start || null, finish: r.finish || null, duration: r.duration || 0, progress: p, status: p >= 100 ? 'done' : r.overdue ? 'late' : p > 0 ? 'active' : 'todo', critical: r.critical ? 'yes' : 'no', milestone: r.is_milestone ? 'yes' : 'no', days_late: r.overdue && r.finish ? Math.max(0, Math.round(dnum(today) - dnum(r.finish))) : 0 });
       }
       for (const i of P.items) {
         if (i.status === 'ignored') continue;
+        if (keepItem && ['milestone', 'deliverable', 'risk'].includes(i.kind) && !keepItem.has(i.id)) continue;
         const d = i.data || {};
         if (i.kind === 'milestone') {
           const amount = d.amount != null ? d.amount : (d.percent != null && P.p.value ? Math.round((P.p.value * d.percent) / 100) : null);
@@ -123,10 +129,10 @@ module.exports = function createWidgets({ on, ctx, err, store, WS, S, rawProject
   on('GET', '/api/widgets/installed', async (m, query) => ({ widgets: await installedFor(uid(), scopeOf(query.scope)) }));
 
   // What the overview pages append to their own payload: nothing at all unless the person added a widget there.
-  async function extras(scope, list) {
+  async function extras(scope, list, f) {
     const widgets = await installedFor(uid(), scope);
     if (!widgets.length) return {};
-    const { today, datasets, truncated } = datasetsFor(list);
+    const { today, datasets, truncated } = datasetsFor(list, f);
     return { widgets, datasets, datasets_today: today, datasets_truncated: truncated };
   }
 

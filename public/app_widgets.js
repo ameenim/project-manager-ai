@@ -309,7 +309,7 @@
     const widgets = { ...cfg.widgets }, order = cfg.order.slice();
     for (const w of d.widgets) {
       const id = 'cw_' + w.id;
-      widgets[id] = { size: sizeOf(w.spec), title: '', label: w.title, community: { id: w.id, author: w.author, version: w.version, title: w.title, mine: w.mine }, wf: specWF(w.spec, pack), render: (body, dd, ctx, F) => renderSpec(body, w, pack, ctx, { f: F }) };
+      widgets[id] = { size: sizeOf(w.spec), title: '', label: w.title, community: { id: w.id, author: w.author, version: w.version, title: w.title, mine: w.mine }, wf: specWF(w.spec, pack), render: (body, dd, ctx, F) => { if (dd && dd.datasets) { pack.datasets = dd.datasets; pack.truncated = dd.datasets_truncated || {}; if (dd.datasets_today) pack.today = dd.datasets_today; } return renderSpec(body, w, pack, ctx, { f: F }); } };
       order.push(id);
     }
     return { ...cfg, widgets, order };

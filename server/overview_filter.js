@@ -122,6 +122,23 @@ module.exports = function createOverviewFilter({ err, TODAY }) {
     return sc.hit || overlaps(P.p.start_date, P.p.end_date || st.forecast_end, r);
   }
 
+  // The figures of one project inside the period and status that are picked. Progress, plan, schedule index, late tasks and
+  // the review count are recomputed from the rows that match, so a tile never shows the whole life of a project while a filter is on.
+  // Health stays the project's own health, because that is what the health filter reads.
+  function scopedStats(st, sc, f) {
+    if (!f || !(f.y || f.s)) return st;
+    let w = 0, a = 0, pl = 0, base = 0, late = 0;
+    for (const r of sc.rows) {
+      const dur = Math.max(r.duration || 1, 1);
+      w += dur; a += dur * (r.progress || 0);
+      if (r.plannedPct != null) { pl += dur * r.plannedPct; base++; }
+      if (r.overdue) late++;
+    }
+    const progress = w ? Math.round(a / w) : 0, planned = base && w ? Math.round(pl / w) : null;
+    const spi = planned ? Math.round((progress / planned) * 100) / 100 : null;
+    return { ...st, progress, planned, spi, overdue: late, tasks: sc.rows.length, pendingItems: sc.items.filter((i) => i.status === 'proposed').length };
+  }
+
   // The tasks of a computed schedule that stay in a project view: every summary row (they carry the phases) and the leaf rows that match.
   function scheduleFor(sched, rows) {
     const keep = new Set(rows.map((x) => x.id));
@@ -144,5 +161,5 @@ module.exports = function createOverviewFilter({ err, TODAY }) {
     return { years: [...years].sort((a, b) => a - b), clients: [...clients].sort(by), currencies: [...currencies].sort(by), projects: projects.sort((a, b) => by(a.name, b.name)) };
   }
 
-  return { parse, active, hasPeriod, hasProject, range, describe, inRange, overlaps, taskStatus, payStatus, delStatus, riskStatus, projectPasses, scope, includeProject, scheduleFor, options, STATUSES, HEALTH, STATUS_LABEL, HEALTH_LABEL };
+  return { parse, active, hasPeriod, hasProject, range, describe, inRange, overlaps, taskStatus, payStatus, delStatus, riskStatus, projectPasses, scope, scopedStats, includeProject, scheduleFor, options, STATUSES, HEALTH, STATUS_LABEL, HEALTH_LABEL };
 };

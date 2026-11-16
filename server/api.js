@@ -910,9 +910,10 @@ module.exports = function createApi(store, auth, connectors, ops) {
       const sc = OF.scope(P, f, mm.rows, TODAY());
       if (!OF.includeProject(P, st, f, sc)) continue;
       kept.push(P);
-      pendingInbox += st.pendingInbox; pendingItems += st.pendingItems;
-      cards.push({ ...clone(P.p), stats: st });
-      radarEntries.push({ p: { ...clone(P.p), id: P.id }, stats: st, items: sc.items.map((i) => ({ ...i, data: i.data || {} })), rows: sc.rows, sched: S.schedule(P.tasks, rawProject(P)) });
+      const ss = OF.scopedStats(st, sc, f); // the figures inside the picked period and status
+      pendingInbox += ss.pendingInbox; pendingItems += ss.pendingItems;
+      cards.push({ ...clone(P.p), stats: ss });
+      radarEntries.push({ p: { ...clone(P.p), id: P.id }, stats: ss, items: sc.items.map((i) => ({ ...i, data: i.data || {} })), rows: sc.rows, sched: S.schedule(P.tasks, rawProject(P)) });
       for (const m of sc.items.filter((i) => i.kind === 'milestone' && (i.state !== 'paid' || f.s === 'done'))) {
         const d = m.data;
         if (d.due_date) {
@@ -990,15 +991,23 @@ module.exports = function createApi(store, auth, connectors, ops) {
     return saved;
   }
   // Opening a trends screen first records today's point, so the newest point is never older than the screen.
-  async function trendsFor(list, days) {
-    const today = TODAY();
+  // The trend widgets read the daily snapshots. With a period on the overview they read the days of that period instead of the last
+  // days, and a period that has not started yet has no history to draw.
+  async function trendsFor(list, days, range) {
+    const real = TODAY();
     await capture(list);
-    let rows = await snapshots.range(list.map((P) => P.id), dstr(dnum(today) - days), today);
+    let from = dstr(dnum(real) - days), to = real;
+    if (range) { from = range.lo; to = range.hi < real ? range.hi : real; days = Math.max(1, Math.round(dnum(to) - dnum(from))); }
+    const ids = list.map((P) => P.id), pj = list.map((P) => ({ id: P.id, name: P.p.name, currency: P.p.currency }));
+    if (from > to) return buildTrends([], { today: to, days, projects: pj });
+    let rows = await snapshots.range(ids, from, to);
     // a skipped capture must never leave today without a row (for example after the rows were removed): record those now
-    const have = new Set(rows.filter((r) => r.date === today).map((r) => r.project_id));
-    const missing = list.filter((P) => P && P.p && isLive(P) && !have.has(Number(P.id)));
-    if (missing.length) { await capture(missing, true); rows = await snapshots.range(list.map((P) => P.id), dstr(dnum(today) - days), today); }
-    return buildTrends(rows, { today, days, projects: list.map((P) => ({ id: P.id, name: P.p.name, currency: P.p.currency })) });
+    if (to === real) {
+      const have = new Set(rows.filter((r) => r.date === real).map((r) => r.project_id));
+      const missing = list.filter((P) => P && P.p && isLive(P) && !have.has(Number(P.id)));
+      if (missing.length) { await capture(missing, true); rows = await snapshots.range(ids, from, to); }
+    }
+    return buildTrends(rows, { today: to, days, projects: pj });
   }
 
   // The type a browser reports for an upload is only what the sender says. The first bytes of the file say what it is.
@@ -1170,10 +1179,10 @@ module.exports = function createApi(store, auth, connectors, ops) {
   // the widget marketplace. The overviews also carry the custom widgets the person added and the data those read.
   const OF = require('./overview_filter')({ err, TODAY });
   const OR = require('./overview_rows')({ OF, S, rawProject, TODAY });
-  const WIDGETS = require('./widgets')({ on, ctx, err, store, WS: win.__WidgetSpec, S, rawProject, stats, TODAY, P_, activeList });
+  const WIDGETS = require('./widgets')({ OF, on, ctx, err, store, WS: win.__WidgetSpec, S, rawProject, stats, TODAY, P_, activeList });
   on('GET', '/api/dashboard', async (m, q) => {
     const f = OF.parse(q), { kept, ...d } = dashboard(f);
-    return { ...d, trends: await trendsFor(kept, 30), ...(await WIDGETS.extras('portfolio', kept)) };
+    return { ...d, trends: await trendsFor(kept, 30, OF.range(f)), ...(await WIDGETS.extras('portfolio', kept, f)) };
   });
   // The row level data behind the overview, for the Excel report. It reads the same filters as the screen.
   on('GET', '/api/dashboard/report-data', async (m, q) => {
@@ -1192,13 +1201,13 @@ module.exports = function createApi(store, auth, connectors, ops) {
     // the filtered items feed the dashboard. Decisions and other kinds keep their place, the review list reads them.
     const keep = new Set(sc.items.map((i) => i.id));
     const items = all.filter((i) => !['risk', 'milestone', 'deliverable'].includes(i.kind) || keep.has(i.id));
-    const entry = { p: { ...clone(P.p), id: P.id }, stats: st, items: items.filter((i) => i.status !== 'ignored' && ['risk', 'milestone', 'deliverable'].includes(i.kind)), rows: sc.rows, sched };
+    const entry = { p: { ...clone(P.p), id: P.id }, stats: OF.scopedStats(st, sc, f), items: items.filter((i) => i.status !== 'ignored' && ['risk', 'milestone', 'deliverable'].includes(i.kind)), rows: sc.rows, sched };
     const audit = P.audit.filter((a) => OF.inRange(String(a.ts || a.created_at || '').slice(0, 10), range)).slice(0, 12).map((a) => ({ ...a, detail: a.detail || {} }));
     const entries = [{ P, st }];
     const dash = win.__ProjDash.buildProjectDash({ project: raw, tasks: OF.active(f) ? OF.scheduleFor(sched, sc.rows) : sched, items, inbox: P.inbox, audit, today });
     if (range) dash.phases = dash.phases.filter((ph) => OF.overlaps(ph.start, ph.finish, range));
     return { project: { ...projectView(P) }, radar: win.__Radar.buildRadar([entry], today), analytics: win.__Analytics.buildAnalytics([entry], today), ...dash,
-      filters: f, filter_empty: OF.active(f) && !sc.rows.length && !sc.items.length, filter_options: OF.options(entries), trends: await trendsFor([P], 30), ...(await WIDGETS.extras('project', [P])) };
+      filters: f, filter_empty: OF.active(f) && !sc.rows.length && !sc.items.length, filter_options: OF.options(entries), trends: await trendsFor([P], 30, range), ...(await WIDGETS.extras('project', [P], f)) };
   });
   on('GET', '/api/projects/(\\d+)/report-data', async (mm, q) => {
     const P = P_(mm[1]), f = OF.parse(q); delete f.p; delete f.c; delete f.cur; delete f.h;
