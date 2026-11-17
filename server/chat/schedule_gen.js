@@ -89,9 +89,17 @@ module.exports = function build(u) {
         document_schedule_lines: kind('schedule').filter((i) => i.status === 'proposed').map((i) => ({ name: clip(i.title, 90), start: (i.data || {}).start || null, end: (i.data || {}).end || null, days: (i.data || {}).duration_days || null, level: (i.data || {}).level || null, owner: clip((i.data || {}).owner, 40) || null })),
         team: (P.resources || []).map((x) => ({ name: clip(x.name, 60), role: clip(x.role, 60) || null })),
         files: (P.documents || []).map((d) => ({ id: d.id, file: clip(d.filename, 90), kind: d.kind || null })),
+        readiness: null,
         first_work_day: h.S.nextWork(p.start_date && p.start_date >= today ? p.start_date : today, cal),
         hint: 'Read the scope, phases and timeline in the files with search_documents or read_document before you design the phases. Then call check_new_schedule.',
       };
+      // does the project hold anything to base a schedule on? Without it the plan would be invented
+      const gaps = [];
+      if (!r.files.length) gaps.push('no documents uploaded');
+      if (!r.deliverables.length && !r.requirements.length && !r.document_schedule_lines.length) gaps.push('no deliverables, requirements or schedule lines');
+      if (!r.project.start_date || !r.project.end_date) gaps.push('project start or end date missing');
+      const enough = r.files.length > 0 || r.deliverables.length > 0 || r.requirements.length > 0 || r.document_schedule_lines.length > 0;
+      r.readiness = { enough, missing: gaps, guidance: enough ? 'There is something to base the plan on. Read the files for the scope and timeline. If the files turn out to hold no scope, phases or dates, do not invent a plan: ask the manager for more details and to upload a document with the project context in the Documents tab.' : 'There is nothing to base a schedule on. Do not invent a plan. Tell the manager what is missing, ask for more details, and ask them to upload a document with the scope, phases and timeline in the Documents tab, or to type the phases and dates.' };
       // keep the answer inside what the model is shown, cutting the longest lists first
       const totals = {}; const lists = ['deliverables', 'requirements', 'payments', 'risks', 'document_schedule_lines', 'team', 'files'];
       for (const k of lists) totals[k] = r[k].length;
