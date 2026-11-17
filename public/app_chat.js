@@ -516,6 +516,7 @@
     const again = S.page && S.data && c.projectId === S.ctx.projectId;
     S.page = true; S.open = true; S.ctx = c; S.mode = 'chat'; S.hist = null;
     document.body.classList.add('chat-page'); document.body.classList.remove('chat-open');
+    const hd = $q('#chtHead'); if (hd) hd.setAttribute('data-level', '1'); // the Thinking Area title is the page heading
     const p = $q('#chtPanel'); p.hidden = false; p.classList.add('on');
     place();
     if (hostObs) hostObs.disconnect();
@@ -530,6 +531,7 @@
     S.page = false; S.open = false;
     if (hostObs) { hostObs.disconnect(); hostObs = null; }
     document.body.classList.remove('chat-page');
+    const hd = $q('#chtHead'); if (hd) hd.removeAttribute('data-level');
     const p = $q('#chtPanel'); p.classList.remove('on', 'page'); p.hidden = true;
     ['top', 'left', 'width', 'height'].forEach((k) => { p.style[k] = ''; });
     paint();

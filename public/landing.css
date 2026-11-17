@@ -15,10 +15,10 @@
 .ls-sat img { display: block; width: 100%; height: auto; }
 .ls-ch { position: absolute; z-index: 4; inset-inline-start: clamp(20px, 6vw, 96px); top: 50%; width: min(400px, 32vw); opacity: 0; visibility: hidden; will-change: transform, opacity; pointer-events: none; }
 .ls-ch.on { pointer-events: auto; }
-.ls-k { display: inline-flex; gap: 8px; align-items: center; font-size: 13px; font-weight:var(--fw); letter-spacing: .08em; text-transform: uppercase; color: rgb(var(--acc)); }
+.ls-k { display: inline-flex; gap: 8px; align-items: center; font-size: 13px; font-weight:var(--fw); letter-spacing: .08em; text-transform: uppercase; color: color-mix(in srgb, rgb(var(--acc)) 60%, var(--text)); }
 html[dir="rtl"] .ls-k { letter-spacing: 0; font-size: 14px; }
-.ls-k i { font-style: normal; font-variant-numeric: tabular-nums; opacity: .7; }
-.ls-new { font-size: 11px; letter-spacing: .04em; text-transform: none; background: rgba(var(--acc), .15); color: rgb(var(--acc)); border-radius: var(--r-pill); padding: 2px 9px; }
+.ls-k i { font-style: normal; font-variant-numeric: tabular-nums; }
+.ls-new { font-size: 11px; letter-spacing: .04em; text-transform: none; background: rgba(var(--acc), .15); color: color-mix(in srgb, rgb(var(--acc)) 60%, var(--text)); border-radius: var(--r-pill); padding: 2px 9px; }
 .ls-ch h1, .ls-ch h2 { font-size: clamp(30px, 4.1vw, 58px); line-height: 1.08; letter-spacing: -.03em; margin: 12px 0 14px; font-weight:var(--fw); color: var(--text); text-wrap: balance; }
 html[dir="rtl"] .ls-ch h1, html[dir="rtl"] .ls-ch h2 { letter-spacing: 0; line-height: 1.25; }
 .ls-ch p { font-size: clamp(16px, 1.3vw, 19px); color: var(--muted); max-width: 30em; }
@@ -43,7 +43,7 @@ html:not(.js) .ls-frame, html:not(.js) .ls-blob, html:not(.js) .ls-shape, html:n
 /* ===== What is new ===== */
 .ls-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 28px; }
 .ls-chips span { padding: 9px 16px; border-radius: var(--r-pill); border: 1px solid var(--border); background: var(--surface); font-weight:var(--fw); font-size: 15px; box-shadow: var(--shadow); transition: transform .25s var(--ease), border-color .25s; }
-.ls-chips span:hover { transform: translateY(-3px); border-color: var(--primary); }
+.ls-chips span:hover { transform: translateY(-1px); border-color: var(--primary); }
 
 /* ===== Gallery ===== */
 .ls-tabs { display: flex; justify-content: center; gap: 8px; max-width: 1060px; margin-inline: auto; margin: 28px 0 22px; flex-wrap: wrap; }

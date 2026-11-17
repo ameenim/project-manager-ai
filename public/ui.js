@@ -143,6 +143,33 @@
     window.PMUI = { theme: function (apply) { if (reduced()) { apply(); return; } try { document.startViewTransition(apply); } catch (e) { apply(); } } };
   } else window.PMUI = { theme: function (apply) { apply(); } };
 
+
+  /* ---------- heading levels ---------- */
+  /* Screens style a card title as h3 while the page title is h1. Screen readers navigate by level, so a jump from h1 to h3 is a skipped level.
+     This keeps the visual size of each heading and sets aria-level so levels follow the document order with no gaps.
+     data-level on a heading overrides its natural level (the Thinking Area title is the page h1). */
+  var HROOTS = '#content, .modal, .drawer, #chtPanel';
+  var hq = 0;
+  function fixHeadings() {
+    hq = 0;
+    $$(HROOTS).forEach(function (r) {
+      var stack = [];
+      $$('h1, h2, h3, h4, h5, h6, [role="heading"]', r).forEach(function (h) {
+        if (!h.offsetParent && getComputedStyle(h).position !== 'fixed') return;
+        var nat = +(h.getAttribute('data-level') || (h.tagName.charAt(0) === 'H' ? h.tagName.charAt(1) : h.getAttribute('aria-level')) || 2);
+        while (stack.length && stack[stack.length - 1] >= nat) stack.pop();
+        stack.push(nat);
+        var eff = stack.length, tag = h.tagName.charAt(0) === 'H' ? +h.tagName.charAt(1) : 0;
+        if (eff !== tag) { if (h.getAttribute('aria-level') !== String(eff)) h.setAttribute('aria-level', String(eff)); }
+        else if (h.hasAttribute('aria-level') && tag) h.removeAttribute('aria-level');
+      });
+    });
+  }
+  function scheduleHeadings() { if (hq) return; hq = setTimeout(fixHeadings, 120); }
+  new MutationObserver(scheduleHeadings).observe(document.body, { childList: true, subtree: true });
+  window.addEventListener('hashchange', scheduleHeadings);
+  scheduleHeadings();
+
   /* ---------- wiring ---------- */
   var app = document.getElementById('app');
   if (app) {

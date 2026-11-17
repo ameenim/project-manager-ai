@@ -22,7 +22,6 @@
   /* status: green is good, amber is watch, red is late or destructive, violet is AI */
   --success: #0b7a4b; --success-soft: #e3f5ec; --warning: #955300; --warning-soft: #fdf1db; --danger: #c0303b; --danger-soft: #fde8ea;
   --violet: #6a45d8; --violet-soft: #efeafd;
-  --ai-grad: linear-gradient(135deg, #3b82f6, #8b5cf6);
   --logo-ai: #7c3aed;
   --on-solid: #ffffff; /* text on a solid status fill */
   /* fixed colors that never change with the theme: brand panels, paper previews and dark hero surfaces */

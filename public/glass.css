@@ -26,7 +26,7 @@ body { background: transparent; }
 .brand .logo { box-shadow: 0 6px 16px -6px var(--primary), inset 0 1px 0 var(--glass-rim); }
 
 /* secondary text on glass keeps 4.5 to 1 over the darkest background frame */
-.sidebar, .proj-head, .modal, .drawer, .card, .dw, .an-card, .upd, .upd-stat, .cht-card, .cht-panel, .wm-card, .bd-card, .site-header, .ls-ch, .q, .dash, .vis, .form-card, .ls-cmp { --faint: var(--glass-faint); }
+.sidebar, .proj-head, .modal, .drawer, .card, .dw, .an-card, .upd, .upd-stat, .cht-card, .cht-panel, .wm-card, .bd-card, .site-header, .ls-ch, .q, .dash:not(.page), .vis, .form-card, .ls-cmp { --faint: var(--glass-faint); }
 
 /* chrome tier */
 .sidebar, .proj-head, .modal, .drawer, .toast:not(.err):not(.ok), .dw-menu, .cl-menu, .dd-pop, .dp-pop, .ib-detail, .ib-list, .fly, .sg-pop, .lg-pop, .bd-menu, .ded-pop, .rec-dock {
@@ -47,6 +47,8 @@ body { background: transparent; }
 /* nested tier: a card inside any glass surface, one blur only */
 :is(.card, .dw, .modal, .drawer, .upd, .cht-panel, .ded-page) :is(.card, .dw, .an-card, .upd-stat, .cht-card, .wm-card, .bd-card) {
   background: var(--glass-nest); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+/* the inbox panes sit inside one glass card, so they use the nested fill without a second blur */
+.card :is(.ib-list, .ib-detail) { background: var(--glass-nest); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
 /* the drawer is already frosted, so its own cards use the nested fill without a second blur */
 .drawer .card, .drawer .dw { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--glass-nest); box-shadow: none; }
 
@@ -60,7 +62,7 @@ body { background: transparent; }
 .ls-ch { background: var(--glass-chrome); border: 1px solid var(--glass-line); border-radius: var(--r-l); padding: 22px 26px; box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-rim);
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)); backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)); }
 .band { background: var(--glass-nest); border-block-color: var(--glass-line); }
-.q, .dash, .vis, .tool, .port-kpis .kpi, .form-card, .ls-cmp, .ls-chips span, .ls-tabs button:not(.on):not([aria-selected="true"]) {
+.q, .dash:not(.page), .vis, .tool, .port-kpis .kpi, .form-card, .ls-cmp, .ls-chips span, .ls-tabs button:not(.on):not([aria-selected="true"]) {
   background: var(--glass-card); border-color: var(--glass-line); box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-rim);
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)); backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)); }
 .form-card { background: var(--glass-modal); }

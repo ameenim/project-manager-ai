@@ -25,7 +25,7 @@ const RULES = [
   { id: 'emoji-icon', sev: 'high', ext: ['.html', '.js'],
     re: /[\p{Extended_Pictographic}]/u, fix: 'Use the SVG icon() set so size and color follow the theme.' },
   { id: 'inter-first-font', sev: 'high', ext: ['.css'],
-    re: /font(-family)?:[^;{}]*(?:^|[\s:])(Inter|Geist)\b/i, fix: 'Use IBM Plex Sans and IBM Plex Sans Arabic.' },
+    re: /font(-family)?:[^;{}]*(?:^|[\s:])(Inter|Geist)\b/i, fix: 'Use Tajawal, the product font.' },
   { id: 'neon-glow', sev: 'high', ext: ['.css'],
     re: /box-shadow:\s*0\s+0\s+(1[2-9]|[2-9]\d)px/i, fix: 'Use var(--shadow) or the 2px focus ring.' },
   { id: 'big-hover-lift', sev: 'medium', ext: ['.css'],

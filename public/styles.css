@@ -1,7 +1,8 @@
 * { box-sizing: border-box; }
 html, body { height: 100%; }
 body { margin: 0; background: var(--bg); color: var(--text); font: var(--fw) 14px/1.5 var(--font); -webkit-font-smoothing: antialiased; }
-h1, h2, h3, h4 { margin: 0; line-height: 1.25; }
+h1, h2, h3, h4 { margin: 0; line-height: 1.25; text-wrap: balance; }
+p, .muted, .small, .help { text-wrap: pretty; }
 h1 { font-size: var(--fs-title); } h2 { font-size: var(--fs-heading); } h3 { font-size: var(--fs-heading); }
 a { color: var(--primary); text-decoration: none; } a:hover { text-decoration: underline; }
 button, input, select, textarea { font: inherit; color: inherit; }
@@ -431,7 +432,7 @@ html[dir="rtl"] .drawer { transform: translateX(-40px); }
 .row.qa { gap: 6px; margin-top: 6px; flex-wrap: wrap; }
 .bad-txt { color: var(--danger); }
 .donut-row { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-bottom: 10px; }
-.stackbar { display: flex; gap: 2px; height: 12px; border-radius: var(--r-s); overflow: hidden; background: var(--track); margin-bottom: 4px; } .stackbar i { display: block; min-width: 4px; } .stackbar i.ok { background: var(--success); } .stackbar i.c1 { background: var(--c1); } .stackbar i.idle { background: var(--faint); opacity: .55; } .stackbar i.bad { background: var(--danger); }
+.stackbar { display: flex; gap: 2px; height: 12px; border-radius: var(--r-s); overflow: hidden; background: var(--track); margin-bottom: 4px; } .stackbar i { display: block; min-width: 4px; } .stackbar i.ok { background: var(--success); } .stackbar i.c1 { background: var(--c1); } .stackbar i.idle { background: color-mix(in srgb, var(--faint) 40%, transparent); } .stackbar i.bad { background: var(--danger); }
 .sc-area { fill: var(--c1); opacity: .12; } .sc-line { fill: none; stroke: var(--c1); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; } .sc-act { fill: none; stroke: var(--success); stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 1 0; } .sc-act.ok { stroke: var(--success); }
 .sc-dot { stroke: var(--surface); stroke-width: 2; } .sc-dot.plan { fill: var(--c1); } .sc-dot.act { fill: var(--success); } .hit-dot { fill: transparent; } .hit-dot:hover { fill: var(--c1); opacity: .25; }
 .viz .cur-m { fill: var(--danger); font-weight:var(--fw); } .cb:hover .hb-seg { filter: brightness(1.08); }
@@ -1720,7 +1721,9 @@ body.ded-open { overflow: hidden; }
 .cl-opts button.on { background: var(--primary-soft); border-color: var(--primary); color: var(--primary); font-weight:var(--fw); }
 .cl-opts button[disabled] { opacity: .45; cursor: default; }
 .cl-opts button:focus-visible, .cl-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-.stackbar.tall { height: 22px; border-radius: var(--r-m); } .stackbar.tall i { display: grid; place-items: center; overflow: hidden; } .stackbar.tall i .cl-t { text-shadow: 0 0 3px var(--surface), 0 0 3px var(--surface); padding: 0 4px; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.stackbar.tall { height: 22px; border-radius: var(--r-m); } .stackbar.tall i { display: grid; place-items: center; overflow: hidden; } .stackbar.tall i .cl-t { font-style: normal; text-shadow: none; color: var(--text); padding: 0 4px; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.stackbar.tall i.c1 { background: color-mix(in srgb, var(--c1) 85%, var(--text)); } /* a touch deeper so the label reaches 4.5 to 1 */
+.stackbar.tall i.ok .cl-t, .stackbar.tall i.c1 .cl-t, .stackbar.tall i.bad .cl-t { color: var(--on-solid); }
 .sb-labs { display: flex; gap: 2px; margin: 2px 0; } .sb-labs > span { min-width: 4px; text-align: center; overflow: hidden; text-overflow: ellipsis; }
 .wk-cv.cl-t { min-height: 16px; font-size: var(--fs-small); } .wk-bar { position: relative; } .wk-bar .cl-mid { position: absolute; inset-inline: 0; top: 50%; transform: translateY(-50%); text-align: center; text-shadow: 0 0 3px var(--surface), 0 0 3px var(--surface); overflow: visible; }
 .wk-cl b.cl-t { font-size: var(--fs-small); }
@@ -2101,7 +2104,7 @@ input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 4px color-mix(in s
 .nav > .ui-ind::before { content: ""; position: absolute; inset-inline-start: -10px; top: 8px; bottom: 8px; width: 3px; border-radius: var(--r-xs); background: var(--primary); }
 .nav > a, .nav .nav-fly > a, .nav > .nav-fly { position: relative; z-index: 1; }
 .nav.has-ind a.active { background: transparent; } .nav.has-ind a.active::before { display: none; }
-.nav a svg { transition: transform var(--t-quick) var(--ease); } .nav a:hover svg { transform: scale(1.12) rotate(-4deg); }
+.nav a svg { transition: transform var(--t-quick) var(--ease); } .nav a:hover svg { transform: none; }
 .nav a:hover:not(.active) { background: color-mix(in srgb, var(--primary) 5%, transparent); }
 .side-prefs { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 4px 6px; }
 .side-prefs .pref { padding: 0; gap: 0; flex: none; } .side-prefs .pref:hover { background: none; }
@@ -2466,3 +2469,11 @@ button.ex-note { width: 100%; border: 0; text-align: start; font: inherit; align
 .lg-add:hover { color: var(--primary); text-decoration: underline; }
 .linkbtn { background: none; border: 0; padding: 0; font: inherit; color: var(--primary); cursor: pointer; }
 .linkbtn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
+
+/* Touch targets: every tappable control is at least 44px high on a phone. Calendar markers and Gantt marks are dense data marks, the day cell or the row is the 44px target. */
+@media (max-width: 600px) {
+  .btn.sm, .btn.icon, .btn.sm.icon, .dw-chip, .rd-chip, .rd-pill, .rb.sm, .rb.chip, .sug-chip, .tabs-nav, .cal-tog { min-height: 44px; }
+  .btn.icon, .btn.sm.icon, .tabs-nav, .dw-grip { min-width: 44px; }
+  .dw-grip { min-height: 44px; }
+  .rd-meta a, .small a, .muted a { padding-block: 14px; } /* inline links keep their text size and get a taller tap area */
+}
