@@ -39,7 +39,7 @@ test('the dashboard guidance loads for dashboard words and on the widgets screen
   for (const [ds, fields] of Object.entries(WS.DATASETS)) { assert.ok(t.includes('  ' + ds + ': '), ds); for (const f of fields) assert.ok(t.includes(f.name), f.name); }
   for (const v of WS.VIZ) assert.ok(new RegExp('\\b' + v + '\\b').test(t), 'chart ' + v);
   assert.ok(!skill.skillText('hello', 'overview').includes('DASHBOARD AND WIDGET PRACTICE'), 'not loaded for other questions');
-  assert.match(skill.SKILL_VERSION, /^1\.13/);
+  assert.match(skill.SKILL_VERSION, /^1\.14/);
 });
 
 test('every example spec in the skill is valid', () => {

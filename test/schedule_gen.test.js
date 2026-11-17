@@ -238,3 +238,42 @@ test('the basis stays inside what the model can read, even for a large project',
   const o = JSON.parse(typeof toolResult.content === 'string' ? toolResult.content : toolResult.content.map((c) => c.text).join(''));
   assert.ok(o.shown.deliverables !== undefined && o.deliverables.length > 0, 'the lists are cut and say how much is shown');
 });
+
+// ---------- the answer is never empty ----------
+test('the basis tells the model when a project has nothing to build a schedule from', async () => {
+  const u = await person('Planner'); const p = await s.project(u.token, 'Empty project ' + Math.random().toString(36).slice(2, 7));
+  say(use('get_schedule_basis', {}, 'g1')); say(text('I need more details. Please upload a document with the scope and timeline in the Documents tab.'));
+  const r = await talk(u.token, { project_id: p.id, text: 'build the schedule for this project', screen: 'thinking' });
+  const basis = shown(1)[0];
+  assert.equal(basis.readiness.enough, false);
+  assert.ok(basis.readiness.missing.length >= 1);
+  assert.ok(/upload/i.test(basis.readiness.guidance));
+  assert.ok(r.message.links.some((l) => /documents$/.test(l.href)), 'the reply links to the Documents tab to upload a document');
+  assert.equal(r.message.card, null);
+});
+
+test('a model that ends its tool rounds with no words is asked once more, without tools, and the person gets an answer', async () => {
+  const x = await setup();
+  say(use('get_schedule_basis', {}, 'g1')); say();   // the model reads the basis, then says nothing
+  say(text('The project has deliverables but no phases or dates in its files. Please upload a document with the project plan in the Documents tab.'));
+  const r = await talk(x.u.token, { project_id: x.p.id, text: 'Create the schedule for this project', screen: 'thinking' });
+  assert.ok(!/nothing to add/i.test(r.message.text), r.message.text);
+  assert.ok(/upload/i.test(r.message.text));
+  assert.ok(JSON.stringify(sc.seen[2].messages.slice(-1)[0]).includes('Stop using tools'), 'the last round carried the wrap up instruction');
+});
+
+test('a model that uses every round on tools still ends with an answer', async () => {
+  const x = await setup();
+  for (let i = 0; i < 10; i++) say(use('get_schedule_basis', {}, 'g' + i));
+  say(text('I read the project but could not finish the plan. Please upload a document with the scope and timeline in the Documents tab.'));
+  const r = await talk(x.u.token, { project_id: x.p.id, text: 'build the schedule for this project', screen: 'thinking' });
+  assert.ok(/upload/i.test(r.message.text), r.message.text);
+});
+
+test('if the model gives nothing at all, a schedule request still gets the needs more context answer', async () => {
+  const x = await setup();
+  say(use('get_schedule_basis', {}, 'g1')); say(); say();
+  const r = await talk(x.u.token, { project_id: x.p.id, text: 'Create the schedule for this project', screen: 'thinking' });
+  assert.ok(/Documents tab/.test(r.message.text) && /start and end dates/.test(r.message.text), r.message.text);
+  assert.ok(r.message.links.some((l) => /documents$/.test(l.href)));
+});
