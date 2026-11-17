@@ -359,7 +359,8 @@ module.exports = function createApi(store, auth, connectors, ops) {
       const topName = (nm) => [...P.tasks].reverse().find((t) => sameName(t.name, nm));
       const mkTask = (o) => { const t = { id: nid(), parent_id: null, position: P.tasks.reduce((m, x) => Math.max(m, x.position ?? 0), 0) + 1, name: '', start, duration: 1, progress: 0, assignee: null, deps: [], deliverable_id: null, b_start: null, b_end: null, notes: null, is_milestone: 0, jira_key: null, color: null, ...o }; P.tasks.push(t); return t; };
       let parent = null;
-      if (d.phase) parent = topName(d.phase) || mkTask({ name: d.phase, duration: 1 });
+      // A milestone can share its name with the phase it closes. It is never chosen as a parent.
+      if (d.phase) parent = [...P.tasks].reverse().find((t) => sameName(t.name, d.phase) && !t.is_milestone) || topName(d.phase) || mkTask({ name: d.phase, duration: 1 });
       const dupe = d.level === 'phase' && !d.phase ? topName(item.title) : null;
       const t = dupe || mkTask({ name: item.title, parent_id: parent ? parent.id : null, duration: dur, is_milestone: d.level === 'milestone' ? 1 : 0, notes: [d.note, d.type && d.type !== 'task' && d.type !== 'milestone' ? `Type: ${d.type}.` : null, d.owner ? `Owner: ${d.owner}.` : null, d.implied ? 'Added by the AI as an expected project step.' : item.quote ? `Source: "${item.quote}"` : null].filter(Boolean).join(' ') || null });
       if (dupe) { t.start = start; t.duration = dur; }
@@ -518,13 +519,22 @@ module.exports = function createApi(store, auth, connectors, ops) {
       if (rivals.length) for (const r of [...rivals, it]) r.data.conflict = true;
       fields.push(it); counts.field++;
     }
+    // A schedule file or plan workbook lists every row on purpose. Its own rows are never merged with each other.
+    const exact = a.engine === 'plan' || a.engine === 'msp';
     const dedupe = (kind, rows, text, threshold, make, enrich) => {
-      const ex = live(kind);
+      const ex = live(kind).filter((x) => !(exact && x.doc_id === doc.id));
+      const mine = [];
+      // Rows of an exact source are compared with this document's own earlier rows as a count, so a second run adds nothing
+      // while a row that really appears twice in the file is still kept twice.
+      const ik = (o) => `${o.title}|${o.data && o.data.start}|${o.data && o.data.end}|${kind === 'risk' ? o.description : ''}`;
+      const have = new Map();
+      if (exact) for (const x of live(kind).filter((y) => y.doc_id === doc.id)) have.set(ik(x), (have.get(ik(x)) || 0) + 1);
       for (const r of rows || []) {
         const t = text(r); if (!t) continue;
+        if (exact) { const k = ik(make(r)); if (have.get(k) > 0) { have.set(k, have.get(k) - 1); counts.merged++; continue; } }
         const dup = ex.find((x) => similarity(x.title + ' ' + x.description, t) >= threshold || similarity(x.title, t) >= threshold);
         if (dup) { addSource(dup, label); if (enrich) enrich(dup, r); counts.merged++; continue; }
-        ex.push(insertItem(P, kind, make(r), doc.id)); counts[kind]++;
+        (exact ? mine : ex).push(insertItem(P, kind, make(r), doc.id)); counts[kind]++;
       }
     };
     dedupe('deliverable', a.deliverables, (r) => r.title, 0.8, (r) => ({ title: r.title, description: [r.ref ? `Ref ${r.ref}.` : '', r.description || '', r.acceptance ? `Acceptance: ${r.acceptance}.` : ''].filter(Boolean).join(' '), data: { ref: r.ref || null, phase: r.phase || null, acceptance: r.acceptance || null, due_date: r.due_date || null, due_dates: r.due_date ? [r.due_date] : [], amount: Number(r.amount) > 0 ? Number(r.amount) : null, category: r.category || null, week: r.week ?? null }, confidence: r.confidence, quote: r.quote }), (dup, r) => {
@@ -683,7 +693,21 @@ module.exports = function createApi(store, auth, connectors, ops) {
         st.status = 'reading';
         try {
           let a, scope = Pipe.SCOPE[doc.role] || Pipe.SCOPE.other;
-          if (doc.role === 'schedule') {
+          // The schedule role is for Microsoft Project XML only. Anything else with that label is read as a plan or by the AI.
+          if (doc.role === 'schedule' && !Pipe.isMspXml(text)) { doc.role = Pipe.planFromText(text).found ? 'plan' : 'other'; st.role = doc.role; st.role_label = Pipe.ROLE_LABEL[doc.role]; scope = Pipe.SCOPE[doc.role]; }
+          if (doc.role === 'plan') {
+            // A workbook with a plan table and a risk table is read row by row in code, so no row is skipped or reworded.
+            a = Pipe.extractPlan({ text });
+            // A plan with dates on Sunday and none on Friday or Saturday is a Sunday to Thursday week. Only a project that still has
+            // the default calendar and no tasks is changed, so dates and durations land on the same days as in the plan.
+            const days = a.schedule.flatMap((t) => [t.start, t.end]).filter(Boolean).map((d) => new Date(d + 'T00:00:00Z').getUTCDay());
+            if (JSON.stringify(P.p.work_days) === '[1,2,3,4,5]' && !P.tasks.length && days.some((d) => d === 0) && !days.some((d) => d === 5 || d === 6)) {
+              P.p.work_days = [0, 1, 2, 3, 4];
+              audit(P, 'AI', 'calendar_set', { summary: `Working week set to Sunday to Thursday because the plan in ${doc.filename} has dates on Sundays and none on Fridays or Saturdays` });
+            }
+            if (a.project_name && !P.p.ai_name) P.p.ai_name = a.project_name;
+            if (!doc.summary) doc.summary = `Project plan workbook with ${a.schedule.length} schedule lines${a.risks.length ? ` and ${a.risks.length} listed risks` : ''}${a.fields.length ? `, ${a.fields[0].value} to ${a.fields[1].value}` : ''}.`;
+          } else if (doc.role === 'schedule') {
             const m = Pipe.scheduleFromMsp(text);
             a = { engine: 'msp', fields: [m.start ? { field: 'start_date', value: m.start, confidence: 0.98, quote: m.items[0].quote } : null, m.end ? { field: 'end_date', value: m.end, confidence: 0.98, quote: m.items[m.items.length - 1].quote } : null].filter(Boolean), schedule: m.items, deliverables: [], requirements: [], milestones: [], coverage: { chars_total: text.length, chars_sent: text.length, parts: 1, parts_read: 1, parts_failed: 0, dropped_no_quote: 0 } };
             doc.summary = `Microsoft Project schedule with ${m.items.length} tasks, ${m.start} to ${m.end}.`;
@@ -702,8 +726,10 @@ module.exports = function createApi(store, auth, connectors, ops) {
           st.counts = c; st.coverage = a.coverage || null; st.engine = a.engine; st.progress = '';
           if (a.engine === 'rules') { st.status = 'basic'; st.message = AI_REASON[(a.ai_error && a.ai_error.code) || 'upstream'] || AI_REASON.upstream; }
           else if (a.coverage && a.coverage.parts_failed) { st.status = 'partial'; st.message = `Part of this document could not be read by the AI (${a.coverage.parts_failed} of ${a.coverage.parts} parts). Use Reanalyze to try again.`; }
+          else if (a.engine === 'plan' && !found && !c.merged) { st.status = 'empty'; st.message = 'A plan table was found but every row was already in the project.'; }
           else if (!found && !c.merged) { st.status = 'empty'; st.message = 'The document was read in full but nothing it is allowed to supply was found in it.'; }
           else st.status = 'done';
+          if (a.engine === 'plan' && a.sheets_skipped && a.sheets_skipped.length) st.message = `Read as tables: ${a.sheets_read.join(', ')}. Not read as a table: ${a.sheets_skipped.join(', ')}. A month grid drawn with colored cells has no dates in it, so the dates come from the plan table.`;
           refreshConfidence(P);
           docNo++; run.stages[3].detail = `Document ${docNo} of ${readable.length}: ${P.items.filter((i) => i.status !== 'ignored').length} items found so far`;
           audit(P, 'AI', 'document_analyzed', { summary: `Analyzed ${doc.filename} as ${Pipe.ROLE_LABEL[doc.role]}: ${c.deliverable} deliverables, ${c.requirement} requirements, ${c.milestone} payment milestones, ${c.schedule} schedule lines${a.coverage ? `. Read ${a.coverage.chars_sent.toLocaleString('en-US')} of ${a.coverage.chars_total.toLocaleString('en-US')} characters` : ''}` });
@@ -751,7 +777,7 @@ module.exports = function createApi(store, auth, connectors, ops) {
     const authority = (it) => { const d = P.documents.find((x) => x.id === it.doc_id); return (d && Pipe.AUTHORITY[d.role]) || 1; };
     const out = { confirmed: 0, review: 0, kinds: {}, conflicts: [] };
     // Only items read by the AI or taken from a schedule file are filled in. The rule based fallback is never trusted on its own.
-    const trusted = new Set(((P.analysis && P.analysis.docs) || []).filter((d) => d.engine === 'claude' || d.engine === 'msp').map((d) => d.id));
+    const trusted = new Set(((P.analysis && P.analysis.docs) || []).filter((d) => d.engine === 'claude' || d.engine === 'msp' || d.engine === 'plan').map((d) => d.id));
     const ok = (it) => it.doc_id == null || trusted.has(it.doc_id);
     const bump = (kind) => { out.confirmed++; out.kinds[kind] = (out.kinds[kind] || 0) + 1; };
     for (const col of Object.keys(FIELD_LABEL)) {
@@ -791,7 +817,8 @@ module.exports = function createApi(store, auth, connectors, ops) {
     const out = { at: nowTs(), summary: '', notes: [], anchor, anchor_basis: P.p.start_date ? 'project start date' : proj().award_date ? 'award date' : proj().start_date ? 'start date in the documents' : null, engine: 'rules', phases: 0, checks: [] };
     P.items = P.items.filter((i) => !(i.data && i.data.synthesized && i.status === 'proposed'));
     for (const i of P.items) if (i.data && i.data.superseded && i.status === 'ignored') { i.status = 'proposed'; delete i.data.superseded; }
-    const hasSchedFile = docs.some((d) => d.role === 'schedule');
+    // A schedule file, or a plan workbook whose rows were read, is the schedule. It is never replaced by a generated one.
+    const hasSchedFile = docs.some((d) => d.role === 'schedule' || (d.role === 'plan' && P.items.some((i) => i.doc_id === d.id && i.kind === 'schedule')));
     // The schedule and the risk analysis are independent, so both AI calls run at the same time.
     const gen = P.analysis.stages.find((x) => x.key === 'generate');
     const synP = hasSchedFile ? Promise.resolve(null) : Pipe.buildSchedule({ docs, items: view(), anchor, project: proj(), texts: P.texts, onProgress: (label, frac) => { gen.detail = label; if (frac != null) gen.frac = frac; P.analysis.pct = progressOf(P); announce(P, 'progress'); } }).catch((e) => ({ failed: true, reason: (e && e.message) || 'unknown', plan: [], notes: [], summary: '' }));

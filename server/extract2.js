@@ -13,11 +13,12 @@ window.__Pipe = (function () {
     award: ['info', 'payments'],
     po: ['info', 'payments'],
     schedule: ['schedule'],
+    plan: ['info', 'schedule', 'risks'],
     other: ['info', 'deliverables', 'requirements', 'payments', 'schedule', 'risks'],
   };
   // When two documents disagree, the higher number wins for project info.
-  const AUTHORITY = { award: 4, po: 4, contract: 4, financial: 3, technical: 2, schedule: 2, other: 1 };
-  const ROLE_LABEL = { technical: 'Technical proposal', financial: 'Financial proposal', contract: 'Contract or statement of work', award: 'Award letter', po: 'Purchase order', schedule: 'Schedule file', other: 'Other document' };
+  const AUTHORITY = { award: 4, po: 4, contract: 4, financial: 3, technical: 2, schedule: 2, plan: 2, other: 1 };
+  const ROLE_LABEL = { technical: 'Technical proposal', financial: 'Financial proposal', contract: 'Contract or statement of work', award: 'Award letter', po: 'Purchase order', schedule: 'Schedule file', plan: 'Project plan workbook', other: 'Other document' };
 
   function isMspXml(text) {
     return /<Project[\s>]/.test(String(text).slice(0, 4000)) && /schemas\.microsoft\.com\/project/i.test(String(text).slice(0, 4000));
@@ -27,6 +28,8 @@ window.__Pipe = (function () {
   function detectRole(filename, text) {
     const f = String(filename || '').toLowerCase();
     if (/\.(xml|mpp)$/.test(f) && isMspXml(text)) return { role: 'schedule', confidence: 0.99 };
+    // A workbook with a plan table (WBS, task, start, finish) is read row by row in code, not by the AI.
+    if (/\.(xlsx|xls)$/.test(f) && planFromText(text).found) return { role: 'plan', confidence: 0.97 };
     const head = String(text || '').slice(0, 8000).toLowerCase();
     const score = { technical: 0, financial: 0, contract: 0, award: 0, po: 0 };
     const rules = {
@@ -136,7 +139,14 @@ Rate probability and impact honestly. A payment worth a third of the contract he
     const re = /assum|depend|client (shall|will|must|is responsible)|responsib|approval|acceptance|constraint|prerequisite|penalt|liquidated|delay|access to|availability of|subject to|out of scope|exclu/i;
     const out = [];
     let size = 0;
+    // A spreadsheet sheet is one block of table rows, so each row is its own passage. Rows that carry dates are
+    // schedule lines and are already in the schedule digest.
+    const units = [];
     for (const para of String(text).split(/\n{2,}|\n(?=\d+(?:\.\d+)*\.?\s)/)) {
+      if (/^\|/m.test(para)) { for (const row of para.split('\n')) if (!/\d{4}-\d{2}-\d{2}[^]*\d{4}-\d{2}-\d{2}/.test(row)) units.push(row.replace(/^\|\s*|\s*\|$/g, '').replace(/\s*\|\s*/g, ' | ')); }
+      else units.push(para);
+    }
+    for (const para of units) {
       const t = para.replace(/\s+/g, ' ').trim();
       if (t.length < 40 || t.length > 700 || !re.test(t)) continue;
       out.push(t);
@@ -149,7 +159,9 @@ Rate probability and impact honestly. A payment worth a third of the contract he
   async function context(doc, text, role) {
     try {
       const j = await AI.claudeJSON(CONTEXT_SYSTEM, `Filename: ${doc.filename}\nHeadings:\n${headings(text).join('\n')}\n\nStart of document:\n${String(text).slice(0, 9000)}`, 1200);
-      return { role: SCOPE[j.role] ? j.role : role, summary: String(j.summary || ''), project_name: j.project_name || null, confidence: clamp(Number(j.confidence)) };
+      // The schedule role belongs to Microsoft Project XML only. A plan workbook or a proposal with a work plan keeps its own role.
+      const keepRole = role === 'plan' || (j.role === 'schedule' && !isMspXml(text));
+      return { role: SCOPE[j.role] && !keepRole ? j.role : role, summary: String(j.summary || ''), project_name: j.project_name || null, confidence: clamp(Number(j.confidence)) };
     } catch (e) {
       if (['bad_key', 'budget', 'rate', 'network'].includes(e.code)) throw e;
       return { role, summary: '', project_name: null, confidence: 0.5 };
@@ -229,7 +241,8 @@ Rate probability and impact honestly. A payment worth a third of the contract he
       project,
       documents: docs.map((d) => ({ file: d.filename, role: ROLE_LABEL[d.role] || d.role, summary: d.summary })),
       deliverables: live('deliverable').slice(0, 40).map((i) => ({ ref: i.data.ref || null, title: i.title, phase: i.data.phase || null, due: i.data.due_date || null, price: i.data.amount || null, acceptance: i.data.acceptance || null })),
-      schedule: live('schedule').slice(0, 80).map((i) => ({ name: i.title, level: i.data.level, start: i.data.start, end: i.data.end, weeks: i.data.start_week != null ? `${i.data.start_week} to ${i.data.end_week}` : null, days: i.data.duration_days || null })),
+      // Phases and milestones first, then tasks, so a long plan still shows its whole shape.
+      schedule: [...live('schedule').filter((i) => i.data.level !== 'task'), ...live('schedule').filter((i) => i.data.level === 'task')].slice(0, 150).map((i) => ({ name: i.title, level: i.data.level, phase: i.data.phase || null, owner: i.data.owner || null, start: i.data.start, end: i.data.end, weeks: i.data.start_week != null ? `${i.data.start_week} to ${i.data.end_week}` : null, days: i.data.duration_days || null })),
       payments: live('milestone').slice(0, 30).map((i) => ({ title: i.title, percent: i.data.percent, amount: i.data.amount, trigger: i.data.trigger || null, terms_days: i.data.terms_days || null, planned_date: i.data.due_date || null })),
       requirements: live('requirement').slice(0, 40).map((i) => ({ type: i.data.type || null, priority: i.data.priority || null, text: (i.title || i.description || '').slice(0, 140) })),
       risks_already_listed: live('risk').slice(0, 40).map((i) => i.title),
@@ -255,6 +268,100 @@ Rate probability and impact honestly. A payment worth a third of the contract he
       console.error('Risk analysis failed:', e.message);
       return [];
     }
+  }
+
+  // ---------- plan workbooks, read in code ----------
+  // The spreadsheet reader writes every sheet as "Sheet: name" followed by one line per row, cells joined by " | ".
+  // A plan table and a risk table are read straight from those lines, so every row is kept exactly as written.
+  function sheetBlocks(text) {
+    const blocks = [];
+    let cur = null;
+    for (const line of String(text || '').split('\n')) {
+      const m = /^Sheet: (.*)$/.exec(line);
+      if (m) { cur = { sheet: m[1].trim(), lines: [], chars: line.length + 1 }; blocks.push(cur); continue; }
+      if (!cur) continue;
+      cur.chars += line.length + 1;
+      if (line.startsWith('|')) cur.lines.push({ line, cells: line.replace(/^\|\s?/, '').replace(/\s?\|$/, '').split(' | ').map((c) => c.trim()) });
+    }
+    return blocks;
+  }
+  const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+  const colOf = (head, re) => head.findIndex((h) => re.test(h));
+  function planColumns(head) {
+    const h = head.map((c) => String(c || '').toLowerCase().replace(/[^a-z0-9% ]+/g, ' ').replace(/\s+/g, ' ').trim());
+    const name = colOf(h, /^(task|activity|task name|activity name|name|work package)$/);
+    const start = colOf(h, /^(start|start date|planned start|baseline start)$/);
+    const end = colOf(h, /^(finish|end|end date|finish date|planned end|planned finish|finish basline|finish baseline|baseline finish|baseline end)$/);
+    if (name < 0 || start < 0 || end < 0) return null;
+    return { name, start, end, wbs: colOf(h, /^(wbs|id|no|ref|#)$/), type: colOf(h, /^(type|level|task type)$/), owner: colOf(h, /^(owner|resource|resources|responsible|assigned to|assignee)$/), status: colOf(h, /^status$/), pct: colOf(h, /^(% complete|complete|progress)$/), notes: colOf(h, /(notes|dependenc|predecessor|comments)/) };
+  }
+  function riskColumns(head) {
+    const h = head.map((c) => String(c || '').toLowerCase().replace(/[^a-z0-9% ]+/g, ' ').replace(/\s+/g, ' ').trim());
+    const title = colOf(h, /(risk|dependency|issue|assumption)/);
+    const impact = colOf(h, /^impact|severity/);
+    const prob = colOf(h, /^(probability|likelihood)/);
+    if (title < 0 || impact < 0 || prob < 0) return null;
+    return { title, impact, prob, id: colOf(h, /^(id|ref|no|#)$/), owner: colOf(h, /^(owner|responsible)/), status: colOf(h, /^status/), mitigation: colOf(h, /(mitigation|action|response)/) };
+  }
+  const level3 = (v) => { const x = String(v || '').toLowerCase(); return /high|critical|severe/.test(x) ? 'High' : /low|minor/.test(x) ? 'Low' : 'Medium'; };
+  function planFromText(text) {
+    const res = { found: false, schedule: [], risks: [], fields: [], sheets_read: [], sheets_skipped: [], chars_read: 0, chars_total: String(text || '').length, project: null };
+    const blocks = sheetBlocks(text);
+    for (const b of blocks) {
+      let used = false;
+      for (let i = 0; i < b.lines.length && !used; i++) {
+        const head = b.lines[i].cells;
+        const pc = planColumns(head);
+        const rc = pc ? null : riskColumns(head);
+        if (!pc && !rc) continue;
+        const rows = b.lines.slice(i + 1);
+        if (pc) {
+          const names = new Map();
+          const cell = (r, k) => (k >= 0 ? r.cells[k] || '' : '');
+          const parsed = rows.map((r) => ({ r, wbs: cell(r, pc.wbs), name: cell(r, pc.name).replace(/\s+/g, ' ').trim(), start: cell(r, pc.start), end: cell(r, pc.end), type: cell(r, pc.type).toLowerCase() })).filter((x) => x.name && (ISO_DATE.test(x.start) || ISO_DATE.test(x.end)));
+          if (parsed.length < 2) continue;
+          for (const x of parsed) if (x.wbs) names.set(x.wbs, x.name);
+          for (const x of parsed) {
+            const start = ISO_DATE.test(x.start) ? x.start : x.end, end = ISO_DATE.test(x.end) ? x.end : x.start;
+            if (/^project$/.test(x.type)) { res.project = { name: x.name, start, end, quote: x.r.line.slice(0, 300) }; continue; }
+            const hasKids = x.wbs && parsed.some((y) => y !== x && y.wbs.startsWith(x.wbs + '.'));
+            const level = /phase|summary|stage/.test(x.type) ? 'phase' : /milestone/.test(x.type) ? 'milestone' : x.type ? 'task' : hasKids ? 'phase' : 'task';
+            const parentWbs = x.wbs.includes('.') ? x.wbs.slice(0, x.wbs.lastIndexOf('.')) : '';
+            res.schedule.push({ level, type: level === 'milestone' ? 'milestone' : 'task', name: x.name, phase: parentWbs && names.get(parentWbs) ? names.get(parentWbs) : null, start, end, start_week: null, end_week: null, duration_days: null, owner: cell(x.r, pc.owner) || null, depends_on: [], wbs: x.wbs || null, confidence: 0.95, quote: x.r.line.slice(0, 300) });
+          }
+          if (res.schedule.length) { used = true; res.found = true; }
+        } else if (rc) {
+          const cell = (r, k) => (k >= 0 ? r.cells[k] || '' : '');
+          for (const r of rows) {
+            const full = cell(r, rc.title).replace(/\s+/g, ' ').trim();
+            if (full.length < 8) continue;
+            const id = cell(r, rc.id), status = cell(r, rc.status);
+            const body = full.replace(/^(risk|dependency|assumption|issue)\s*:\s*/i, '');
+            const colon = body.indexOf(':');
+            const title = (colon >= 12 && colon <= 90 ? body.slice(0, colon) : body.split(/(?<=[.!?])\s/)[0].slice(0, 100)).replace(/[.\s]+$/, '').trim();
+            const closed = /closed|resolved|retired|done/i.test(status);
+            res.risks.push({ title, description: `${id ? id + '. ' : ''}${full}${status ? ` Status in the plan: ${status}.` : ''}`, probability: level3(cell(r, rc.prob)), impact: level3(cell(r, rc.impact)), mitigation: cell(r, rc.mitigation), owner: cell(r, rc.owner) || null, confidence: closed ? 0.6 : 0.9, quote: r.line.slice(0, 300) });
+          }
+          if (res.risks.length) { used = true; res.found = true; }
+        }
+      }
+      (used ? res.sheets_read : res.sheets_skipped).push(b.sheet);
+      if (used) res.chars_read += b.chars;
+    }
+    const dates = res.schedule.flatMap((t) => [t.start, t.end]).filter(Boolean).sort();
+    const pj = res.project;
+    if (res.schedule.length && (pj || dates.length)) {
+      const quote = pj ? pj.quote : res.schedule[0].quote;
+      res.fields.push({ field: 'start_date', value: pj ? pj.start : dates[0], confidence: 0.85, quote });
+      res.fields.push({ field: 'end_date', value: pj ? pj.end : dates[dates.length - 1], confidence: 0.8, quote });
+    }
+    return res;
+  }
+  // Same result shape as extractDoc, with no AI call: every row of the plan and risk tables is kept as written.
+  function extractPlan({ text }) {
+    const p = planFromText(text);
+    if (!p.found) throw Object.assign(new Error('No plan table was found in this workbook'), { code: 'badjson' });
+    return { engine: 'plan', fields: p.fields, deliverables: [], requirements: [], milestones: [], schedule: p.schedule, risks: p.risks, sheets_read: p.sheets_read, sheets_skipped: p.sheets_skipped, project_name: p.project ? p.project.name : null, coverage: { chars_total: p.chars_total, chars_sent: Math.min(p.chars_total, p.chars_read), parts: p.sheets_read.length + p.sheets_skipped.length, parts_read: p.sheets_read.length, parts_failed: 0, dropped_no_quote: 0 } };
   }
 
   // ---------- Microsoft Project XML, read without AI ----------
@@ -450,5 +557,5 @@ Rules. Give 12 to 28 rows, or 6 to 12 rows for a recurring governance phase. Lis
     return { overall, by, coverage: cov };
   }
 
-  return { SCOPE, AUTHORITY, ROLE_LABEL, detectRole, isMspXml, context, extractDoc, analyzeRisks, buildSchedule, planSections, scheduleFromMsp, confidence, passages };
+  return { SCOPE, AUTHORITY, ROLE_LABEL, detectRole, isMspXml, planFromText, extractPlan, context, extractDoc, analyzeRisks, buildSchedule, planSections, scheduleFromMsp, confidence, passages };
 })();

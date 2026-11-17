@@ -4,14 +4,27 @@
 'use strict';
 const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
 
+// Date cells are written as ISO dates (2026-04-26) so the text never depends on the cell format (26-Apr-26),
+// and every cell stays on one line so a row is always one line of text.
 function toText(buf) {
   const XLSX = require('xlsx');
-  const wb = XLSX.read(buf, { type: 'buffer', cellDates: true });
+  const wb = XLSX.read(buf, { type: 'buffer', cellDates: false, cellNF: true });
   const parts = [];
   for (const sheet of wb.SheetNames) {
-    const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheet], { header: 1, raw: false, defval: '' });
+    const ws = wb.Sheets[sheet];
+    for (const addr of Object.keys(ws)) {
+      if (addr[0] === '!') continue;
+      const c = ws[addr];
+      if (!c || c.t !== 'n' || typeof c.v !== 'number' || !c.z || !XLSX.SSF || !XLSX.SSF.is_date || !XLSX.SSF.parse_date_code || !XLSX.SSF.is_date(c.z)) continue;
+      const d = XLSX.SSF.parse_date_code(c.v);
+      if (!d || !d.y) continue;
+      const p2 = (n) => String(n).padStart(2, '0');
+      c.w = `${d.y}-${p2(d.m)}-${p2(d.d)}`;
+    }
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
     parts.push(`Sheet: ${sheet}`);
-    for (const r of rows) if (r.some((c) => String(c).trim() !== '')) parts.push('| ' + r.map((c) => String(c).trim()).join(' | ') + ' |');
+    const one = (c) => String(c).replace(/\s*[\r\n]+\s*/g, ' ').replace(/\s*\|\s*/g, ' / ').trim();
+    for (const r of rows) if (r.some((c) => String(c).trim() !== '')) parts.push('| ' + r.map(one).join(' | ') + ' |');
     parts.push('');
   }
   return { text: parts.join('\n'), sheets: wb.SheetNames.length };
