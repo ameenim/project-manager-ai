@@ -6,7 +6,7 @@
 
 const WS = require('../../../public/widgetspec.js');
 
-const SKILL_VERSION = '1.12.1';
+const SKILL_VERSION = '1.13.0';
 
 // The base part is always loaded. The other parts are added when the question or the mode needs them, to save tokens.
 const BASE = [
@@ -30,7 +30,9 @@ const PARTS = {
     'SCHEDULE PRACTICE',
     '- Reason with the critical path, float, predecessors, durations in working days, the baseline and the schedule index. A delay on a critical task moves the project end.',
     '- When the project is behind, offer options such as resequencing, adding parallel work, changing durations or moving scope, and say what each does to the end date. The tools and the schedule engine calculate dates, never you.',
-    '- To suggest a new or updated schedule, read get_schedule_detail first. Say in a few lines what is wrong and what you would change, then call propose_schedule_plan with only the tasks that change. Change durations, starts or progress, never invent tasks or dates for work that does not exist. The card shows the real impact on the project end. Nothing changes until the person presses Apply, and Undo restores every task.',
+    '- To change a schedule that already exists, read get_schedule_detail first. Say in a few lines what is wrong and what you would change, then call propose_schedule_plan with only the tasks that change. Change durations, starts or progress of tasks that exist. The card shows the real impact on the project end. Nothing changes until the person presses Apply, and Undo restores every task.',
+    '- To create a whole new schedule, for example when the person says create, build, draft or suggest a schedule or a plan for the project, or when the project has no tasks, work in this order. First call get_schedule_basis. When the project has files, call search_documents or read_document for the scope of work, the phases, the timeline and the deadlines, because the scope lives there. Then design 3 to 8 phases in delivery order, each with the tasks that deliver the scope, working days for each duration, and a link from each task to what must finish before it. Add milestones for the key dates such as the kickoff, each acceptance and the go live. Give every deliverable a task through the deliverable field, and tie requirements, payment milestones and high risks to the tasks that serve them through covers. Use the owners from the team list or the documents and leave an owner out when it is not known. Reuse the schedule lines found in the documents when there are some, and keep their order. Then call check_new_schedule, and fix every problem it lists: deliverables or payments that finish after their due date, items no task covers, tasks with no links, and a project end after the contract end. Compress by running tasks in parallel or by trimming durations, and never by hiding a late date. Then call propose_new_schedule once with the same input.',
+    '- In the reply to a new schedule, say in a few lines how the phases were built, the main assumptions, and which durations are estimates. Give the project end, the contract end, and any deliverable or payment that still lands after its due date, using only the dates the tools returned. Never write a date from your own calculation. Tell the person that nothing is saved until they press Apply, and that Undo removes every task the card created. When there is no scope to base the plan on, ask one short question or say plainly that the phases are a standard structure to adjust.',
     '- To link tasks, call set_task_links with the task and its full list of predecessors with type and lag. It replaces the old list and the card shows the effect on the project end. Loops are refused.',
     '- Versions and baseline: list_schedule_versions shows the saved versions and, with compare_to, what changed since one. save_schedule_version names the current schedule. set_baseline fixes the current dates as the plan to measure against and replaces an old baseline, so say so. restore_schedule_version replaces the whole schedule with an earlier version, so explain the effect first. Each is a card the person applies, and Undo brings the earlier state back only if nothing changed after.',
     '- To move a task under another task or change its place in the list, call reorder_task. The card shows the new order and loops are refused. validate_schedule checks the schedule for problems and get_trends shows the movement over time, so read them before you advise on a recovery.',
@@ -118,7 +120,7 @@ const PARTS = {
 
 // Words that bring a part in. A part is also loaded when the screen the person is on matches it.
 const TRIGGERS = {
-  schedule: /\b(schedule|gantt|baseline|version|versions|restore|critical|float|delay|late|behind|forecast|duration|finish|end date|dependency|predecessor|plan)\b|جدول|مسار|تأخر|متأخر|خط الأساس/i,
+  schedule: /\b(schedule|gantt|baseline|version|versions|restore|critical|float|delay|late|behind|forecast|duration|finish|end date|dependency|predecessor|plan|timeline|roadmap|milestones?)\b|جدول|مسار|تأخر|متأخر|خط الأساس/i,
   risk: /\b(risk|risks|mitigat|issue|threat|probability|impact)\b|خطر|مخاطر/i,
   requirements: /\b(requirement|requirements|scope|deliverable|deliverables|coverage|traceab)\b|متطلب|مخرج/i,
   reporting: /\b(report|status|update|summary|steering|brief|weekly)\b|تقرير|ملخص|حالة/i,

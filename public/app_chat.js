@@ -93,6 +93,26 @@
     th_g_today: 'اليوم', th_g_yest: 'أمس', th_g_week: 'آخر 7 أيام', th_g_older: 'أقدم', th_side_hide: 'إخفاء المحادثات', th_side_show: 'إظهار المحادثات',
   });
 
+  // The suggested schedule card: the plan, its end against the contract, and the checks against due dates.
+  Object.assign(PM.I18N.en, {
+    cht_sum_newsched: 'Create the schedule "{title}"', cht_f_phases: 'Phases', cht_f_tasks: 'Tasks', cht_f_milestones: 'Milestones', cht_f_forecast_end: 'Project end', cht_f_contract_end: 'Contract end',
+    cht_plan_range: '{a} to {b}', cht_plan_end_ok: 'Project end {e}, on or before the contract end {c}.', cht_plan_end_over: 'Project end {e}, {d} days after the contract end {c}.', cht_plan_end_only: 'Project end {e}.',
+    cht_plan_dates_h: 'Deliverables and payments against their due dates', cht_plan_due: 'due {d}', cht_plan_nodue: 'no due date', cht_plan_planned: 'planned {d}', cht_plan_ontime: 'On time', cht_plan_late: '{n} days late', cht_plan_late1: '1 day late',
+    cht_plan_gap_h: 'No task covers these yet', cht_plan_k_del: 'Deliverables', cht_plan_k_pay: 'Payments', cht_plan_k_req: 'Requirements',
+    cht_plan_ms: 'Milestone', cht_plan_produces: 'Delivers {d}', cht_plan_score: 'Schedule check score {n} of 100', cht_plan_phases_h: 'Phases and tasks',
+    cht_plan_legend: 'Bars show the planned dates and red bars are on the critical path. The dates come from the schedule engine, so the Schedule tab shows the same ones after you apply.',
+    cht_open_schedule: 'Open the schedule',
+  });
+  Object.assign(PM.I18N.ar, {
+    cht_sum_newsched: 'إنشاء الجدول "{title}"', cht_f_phases: 'المراحل', cht_f_tasks: 'المهام', cht_f_milestones: 'المعالم', cht_f_forecast_end: 'نهاية المشروع', cht_f_contract_end: 'نهاية العقد',
+    cht_plan_range: '{a} إلى {b}', cht_plan_end_ok: 'نهاية المشروع {e}، وهي في موعد نهاية العقد {c} أو قبله.', cht_plan_end_over: 'نهاية المشروع {e}، بعد نهاية العقد {c} بمقدار {d} يوما.', cht_plan_end_only: 'نهاية المشروع {e}.',
+    cht_plan_dates_h: 'المخرجات والدفعات مقابل مواعيد استحقاقها', cht_plan_due: 'الاستحقاق {d}', cht_plan_nodue: 'بلا تاريخ استحقاق', cht_plan_planned: 'المخطط {d}', cht_plan_ontime: 'في الموعد', cht_plan_late: 'متأخر {n} يوما', cht_plan_late1: 'متأخر يوم واحد',
+    cht_plan_gap_h: 'لا توجد مهمة تغطي هذه العناصر بعد', cht_plan_k_del: 'المخرجات', cht_plan_k_pay: 'الدفعات', cht_plan_k_req: 'المتطلبات',
+    cht_plan_ms: 'معلم', cht_plan_produces: 'تسلّم {d}', cht_plan_score: 'نتيجة فحص الجدول {n} من 100', cht_plan_phases_h: 'المراحل والمهام',
+    cht_plan_legend: 'تعرض الأشرطة التواريخ المخططة، والأشرطة الحمراء على المسار الحرج. التواريخ من محرك الجدولة، لذلك يعرض تبويب الجدول التواريخ نفسها بعد التطبيق.',
+    cht_open_schedule: 'افتح الجدول',
+  });
+
   const pref = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* storage blocked */ } return null; };
   const DEF_W = 420, MIN_W = 340, WIDE_W = 760, MIN_IN = 38;
   const S = { open: false, busy: false, ctl: null, ctx: { projectId: null, screen: 'portfolio' }, data: null, msgs: [], confirming: null, raf: 0, mode: 'chat', hist: null, w: Number(pref('pm_chat_w')) || DEF_W, inH: Number(pref('pm_chat_inh')) || 0, dragging: false, page: false, att: [], upl: false, deep: pref('pm_think_deep') === '1', side: pref('pm_th_side') !== '0', th: { items: null, q: '', confirm: null } };
@@ -117,7 +137,7 @@
   const sumText = (it) => {
     const x = it.sum; if (!x) return it.summary;
     const kind = x.kind && has('cht_f_' + x.kind) ? t('cht_f_' + x.kind).toLowerCase() : (x.kind || '');
-    const map = { generate: 'cht_sum_gen', change_schedule: 'cht_sum_sched', schedule_plan: 'cht_sum_plan', create_widget: 'cht_sum_widget', save_layout: 'cht_sum_layout', save_version: 'cht_sum_saveversion', set_baseline: 'cht_sum_baseline', restore_version: 'cht_sum_restore', meeting_items: 'cht_sum_meeting', update_project: 'cht_sum_project', create_template: 'cht_sum_template', apply_update: 'cht_sum_applyupd', dismiss_update: 'cht_sum_dismiss', add_update: 'cht_sum_addupd', create_item: 'cht_sum_add', update_item: 'cht_sum_upd', delete_item: 'cht_sum_del', set_payment: 'cht_sum_pay', create_task: 'cht_sum_addtask', update_task: 'cht_sum_updtask', delete_task: 'cht_sum_deltask', review_item: 'cht_sum_review', update_closure: 'cht_sum_closure', close_project: 'cht_sum_close', reopen_project: 'cht_sum_reopen', create_resource: 'cht_sum_addres', update_resource: 'cht_sum_updres', delete_resource: 'cht_sum_delres', add_team: 'cht_sum_addteam', update_report: 'cht_sum_updrep', delete_report: 'cht_sum_delrep', create_folder: 'cht_sum_addfold', rename_folder: 'cht_sum_renfold', delete_folder: 'cht_sum_delfold', update_template: 'cht_sum_updtpl', delete_template: 'cht_sum_deltpl', update_meeting: 'cht_sum_updmeet', rename_speakers: 'cht_sum_speakers', regenerate_minutes: 'cht_sum_minutes', restore_update: 'cht_sum_restoreupd', run_sync: 'cht_sum_sync', set_sync_schedule: 'cht_sum_syncsched', choose_jira_site: 'cht_sum_jirasite', reorder_task: 'cht_sum_reorder', save_log_view: 'cht_sum_savelog', delete_log_view: 'cht_sum_dellog', mark_notifications: 'cht_sum_notif', install_widget: 'cht_sum_instw', uninstall_widget: 'cht_sum_uninstw', delete_widget: 'cht_sum_delw', delete_layout: 'cht_sum_dellay', create_project: 'cht_sum_newproj', create_support_ticket: 'cht_sum_ticket' };
+    const map = { generate: 'cht_sum_gen', change_schedule: 'cht_sum_sched', schedule_plan: 'cht_sum_plan', new_schedule: 'cht_sum_newsched', create_widget: 'cht_sum_widget', save_layout: 'cht_sum_layout', save_version: 'cht_sum_saveversion', set_baseline: 'cht_sum_baseline', restore_version: 'cht_sum_restore', meeting_items: 'cht_sum_meeting', update_project: 'cht_sum_project', create_template: 'cht_sum_template', apply_update: 'cht_sum_applyupd', dismiss_update: 'cht_sum_dismiss', add_update: 'cht_sum_addupd', create_item: 'cht_sum_add', update_item: 'cht_sum_upd', delete_item: 'cht_sum_del', set_payment: 'cht_sum_pay', create_task: 'cht_sum_addtask', update_task: 'cht_sum_updtask', delete_task: 'cht_sum_deltask', review_item: 'cht_sum_review', update_closure: 'cht_sum_closure', close_project: 'cht_sum_close', reopen_project: 'cht_sum_reopen', create_resource: 'cht_sum_addres', update_resource: 'cht_sum_updres', delete_resource: 'cht_sum_delres', add_team: 'cht_sum_addteam', update_report: 'cht_sum_updrep', delete_report: 'cht_sum_delrep', create_folder: 'cht_sum_addfold', rename_folder: 'cht_sum_renfold', delete_folder: 'cht_sum_delfold', update_template: 'cht_sum_updtpl', delete_template: 'cht_sum_deltpl', update_meeting: 'cht_sum_updmeet', rename_speakers: 'cht_sum_speakers', regenerate_minutes: 'cht_sum_minutes', restore_update: 'cht_sum_restoreupd', run_sync: 'cht_sum_sync', set_sync_schedule: 'cht_sum_syncsched', choose_jira_site: 'cht_sum_jirasite', reorder_task: 'cht_sum_reorder', save_log_view: 'cht_sum_savelog', delete_log_view: 'cht_sum_dellog', mark_notifications: 'cht_sum_notif', install_widget: 'cht_sum_instw', uninstall_widget: 'cht_sum_uninstw', delete_widget: 'cht_sum_delw', delete_layout: 'cht_sum_dellay', create_project: 'cht_sum_newproj', create_support_ticket: 'cht_sum_ticket' };
     return t(map[x.op] || 'cht_sum_upd', { kind, title: '\u2068' + x.title + '\u2069', state: x.state && has('cht_v_' + x.state) ? t('cht_v_' + x.state).toLowerCase() : x.state });
   };
   const impactHtml = (it) => {
@@ -126,6 +146,35 @@
     const line = (m.moved ? t(m.moved === 1 ? 'cht_impact_n1' : 'cht_impact_n', { n: m.moved }) : t('cht_impact_none')) + ' ' + (m.endBefore && m.endAfter && m.endBefore !== m.endAfter ? t('cht_impact_end', { a: m.endBefore, b: m.endAfter }) : t('cht_impact_same', { b: m.endAfter || m.endBefore || '' }));
     return `<div class="cht-impact small"><b>${esc(t('cht_impact_h'))}</b><div>${esc(line)}</div>${ex}</div>`;
   };
+  // A suggested schedule on a card: the counts, the project end against the contract end, a bar for every task, the checks
+  // against the due dates of deliverables and payments, and what no task covers yet.
+  const dayN = (d) => Math.floor(Date.parse(String(d) + 'T00:00:00Z') / 864e5);
+  const LRI = (d) => '\u2066' + d + '\u2069';
+  function planHtml(it) {
+    const p = it.plan; if (!p || !Array.isArray(p.phases)) return '';
+    const a = p.start ? dayN(p.start) : 0, span = Math.max(1, (p.end ? dayN(p.end) : a) - a + 1);
+    const bar = (tk) => {
+      if (!tk.start || !tk.finish) return '';
+      const l = Math.max(0, Math.min(99, (dayN(tk.start) - a) / span * 100));
+      if (tk.milestone) return `<span class="cht-pbar" aria-hidden="true"><i class="ms ${tk.critical ? 'crit' : ''}" style="inset-inline-start:${l.toFixed(1)}%"></i></span>`;
+      const w = Math.max(1.5, Math.min(100 - l, (dayN(tk.finish) - dayN(tk.start) + 1) / span * 100));
+      return `<span class="cht-pbar" aria-hidden="true"><i class="${tk.critical ? 'crit' : ''}" style="inset-inline-start:${l.toFixed(1)}%;inline-size:${w.toFixed(1)}%"></i></span>`;
+    };
+    const c = p.counts || {};
+    const counts = `<div class="cht-pcounts">${[['cht_f_phases', c.phases], ['cht_f_tasks', c.tasks], ['cht_f_milestones', c.milestones]].map(([k, n]) => `<span class="chip">${esc(t(k))} <b>${esc(String(n || 0))}</b></span>`).join('')}</div>`;
+    const over = p.over_days > 0;
+    const end = p.project_end ? `<div class="small ${over ? 'cht-plan-bad' : ''}" role="${over ? 'alert' : 'status'}">${esc(p.contract_end ? t(over ? 'cht_plan_end_over' : 'cht_plan_end_ok', { e: LRI(p.project_end), c: LRI(p.contract_end), d: p.over_days }) : t('cht_plan_end_only', { e: LRI(p.project_end) }))}</div>` : '';
+    const dates = (p.dates || []).length ? `<div class="cht-pdates"><div class="small muted">${esc(t('cht_plan_dates_h'))}</div>${p.dates.map((d) => `<div class="cht-pdate small"><span class="cht-pdn"><bdi>${esc(d.title)}</bdi></span><span class="muted">${esc(d.due ? t('cht_plan_due', { d: LRI(d.due) }) : t('cht_plan_nodue'))}</span><span class="muted">${esc(t('cht_plan_planned', { d: LRI(d.finish) }))}</span><span class="chip ${d.late_days > 0 ? 'red' : 'green'}">${esc(d.late_days > 0 ? t(d.late_days === 1 ? 'cht_plan_late1' : 'cht_plan_late', { n: d.late_days }) : t('cht_plan_ontime'))}</span></div>`).join('')}</div>` : '';
+    const u = p.uncovered || {};
+    const gaps = [['cht_plan_k_del', u.deliverables], ['cht_plan_k_pay', u.payments], ['cht_plan_k_req', u.requirements]].filter((x) => x[1] > 0);
+    const gap = gaps.length ? `<div class="cht-pgap small"><span class="muted">${esc(t('cht_plan_gap_h'))}</span>${gaps.map(([k, n]) => `<span class="chip amber">${esc(t(k))} <b>${esc(String(n))}</b></span>`).join('')}</div>` : '';
+    const phases = `<div class="small muted cht-pph-h">${esc(t('cht_plan_phases_h'))}</div>${p.phases.map((ph) => `<details class="cht-pph"><summary><span class="cht-pph-n"><bdi>${esc(ph.name)}</bdi></span><span class="small muted">${esc(t('cht_plan_range', { a: LRI(ph.start), b: LRI(ph.finish) }))}</span></summary>${ph.tasks.map((tk) => {
+      const meta = [tk.owner, tk.deliverable ? t('cht_plan_produces', { d: tk.deliverable }) : ''].filter(Boolean).join(', ');
+      return `<div class="cht-ptk small"><span class="cht-ptn"><bdi>${esc(tk.name)}</bdi>${tk.milestone ? ` <span class="chip blue">${esc(t('cht_plan_ms'))}</span>` : ''}${meta ? `<span class="muted cht-ptm"><bdi>${esc(meta)}</bdi></span>` : ''}</span><span class="muted cht-ptd">${esc(tk.milestone ? tk.start : t('cht_plan_range', { a: LRI(tk.start), b: LRI(tk.finish) }))}</span>${bar(tk)}</div>`;
+    }).join('')}</details>`).join('')}`;
+    const score = p.score != null ? `<div class="small muted">${esc(t('cht_plan_score', { n: p.score }))}</div>` : '';
+    return `<div class="cht-plan">${counts}${end}${dates}${gap}${phases}${score}<div class="small muted">${esc(t('cht_plan_legend'))}</div></div>`;
+  }
   const noteText = (it) => { const n = it.noteData; if (!n) return it.note || ''; return [n.kids ? t(n.kids === 1 ? 'cht_note_kids1' : 'cht_note_kids', { n: n.kids }) : '', n.succ ? t(n.succ === 1 ? 'cht_note_succ1' : 'cht_note_succ', { n: n.succ }) : ''].filter(Boolean).join(' '); };
 
   const CAM_ICON = '<svg class="i" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"/><circle cx="12" cy="13" r="4"/></svg>';
@@ -353,14 +402,14 @@
     const c = m.card; const id = esc(m.id);
     const live = c.status === 'pending';
     const confirming = S.confirming === m.id && live;
-    const items = c.items.map((it, ix) => `<li class="cht-item ${it.destructive ? 'bad' : ''}"><div class="cht-it-h">${esc(sumText(it))}</div>${it.widget ? wprevHtml(m, c, ix, it) : ''}${it.project && (c.projects || []).length > 1 ? `<div class="small muted">${esc(it.project)}</div>` : ''}${(it.changes || []).map((ch) => `<div class="cht-chg small"><span class="muted">${esc(fieldLabel(ch.field))}</span> ${ch.before != null ? `<span class="cht-old">${esc(valText(ch.before, ch.field))}</span><span class="muted">${icon('down', 'flip cht-arrow')}</span>` : ''}${ch.after != null ? `<b class="cht-new">${esc(valText(ch.after, ch.field))}</b>` : `<b class="cht-new">${esc(t('cht_none'))}</b>`}</div>`).join('')}${impactHtml(it)}${noteText(it) ? `<div class="small muted">${esc(noteText(it))}</div>` : ''}</li>`).join('');
+    const items = c.items.map((it, ix) => `<li class="cht-item ${it.destructive ? 'bad' : ''}"><div class="cht-it-h">${esc(sumText(it))}</div>${it.widget ? wprevHtml(m, c, ix, it) : ''}${it.project && (c.projects || []).length > 1 ? `<div class="small muted">${esc(it.project)}</div>` : ''}${(it.changes || []).filter((ch) => !it.plan || ch.field === 'reason').map((ch) => `<div class="cht-chg small"><span class="muted">${esc(fieldLabel(ch.field))}</span> ${ch.before != null ? `<span class="cht-old">${esc(valText(ch.before, ch.field))}</span><span class="muted">${icon('down', 'flip cht-arrow')}</span>` : ''}${ch.after != null ? `<b class="cht-new">${esc(valText(ch.after, ch.field))}</b>` : `<b class="cht-new">${esc(t('cht_none'))}</b>`}</div>`).join('')}${planHtml(it)}${impactHtml(it)}${noteText(it) ? `<div class="small muted">${esc(noteText(it))}</div>` : ''}</li>`).join('');
     const state = live ? '' : `<span class="chip ${c.status === 'applied' || c.status === 'applied_final' ? 'green' : c.status === 'failed' ? 'red' : c.status === 'undone' ? 'blue' : ''}">${esc(t('cht_s_' + c.status))}</span>`;
     const msg = c.message ? `<div class="small ${c.status === 'failed' ? 'cht-err' : 'muted'}" role="${c.status === 'failed' ? 'alert' : 'status'}">${esc(c.message)}</div>` : '';
     let foot = '';
     if (c.busy === 'apply' || c.busy === 'undo') foot = `<div class="cht-card-foot cht-busy small" role="status">${PM.loader.html({ size: 'sm', label: t(c.busy === 'undo' ? 'cht_s_undoing' : 'cht_s_applying') })}<span>${esc(t(c.busy === 'undo' ? 'cht_s_undoing' : 'cht_s_applying'))}</span></div>`;
     else if (live && !confirming) foot = `<div class="cht-card-foot"><button class="btn primary sm" type="button" data-act="apply" data-id="${id}">${esc(t('cht_apply'))}</button><button class="btn sm" type="button" data-act="edit" data-id="${id}">${esc(t('cht_edit'))}</button><button class="btn ghost sm" type="button" data-act="cancel" data-id="${id}">${esc(t('cht_cancel'))}</button></div>`;
     else if (confirming) foot = `<div class="cht-warn small" role="alert">${esc(c.items.some((x) => x.destructive) ? t('cht_strong') : t('cht_many'))}</div><div class="cht-card-foot"><button class="btn danger sm" type="button" data-act="confirm" data-id="${id}">${esc(t('cht_yes'))}</button><button class="btn ghost sm" type="button" data-act="back" data-id="${id}">${esc(t('cht_back'))}</button></div>`;
-    else if (c.status === 'applied') foot = `<div class="cht-card-foot">${(c.widgets || []).length > 1 ? `<a class="btn primary sm" href="#/widgets?tab=mine" data-act="nav">${icon('grid')}${esc(t('cht_wp_all', { n: c.widgets.length }))}</a>` : (c.widgets || []).map(wfootHtml).join('')}${(c.drafts || []).map((d) => draftBtns(m, d)).join('')}${(c.docs || []).map((d) => `<button class="btn primary sm" type="button" data-act="docopen" data-id="${d.id}">${icon('eye')}${esc(t('cht_doc_open'))}</button><button class="btn sm" type="button" data-act="docdl" data-id="${d.id}">${icon('dl')}${esc(t('cht_doc_dl'))}</button>`).join('')}${!(c.docs || []).length && !(c.drafts || []).length && (c.projects || []).length && c.items.some((x) => x.sum && x.sum.op === 'generate') ? `<a class="btn primary sm" href="#/p/${(c.projects[0] || {}).id}/reports" data-act="nav">${esc(t('cht_open_reports'))}</a>` : ''}<button class="btn sm" type="button" data-act="undo" data-id="${id}">${icon('undo')}${esc(t('cht_undo'))}</button></div>${(c.drafts || []).map(draftNote).join('')}`;
+    else if (c.status === 'applied') foot = `<div class="cht-card-foot">${(c.widgets || []).length > 1 ? `<a class="btn primary sm" href="#/widgets?tab=mine" data-act="nav">${icon('grid')}${esc(t('cht_wp_all', { n: c.widgets.length }))}</a>` : (c.widgets || []).map(wfootHtml).join('')}${(c.drafts || []).map((d) => draftBtns(m, d)).join('')}${(c.docs || []).map((d) => `<button class="btn primary sm" type="button" data-act="docopen" data-id="${d.id}">${icon('eye')}${esc(t('cht_doc_open'))}</button><button class="btn sm" type="button" data-act="docdl" data-id="${d.id}">${icon('dl')}${esc(t('cht_doc_dl'))}</button>`).join('')}${!(c.docs || []).length && !(c.drafts || []).length && (c.projects || []).length && c.items.some((x) => x.sum && x.sum.op === 'generate') ? `<a class="btn primary sm" href="#/p/${(c.projects[0] || {}).id}/reports" data-act="nav">${esc(t('cht_open_reports'))}</a>` : ''}${(c.projects || []).length && c.items.some((x) => x.sum && x.sum.op === 'new_schedule') ? `<a class="btn primary sm" href="#/p/${(c.projects[0] || {}).id}/schedule" data-act="nav">${esc(t('cht_open_schedule'))}</a>` : ''}<button class="btn sm" type="button" data-act="undo" data-id="${id}">${icon('undo')}${esc(t('cht_undo'))}</button></div>${(c.drafts || []).map(draftNote).join('')}`;
     return `<div class="cht-card ${live ? 'live' : ''}" data-card="${id}"><div class="cht-card-h"><span class="small muted">${icon('spark')}${esc(cardScope(c))}</span>${state}</div><ul class="cht-items">${items}</ul>${msg}${foot}</div>`;
   }
   function emptyHtml() {
@@ -1069,7 +1118,17 @@
     }, true);
     if (!isPage() && keep('pm_chat_open') === '1' && !window.matchMedia('(max-width: 820px)').matches) open();
   }
-  PM.chat = { init, open, close, mountPage };
+  // Lets a screen start a request in the Thinking Area, for example the empty Schedule screen. The person still sees the
+  // message and the answer in the thread, and every rule is applied by the server as for a typed message.
+  async function ask(text) {
+    if (!PM.state.token || !text) return false;
+    build();
+    if (!S.open && !isPage()) await open();
+    if (S.busy || S.mode !== 'chat') { if (S.mode !== 'chat') { S.mode = 'chat'; paint(); } if (S.busy) return false; }
+    await send(String(text));
+    return true;
+  }
+  PM.chat = { init, open, close, mountPage, ask };
   const pageHtml = '<div class="page th-page"><div id="thHost" class="th-host" aria-hidden="true"></div></div>';
   PM.views.thinking = async function () { PM.shell('thinking', pageHtml); await mountPage(); };
   PM.views.tab_thinking = async function (root) { root.innerHTML = pageHtml; await mountPage(); };

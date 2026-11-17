@@ -217,7 +217,7 @@ function createChat({ db, store, api, auth, ops, model }) {
         if (name === 'create_widget' && proposals.filter((p) => p.op && p.op.op === 'create_widget').length >= MAX_WIDGETS_PER_CARD) return fail(`A dashboard card holds up to ${MAX_WIDGETS_PER_CARD} widgets. Keep the most useful ones and offer a second dashboard for the rest.`);
         const out = await api.runAs({ user, fn: (h) => tools.WRITE[name](h, input, scope) });
         proposals.push(out);
-        return { content: JSON.stringify({ prepared: true, summary: out.summary, project: out.project, defaults_used: out.defaults || [], note: 'Nothing is saved. The person must press Apply on the card.' }) };
+        return { content: JSON.stringify({ prepared: true, summary: out.summary, project: out.project, defaults_used: out.defaults || [], ...(out.warnings && out.warnings.length ? { warnings: out.warnings } : {}), note: 'Nothing is saved. The person must press Apply on the card.' }) };
       }
       return fail('That tool does not exist.');
     } catch (e) {
@@ -236,7 +236,7 @@ function createChat({ db, store, api, auth, ops, model }) {
     return {
       status: 'pending', strong, created_at: new Date().toISOString(),
       ops: proposals.map((p) => p.op),
-      items: proposals.map((p) => ({ widget: p.op && p.op.op === 'create_widget' ? { title: p.op.meta.title, group: p.op.meta.group, spec: p.op.spec } : undefined, summary: p.summary, sum: p.sum || null, project: p.project, destructive: !!p.destructive, noteData: p.noteData || null, impact: p.impact || null, changes: p.changes.map(([field, before, after]) => ({ field, before, after })) })),
+      items: proposals.map((p) => ({ widget: p.op && p.op.op === 'create_widget' ? { title: p.op.meta.title, group: p.op.meta.group, spec: p.op.spec } : undefined, summary: p.summary, sum: p.sum || null, project: p.project, destructive: !!p.destructive, noteData: p.noteData || null, impact: p.impact || null, plan: p.plan || null, changes: p.changes.map(([field, before, after]) => ({ field, before, after })) })),
       projects: projectsTouched.map((id) => ({ id, name: A.projects[id].p.name })),
     };
   }

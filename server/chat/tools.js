@@ -936,6 +936,11 @@ const MORE = require('./tools_more')({ bad, clip, lim, href, pickProject, findRe
 READ_TOOLS.push(...MORE.READ_TOOLS); WRITE_TOOLS.push(...MORE.WRITE_TOOLS);
 Object.assign(READ, MORE.READ); Object.assign(WRITE, MORE.WRITE);
 for (const t of MORE.WRITE_TOOLS) WRITE_NAMES.add(t.name);
+// The suggested schedule (read the basis, check a plan, propose it, apply and undo) lives in its own file.
+const GEN = require('./schedule_gen')({ bad, clip, href, pickProject, findRecord, cleanText, cleanDate, str, num, proj });
+READ_TOOLS.push(...GEN.READ_TOOLS); WRITE_TOOLS.push(...GEN.WRITE_TOOLS);
+Object.assign(READ, GEN.READ); Object.assign(WRITE, GEN.WRITE); Object.assign(MORE.APPLY, GEN.APPLY); Object.assign(MORE.UNDO, GEN.UNDO);
+for (const t of GEN.WRITE_TOOLS) WRITE_NAMES.add(t.name);
 const USER_LEVEL = MORE.USER_LEVEL;
 const useServices = MORE.useServices;
 

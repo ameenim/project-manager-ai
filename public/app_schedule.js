@@ -30,8 +30,12 @@
 
     const banner = () => {
       const el = $('#schedBanner', root);
-      if (!g.tasks.length) el.innerHTML = `<div class="banner mb">${icon('cal')}<div class="grow"><b>${t('no_tasks')}</b><div class="small muted">${t('no_tasks_hint')}</div></div><a class="btn" href="#/p/${p.id}/review?kind=schedule">${t('review_schedule_lines')}</a></div>`;
-      else el.innerHTML = '';
+      if (!g.tasks.length) {
+        // an editor can ask the Thinking Area for a suggested schedule. It reads the scope, deliverables and milestones and shows a card to review.
+        const ask = p.can_edit !== false && window.PM.chat && window.PM.chat.ask;
+        el.innerHTML = `<div class="banner mb">${icon('cal')}<div class="grow"><b>${t('no_tasks')}</b><div class="small muted">${t('no_tasks_hint')}</div></div>${ask ? `<button class="btn primary" type="button" id="schedAsk">${icon('spark')}${t('sched_ask')}</button>` : ''}<a class="btn" href="#/p/${p.id}/review?kind=schedule">${t('review_schedule_lines')}</a></div>`;
+        const b = $('#schedAsk', el); if (b) b.onclick = () => window.PM.chat.ask(t('sched_ask_q'));
+      } else el.innerHTML = '';
     };
 
     const pickFields = (x) => ({ start: x.start, duration: x.duration, progress: x.progress, deps: x.deps, name: x.name, assignee: x.assignee || '', mode: x.mode || 'auto', flag: x.flag ? 1 : 0, links: x.links || [], deliverable_id: x.deliverable_id || null });
