@@ -4,6 +4,15 @@
 'use strict';
 const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
 
+// A date shown as text, such as 26-Apr-26 or 26 Apr 2026, becomes 2026-04-26. Anything else is left as it is.
+const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+function displayDate(s) {
+  const m = /^(\d{1,2})[-\s]([A-Za-z]{3})[a-z]*[-\s,]+(\d{2}|\d{4})$/.exec(String(s).trim());
+  if (!m || !MONTHS[m[2].toLowerCase()] || +m[1] < 1 || +m[1] > 31) return null;
+  const p2 = (n) => String(n).padStart(2, '0');
+  return `${m[3].length === 2 ? 2000 + +m[3] : +m[3]}-${p2(MONTHS[m[2].toLowerCase()])}-${p2(+m[1])}`;
+}
+
 // Date cells are written as ISO dates (2026-04-26) so the text never depends on the cell format (26-Apr-26),
 // and every cell stays on one line so a row is always one line of text.
 function toText(buf) {
@@ -23,7 +32,7 @@ function toText(buf) {
     }
     const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
     parts.push(`Sheet: ${sheet}`);
-    const one = (c) => String(c).replace(/\s*[\r\n]+\s*/g, ' ').replace(/\s*\|\s*/g, ' / ').trim();
+    const one = (c) => displayDate(c) || String(c).replace(/\s*[\r\n]+\s*/g, ' ').replace(/\s*\|\s*/g, ' / ').trim();
     for (const r of rows) if (r.some((c) => String(c).trim() !== '')) parts.push('| ' + r.map(one).join(' | ') + ' |');
     parts.push('');
   }

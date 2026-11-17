@@ -143,7 +143,7 @@ Rate probability and impact honestly. A payment worth a third of the contract he
     // schedule lines and are already in the schedule digest.
     const units = [];
     for (const para of String(text).split(/\n{2,}|\n(?=\d+(?:\.\d+)*\.?\s)/)) {
-      if (/^\|/m.test(para)) { for (const row of para.split('\n')) if (!/\d{4}-\d{2}-\d{2}[^]*\d{4}-\d{2}-\d{2}/.test(row)) units.push(row.replace(/^\|\s*|\s*\|$/g, '').replace(/\s*\|\s*/g, ' | ')); }
+      if (/^\|/m.test(para)) { for (const row of para.split('\n')) if (!/(\d{4}-\d{2}-\d{2}|\d{1,2}-[A-Za-z]{3}-\d{2,4})[^]*(\d{4}-\d{2}-\d{2}|\d{1,2}-[A-Za-z]{3}-\d{2,4})/.test(row)) units.push(row.replace(/^\|\s*|\s*\|$/g, '').replace(/\s*\|\s*/g, ' | ')); }
       else units.push(para);
     }
     for (const para of units) {
@@ -285,7 +285,17 @@ Rate probability and impact honestly. A payment worth a third of the contract he
     }
     return blocks;
   }
+  // A date shown as text, such as 26-Apr-26 or 26 Apr 2026, becomes 2026-04-26. Anything else is left as it is.
+  const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+  function displayDate(s) {
+    const m = /^(\d{1,2})[-\s]([A-Za-z]{3})[a-z]*[-\s,]+(\d{2}|\d{4})$/.exec(String(s).trim());
+    if (!m || !MONTHS[m[2].toLowerCase()] || +m[1] < 1 || +m[1] > 31) return null;
+    const p2 = (n) => String(n).padStart(2, '0');
+    return `${m[3].length === 2 ? 2000 + +m[3] : +m[3]}-${p2(MONTHS[m[2].toLowerCase()])}-${p2(+m[1])}`;
+  }
   const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+  // The reader writes ISO dates, but a plan whose dates came through as text (26-Apr-26) is read the same way.
+  const asIso = (v) => (ISO_DATE.test(v) ? v : displayDate(v) || v);
   const colOf = (head, re) => head.findIndex((h) => re.test(h));
   function planColumns(head) {
     const h = head.map((c) => String(c || '').toLowerCase().replace(/[^a-z0-9% ]+/g, ' ').replace(/\s+/g, ' ').trim());
@@ -318,7 +328,7 @@ Rate probability and impact honestly. A payment worth a third of the contract he
         if (pc) {
           const names = new Map();
           const cell = (r, k) => (k >= 0 ? r.cells[k] || '' : '');
-          const parsed = rows.map((r) => ({ r, wbs: cell(r, pc.wbs), name: cell(r, pc.name).replace(/\s+/g, ' ').trim(), start: cell(r, pc.start), end: cell(r, pc.end), type: cell(r, pc.type).toLowerCase() })).filter((x) => x.name && (ISO_DATE.test(x.start) || ISO_DATE.test(x.end)));
+          const parsed = rows.map((r) => ({ r, wbs: cell(r, pc.wbs), name: cell(r, pc.name).replace(/\s+/g, ' ').trim(), start: asIso(cell(r, pc.start)), end: asIso(cell(r, pc.end)), type: cell(r, pc.type).toLowerCase() })).filter((x) => x.name && (ISO_DATE.test(x.start) || ISO_DATE.test(x.end)));
           if (parsed.length < 2) continue;
           for (const x of parsed) if (x.wbs) names.set(x.wbs, x.name);
           for (const x of parsed) {

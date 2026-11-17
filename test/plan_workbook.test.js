@@ -118,3 +118,29 @@ test('the risk analysis is given the whole plan shape and the risks the workbook
   assert.match(prompt, /cybersecurity clearance is required again/, 'the risk rows are passages');
   assert.doesNotMatch(prompt.slice(prompt.indexOf('Passages')), /Weekly status meeting/, 'dated schedule rows are not passages');
 });
+
+test('the plan is read the same when the dates arrive as text such as 26-Apr-26', async () => {
+  // This is what a spreadsheet library that does not convert date cells gives. It happened in production.
+  const { readSpreadsheet } = require('../server/xlsx_text');
+  const iso = (await readSpreadsheet(workbook())).text;
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const old = iso.replace(/\| (\d{4})-(\d{2})-(\d{2}) \|/g, (m, y, mo, d) => `| ${d}-${MON[+mo - 1]}-${y.slice(2)} |`).replace(/\| (\d{4})-(\d{2})-(\d{2}) \|/g, (m, y, mo, d) => `| ${d}-${MON[+mo - 1]}-${y.slice(2)} |`);
+  assert.match(old, /\| 26-Apr-26 \|/);
+  assert.doesNotMatch(old, /\| \d{4}-\d{2}-\d{2} \|/);
+  const P = pipe({});
+  assert.equal(P.detectRole('ACME_Plan.xlsx', old).role, 'plan');
+  const a = P.extractPlan({ text: old }), b = P.extractPlan({ text: iso });
+  assert.equal(a.schedule.length, 12);
+  assert.equal(JSON.stringify(a.schedule.map((x) => [x.name, x.start, x.end])), JSON.stringify(b.schedule.map((x) => [x.name, x.start, x.end])));
+  assert.equal(JSON.stringify(a.fields.map((f) => f.value)), JSON.stringify(['2026-04-26', '2027-12-23']));
+  assert.ok(!P.passages(old).some((p) => /Weekly status meeting/.test(p)), 'dated rows are still not passages');
+});
+
+test('the reader turns dates that are plain text into ISO dates too', async () => {
+  const { readSpreadsheet } = require('../server/xlsx_text');
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['WBS', 'Task Name', 'Start', 'Finish'], ['1', 'Kick off', '26-Apr-26', '28 Apr 2026'], ['2', 'Note 13-Sep-2026 stays', 'x', 'y']]), 'Plan');
+  const r = await readSpreadsheet(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
+  assert.match(r.text, /\| 1 \| Kick off \| 2026-04-26 \| 2026-04-28 \|/);
+  assert.match(r.text, /Note 13-Sep-2026 stays/, 'a date inside a sentence is left alone');
+});
