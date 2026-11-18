@@ -2728,7 +2728,7 @@ Rules:
     return ran;
   }
 
-  return { handle, runAs, runDueSyncs, FileResult, StreamResult, userView, saveUserFor: null, running, TODAY, captureAll, snapshots };
+  return { handle, stats, runAs, runDueSyncs, FileResult, StreamResult, userView, saveUserFor: null, running, TODAY, captureAll, snapshots };
 };
 module.exports.FileResult = FileResult;
 module.exports.StreamResult = StreamResult;

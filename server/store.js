@@ -102,6 +102,7 @@ class Store {
       await t.query("INSERT INTO project_members(project_id, user_id, role) VALUES ($1, $2, 'manager')", [P.id, ownerId]);
     });
     this.cache.set(P.id, { P, version: 1, sums: null, psums: null });
+    if (this.onCreate) await this.onCreate(P, ownerId);
     await this.save(P);
   }
 
@@ -178,6 +179,7 @@ class Store {
       }
       if (ver === null) { this.cache.delete(id); return false; } // deleted meanwhile
       const c = this.cache.get(id); if (c) { c.P = P; c.version = ver; c.sums = sums; c.psums = psums; }
+      if (this.afterSave) await this.afterSave(P, ver);
       return true;
     });
     this.chain.set(id, run);

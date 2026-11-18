@@ -5,6 +5,10 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { Workspaces } = require('./workspaces');
+const { Ledger } = require('./ledger');
+const { Scope } = require('./scope');
+const { Rollups } = require('./rollups');
 const zlib = require('zlib');
 const Busboy = require('busboy');
 const dbm = require('./db');
@@ -160,6 +164,15 @@ async function createApp(opts = {}) {
   const envChecks = () => sec.checkEnvironment(process.env, production);
   if (production || opts.envReport) for (const c of envChecks()) if (c.level !== 'ok') console.warn(`SECURITY CHECK [${c.level}] ${c.id}: ${c.message}`);
   await ops.backfillSubscriptions();
+  const workspaces = new Workspaces(db, store);
+  workspaces.currency = async () => (await ops.config()).currency || 'USD';
+  await workspaces.init();
+  ops.ledger = new Ledger(db, store, workspaces, ops);
+  const scope = new Scope(db, workspaces, ops);
+  const rollups = new Rollups(db, store, workspaces);
+  store.onCreate = (P, ownerId) => workspaces.stampProject(P.id, ownerId);
+  store.afterSave = (P, ver) => rollups.write(P, ver);
+  if (workspaces.ready && opts.workspaceBackfill !== false) workspaces.backfillAll().catch((e) => console.error('workspace backfill', e.message));
   await ops.bootstrapSuperAdmins();
   if (opts.opsJobs !== false) ops.start();
   // Support tickets. opts.ticketAi and opts.ticketDispatcher let tests replace the Claude call and the GitHub dispatch.
@@ -168,6 +181,7 @@ async function createApp(opts = {}) {
   const admin = createAdmin({ db, store, auth, ops, usage, tickets, secLog, envChecks });
   const connectors = new Connectors(db, opts.connectorOptions || {});
   const api = createApi(store, auth, connectors, ops);
+  rollups.statsFn = (P) => api.stats(P);
   // The Project Chat. opts.chatModel lets tests replace the model with a scripted one.
   const chat = createChat({ db, store, api, auth, ops, model: opts.chatModel });
   const notifications = createNotifications({ db, store, api });
@@ -522,7 +536,7 @@ async function createApp(opts = {}) {
     await store.flush();
     await db.close();
   }
-  return { server, store, db, auth, api, chat, ops, admin, tickets, close };
+  return { server, store, db, auth, api, chat, ops, admin, tickets, workspaces, scope, rollups, close };
 }
 
 module.exports = { createApp };

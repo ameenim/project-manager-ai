@@ -456,6 +456,134 @@ const MIGRATIONS = [
   `
   ALTER TABLE notifications ADD COLUMN IF NOT EXISTS pinned BOOLEAN NOT NULL DEFAULT false;
   `,
+  // 16: workspaces, the base of the organization structure (Phase 0). Only new tables and two new columns are added, no
+  // existing table changes meaning. A workspace owns projects: every person gets a hidden personal workspace of one, and
+  // an organization is a business workspace. workspace_members holds role assignments with a scope. structure_nodes holds
+  // portfolios and programs as a tree. billing_accounts, plans and subscription_events separate who pays from who uses.
+  // token_wallets and token_ledger hold the pooled AI allowance and every AI call in AI units. project_rollups holds one
+  // small row of key figures per project so higher level views never open the project document. The app works without
+  // these tables (a published app gets them when Publish applies the schema) and then simply leaves the features off.
+  `
+  CREATE TABLE IF NOT EXISTS workspaces (
+    id BIGINT PRIMARY KEY,
+    kind TEXT NOT NULL DEFAULT 'personal' CHECK (kind IN ('personal','business')),
+    name TEXT NOT NULL DEFAULT '',
+    owner_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+    settings JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS workspaces_personal_idx ON workspaces(owner_id) WHERE kind = 'personal';
+  CREATE TABLE IF NOT EXISTS workspace_members (
+    workspace_id BIGINT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role TEXT NOT NULL CHECK (role IN ('admin','pmo_director','program_manager','project_manager','viewer')),
+    scope_type TEXT NOT NULL DEFAULT 'organization' CHECK (scope_type IN ('organization','portfolio','program','project')),
+    scope_id BIGINT NOT NULL DEFAULT 0,
+    granted_by BIGINT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (workspace_id, user_id, role, scope_type, scope_id)
+  );
+  CREATE INDEX IF NOT EXISTS workspace_members_user_idx ON workspace_members(user_id);
+  CREATE TABLE IF NOT EXISTS structure_nodes (
+    id BIGINT PRIMARY KEY,
+    workspace_id BIGINT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL CHECK (kind IN ('portfolio','program')),
+    parent_id BIGINT,
+    name TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS structure_nodes_ws_idx ON structure_nodes(workspace_id, kind);
+  CREATE INDEX IF NOT EXISTS structure_nodes_parent_idx ON structure_nodes(parent_id);
+  ALTER TABLE projects ADD COLUMN IF NOT EXISTS workspace_id BIGINT;
+  ALTER TABLE projects ADD COLUMN IF NOT EXISTS parent_id BIGINT;
+  CREATE INDEX IF NOT EXISTS projects_workspace_idx ON projects(workspace_id);
+  CREATE INDEX IF NOT EXISTS projects_parent_idx ON projects(parent_id);
+  CREATE TABLE IF NOT EXISTS plans (
+    code TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    audience TEXT NOT NULL DEFAULT 'individual' CHECK (audience IN ('individual','organization')),
+    price_cents INT NOT NULL DEFAULT 0,
+    period_days INT NOT NULL DEFAULT 30,
+    units_included BIGINT NOT NULL DEFAULT 0,
+    entitlements JSONB NOT NULL DEFAULT '{}'::jsonb,
+    active BOOLEAN NOT NULL DEFAULT true
+  );
+  CREATE TABLE IF NOT EXISTS billing_accounts (
+    id BIGINT PRIMARY KEY,
+    workspace_id BIGINT NOT NULL UNIQUE REFERENCES workspaces(id) ON DELETE CASCADE,
+    plan_code TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'trial' CHECK (status IN ('trial','active','cancelled')),
+    currency TEXT NOT NULL DEFAULT 'USD',
+    price_cents INT NOT NULL DEFAULT 0,
+    trial_end TIMESTAMPTZ,
+    period_start TIMESTAMPTZ,
+    period_end TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE TABLE IF NOT EXISTS subscription_events (
+    id BIGINT PRIMARY KEY,
+    billing_account_id BIGINT NOT NULL REFERENCES billing_accounts(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    from_plan TEXT NOT NULL DEFAULT '',
+    to_plan TEXT NOT NULL DEFAULT '',
+    amount_cents BIGINT NOT NULL DEFAULT 0,
+    currency TEXT NOT NULL DEFAULT 'USD',
+    effective_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    meta JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS subscription_events_acct_idx ON subscription_events(billing_account_id, effective_at);
+  CREATE TABLE IF NOT EXISTS token_wallets (
+    workspace_id BIGINT PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
+    period_start TIMESTAMPTZ,
+    period_end TIMESTAMPTZ,
+    units_included NUMERIC NOT NULL DEFAULT 0,
+    units_purchased NUMERIC NOT NULL DEFAULT 0,
+    overage_policy TEXT NOT NULL DEFAULT 'stop' CHECK (overage_policy IN ('stop','capped')),
+    overage_cap_units NUMERIC NOT NULL DEFAULT 0,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE TABLE IF NOT EXISTS token_ledger (
+    id BIGINT PRIMARY KEY,
+    workspace_id BIGINT,
+    user_id BIGINT,
+    project_id BIGINT,
+    program_id BIGINT,
+    portfolio_id BIGINT,
+    feature TEXT NOT NULL DEFAULT 'ai',
+    model TEXT NOT NULL DEFAULT '',
+    input_tokens INT NOT NULL DEFAULT 0,
+    output_tokens INT NOT NULL DEFAULT 0,
+    units NUMERIC NOT NULL DEFAULT 0,
+    cost_micros BIGINT NOT NULL DEFAULT 0,
+    billable BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS token_ledger_ws_idx ON token_ledger(workspace_id, created_at);
+  CREATE INDEX IF NOT EXISTS token_ledger_user_idx ON token_ledger(user_id, created_at);
+  CREATE TABLE IF NOT EXISTS project_rollups (
+    project_id BIGINT PRIMARY KEY,
+    workspace_id BIGINT,
+    parent_id BIGINT,
+    status TEXT NOT NULL DEFAULT '',
+    health TEXT NOT NULL DEFAULT '',
+    progress NUMERIC,
+    planned NUMERIC,
+    spi NUMERIC,
+    overdue INT NOT NULL DEFAULT 0,
+    tasks INT NOT NULL DEFAULT 0,
+    pending_review INT NOT NULL DEFAULT 0,
+    value NUMERIC NOT NULL DEFAULT 0,
+    currency TEXT NOT NULL DEFAULT '',
+    forecast_end TEXT,
+    contract_end TEXT,
+    project_version INT NOT NULL DEFAULT 0,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS project_rollups_ws_idx ON project_rollups(workspace_id);
+  CREATE INDEX IF NOT EXISTS project_rollups_parent_idx ON project_rollups(parent_id);
+  `,
 ];
 
 async function openPg(url) {

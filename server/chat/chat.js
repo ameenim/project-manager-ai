@@ -76,7 +76,7 @@ function createChat({ db, store, api, auth, ops, model }) {
   }
   async function log(user, projectId, kind, f) {
     const x = f || {};
-    try { await q('INSERT INTO chat_log(id, user_id, project_id, kind, category, tool, outcome, input_tokens, output_tokens, billable) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)', [store.nid(), user.id, projectId || null, kind, x.category || null, x.tool || null, x.outcome || null, x.input || 0, x.output || 0, x.billable !== false]); }
+    try { await q('INSERT INTO chat_log(id, user_id, project_id, kind, category, tool, outcome, input_tokens, output_tokens, billable) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)', [store.nid(), user.id, projectId || null, kind, x.category || null, x.tool || null, x.outcome || null, x.input || 0, x.output || 0, x.billable !== false]); if (x.billable !== false && ops && ops.ledger) await ops.ledger.record({ userId: user.id, projectId, feature: 'chat', input: x.input, output: x.output, billable: true }); }
     catch (e) { console.error('chat log', e.message); }
   }
   const purge = () => q("DELETE FROM chat_log WHERE created_at < $1", [ago(RETENTION_DAYS * 86400e3)]).catch((e) => console.error('chat purge', e.message));

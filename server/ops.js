@@ -14,6 +14,7 @@ const CONFIG = {
   currency: { def: 'USD', type: 'text', max: 3, label: 'Currency code' },
   period_days: { def: 30, type: 'int', min: 1, max: 366, label: 'Billing period in days' },
   token_limit: { def: 10000000, type: 'int', min: 0, max: 1e12, label: 'Tokens per period for new subscriptions' },
+  org_features: { def: false, type: 'bool', label: 'Organization features (workspaces above a single user)' },
   ai_price_input_per_m: { def: 3, type: 'num', min: 0, max: 100000, label: 'AI cost per million input tokens (USD)' },
   ai_price_output_per_m: { def: 15, type: 'num', min: 0, max: 100000, label: 'AI cost per million output tokens (USD)' },
   signup_enabled: { def: true, type: 'bool', label: 'Allow new sign ups' },
@@ -127,7 +128,8 @@ class Ops {
   async recordUsage({ userId, projectId, source, model, input, output }) {
     if (!input && !output) return;
     try { await this.q('INSERT INTO ai_usage(id, user_id, project_id, source, model, input_tokens, output_tokens) VALUES ($1,$2,$3,$4,$5,$6,$7)', [this.store.nid(), userId || null, projectId || null, source || 'ai', model || '', Math.round(input || 0), Math.round(output || 0)]); }
-    catch (e) { console.error('usage log', e.message); }
+    catch (e) { console.error('usage log', e.message); return; }
+    if (this.ledger) await this.ledger.record({ userId, projectId, feature: source || 'ai', model, input, output, billable: true });
   }
   async cost(inTok, outTok) {
     const c = await this.config();
