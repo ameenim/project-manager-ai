@@ -132,14 +132,14 @@ test('fonts and pictures are kept by the browser, scripts and styles keep their 
 test('screens that most visits never open are not loaded at start and each one has a real, versioned file', async () => {
   const page = (await raw('/app.html')).body.toString();
   const lazy = [...page.matchAll(/<script type="pm\/lazy" data-group="(\w+)" src="([^"]+)"/g)];
-  assert.deepEqual([...new Set(lazy.map((m) => m[1]))].sort(), ['brand', 'closure', 'connect', 'docs', 'meetings']);
+  assert.deepEqual([...new Set(lazy.map((m) => m[1]))].sort(), ['brand', 'closure', 'connect', 'docs', 'meetings', 'org']);
   for (const m of lazy) {
     assert.match(m[2], /\.js\?v=[0-9a-f]{10}$/);
     const r = await raw('/' + m[2]);
     assert.equal(r.status, 200, m[2]); assert.match(r.headers['cache-control'], /immutable/);
   }
   const eager = [...page.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1].split('?')[0]);
-  for (const f of ['app_meetings.js', 'app_closure.js', 'app_brand.js', 'app_connect.js', 'app_editor.js', 'app_clienttpl.js']) assert.ok(!eager.includes(f), f + ' is not loaded eagerly');
+  for (const f of ['app_meetings.js', 'app_closure.js', 'app_brand.js', 'app_connect.js', 'app_editor.js', 'app_clienttpl.js', 'app_org.js']) assert.ok(!eager.includes(f), f + ' is not loaded eagerly');
   for (const f of ['app.js', 'app_logs.js', 'app_review.js', 'app_chat.js']) assert.ok(eager.includes(f), f + ' still loads at start');
 });
 
@@ -149,6 +149,7 @@ test('every stub for a lazy screen is replaced by the real code, so nothing can 
   assert.match(read('app_closure.js'), /PM\.views\.tab_closure\s*=/);
   assert.match(read('app_closure.js'), /PM\.askNotDelivered\s*=/);
   assert.match(read('app_brand.js'), /PM\.views\.brand\s*=/);
+  assert.match(read('app_org.js'), /PM\.views\.organization\s*=/);
   assert.match(read('app_connect.js'), /PM\.connect\s*=\s*\{[^}]*wizard[^}]*mountRows/);
   assert.match(read('app_clienttpl.js'), /PM\.clientTpl\s*=\s*\{[^}]*upload[^}]*open[^}]*readLogo/);
   assert.match(read('app_editor.js'), /PM\.docEditor\s*=\s*\{\s*open/);

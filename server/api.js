@@ -1082,7 +1082,7 @@ module.exports = function createApi(store, auth, connectors, ops) {
     for (const k of KINDS) out[k] = { connected: !!CONN[k], label: CONN[k], managed: false, configured: connectors.configured(k), setup: connectors.configured(k) ? null : connectors.setupInfo(k, ctx().origin), sites: (meta[k] && meta[k].sites) || [], site_id: (meta[k] && meta[k].site_id) || null, token_ok: k === 'jira' };
     return out;
   };
-  on('GET', '/api/me', async () => ({ user: DB.user, status: { jira: !!CONN.jira, graph: !!CONN.outlook, claude: !!process.env.ANTHROPIC_API_KEY, model: MODEL } }));
+  on('GET', '/api/me', async () => ({ user: DB.user, status: { org: !!(ops.orgs && await ops.orgs.enabled()), jira: !!CONN.jira, graph: !!CONN.outlook, claude: !!process.env.ANTHROPIC_API_KEY, model: MODEL } }));
   // ---------- plan, tokens and invoices (the person's own view of their subscription) ----------
   const DAYMS2 = 86400000;
   async function billingView() {
