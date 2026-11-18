@@ -14,6 +14,8 @@ const CONFIG = {
   currency: { def: 'USD', type: 'text', max: 3, label: 'Currency code' },
   period_days: { def: 30, type: 'int', min: 1, max: 366, label: 'Billing period in days' },
   token_limit: { def: 10000000, type: 'int', min: 0, max: 1e12, label: 'Tokens per period for new subscriptions' },
+  team_seat_price_cents: { def: 4900, type: 'num', min: 0, max: 100000000, label: 'Team plan price per seat per month (cents)' },
+  team_units_per_seat: { def: 20000, type: 'num', min: 0, max: 1000000000, label: 'Team plan AI units per seat per month (1 unit is USD 0.001)' },
   org_features: { def: false, type: 'bool', label: 'Organization features (workspaces above a single user)' },
   ai_price_input_per_m: { def: 3, type: 'num', min: 0, max: 100000, label: 'AI cost per million input tokens (USD)' },
   ai_price_output_per_m: { def: 15, type: 'num', min: 0, max: 100000, label: 'AI cost per million output tokens (USD)' },
@@ -113,9 +115,11 @@ class Ops {
     return Number(a) + Number(b);
   }
   // Used before an AI call when "enforce_limits" is on. Super admins are never blocked.
-  async allowance(user) {
+  async allowance(user, projectId) {
     const c = await this.config();
     if (!c.enforce_limits || user.is_super) return null;
+    // a project that belongs to an organization draws on the organization's pool, not on the person's own plan
+    if (projectId && this.orgs && c.org_features) { const wid = await this.orgs.workspaceOfProject(projectId); if (wid) return this.orgs.poolBlock(wid); }
     await this.ensureSubscription(user.id);
     const s = (await this.q('SELECT * FROM subscriptions WHERE user_id = $1', [user.id])).rows[0];
     const st = Ops.state(s);

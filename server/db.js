@@ -584,6 +584,33 @@ const MIGRATIONS = [
   CREATE INDEX IF NOT EXISTS project_rollups_ws_idx ON project_rollups(workspace_id);
   CREATE INDEX IF NOT EXISTS project_rollups_parent_idx ON project_rollups(parent_id);
   `,
+  // Phase 1 (Team): invitations to an organization workspace, and the queue of active projects waiting for a new manager.
+  `
+  CREATE TABLE IF NOT EXISTS workspace_invites (
+    id BIGINT PRIMARY KEY,
+    workspace_id BIGINT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    email TEXT NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('admin','pmo_director','program_manager','project_manager','viewer')),
+    invited_by BIGINT,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','accepted','revoked')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    decided_at TIMESTAMPTZ
+  );
+  CREATE INDEX IF NOT EXISTS workspace_invites_ws_idx ON workspace_invites(workspace_id, status);
+  CREATE INDEX IF NOT EXISTS workspace_invites_email_idx ON workspace_invites(email, status);
+  CREATE TABLE IF NOT EXISTS project_handovers (
+    id BIGINT PRIMARY KEY,
+    workspace_id BIGINT NOT NULL,
+    project_id BIGINT NOT NULL,
+    from_user_id BIGINT,
+    to_user_id BIGINT,
+    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','done')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    done_at TIMESTAMPTZ,
+    done_by BIGINT
+  );
+  CREATE INDEX IF NOT EXISTS project_handovers_ws_idx ON project_handovers(workspace_id, status);
+  `,
 ];
 
 async function openPg(url) {

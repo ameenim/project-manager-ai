@@ -51,6 +51,19 @@ class Workspaces {
     } catch (e) { console.error('workspace', e.message); return null; }
   }
 
+  // A fresh personal workspace for someone whose old one became an organization. It has no billing account: the plan moved with the organization.
+  async ensurePersonalBare(userId) {
+    if (!this.ready) return null;
+    const have = (await this.q("SELECT id FROM workspaces WHERE kind = 'personal' AND owner_id = $1", [userId])).rows[0];
+    if (have) { this.byUser.set(userId, Number(have.id)); return Number(have.id); }
+    const u = (await this.q('SELECT name FROM users WHERE id = $1', [userId])).rows[0]; if (!u) return null;
+    const id = this.store.nid();
+    await this.q("INSERT INTO workspaces(id, kind, name, owner_id) VALUES ($1, 'personal', $2, $3)", [id, u.name, userId]);
+    await this.q("INSERT INTO workspace_members(workspace_id, user_id, role) VALUES ($1, $2, 'project_manager') ON CONFLICT DO NOTHING", [id, userId]);
+    this.byUser.set(userId, id);
+    return id;
+  }
+
   // One billing account per workspace, copied from the subscription. The subscription stays the source of truth in Phase 0.
   async copyBilling(wid, userId) {
     const cur = await this.cur();

@@ -9,6 +9,7 @@ const { Workspaces } = require('./workspaces');
 const { Ledger } = require('./ledger');
 const { Scope } = require('./scope');
 const { Rollups } = require('./rollups');
+const { Orgs } = require('./orgs');
 const zlib = require('zlib');
 const Busboy = require('busboy');
 const dbm = require('./db');
@@ -170,6 +171,8 @@ async function createApp(opts = {}) {
   ops.ledger = new Ledger(db, store, workspaces, ops);
   const scope = new Scope(db, workspaces, ops);
   const rollups = new Rollups(db, store, workspaces);
+  const orgs = new Orgs({ db, store, workspaces, scope, ops });
+  ops.orgs = orgs;
   store.onCreate = (P, ownerId) => workspaces.stampProject(P.id, ownerId);
   store.afterSave = (P, ver) => rollups.write(P, ver);
   if (workspaces.ready && opts.workspaceBackfill !== false) workspaces.backfillAll().catch((e) => console.error('workspace backfill', e.message));
@@ -536,7 +539,7 @@ async function createApp(opts = {}) {
     await store.flush();
     await db.close();
   }
-  return { server, store, db, auth, api, chat, ops, admin, tickets, workspaces, scope, rollups, close };
+  return { server, store, db, auth, api, chat, ops, admin, tickets, workspaces, scope, rollups, orgs, close };
 }
 
 module.exports = { createApp };

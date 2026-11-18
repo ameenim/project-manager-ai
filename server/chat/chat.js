@@ -305,7 +305,7 @@ function createChat({ db, store, api, auth, ops, model }) {
       return finishWith(reply, { unavailable: 'no_key' });
     }
 
-    const limitMsg = ops ? await ops.allowance(user) : null;
+    const limitMsg = ops ? await ops.allowance(user, projectId) : null;
     if (limitMsg) { emit({ type: 'text', text: limitMsg }); return finishWith(limitMsg, { unavailable: 'limit' }); }
 
     let askText = gt.decision === 'mixed' ? gt.rest : text;

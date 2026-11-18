@@ -2322,6 +2322,25 @@ Rules:
     return { members: (await store.members(P.id)).map(memberView) };
   });
 
+  // ---------- organizations (Team plan, behind org_features) ----------
+  const O = () => ops.orgs, UID = () => ctx().user.id;
+  on('GET', '/api/orgs', async () => ({ organizations: await O().list(UID()), invites: await O().myInvites(UID()) }));
+  on('POST', '/api/orgs', async (m, q, b) => O().create(UID(), b && b.name));
+  on('POST', '/api/orgs/convert', async (m, q, b) => O().convert(UID(), b && b.name));
+  on('POST', '/api/orgs/invites/(\\d+)/accept', async (m) => O().accept(UID(), m[1]));
+  on('GET', '/api/orgs/(\\d+)', async (m) => O().overview(UID(), m[1]));
+  on('PUT', '/api/orgs/(\\d+)', async (m, q, b) => { await O().rename(UID(), m[1], b && b.name); return O().overview(UID(), m[1]); });
+  on('PUT', '/api/orgs/(\\d+)/seats', async (m, q, b) => O().setSeats(UID(), m[1], b && b.seats));
+  on('PUT', '/api/orgs/(\\d+)/overage', async (m, q, b) => O().setOverage(UID(), m[1], b && b.policy, b && b.cap_units));
+  on('GET', '/api/orgs/(\\d+)/members', async (m) => O().members(UID(), m[1]));
+  on('POST', '/api/orgs/(\\d+)/invites', async (m, q, b) => O().invite(UID(), m[1], b && b.email, b && b.role));
+  on('DELETE', '/api/orgs/(\\d+)/invites/(\\d+)', async (m) => { await O().revoke(UID(), m[1], m[2]); return { ok: true }; });
+  on('PUT', '/api/orgs/(\\d+)/members/(\\d+)', async (m, q, b) => { await O().changeRole(UID(), m[1], Number(m[2]), b && b.role); return O().members(UID(), m[1]); });
+  on('DELETE', '/api/orgs/(\\d+)/members/(\\d+)', async (m) => O().remove(UID(), m[1], Number(m[2])));
+  on('GET', '/api/orgs/(\\d+)/handovers', async (m) => ({ handovers: await O().queue(UID(), m[1]) }));
+  on('POST', '/api/orgs/(\\d+)/handovers/(\\d+)/transfer', async (m, q, b) => O().transfer(UID(), m[1], m[2], b && b.user_id));
+  on('POST', '/api/projects/(\\d+)/move', async (m, q, b) => { P_(m[1], 'manager'); return O().moveProject(UID(), Number(m[1]), b && b.organization_id); });
+
   // ---------- sample projects ----------
   on('POST', '/api/workspace/sample', async () => {
     if (DB.user.sample_loaded) throw err(409, 'The sample projects are already in your workspace');

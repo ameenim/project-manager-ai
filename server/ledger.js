@@ -17,7 +17,9 @@ class Ledger {
     try {
       if (!this.workspaces.ready || !(await this.check())) return;
       if (!input && !output) return;
-      const wid = await this.workspaces.workspaceOf(userId);
+      let wid = null;
+      if (projectId) { const r = (await this.db.query("SELECT p.workspace_id FROM projects p JOIN workspaces w ON w.id = p.workspace_id WHERE p.id = $1 AND w.kind = 'business'", [Number(projectId)])).rows[0]; if (r) wid = Number(r.workspace_id); }
+      if (!wid) wid = await this.workspaces.workspaceOf(userId);
       if (!wid) return;
       const usd = await this.ops.cost(input || 0, output || 0);
       const micros = Math.round(usd * 1e6);

@@ -4,7 +4,9 @@
 'use strict';
 
 const RANK = { viewer: 1, editor: 2, manager: 3 };
-const ROLE_ACCESS = { admin: 'manager', pmo_director: 'manager', program_manager: 'manager', project_manager: 'manager', viewer: 'viewer' };
+// Admin and Project Manager reach projects only through direct project membership. The Admin role manages the organization,
+// it does not open project data. PMO Director and Program Manager reach projects by scope, Viewer reads by scope.
+const ROLE_ACCESS = { pmo_director: 'manager', program_manager: 'manager', viewer: 'viewer' };
 
 class Scope {
   constructor(db, workspaces, ops) { this.db = db; this.workspaces = workspaces; this.ops = ops; }
