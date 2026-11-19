@@ -78,6 +78,27 @@ module.exports = function createAdmin({ db, store, auth, ops, usage, tickets, se
     };
   });
 
+  // ---------- user types ----------
+  const orgs = () => ops.orgs;
+  async function typeInfo(id, isSuper) { const o = orgs(); const mem = o ? await o.membershipsOf(id) : []; return { type: o ? o.constructor.typeOf(isSuper, mem) : (isSuper ? 'super_admin' : 'individual'), memberships: mem }; }
+  // Apply a user type. Org types need an organization (and a program for Program Manager).
+  async function applyType(admin, id, cur, body) {
+    const type = String(body.type || ''); const o = orgs();
+    if (!(o && o.constructor.TYPES.includes(type))) throw err(400, 'Choose a valid user type');
+    const orgType = !['individual', 'super_admin'].includes(type);
+    if (orgType && !(await o.enabled())) throw err(400, 'Organizations are not turned on for this platform');
+    if (type !== 'super_admin' && cur.is_super) {
+      if (id === admin.id) throw err(400, 'You cannot remove your own super admin access');
+      if ((await supersLeft(id)) === 0) throw err(400, 'This is the last active super admin');
+    }
+    if (orgType) await o.setMemberRole(admin.id, idOf(body.organization_id), id, type, body.program_id);
+    else if (type === 'individual' && (await o.membershipsOf(id)).length) await o.leaveAll(admin.id, id);
+    const wantSuper = type === 'super_admin';
+    if (wantSuper !== !!cur.is_super) await q('INSERT INTO user_flags(user_id, is_super) VALUES ($1,$2) ON CONFLICT (user_id) DO UPDATE SET is_super = EXCLUDED.is_super', [id, wantSuper]);
+    return type;
+  }
+  on('GET', '/user-types', async () => { const o = orgs(); return { types: o ? o.constructor.TYPES : ['individual', 'super_admin'], ...(o ? await o.lookup() : { enabled: false, organizations: [] }) }; });
+
   // ---------- users ----------
   on('GET', '/users', async ({ query }) => {
     const { size, offset, page: p } = page(query);
@@ -88,7 +109,8 @@ module.exports = function createAdmin({ db, store, auth, ops, usage, tickets, se
     const where = w.length ? 'WHERE ' + w.join(' AND ') : '';
     const total = num((await q(`SELECT count(*) AS c FROM users u LEFT JOIN user_flags f ON f.user_id = u.id ${where}`, params)).rows[0].c);
     const rows = (await q(`SELECT u.id, u.name, u.email, u.created_at, COALESCE(f.is_super, false) AS is_super, COALESCE(f.status, 'active') AS status, f.last_seen_at, s.status AS sub_status, s.trial_end, s.period_end, s.token_limit, (SELECT count(*) FROM projects pr WHERE pr.owner_id = u.id) AS projects FROM users u LEFT JOIN user_flags f ON f.user_id = u.id LEFT JOIN subscriptions s ON s.user_id = u.id ${where} ORDER BY u.id DESC LIMIT ${size} OFFSET ${offset}`, params)).rows;
-    return { total, page: p, size, users: rows.map((r) => ({ ...userOut(r), projects: num(r.projects), subscription: r.sub_status ? Ops.state({ status: r.sub_status, trial_end: r.trial_end, period_end: r.period_end }) : 'none' })) };
+    const types = {}; for (const r of rows) types[r.id] = (await typeInfo(r.id, r.is_super)).type;
+    return { total, page: p, size, users: rows.map((r) => ({ ...userOut(r), type: types[r.id], projects: num(r.projects), subscription: r.sub_status ? Ops.state({ status: r.sub_status, trial_end: r.trial_end, period_end: r.period_end }) : 'none' })) };
   });
   on('GET', '/users/(\\d+)', async ({ m }) => {
     const id = idOf(m[1]); const u = await userRow(id);
@@ -99,20 +121,24 @@ module.exports = function createAdmin({ db, store, auth, ops, usage, tickets, se
     const payments = (await q('SELECT id, amount_cents, currency, kind, status, method, reference, note, paid_at FROM payments WHERE user_id = $1 ORDER BY paid_at DESC LIMIT 50', [id])).rows;
     const errors = (await q('SELECT id, kind, status, path, message, created_at FROM error_log WHERE user_id = $1 ORDER BY id DESC LIMIT 10', [id])).rows;
     const used = await ops.tokensUsedSince(id, start);
-    return { user: userOut(u), subscription: subView(sub), tokens_used: used, projects: projects.map((p) => ({ id: p.id, name: p.name || 'Untitled', role: p.role, updated_at: iso(p.updated_at) })), payments: payments.map(payView), errors: errors.map((e) => ({ ...e, created_at: iso(e.created_at) })) };
+    return { user: { ...userOut(u), ...(await typeInfo(id, u.is_super)) }, subscription: subView(sub), tokens_used: used, projects: projects.map((p) => ({ id: p.id, name: p.name || 'Untitled', role: p.role, updated_at: iso(p.updated_at) })), payments: payments.map(payView), errors: errors.map((e) => ({ ...e, created_at: iso(e.created_at) })) };
   });
   on('POST', '/users', async ({ admin, body }) => {
     const name = String(body.name || '').trim(), email = String(body.email || '').trim().toLowerCase(), password = String(body.password || '');
     if (!name || name.length > 120) throw err(400, 'Enter a name up to 120 characters');
     if (!EMAIL_RE.test(email) || email.length > 200) throw err(400, 'Enter a valid email address');
     { const bad = checkPassword(password, email); if (bad) throw err(400, bad); }
+    const type = body.type || (body.is_super ? 'super_admin' : 'individual');
+    if (orgs() && !orgs().constructor.TYPES.includes(type)) throw err(400, 'Choose a valid user type');
+    if (!['individual', 'super_admin'].includes(type)) { await orgs().assertPlaceable(0, type, idOf(body.organization_id || 0), body.program_id); }
     const salt = crypto.randomBytes(16).toString('hex');
     let row;
     try { row = (await q('INSERT INTO users(email, name, pw_salt, pw_hash) VALUES ($1,$2,$3,$4) RETURNING id', [email, name, salt, await scrypt(password, salt)])).rows[0]; }
     catch (e) { if (/unique|duplicate/i.test(e.message)) throw err(409, 'An account with this email already exists'); throw e; }
     await ops.ensureSubscription(row.id);
-    if (body.is_super) await q('INSERT INTO user_flags(user_id, is_super) VALUES ($1, true) ON CONFLICT (user_id) DO UPDATE SET is_super = true', [row.id]);
-    await audit(admin, 'user.create', `user:${row.id}`, { email, is_super: !!body.is_super });
+    if (type === 'super_admin') await q('INSERT INTO user_flags(user_id, is_super) VALUES ($1, true) ON CONFLICT (user_id) DO UPDATE SET is_super = true', [row.id]);
+    else if (type !== 'individual') await orgs().setMemberRole(admin.id, idOf(body.organization_id), row.id, type, body.program_id);
+    await audit(admin, 'user.create', `user:${row.id}`, { email, type, organization_id: body.organization_id || null });
     return { user: userOut(await userRow(row.id)) };
   });
   on('PUT', '/users/(\\d+)', async ({ m, admin, body }) => {
@@ -131,7 +157,8 @@ module.exports = function createAdmin({ db, store, auth, ops, usage, tickets, se
       if (body.status === 'suspended') await auth.logoutEverywhere(id);
       changes.status = body.status;
     }
-    if ('is_super' in body) {
+    if ('type' in body) changes.type = await applyType(admin, id, cur, body);
+    else if ('is_super' in body) {
       const v = !!body.is_super;
       if (!v && cur.is_super && (id === admin.id || (await supersLeft(id)) === 0)) throw err(400, id === admin.id ? 'You cannot remove your own super admin access' : 'This is the last active super admin');
       await q('INSERT INTO user_flags(user_id, is_super) VALUES ($1,$2) ON CONFLICT (user_id) DO UPDATE SET is_super = EXCLUDED.is_super', [id, v]);
@@ -164,10 +191,13 @@ module.exports = function createAdmin({ db, store, auth, ops, usage, tickets, se
     const id = idOf(m[1]); const u = await userRow(id);
     if (id === admin.id) throw err(400, 'You cannot delete your own account');
     if (u.is_super && (await supersLeft(id)) === 0) throw err(400, 'This is the last active super admin');
+    const o = orgs();
+    if (o) { await o.leaveAll(admin.id, id); await o.reassignOwned(id); }
     const owned = (await q('SELECT id FROM projects WHERE owner_id = $1', [id])).rows.map((r) => r.id);
     if (owned.length && query.delete_projects !== '1') throw err(409, `This person owns ${owned.length} project${owned.length === 1 ? '' : 's'}. Delete them too, or transfer them first.`);
     for (const pid of owned) await store.remove(pid);
-    await q('DELETE FROM users WHERE id = $1', [id]);
+    try { await q('DELETE FROM users WHERE id = $1', [id]); }
+    catch (e) { if (/foreign key|violates/i.test(e.message)) throw err(409, 'This person still owns an organization or other records. Transfer them first.'); throw e; }
     await audit(admin, 'user.delete', `user:${id}`, { email: u.email, projects_deleted: owned.length });
     return { ok: true, projects_deleted: owned.length };
   });

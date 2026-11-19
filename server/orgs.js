@@ -156,6 +156,77 @@ class Orgs {
     return ['time,actor,action,details,ip'].concat(rows.map((r) => [new Date(r.created_at).toISOString(), r.actor, r.action, JSON.stringify(r.meta || {}), r.ip].map(cell).join(','))).join('\n');
   }
 
+  // ---------- platform owner: user types ----------
+  static get TYPES() { return ['individual', 'super_admin', 'admin', 'pmo_director', 'program_manager', 'project_manager', 'viewer', 'auditor']; }
+  async lookup() {
+    if (!(await this.enabled())) return { enabled: false, organizations: [] };
+    const rows = (await this.q("SELECT id, name FROM workspaces WHERE kind = 'business' ORDER BY name")).rows;
+    const out = [];
+    for (const w of rows) {
+      const progs = (await this.q("SELECT id, name FROM structure_nodes WHERE workspace_id = $1 AND kind = 'program' AND status = 'active' ORDER BY name", [w.id])).rows;
+      out.push({ id: Number(w.id), name: w.name, plan: await this.planCode(w.id), seats: await this.seatsBought(w.id), seats_used: await this.seatsUsed(w.id), programs: progs.map((p) => ({ id: Number(p.id), name: p.name })) });
+    }
+    return { enabled: true, organizations: out };
+  }
+  // Roles a person holds in every organization, for the platform console.
+  async membershipsOf(userId) {
+    if (!this.workspaces.ready) return [];
+    try {
+      const rows = (await this.q("SELECT w.id, w.name, m.role, m.scope_type, m.scope_id, (SELECT name FROM structure_nodes n WHERE n.id = m.scope_id AND m.scope_type = 'program') AS program FROM workspace_members m JOIN workspaces w ON w.id = m.workspace_id WHERE m.user_id = $1 AND w.kind = 'business' ORDER BY w.name, m.role", [userId])).rows;
+      const by = new Map();
+      for (const r of rows) { const e = by.get(String(r.id)) || { organization_id: Number(r.id), name: r.name, roles: [] }; e.roles.push({ role: r.role, scope_type: r.scope_type, program: r.program || null }); by.set(String(r.id), e); }
+      return [...by.values()];
+    } catch (e) { return []; }
+  }
+  static typeOf(isSuper, memberships) {
+    if (isSuper) return 'super_admin';
+    const order = ['admin', 'pmo_director', 'program_manager', 'project_manager', 'auditor', 'viewer'];
+    const have = memberships.flatMap((m) => m.roles.map((r) => r.role));
+    return order.find((r) => have.includes(r)) || 'individual';
+  }
+  // Check that a person of this type can be placed in the organization, before anything is created or changed.
+  async assertPlaceable(userId, type, wid, programId) {
+    await this.need();
+    if (!wid) throw err(400, 'Choose an organization');
+    const w = await this.business(wid);
+    if (type === 'program_manager') {
+      const p = (await this.q("SELECT id FROM structure_nodes WHERE id = $1 AND workspace_id = $2 AND kind = 'program' AND status = 'active'", [Number(programId) || 0, wid])).rows[0];
+      if (!p) throw err(400, 'Choose a program of this organization');
+    }
+    if (type === 'auditor') await this.needEnterprise(wid);
+    const have = userId ? await this.rolesIn(userId, wid) : [];
+    if (!FREE_ROLES.includes(type) && have.every((r) => FREE_ROLES.includes(r)) && (await this.seatsUsed(wid)) >= (await this.seatsBought(wid))) throw err(409, `All seats of ${w.name} are in use. Raise the seats in the organization first.`);
+    if (have.includes('admin') && type !== 'admin' && (await this.admins(wid)) <= 1) throw err(409, `${w.name} needs at least one Admin`);
+  }
+  async setMemberRole(actorId, wid, userId, type, programId) {
+    await this.assertPlaceable(userId, type, wid, programId);
+    await this.q('DELETE FROM workspace_members WHERE workspace_id = $1 AND user_id = $2', [wid, userId]);
+    const rows = type === 'admin' ? [['admin', 'organization', 0], ['project_manager', 'organization', 0]] : [[type, type === 'program_manager' ? 'program' : 'organization', type === 'program_manager' ? Number(programId) : 0]];
+    for (const [role, st, sid] of rows) await this.q('INSERT INTO workspace_members(workspace_id, user_id, role, scope_type, scope_id, granted_by) VALUES ($1,$2,$3,$4,$5,$6)', [wid, userId, role, st, sid, actorId]);
+    await this.audit(wid, actorId, 'member.type_set', { user_id: userId, type, via: 'platform owner' });
+  }
+  // Take a person out of every organization. Active projects they managed go to each handover queue.
+  async leaveAll(actorId, userId) {
+    if (!this.workspaces.ready) return { handover: 0, archived: 0, organizations: 0 };
+    const orgs = (await this.q("SELECT DISTINCT m.workspace_id FROM workspace_members m JOIN workspaces w ON w.id = m.workspace_id WHERE m.user_id = $1 AND w.kind = 'business'", [userId])).rows;
+    const out = { handover: 0, archived: 0, organizations: 0 };
+    for (const o of orgs) {
+      if ((await this.rolesIn(userId, o.workspace_id)).includes('admin') && (await this.admins(o.workspace_id)) <= 1) { const w = await this.business(o.workspace_id); throw err(409, `${w.name} needs at least one Admin. Make someone else Admin first.`); }
+    }
+    for (const o of orgs) { const r = await this.remove(actorId, o.workspace_id, userId, { system: true }); out.handover += r.handover; out.archived += r.archived; out.organizations++; await this.audit(o.workspace_id, actorId, 'member.removed', { user_id: userId, via: 'platform owner' }); }
+    return out;
+  }
+  // Organization projects owned by a person who is being deleted pass to the organization owner or another Admin.
+  async reassignOwned(userId) {
+    if (!this.workspaces.ready) return;
+    const rows = (await this.q("SELECT p.id, p.workspace_id FROM projects p JOIN workspaces w ON w.id = p.workspace_id WHERE p.owner_id = $1 AND w.kind = 'business'", [userId])).rows;
+    for (const r of rows) {
+      const to = (await this.q("SELECT COALESCE((SELECT owner_id FROM workspaces WHERE id = $1 AND owner_id <> $2), (SELECT user_id FROM workspace_members WHERE workspace_id = $1 AND role = 'admin' AND user_id <> $2 LIMIT 1)) AS u", [r.workspace_id, userId])).rows[0];
+      if (!to || !to.u) throw err(409, 'An organization project is owned by this person and the organization has nobody else to own it');
+      await this.q('UPDATE projects SET owner_id = $2 WHERE id = $1', [r.id, to.u]); this.store.cache.delete(Number(r.id));
+    }
+  }
+
   // ---------- organizations ----------
   async list(userId) {
     await this.need();
