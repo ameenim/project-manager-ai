@@ -16,6 +16,7 @@ const CONFIG = {
   token_limit: { def: 10000000, type: 'int', min: 0, max: 1e12, label: 'Tokens per period for new subscriptions' },
   team_seat_price_cents: { def: 4900, type: 'num', min: 0, max: 100000000, label: 'Team plan price per seat per month (cents)' },
   team_units_per_seat: { def: 20000, type: 'num', min: 0, max: 1000000000, label: 'Team plan AI units per seat per month (1 unit is USD 0.001)' },
+  testbed_email: { def: 'ameenim@gmail.com', type: 'text', max: 200, label: 'Test organization owner email (blank turns the test organization and role switcher off)' },
   org_features: { def: false, type: 'bool', label: 'Organization features (workspaces above a single user)' },
   ai_price_input_per_m: { def: 3, type: 'num', min: 0, max: 100000, label: 'AI cost per million input tokens (USD)' },
   ai_price_output_per_m: { def: 15, type: 'num', min: 0, max: 100000, label: 'AI cost per million output tokens (USD)' },

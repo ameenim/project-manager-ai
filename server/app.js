@@ -28,6 +28,7 @@ const { createChat } = require('./chat/chat');
 const { createNotifications } = require('./notifications');
 const { Ops } = require('./ops');
 const createAdmin = require('./admin');
+const { Testbed } = require('./testbed');
 const { createUsage } = require('./usage');
 const { Tickets } = require('./tickets');
 
@@ -193,6 +194,9 @@ async function createApp(opts = {}) {
   const connectors = new Connectors(db, opts.connectorOptions || {});
   const api = createApi(store, auth, connectors, ops);
   rollups.statsFn = (P) => api.stats(P);
+  const testbed = new Testbed({ db, store, auth, ops, orgs, workspaces, api });
+  ops.testbed = testbed;
+  if (opts.testbed !== false) await testbed.seed().catch((e) => console.error('test organization', e.message));
   // The Project Chat. opts.chatModel lets tests replace the model with a scripted one.
   const chat = createChat({ db, store, api, auth, ops, model: opts.chatModel });
   const notifications = createNotifications({ db, store, api });
@@ -313,6 +317,7 @@ async function createApp(opts = {}) {
     }
     if (p.startsWith('/api/admin') && adminLimit(user.id)) { secLog.log('rate_limited', { ip, userId: user.id, path: p, throttleMs: 60e3, key: 'admin' }); return json(res, 429, { error: 'Too many requests. Wait a moment and try again.' }); }
     if (await admin.route(req, res, url, user, { json, readBody, SECURITY, origin, event: (type, o) => secLog.log(type, { ip, ...o }) })) return;
+    if (p.startsWith('/api/testbed') && (await testbed.route(req, res, url, user, cred, { json, readBody, SECURITY, sessionSeconds, userView: api.userView }))) return;
     if (!user.is_super && (await ops.config()).maintenance_mode && !/^\/api\/(me|billing)/.test(p)) return json(res, 503, { error: (await ops.config()).maintenance_message });
 
     if (p.startsWith('/api/tickets') && (await tickets.route(req, res, url, user, { json, readBody, SECURITY }))) return;

@@ -173,7 +173,7 @@ function make(db, getSessionMinutes, hooks = {}) {
 
   const purgeExpired = async () => { const m = await minutesNow(); await db.query("DELETE FROM sessions WHERE expires_at < now() OR created_at + ($1 || ' minutes')::interval < now()", [String(m)]); };
   const purgeResets = () => db.query("DELETE FROM password_resets WHERE expires_at < now() - interval '1 day'").catch(() => {});
-  return { register, login, userForToken, logout, logoutEverywhere, changePassword, purgeExpired, createResetLink, resetPassword, requestReset, purgeResets, EMAIL_RE, RESET_MINUTES };
+  return { startSession: newSession, register, login, userForToken, logout, logoutEverywhere, changePassword, purgeExpired, createResetLink, resetPassword, requestReset, purgeResets, EMAIL_RE, RESET_MINUTES };
 }
 
 module.exports = { make, err, checkPassword };

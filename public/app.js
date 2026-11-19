@@ -386,6 +386,7 @@
         <div class="pref"><span class="pref-ic">${icon(S.theme === 'dark' ? 'moon' : 'sun')}</span><span class="grow">${t('dark_mode')}</span><button type="button" class="tgl ${S.theme === 'dark' ? 'on' : ''}" id="themeBtn" role="switch" aria-checked="${S.theme === 'dark'}" aria-label="${t('dark_mode')}" data-tip="${t('dark_mode')}"><i>${icon(S.theme === 'dark' ? 'moon' : 'sun')}</i></button></div>
         <div class="pref"><span class="pref-ic">${icon('globe')}</span><span class="grow">${t('language')}</span><button type="button" class="seg2" id="langBtn" aria-label="${t('language')}" data-tip="${t('language')}"><span class="${S.lang !== 'ar' ? 'on' : ''}">EN</span><span class="${S.lang === 'ar' ? 'on' : ''}">عربي</span></button></div>
       </div>
+      ${S.testbed && S.testbed.available ? `<div class="pref" id="tbRow"><span class="pref-ic">${icon('user')}</span><label class="grow small" for="tbSel">View as role</label><select id="tbSel" aria-label="View as role"><option value="owner">My account, all roles</option>${S.testbed.roles.map((r) => `<option value="${r.role}">${esc(r.label)}</option>`).join('')}</select></div>` : ''}
       <div class="user-row"><a class="user-chip grow" href="#/account" style="text-decoration:none;color:inherit">${avatarHtml(S.user)}<div class="grow" style="min-width:0"><div style="font-weight:var(--fw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(S.user.name)}</div><div class="small muted">${t('account_settings')}</div></div></a>
         <button type="button" class="btn ghost icon" id="logoutBtn" aria-label="${t('sign_out')}" data-tip="${t('sign_out')}">${icon('logout')}</button></div></aside>
       <main class="main" id="main">${projHead || ''}<div id="content">${content}</div></main></div>`;
@@ -413,6 +414,7 @@
     $('#themeBtn').onclick = () => setPref({ theme: S.theme === 'dark' ? 'light' : 'dark' });
     $('#langBtn').onclick = () => setPref({ language: S.lang === 'ar' ? 'en' : 'ar' });
     $('#logoutBtn').onclick = () => signOut();
+    const tbSel = $('#tbSel'); if (tbSel) { tbSel.value = S.testbed.active === 'owner' ? 'owner' : S.testbed.active; tbSel.onchange = async () => { tbSel.disabled = true; try { await api('POST', '/api/testbed/switch', { role: tbSel.value }); location.hash = '#/'; location.reload(); } catch (e) { tbSel.disabled = false; toast(e.message, 'err'); } }; }
     if (PM.billing) PM.billing.bind();
     if (PM.notify) PM.notify.mount();
   }
@@ -669,7 +671,7 @@
     const parts = pathPart.split('/').filter(Boolean);
     if (!S.token) { location.replace('index.html'); return; }
     if (!S.user) {
-      try { const r = await api('GET', '/api/me'); setUser(r.user); S.status = r.status; } catch (e) { if (S.token && mine === routeRun) bootFail(e); return; }
+      try { const r = await api('GET', '/api/me'); setUser(r.user); S.status = r.status; S.testbed = await api('GET', '/api/testbed').catch(() => ({ available: false })); } catch (e) { if (S.token && mine === routeRun) bootFail(e); return; }
     }
     if (parts[0] === 'login' || parts[0] === 'register') { location.hash = '#/'; return; }
     if (PM.onboard) PM.onboard.gate();

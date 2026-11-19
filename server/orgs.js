@@ -15,7 +15,7 @@ class Orgs {
   constructor({ db, store, workspaces, scope, ops }) { this.db = db; this.store = store; this.workspaces = workspaces; this.scope = scope; this.ops = ops; }
   q(t, p) { return this.db.query(t, p); }
   async enabled() { return this.workspaces.ready && (await this.scope.orgOn()); }
-  async need() { if (!(await this.enabled())) throw err(404, 'Not found'); }
+  async need() { if (this.force) return; if (!(await this.enabled())) throw err(404, 'Not found'); }
 
   async rolesIn(userId, wid) { return (await this.q('SELECT DISTINCT role FROM workspace_members WHERE workspace_id = $1 AND user_id = $2', [wid, userId])).rows.map((r) => r.role); }
   async requireRole(userId, wid, ...roles) {

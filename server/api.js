@@ -2774,7 +2774,17 @@ Rules:
     return ran;
   }
 
-  return { handle, stats, runAs, runDueSyncs, FileResult, StreamResult, userView, saveUserFor: null, running, TODAY, captureAll, snapshots };
+  // The same sample projects the workspace sample button loads, created for a given owner without a request. Used by the test organization.
+  async function createSamples(ownerId) {
+    const made = [seedFirst(ownerId), ...seedPortfolio(ownerId)]; const ids = [];
+    for (const P of made) {
+      const oldId = P.id, id = nid(); P.id = id; P.p.id = id;
+      for (const k of ['items', 'resources', 'inbox', 'audit', 'documents', 'generated']) for (const r of P[k] || []) if (r && r.project_id === oldId) r.project_id = id;
+      await store.create(P, ownerId); ids.push(id);
+    }
+    return ids;
+  }
+  return { createSamples, handle, stats, runAs, runDueSyncs, FileResult, StreamResult, userView, saveUserFor: null, running, TODAY, captureAll, snapshots };
 };
 module.exports.FileResult = FileResult;
 module.exports.StreamResult = StreamResult;

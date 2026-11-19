@@ -56,7 +56,7 @@ function clearCookies(req) {
   for (const secure of [true, false]) {
     const n = names(secure);
     const common = `Path=/; SameSite=Strict; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT${secure ? '; Secure' : ''}`;
-    out.push(`${n.sid}=; HttpOnly; ${common}`, `${n.csrf}=; ${common}`);
+    out.push(`${n.sid}=; HttpOnly; ${common}`, `${n.csrf}=; ${common}`, `pm_tb=; HttpOnly; ${common}`);
   }
   return out;
 }
