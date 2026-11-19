@@ -83,7 +83,8 @@ class Programs {
   // Give or take away an extra organization role: PMO Director, or Program Manager for one program.
   async grant(adminId, wid, target, role, pid, portfolioId) {
     await this.orgs.need(); await this.orgs.requireRole(adminId, wid, 'admin');
-    if (!['pmo_director', 'program_manager', 'viewer'].includes(role)) throw err(400, 'Choose PMO Director, Program Manager or Viewer');
+    if (!['pmo_director', 'program_manager', 'viewer', 'auditor'].includes(role)) throw err(400, 'Choose PMO Director, Program Manager, Viewer or Auditor');
+    if (role === 'auditor') await this.orgs.needEnterprise(wid);
     const have = await this.orgs.rolesIn(target, wid); if (!have.length) throw err(404, 'That person is not in this organization');
     let st = 'organization', sid = 0;
     if (role === 'viewer' && portfolioId) {
@@ -91,12 +92,12 @@ class Programs {
       if (!f || f.status !== 'active') throw err(404, 'Portfolio not found');
       st = 'portfolio'; sid = Number(f.id);
     } else if (role === 'program_manager' || (role === 'viewer' && pid)) { const p = await this.program(wid, pid); if (p.status !== 'active') throw err(409, 'This program is closed'); st = 'program'; sid = Number(p.id); }
-    if (role !== 'viewer' && !have.some((r) => r !== 'viewer') && (await this.orgs.seatsUsed(wid)) >= (await this.orgs.seatsBought(wid))) throw err(409, 'All seats are in use. Add seats first.');
+    if (!['viewer', 'auditor'].includes(role) && have.every((r) => ['viewer', 'auditor'].includes(r)) && (await this.orgs.seatsUsed(wid)) >= (await this.orgs.seatsBought(wid))) throw err(409, 'All seats are in use. Add seats first.');
     await this.q('INSERT INTO workspace_members(workspace_id, user_id, role, scope_type, scope_id, granted_by) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING', [wid, target, role, st, sid, adminId]);
   }
   async revoke(adminId, wid, target, role, pid, portfolioId) {
     await this.orgs.need(); await this.orgs.requireRole(adminId, wid, 'admin');
-    if (!['pmo_director', 'program_manager', 'viewer'].includes(role)) throw err(400, 'Choose PMO Director, Program Manager or Viewer');
+    if (!['pmo_director', 'program_manager', 'viewer', 'auditor'].includes(role)) throw err(400, 'Choose PMO Director, Program Manager, Viewer or Auditor');
     const st = portfolioId && role === 'viewer' ? 'portfolio' : role === 'program_manager' || (role === 'viewer' && pid) ? 'program' : 'organization', sid = st === 'portfolio' ? Number(portfolioId) || 0 : st === 'program' ? Number(pid) || 0 : 0;
     await this.q('DELETE FROM workspace_members WHERE workspace_id = $1 AND user_id = $2 AND role = $3 AND scope_type = $4 AND scope_id = $5', [wid, target, role, st, sid]);
   }

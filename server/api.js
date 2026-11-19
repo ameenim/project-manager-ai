@@ -2340,6 +2340,14 @@ Rules:
   on('GET', '/api/orgs/(\\d+)/handovers', async (m) => ({ handovers: await O().queue(UID(), m[1]) }));
   on('POST', '/api/orgs/(\\d+)/handovers/(\\d+)/transfer', async (m, q, b) => O().transfer(UID(), m[1], m[2], b && b.user_id));
   const PG = () => app_programs(), PF = () => ops.portfolios;
+  on('PUT', '/api/orgs/(\\d+)/plan', async (m, q, b) => O().setPlan(ctx().user, m[1], b && b.plan));
+  on('GET', '/api/orgs/(\\d+)/ai-policy', async (m) => { await O().requireRole(UID(), m[1], 'admin', 'auditor'); return O().aiPolicy(m[1]); });
+  on('PUT', '/api/orgs/(\\d+)/ai-policy', async (m, q, b) => O().setAiPolicy(UID(), m[1], b));
+  on('GET', '/api/orgs/(\\d+)/audit', async (m, q) => ({ events: await O().auditList(UID(), m[1], { before: q.before, limit: q.limit, action: q.action }) }));
+  on('GET', '/api/orgs/(\\d+)/audit/export', async (m) => ({ csv: await O().auditCsv(UID(), m[1]), filename: 'organization-audit.csv' }));
+  on('GET', '/api/orgs/(\\d+)/scim-token', async (m) => ops.scim.tokenInfo(UID(), m[1]));
+  on('POST', '/api/orgs/(\\d+)/scim-token', async (m) => ops.scim.createToken(UID(), m[1]));
+  on('DELETE', '/api/orgs/(\\d+)/scim-token', async (m) => { await ops.scim.revokeToken(UID(), m[1]); return { ok: true }; });
   on('GET', '/api/orgs/(\\d+)/programs', async (m) => ({ programs: await PG().list(UID(), m[1]) }));
   on('POST', '/api/orgs/(\\d+)/programs', async (m, q, b) => PG().create(UID(), m[1], b && b.name));
   on('PUT', '/api/orgs/(\\d+)/programs/(\\d+)', async (m, q, b) => { await PG().rename(UID(), m[1], m[2], b && b.name); return { ok: true }; });
@@ -2686,7 +2694,9 @@ Rules:
       const m = p.match(re);
       if (!m) continue;
       c.level = method === 'GET' ? 'viewer' : 'editor';
-      return fn(m, query || {}, body == null ? {} : body);
+      const out = await fn(m, query || {}, body == null ? {} : body);
+      if (method !== 'GET' && ops.orgs && (p.startsWith('/api/orgs') || /^\/api\/projects\/\d+\/move$/.test(p))) await ops.orgs.auditRoute(c, method, p, body, out);
+      return out;
     }
     throw err(404, 'Not found');
   }

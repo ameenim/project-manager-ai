@@ -12,6 +12,7 @@ const { Rollups } = require('./rollups');
 const { Orgs } = require('./orgs');
 const { Programs } = require('./programs');
 const { Portfolios } = require('./portfolios');
+const { Scim } = require('./scim');
 const zlib = require('zlib');
 const Busboy = require('busboy');
 const dbm = require('./db');
@@ -178,6 +179,8 @@ async function createApp(opts = {}) {
   const programs = new Programs({ db, store, orgs });
   ops.programs = programs;
   ops.portfolios = new Portfolios({ db, store, orgs, programs });
+  const scim = new Scim({ db, store, orgs, auth });
+  ops.scim = scim;
   store.onCreate = (P, ownerId) => workspaces.stampProject(P.id, ownerId);
   store.afterSave = (P, ver) => rollups.write(P, ver);
   if (workspaces.ready && opts.workspaceBackfill !== false) workspaces.backfillAll().catch((e) => console.error('workspace backfill', e.message));
@@ -281,6 +284,9 @@ async function createApp(opts = {}) {
       await ops.logError({ kind: 'browser', userId: who && who.id, path: b.url, message: b.message || 'Unknown error', stack: b.stack, agent: req.headers['user-agent'] });
       return json(res, 200, { ok: true });
     }
+
+    // identity provider provisioning, signed with an organization token instead of a sign in
+    if (p.startsWith('/scim/v2/')) { if (await scim.handle(req, res, url, { json, readBody, SECURITY })) return; }
 
     // the fix job calls these with a signature instead of a sign in
     if (p.startsWith('/api/hooks/tickets/')) { await tickets.hook(req, res, url, { json, readBody, SECURITY }); return; }
@@ -519,6 +525,7 @@ async function createApp(opts = {}) {
       if (url.pathname === '/healthz') { await db.query('SELECT 1'); return json(res, 200, { ok: true, version: PKG.version, started: STARTED, admin: true }); }
       if (req.method === 'GET' && url.pathname === '/srv/ai/status') return json(res, 200, { configured: !!process.env.ANTHROPIC_API_KEY, model: MODEL });
       if (req.method === 'GET' && /^\/oauth\/callback\/(jira|outlook)$/.test(url.pathname)) return await oauthCallback(req, res, url);
+      if (url.pathname.startsWith('/scim/v2/')) return await handleApi(req, res, url);
       if (url.pathname.startsWith('/api/')) return await idempotent(req, res, url, () => handleApi(req, res, url));
       return await serveStatic(req, res, url);
     } catch (e) {

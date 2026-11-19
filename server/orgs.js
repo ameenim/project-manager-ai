@@ -5,9 +5,10 @@
 const mailer = require('./mailer');
 
 const err = (status, message) => { const e = new Error(message); e.status = status; return e; };
-const ROLES = ['admin', 'pmo_director', 'program_manager', 'project_manager', 'viewer'];
+const ROLES = ['admin', 'pmo_director', 'program_manager', 'project_manager', 'viewer', 'auditor'];
+const FREE_ROLES = ['viewer', 'auditor']; // read only roles that use no seat
 const PHASE1_ROLES = ['admin', 'project_manager', 'viewer'];
-const INVITE_ROLES = ['admin', 'pmo_director', 'program_manager', 'project_manager', 'viewer'];
+const INVITE_ROLES = ['admin', 'pmo_director', 'program_manager', 'project_manager', 'viewer', 'auditor'];
 const DAY = 86400000;
 
 class Orgs {
@@ -33,7 +34,7 @@ class Orgs {
     const c = await this.ops.config();
     return { code: 'team', price_cents: Number(c.team_seat_price_cents), units_per_seat: Number(c.team_units_per_seat), period_days: 30 };
   }
-  async seatsUsed(wid) { return Number((await this.q("SELECT count(DISTINCT user_id) AS n FROM workspace_members WHERE workspace_id = $1 AND role <> 'viewer'", [wid])).rows[0].n); }
+  async seatsUsed(wid) { return Number((await this.q("SELECT count(DISTINCT user_id) AS n FROM workspace_members WHERE workspace_id = $1 AND role NOT IN ('viewer','auditor')", [wid])).rows[0].n); }
   async seatsBought(wid) { const w = await this.business(wid); return Number((w.settings || {}).seats) || 5; }
   async event(wid, kind, o = {}) {
     const b = (await this.q('SELECT id, currency FROM billing_accounts WHERE workspace_id = $1', [wid])).rows[0];
@@ -68,7 +69,17 @@ class Orgs {
       .map((r) => ({ user_id: r.user_id, name: r.name, units: Number(r.units) }));
   }
   // The message that stops an AI call, or null. Used by ops.allowance for projects that belong to an organization.
-  async poolBlock(wid) {
+  async poolBlock(wid, userId, enforce = true) {
+    const ai = await this.aiPolicy(wid);
+    if (!ai.enabled) return 'AI features are turned off for your organization.';
+    if (userId && ai.member_cap_units > 0) {
+      const w = (await this.q('SELECT period_start FROM token_wallets WHERE workspace_id = $1', [wid])).rows[0];
+      if (w) {
+        const used = Number((await this.q('SELECT COALESCE(SUM(units), 0) AS n FROM token_ledger WHERE workspace_id = $1 AND user_id = $2 AND billable AND created_at >= $3', [wid, userId, w.period_start])).rows[0].n);
+        if (used >= ai.member_cap_units) return 'You have reached your personal AI limit for this period. Ask an organization admin to raise it.';
+      }
+    }
+    if (!enforce) return null;
     const p = await this.pool(wid);
     return p && p.blocked ? 'Your organization has used all of its AI units for this period. Ask an organization admin to add units or wait for the next period.' : null;
   }
@@ -76,6 +87,73 @@ class Orgs {
     if (!projectId || !this.workspaces.ready) return null;
     const r = (await this.q("SELECT p.workspace_id FROM projects p JOIN workspaces w ON w.id = p.workspace_id WHERE p.id = $1 AND w.kind = 'business'", [Number(projectId)])).rows[0];
     return r ? Number(r.workspace_id) : null;
+  }
+
+  // ---------- plan, governance and audit (Enterprise) ----------
+  async planCode(wid) { const r = (await this.q('SELECT plan_code FROM billing_accounts WHERE workspace_id = $1', [wid])).rows[0]; return r ? r.plan_code : 'team'; }
+  async needEnterprise(wid) { if ((await this.planCode(wid)) !== 'enterprise') throw err(403, 'This control is part of the Enterprise plan'); }
+  // Only the platform owner sets the plan until payments are connected.
+  async setPlan(user, wid, plan) {
+    await this.need();
+    if (!user.is_super) throw err(403, 'Only the platform owner can change the plan');
+    if (!['team', 'business', 'enterprise'].includes(plan)) throw err(400, 'Choose team, business or enterprise');
+    await this.business(wid);
+    const from = await this.planCode(wid);
+    await this.q('UPDATE billing_accounts SET plan_code = $2 WHERE workspace_id = $1', [wid, plan]);
+    await this.event(wid, 'plan_changed', { from, to: plan, meta: { by: user.id } });
+    return { plan };
+  }
+  async aiPolicy(wid) {
+    const w = await this.business(wid); const a = (w.settings || {}).ai || {};
+    return { enabled: a.enabled !== false, member_cap_units: Number(a.member_cap_units) || 0 };
+  }
+  async setAiPolicy(userId, wid, body) {
+    await this.need(); await this.requireRole(userId, wid, 'admin'); await this.needEnterprise(wid);
+    const cap = Math.max(0, Math.round(Number(body && body.member_cap_units) || 0));
+    const ai = { enabled: !(body && body.enabled === false), member_cap_units: cap };
+    await this.q("UPDATE workspaces SET settings = settings || $2::jsonb WHERE id = $1", [wid, JSON.stringify({ ai })]);
+    return ai;
+  }
+  static auditAction(method, path) {
+    const t = [
+      ['POST', /^\/api\/orgs$/, 'organization.created'], ['POST', /^\/api\/orgs\/convert$/, 'organization.converted'], ['POST', /^\/api\/orgs\/invites\/\d+\/accept$/, 'invitation.accepted'],
+      ['PUT', /^\/api\/orgs\/\d+$/, 'organization.renamed'], ['PUT', /\/seats$/, 'seats.changed'], ['PUT', /\/overage$/, 'overage.changed'], ['PUT', /\/ai-policy$/, 'ai_policy.changed'], ['PUT', /\/plan$/, 'plan.changed'],
+      ['POST', /\/invites$/, 'member.invited'], ['DELETE', /\/invites\/\d+$/, 'invitation.cancelled'], ['PUT', /\/members\/\d+$/, 'member.role_changed'], ['DELETE', /\/members\/\d+$/, 'member.removed'],
+      ['POST', /\/members\/\d+\/grants$/, 'role.granted'], ['DELETE', /\/members\/\d+\/grants$/, 'role.revoked'],
+      ['POST', /\/handovers\/\d+\/transfer$/, 'project.handed_over'], ['POST', /^\/api\/projects\/\d+\/move$/, 'project.moved_in'], ['PUT', /\/projects\/\d+\/program$/, 'project.placed'],
+      ['POST', /\/programs$/, 'program.created'], ['PUT', /\/programs\/\d+$/, 'program.renamed'], ['DELETE', /\/programs\/\d+$/, 'program.closed'], ['PUT', /\/programs\/\d+\/portfolio$/, 'program.placed'],
+      ['POST', /\/portfolios$/, 'portfolio.created'], ['PUT', /\/portfolios\/\d+$/, 'portfolio.renamed'], ['DELETE', /\/portfolios\/\d+$/, 'portfolio.closed'],
+      ['POST', /\/scim-token$/, 'provisioning.token_created'], ['DELETE', /\/scim-token$/, 'provisioning.token_revoked'],
+    ];
+    const hit = t.find(([m, re]) => m === method && re.test(path));
+    return hit ? hit[2] : null;
+  }
+  // Called by the API after any successful change under /api/orgs, so no change can be left out of the trail.
+  async auditRoute(c, method, path, body, out) {
+    const action = Orgs.auditAction(method, path); if (!action) return;
+    const m = /^\/api\/orgs\/(\d+)/.exec(path);
+    const wid = m ? Number(m[1]) : (out && (out.organization_id || out.id)) || (body && body.organization_id);
+    if (!wid) return;
+    const meta = {}; const b = body || {};
+    for (const k of ['email', 'role', 'name', 'seats', 'policy', 'cap_units', 'program_id', 'portfolio_id', 'user_id', 'organization_id', 'enabled', 'member_cap_units', 'plan']) if (b[k] !== undefined) meta[k] = b[k];
+    const ids = path.match(/\/(\d+)/g) || []; if (ids.length > 1) meta.target = Number(ids[ids.length - 1].slice(1));
+    if (out && out.handover != null) { meta.handover = out.handover; meta.archived = out.archived; }
+    await this.audit(wid, c.user && c.user.id, action, meta, c.ip);
+  }
+  async audit(wid, actorId, action, meta, ip) {
+    try { await this.q('INSERT INTO org_audit(id, workspace_id, actor_id, action, meta, ip) VALUES ($1,$2,$3,$4,$5,$6)', [this.store.nid(), Number(wid), actorId || null, action, JSON.stringify(meta || {}), ip || '']); }
+    catch (e) { console.error('audit', e.message); }
+  }
+  async auditList(userId, wid, { before, limit, action } = {}) {
+    await this.need(); await this.requireRole(userId, wid, 'admin', 'auditor'); await this.needEnterprise(wid);
+    const lim = Math.min(500, Math.max(1, Number(limit) || 100));
+    const rows = (await this.q(`SELECT a.id, a.actor_id, u.name AS actor, a.action, a.meta, a.ip, a.created_at FROM org_audit a LEFT JOIN users u ON u.id = a.actor_id WHERE a.workspace_id = $1 AND ($2::bigint IS NULL OR a.id < $2) AND ($3::text IS NULL OR a.action = $3) ORDER BY a.id DESC LIMIT ${lim}`, [wid, before ? Number(before) : null, action || null])).rows;
+    return rows.map((r) => ({ id: String(r.id), actor_id: r.actor_id, actor: r.actor || (r.meta && r.meta.via) || '', action: r.action, meta: r.meta, ip: r.ip, created_at: r.created_at }));
+  }
+  async auditCsv(userId, wid) {
+    const rows = await this.auditList(userId, wid, { limit: 500 });
+    const cell = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+    return ['time,actor,action,details,ip'].concat(rows.map((r) => [new Date(r.created_at).toISOString(), r.actor, r.action, JSON.stringify(r.meta || {}), r.ip].map(cell).join(','))).join('\n');
   }
 
   // ---------- organizations ----------
@@ -137,9 +215,9 @@ class Orgs {
     return { seats: n, prorated_cents: amount };
   }
   async overview(userId, wid) {
-    await this.need(); await this.requireRole(userId, wid, 'admin', 'project_manager', 'viewer', 'pmo_director', 'program_manager');
+    await this.need(); await this.requireRole(userId, wid, 'admin', 'project_manager', 'viewer', 'pmo_director', 'program_manager', 'auditor');
     const w = await this.business(wid), roles = await this.rolesIn(userId, wid);
-    const out = { id: Number(w.id), name: w.name, roles, seats: await this.seatsBought(wid), seats_used: await this.seatsUsed(wid), pool: await this.pool(wid) };
+    const out = { id: Number(w.id), name: w.name, plan: await this.planCode(wid), roles, seats: await this.seatsBought(wid), seats_used: await this.seatsUsed(wid), pool: await this.pool(wid) };
     if (roles.includes('admin')) { out.by_member = await this.byMember(wid); out.events = (await this.q('SELECT e.kind, e.amount_cents, e.currency, e.effective_at, e.meta FROM subscription_events e JOIN billing_accounts b ON b.id = e.billing_account_id WHERE b.workspace_id = $1 ORDER BY e.effective_at DESC, e.id DESC LIMIT 50', [wid])).rows; }
     return out;
   }
@@ -152,7 +230,7 @@ class Orgs {
 
   // ---------- members and invitations ----------
   async members(userId, wid) {
-    await this.need(); await this.requireRole(userId, wid, 'admin', 'pmo_director', 'program_manager', 'project_manager', 'viewer');
+    await this.need(); await this.requireRole(userId, wid, ...ROLES);
     const rows = (await this.q('SELECT m.user_id, u.name, u.email, array_agg(DISTINCT m.role) AS roles FROM workspace_members m JOIN users u ON u.id = m.user_id WHERE m.workspace_id = $1 GROUP BY m.user_id, u.name, u.email ORDER BY u.name', [wid])).rows;
     const invites = (await this.rolesIn(userId, wid)).includes('admin') ? (await this.q("SELECT id, email, role, created_at FROM workspace_invites WHERE workspace_id = $1 AND status = 'pending' ORDER BY id", [wid])).rows : [];
     return { members: rows.map((r) => ({ user_id: Number(r.user_id), name: r.name, email: r.email, roles: r.roles })), invites: invites.map((i) => ({ id: String(i.id), email: i.email, role: i.role, created_at: i.created_at })) };
@@ -175,8 +253,9 @@ class Orgs {
     const exists = (await this.q('SELECT 1 FROM workspace_members m JOIN users u ON u.id = m.user_id WHERE m.workspace_id = $1 AND u.email = $2 LIMIT 1', [wid, e])).rows.length;
     if (exists) throw err(409, 'That person is already in this organization');
     if ((await this.q("SELECT 1 FROM workspace_invites WHERE workspace_id = $1 AND email = $2 AND status = 'pending'", [wid, e])).rows.length) throw err(409, 'That person already has an open invitation');
-    if (role !== 'viewer') {
-      const pending = Number((await this.q("SELECT count(*) AS n FROM workspace_invites WHERE workspace_id = $1 AND status = 'pending' AND role <> 'viewer'", [wid])).rows[0].n);
+    if (role === 'auditor') await this.needEnterprise(wid);
+    if (!FREE_ROLES.includes(role)) {
+      const pending = Number((await this.q("SELECT count(*) AS n FROM workspace_invites WHERE workspace_id = $1 AND status = 'pending' AND role NOT IN ('viewer','auditor')", [wid])).rows[0].n);
       if ((await this.seatsUsed(wid)) + pending >= (await this.seatsBought(wid))) throw err(409, 'All seats are in use. Add seats before inviting another member.');
     }
     const id = this.store.nid();
@@ -211,7 +290,7 @@ class Orgs {
     if (!PHASE1_ROLES.includes(role)) throw err(400, 'Choose Admin, Project Manager or Viewer');
     const have = await this.rolesIn(target, wid); if (!have.length) throw err(404, 'That person is not in this organization');
     if (have.includes('admin') && role !== 'admin' && (await this.admins(wid)) <= 1) throw err(409, 'An organization needs at least one Admin');
-    const seatChange = role !== 'viewer' && !have.some((r) => r !== 'viewer');
+    const seatChange = !FREE_ROLES.includes(role) && !have.some((r) => !FREE_ROLES.includes(r));
     if (seatChange && (await this.seatsUsed(wid)) >= (await this.seatsBought(wid))) throw err(409, 'All seats are in use. Add seats first.');
     await this.q("DELETE FROM workspace_members WHERE workspace_id = $1 AND user_id = $2 AND role IN ('admin','project_manager','viewer')", [wid, target]);
     const rows = role === 'admin' ? ['admin', 'project_manager'] : [role];
@@ -219,9 +298,9 @@ class Orgs {
   }
   // Remove a member, or let a member leave. Their access ends. Active projects they managed go to the handover queue,
   // every other project they managed is archived and stays reachable through the organization roles.
-  async remove(actorId, wid, target) {
+  async remove(actorId, wid, target, opts = {}) {
     await this.need();
-    if (actorId !== target) await this.requireRole(actorId, wid, 'admin'); else await this.requireRole(actorId, wid, ...ROLES);
+    if (opts.system) { /* provisioning from the identity provider */ } else if (actorId !== target) await this.requireRole(actorId, wid, 'admin'); else await this.requireRole(actorId, wid, ...ROLES);
     const have = await this.rolesIn(target, wid); if (!have.length) throw err(404, 'That person is not in this organization');
     if (have.includes('admin') && (await this.admins(wid)) <= 1) throw err(409, 'An organization needs at least one Admin');
     const owned = (await this.q("SELECT p.id, p.data->'p'->>'status' AS status FROM projects p JOIN project_members m ON m.project_id = p.id AND m.user_id = $2 AND m.role = 'manager' WHERE p.workspace_id = $1", [wid, target])).rows;
@@ -271,4 +350,4 @@ class Orgs {
   }
 }
 
-module.exports = { Orgs, ROLES, PHASE1_ROLES, INVITE_ROLES };
+module.exports = { Orgs, FREE_ROLES, ROLES, PHASE1_ROLES, INVITE_ROLES };

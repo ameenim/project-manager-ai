@@ -616,6 +616,33 @@ const MIGRATIONS = [
   ALTER TABLE workspace_invites ADD COLUMN IF NOT EXISTS scope_type TEXT NOT NULL DEFAULT 'organization';
   ALTER TABLE workspace_invites ADD COLUMN IF NOT EXISTS scope_id BIGINT NOT NULL DEFAULT 0;
   `,
+  // Phase 4 (Enterprise): the Auditor role, the organization audit trail and provisioning tokens.
+  `
+  ALTER TABLE workspace_members DROP CONSTRAINT IF EXISTS workspace_members_role_check;
+  ALTER TABLE workspace_members ADD CONSTRAINT workspace_members_role_check CHECK (role IN ('admin','pmo_director','program_manager','project_manager','viewer','auditor'));
+  ALTER TABLE workspace_invites DROP CONSTRAINT IF EXISTS workspace_invites_role_check;
+  ALTER TABLE workspace_invites ADD CONSTRAINT workspace_invites_role_check CHECK (role IN ('admin','pmo_director','program_manager','project_manager','viewer','auditor'));
+  CREATE TABLE IF NOT EXISTS org_audit (
+    id BIGINT PRIMARY KEY,
+    workspace_id BIGINT NOT NULL,
+    actor_id BIGINT,
+    action TEXT NOT NULL,
+    meta JSONB NOT NULL DEFAULT '{}'::jsonb,
+    ip TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS org_audit_ws_idx ON org_audit(workspace_id, id DESC);
+  CREATE TABLE IF NOT EXISTS scim_tokens (
+    id BIGINT PRIMARY KEY,
+    workspace_id BIGINT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    token_hash TEXT NOT NULL UNIQUE,
+    created_by BIGINT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_used TIMESTAMPTZ,
+    revoked BOOLEAN NOT NULL DEFAULT false
+  );
+  CREATE INDEX IF NOT EXISTS scim_tokens_ws_idx ON scim_tokens(workspace_id);
+  `,
 ];
 
 async function openPg(url) {

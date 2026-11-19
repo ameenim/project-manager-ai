@@ -10,3 +10,7 @@
 .org-page th, .org-page td { padding: 10px 12px; text-align: start; border-bottom: 1px solid var(--border); }
 .org-page th { font-weight: var(--fw); color: var(--muted); font-size: var(--fs-small); white-space: nowrap; }
 .org-page .grid { gap: 12px; }
+.org-page a.card.row { padding: 14px 18px; }
+.org-page label.row { flex: 0 0 auto; gap: 8px; white-space: nowrap; }
+.org-page .row input[type="checkbox"] { flex: none; width: auto; }
+.org-page code { word-break: break-all; }

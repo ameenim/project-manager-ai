@@ -117,9 +117,9 @@ class Ops {
   // Used before an AI call when "enforce_limits" is on. Super admins are never blocked.
   async allowance(user, projectId) {
     const c = await this.config();
+    // a project that belongs to an organization follows the organization's AI policy and draws on its pool, not on the person's own plan
+    if (projectId && this.orgs && c.org_features && !user.is_super) { const wid = await this.orgs.workspaceOfProject(projectId); if (wid) return this.orgs.poolBlock(wid, user.id, !!c.enforce_limits); }
     if (!c.enforce_limits || user.is_super) return null;
-    // a project that belongs to an organization draws on the organization's pool, not on the person's own plan
-    if (projectId && this.orgs && c.org_features) { const wid = await this.orgs.workspaceOfProject(projectId); if (wid) return this.orgs.poolBlock(wid); }
     await this.ensureSubscription(user.id);
     const s = (await this.q('SELECT * FROM subscriptions WHERE user_id = $1', [user.id])).rows[0];
     const st = Ops.state(s);
