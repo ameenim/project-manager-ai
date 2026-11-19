@@ -4,6 +4,7 @@
 const crypto = require('crypto');
 const { Ops, DAY } = require('./ops');
 const { checkPassword } = require('./auth');
+const createAdminOrgs = require('./admin_orgs');
 
 const err = (status, message) => Object.assign(new Error(message), { status });
 const num = (v) => Number(v || 0);
@@ -33,6 +34,7 @@ module.exports = function createAdmin({ db, store, auth, ops, usage, tickets, se
     return r;
   }
   const userOut = (r) => ({ id: r.id, name: r.name, email: r.email, is_super: !!r.is_super, status: r.status, created_at: iso(r.created_at), last_seen_at: iso(r.last_seen_at) });
+  const AO = createAdminOrgs({ db, store, ops, userRow });
   const supersLeft = async (exceptId) => num((await q("SELECT count(*) AS c FROM user_flags f JOIN users u ON u.id = f.user_id WHERE f.is_super AND f.status = 'active' AND f.user_id <> $1", [exceptId])).rows[0].c);
 
   // ---------- who am I ----------
@@ -67,6 +69,7 @@ module.exports = function createAdmin({ db, store, auth, ops, usage, tickets, se
       currency: cfg.currency,
       users: { total: num(users.total), new7: num(users.new7), suspended: num(users.suspended), active30: num(users.active30) },
       subscriptions: by, mrr_cents: mrr, income: { month_cents: num(inc.month), total_cents: num(inc.total) }, projects,
+      organizations: await AO.totals(),
       security24: await secLog.summary(24),
       ai30: await aiTotals(30), errors24: { total: num(errs.d1), open: num(errs.open1) }, tickets: tickets ? await tickets.stats() : { open: 0, needs_action: 0, counts: {}, ai_fix: { tried: 0, succeeded: 0 } },
       uptime: { d1: await ops.uptime(1), d7: await ops.uptime(7), d30: await ops.uptime(30) },
@@ -106,11 +109,16 @@ module.exports = function createAdmin({ db, store, auth, ops, usage, tickets, se
     if (query.q) { params.push(like(query.q)); w.push(`(u.email ILIKE $${params.length} OR u.name ILIKE $${params.length})`); }
     if (query.status === 'suspended' || query.status === 'active') { params.push(query.status); w.push(`COALESCE(f.status, 'active') = $${params.length}`); }
     if (query.role === 'super') w.push('COALESCE(f.is_super, false)');
+    const inOrg = "EXISTS (SELECT 1 FROM workspace_members wm JOIN workspaces ww ON ww.id = wm.workspace_id WHERE wm.user_id = u.id AND ww.kind = 'business'";
+    if (query.organization_id) { params.push(idOf(query.organization_id)); w.push(`EXISTS (SELECT 1 FROM workspace_members wm WHERE wm.user_id = u.id AND wm.workspace_id = $${params.length})`); }
+    if (query.type === 'super_admin') w.push('COALESCE(f.is_super, false)');
+    else if (query.type === 'individual') w.push(`NOT COALESCE(f.is_super, false) AND NOT ${inOrg})`);
+    else if (['admin', 'pmo_director', 'program_manager', 'project_manager', 'viewer', 'auditor'].includes(query.type)) { params.push(query.type); w.push(`NOT COALESCE(f.is_super, false) AND ${inOrg} AND wm.role = $${params.length})`); }
     const where = w.length ? 'WHERE ' + w.join(' AND ') : '';
     const total = num((await q(`SELECT count(*) AS c FROM users u LEFT JOIN user_flags f ON f.user_id = u.id ${where}`, params)).rows[0].c);
     const rows = (await q(`SELECT u.id, u.name, u.email, u.created_at, COALESCE(f.is_super, false) AS is_super, COALESCE(f.status, 'active') AS status, f.last_seen_at, s.status AS sub_status, s.trial_end, s.period_end, s.token_limit, (SELECT count(*) FROM projects pr WHERE pr.owner_id = u.id) AS projects FROM users u LEFT JOIN user_flags f ON f.user_id = u.id LEFT JOIN subscriptions s ON s.user_id = u.id ${where} ORDER BY u.id DESC LIMIT ${size} OFFSET ${offset}`, params)).rows;
-    const types = {}; for (const r of rows) types[r.id] = (await typeInfo(r.id, r.is_super)).type;
-    return { total, page: p, size, users: rows.map((r) => ({ ...userOut(r), type: types[r.id], projects: num(r.projects), subscription: r.sub_status ? Ops.state({ status: r.sub_status, trial_end: r.trial_end, period_end: r.period_end }) : 'none' })) };
+    const types = {}, orgNames = {}; for (const r of rows) { const t = await typeInfo(r.id, r.is_super); types[r.id] = t.type; orgNames[r.id] = t.memberships.map((x) => x.name); }
+    return { total, page: p, size, users: rows.map((r) => ({ ...userOut(r), type: types[r.id], organizations: orgNames[r.id], projects: num(r.projects), subscription: r.sub_status ? Ops.state({ status: r.sub_status, trial_end: r.trial_end, period_end: r.period_end }) : 'none' })) };
   });
   on('GET', '/users/(\\d+)', async ({ m }) => {
     const id = idOf(m[1]); const u = await userRow(id);
@@ -286,6 +294,7 @@ module.exports = function createAdmin({ db, store, auth, ops, usage, tickets, se
       totals: { gross_cents: num(sum.gross), refunds_cents: num(sum.refunds), net_cents: net, payments: num(sum.payments), demo_cents: num(sum.demo), mrr_cents: mrr, arr_cents: mrr * 12, active_subscribers: activeSubs.length, ai_cost_usd: aiCost, margin_usd: net / 100 - aiCost },
       by_month: months.map((r) => ({ month: r.m, cents: num(r.v) })), by_method: byMethod.map((r) => ({ method: r.method, cents: num(r.v) })), top_customers: top.map((r) => ({ email: r.email || 'Unknown', cents: num(r.v) })),
       payments: { total, page: p, size, rows: rows.map(payView) },
+      organizations: await AO.financeBlock(from, to),
     };
   });
   on('POST', '/payments', async ({ admin, body }) => { const p = await addPayment(admin, body); await audit(admin, 'payment.create', `payment:${p.id}`, { amount_cents: p.amount_cents, kind: p.kind, email: p.email }); return { payment: p }; });
@@ -328,17 +337,22 @@ module.exports = function createAdmin({ db, store, auth, ops, usage, tickets, se
       note: 'Cost is an estimate: tokens multiplied by the rates in Configuration. Set the rates of your model there. Usage before this feature existed is not recorded, and the project chat tokens come from the chat log, which keeps 90 days.',
       configured: !!process.env.ANTHROPIC_API_KEY, by_source: bySource, by_model: models.map((r) => ({ model: r.model || 'unknown', input: num(r.i), output: num(r.o), calls: num(r.calls) })),
       top_users: perUser.map((r) => ({ id: r.id, email: r.email, name: r.name, input: num(r.i), output: num(r.o), calls: num(r.calls), cost: costOf(num(r.i), num(r.o)) })), daily,
+      by_organization: AO.ready() ? await AO.usage(days) : [],
     };
   });
 
   // ---------- projects ----------
   on('GET', '/projects', async ({ query }) => {
     const { size, offset, page: p } = page(query);
-    const params = []; let where = '';
-    if (query.q) { params.push(like(query.q)); where = `WHERE (p.data->'p'->>'name' ILIKE $1 OR o.email ILIKE $1)`; }
+    const params = []; const wh = [];
+    if (query.q) { params.push(like(query.q)); wh.push(`(p.data->'p'->>'name' ILIKE $${params.length} OR o.email ILIKE $${params.length})`); }
+    if (query.organization_id === 'none') wh.push("NOT EXISTS (SELECT 1 FROM workspaces xw WHERE xw.id = p.workspace_id AND xw.kind = 'business')");
+    else if (query.organization_id === 'any') wh.push("EXISTS (SELECT 1 FROM workspaces xw WHERE xw.id = p.workspace_id AND xw.kind = 'business')");
+    else if (query.organization_id) { params.push(idOf(query.organization_id)); wh.push(`p.workspace_id = $${params.length}`); }
+    const where = wh.length ? 'WHERE ' + wh.join(' AND ') : '';
     const total = num((await q(`SELECT count(*) AS c FROM projects p JOIN users o ON o.id = p.owner_id ${where}`, params)).rows[0].c);
-    const rows = (await q(`SELECT p.id, p.data->'p'->>'name' AS name, p.owner_id, o.email AS owner_email, o.name AS owner_name, p.created_at, p.updated_at, (SELECT count(*) FROM project_members m WHERE m.project_id = p.id) AS members, jsonb_array_length(COALESCE(p.data->'tasks', '[]'::jsonb)) AS tasks FROM projects p JOIN users o ON o.id = p.owner_id ${where} ORDER BY p.id DESC LIMIT ${size} OFFSET ${offset}`, params)).rows;
-    return { total, page: p, size, projects: rows.map((r) => ({ id: r.id, name: r.name || 'Untitled', owner_id: r.owner_id, owner_email: r.owner_email, owner_name: r.owner_name, members: num(r.members), tasks: num(r.tasks), created_at: iso(r.created_at), updated_at: iso(r.updated_at) })) };
+    const rows = (await q(`SELECT p.id, p.data->'p'->>'name' AS name, p.owner_id, o.email AS owner_email, o.name AS owner_name, p.created_at, p.updated_at, (SELECT count(*) FROM project_members m WHERE m.project_id = p.id) AS members, jsonb_array_length(COALESCE(p.data->'tasks', '[]'::jsonb)) AS tasks, (SELECT w.id FROM workspaces w WHERE w.id = p.workspace_id AND w.kind = 'business') AS org_id, (SELECT w.name FROM workspaces w WHERE w.id = p.workspace_id AND w.kind = 'business') AS org_name, (SELECT n.name FROM structure_nodes n WHERE n.id = p.parent_id) AS program FROM projects p JOIN users o ON o.id = p.owner_id ${where} ORDER BY p.id DESC LIMIT ${size} OFFSET ${offset}`, params)).rows;
+    return { total, page: p, size, projects: rows.map((r) => ({ id: r.id, name: r.name || 'Untitled', owner_id: r.owner_id, owner_email: r.owner_email, owner_name: r.owner_name, members: num(r.members), tasks: num(r.tasks), organization_id: r.org_id ? Number(r.org_id) : null, organization: r.org_name || null, program: r.program || null, created_at: iso(r.created_at), updated_at: iso(r.updated_at) })) };
   });
   on('GET', '/projects/(\\d+)', async ({ m }) => {
     const id = idOf(m[1]); const r = (await q("SELECT p.id, p.data->'p'->>'name' AS name, p.owner_id, p.created_at, p.updated_at, pg_column_size(p.data) + COALESCE((SELECT sum(pg_column_size(x.data)) FROM project_parts x WHERE x.project_id = p.id), 0) AS bytes FROM projects p WHERE p.id = $1", [id])).rows[0];
@@ -400,7 +414,7 @@ module.exports = function createAdmin({ db, store, auth, ops, usage, tickets, se
     try { await q('SELECT 1'); dbMs = Date.now() - t0; } catch (e) { dbOk = false; }
     const beats = (await q("SELECT beat, db_ms, mem_mb FROM health_beats WHERE beat >= now() - interval '3 hours' ORDER BY beat")).rows;
     const err1 = (await q("SELECT count(*) FILTER (WHERE created_at >= now() - interval '1 hour') AS h1, count(*) FILTER (WHERE created_at >= now() - interval '24 hours') AS h24 FROM error_log WHERE kind = 'server'")).rows[0];
-    const sizes = (await q("SELECT (SELECT count(*) FROM users) AS users, (SELECT count(*) FROM projects) AS projects, (SELECT count(*) FROM sessions WHERE expires_at > now()) AS sessions")).rows[0];
+    const sizes = (await q("SELECT (SELECT count(*) FROM users) AS users, (SELECT count(*) FROM projects) AS projects, (SELECT count(*) FROM sessions WHERE expires_at > now()) AS sessions, (SELECT count(*) FROM workspaces WHERE kind = 'business') AS organizations")).rows[0];
     const sys = ops.system();
     const issues = [];
     if (!dbOk) issues.push('The database did not answer.');
@@ -408,7 +422,7 @@ module.exports = function createAdmin({ db, store, auth, ops, usage, tickets, se
     if (!process.env.ANTHROPIC_API_KEY) issues.push('No Anthropic API key is set, so AI features use the basic rule based reading.');
     if (num(err1.h1) >= 10) issues.push('Ten or more server errors in the last hour.');
     if (sys.rss_mb > 1500) issues.push('Memory use is high.');
-    return { status: !dbOk ? 'down' : issues.some((x) => !/Anthropic/.test(x)) ? 'degraded' : 'healthy', issues, database: { ok: dbOk, kind: db.kind, latency_ms: dbMs }, system: sys, uptime: { d1: await ops.uptime(1), d7: await ops.uptime(7), d30: await ops.uptime(30) }, server_errors: { last_hour: num(err1.h1), last_24h: num(err1.h24) }, counts: { users: num(sizes.users), projects: num(sizes.projects), sessions: num(sizes.sessions) }, beats: beats.map((b) => ({ at: iso(b.beat), db_ms: b.db_ms, mem_mb: b.mem_mb })) };
+    return { status: !dbOk ? 'down' : issues.some((x) => !/Anthropic/.test(x)) ? 'degraded' : 'healthy', issues, database: { ok: dbOk, kind: db.kind, latency_ms: dbMs }, system: sys, uptime: { d1: await ops.uptime(1), d7: await ops.uptime(7), d30: await ops.uptime(30) }, server_errors: { last_hour: num(err1.h1), last_24h: num(err1.h24) }, counts: { users: num(sizes.users), projects: num(sizes.projects), sessions: num(sizes.sessions), organizations: num(sizes.organizations) }, beats: beats.map((b) => ({ at: iso(b.beat), db_ms: b.db_ms, mem_mb: b.mem_mb })) };
   });
 
   // ---------- project manager usability ----------
@@ -442,6 +456,9 @@ module.exports = function createAdmin({ db, store, auth, ops, usage, tickets, se
     return { total, page: p, size, entries: rows.map((r) => ({ id: r.id, admin: r.admin_email, action: r.action, target: r.target, detail: r.detail, at: iso(r.created_at) })) };
   });
 
+  // ---------- organizations (see admin_orgs.js) ----------
+  AO.register({ on, audit, page, like });
+
   // ---------- support tickets (see tickets.js) ----------
   if (tickets) tickets.registerAdmin({ on, audit, idOf, page, like });
 
@@ -460,6 +477,10 @@ module.exports = function createAdmin({ db, store, auth, ops, usage, tickets, se
       res.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="payments.csv"', 'Cache-Control': 'no-store', ...c.SECURITY });
       res.end(body);
       return true;
+    }
+    if (req.method === 'GET' && url.pathname.endsWith('.csv')) {
+      const r = await AO.csv(url.pathname);
+      if (r) { await audit(fresh, 'report.export', r.name, { rows: r.rows }); res.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="${r.name}"`, 'Cache-Control': 'no-store', ...c.SECURITY }); res.end(r.body); return true; }
     }
     for (const [method, re, fn] of routes) {
       if (method !== req.method) continue;

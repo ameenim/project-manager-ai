@@ -94,3 +94,4 @@
 .sa-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 @media (max-width: 900px) { .sa-grid2 { grid-template-columns: 1fr; } }
 tr.clk { cursor: pointer; } tr.clk:hover { background: var(--surface-2); }
+.sa-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; } .sa-list li { display: flex; gap: 8px; align-items: center; }

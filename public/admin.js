@@ -149,7 +149,7 @@
 
   // ---------- shell ----------
   const NAV = [
-    ['overview', 'Overview', 'home'], ['users', 'Users', 'users'], ['usability', 'Usability', 'route'], ['subscriptions', 'Subscriptions', 'card'], ['finance', 'Finance and income', 'coin'], ['ai', 'AI consumption', 'spark'],
+    ['overview', 'Overview', 'home'], ['users', 'Users', 'users'], ['organizations', 'Organizations', 'grid'], ['usability', 'Usability', 'route'], ['subscriptions', 'Subscriptions', 'card'], ['finance', 'Finance and income', 'coin'], ['ai', 'AI consumption', 'spark'],
     ['projects', 'Projects', 'folder'], ['widgets', 'Widgets', 'grid'], ['config', 'Configuration', 'gear'], ['health', 'System health', 'pulse'], ['tickets', 'Tickets', 'life'], ['errors', 'Error log', 'alert'], ['security', 'Security', 'shield'], ['audit', 'Audit log', 'list'],
   ];
   function shell() {
@@ -199,6 +199,7 @@
         ${kpi(nf(o.tickets ? o.tickets.open : 0), 'Open tickets', `${nf(o.tickets ? o.tickets.needs_action : 0)} need your action`, o.tickets && o.tickets.needs_action ? 'warn' : 'good')}
         ${kpi(up == null ? 'No data' : up + '%', 'Uptime, 7 days', `${o.uptime.d1.pct == null ? 'No data' : o.uptime.d1.pct + '%'} in 24 hours`, up == null ? '' : up >= 99 ? 'good' : up >= 95 ? 'warn' : 'bad')}
       </div>
+      ${o.organizations ? `<div class="sa-kpis mt">${kpi(nf(o.organizations.organizations), 'Organizations', `${nf(o.organizations.paying)} paying, ${nf(o.organizations.trial)} on trial`, 'info')}${kpi(nf(o.organizations.members), 'Organization members', `${nf(o.organizations.seats_used)} of ${nf(o.organizations.seats_bought)} seats in use`, 'info')}${kpi(money(o.organizations.mrr_cents, cur), 'Organization recurring revenue', `${nf(o.organizations.projects)} organization projects`, 'good')}${kpi(nf(o.organizations.units_30d), 'Organization AI units, 30 days', 'Last 30 days', 'warn')}</div>` : ''}
       <div class="sa-grid3 mt">
         <section class="card"><div class="card-head"><h3>New users, 30 days</h3></div>${bars(o.series.signups, { label: 'New users per day' })}</section>
         <section class="card"><div class="card-head"><h3>AI tokens, 30 days</h3></div>${bars(o.series.tokens, { cls: 'orange', fmt: tok, label: 'AI tokens per day' })}</section>
@@ -208,22 +209,27 @@
   };
 
   // ---------- users ----------
-  const F = { users: { q: '', status: '', role: '', page: 1 }, subs: { q: '', state: '', page: 1 }, projects: { q: '', page: 1 }, widgets: { page: 1 }, errors: { kind: '', resolved: '0', q: '', page: 1 }, audit: { q: '', page: 1 }, security: { q: '', severity: '', type: '', page: 1 }, fin: { from: '', to: '', page: 1 }, aiDays: 30, useDays: 30 };
+  const F = { users: { q: '', status: '', type: '', organization_id: '', page: 1 }, orgs: { q: '', plan: '', page: 1 }, subScope: 'people', projOrg: '', auditScope: 'platform', orgAudit: { q: '', organization_id: '', page: 1 }, subs: { q: '', state: '', page: 1 }, projects: { q: '', organization_id: '', page: 1 }, widgets: { page: 1 }, errors: { kind: '', resolved: '0', q: '', page: 1 }, audit: { q: '', page: 1 }, security: { q: '', severity: '', type: '', page: 1 }, fin: { from: '', to: '', page: 1 }, aiDays: 30, useDays: 30 };
   VIEWS.users = async (rest) => {
     if (rest[0]) return userDetail(Number(rest[0]));
     const f = F.users;
     async function draw() {
       const r = await api('GET', '/api/admin/users?' + qs(f)); const pg = pager(r, (p) => { f.page = p; draw(); });
-      $('#tbl').innerHTML = r.users.length ? `<div class="table-wrap"><table class="t sa-tbl"><thead><tr><th>Name</th><th>Email</th><th>User type</th><th>Status</th><th>Plan</th><th class="num">Projects</th><th>Last seen</th></tr></thead><tbody>${r.users.map((u) => `<tr class="click" data-id="${u.id}" tabindex="0"><td><b>${esc(u.name)}</b></td><td>${esc(u.email)}</td><td>${typeChip(u.type || (u.is_super ? 'super_admin' : 'individual'))}</td><td>${u.status === 'suspended' ? chip('red', 'Suspended') : chip('green', 'Active')}</td><td>${stateChip(u.subscription)}</td><td class="num">${nf(u.projects)}</td><td>${ago(u.last_seen_at)}</td></tr>`).join('')}</tbody></table></div>${pg.html}` : empty('No users match these filters.');
+      $('#tbl').innerHTML = r.users.length ? `<div class="table-wrap"><table class="t sa-tbl"><thead><tr><th>Name</th><th>Email</th><th>User type</th><th>Organization</th><th>Status</th><th>Plan</th><th class="num">Projects</th><th>Last seen</th></tr></thead><tbody>${r.users.map((u) => `<tr class="click" data-id="${u.id}" tabindex="0"><td><b>${esc(u.name)}</b></td><td>${esc(u.email)}</td><td>${typeChip(u.type || (u.is_super ? 'super_admin' : 'individual'))}</td><td>${(u.organizations || []).length ? esc(u.organizations.join(', ')) : '<span class="muted">Personal</span>'}</td><td>${u.status === 'suspended' ? chip('red', 'Suspended') : chip('green', 'Active')}</td><td>${stateChip(u.subscription)}</td><td class="num">${nf(u.projects)}</td><td>${ago(u.last_seen_at)}</td></tr>`).join('')}</tbody></table></div>${pg.html}` : empty('No users match these filters.');
       $$('#tbl tr.click').forEach((tr) => { const go = () => (location.hash = `#/users/${tr.dataset.id}`); tr.onclick = go; tr.onkeydown = (e) => { if (e.key === 'Enter') go(); }; });
       pg.bind($('#tbl'));
     }
     setView(`<div class="page">${head('Users', '<button class="btn primary" id="addUser">' + ic('plus') + 'Add user</button>', 'Every account on the platform.')}
-      <div class="sa-toolbar"><label class="sf">${ic('search')}<input type="search" id="fq" placeholder="Search name or email" value="${esc(f.q)}" aria-label="Search users"></label><select id="fs" aria-label="Status"><option value="">Any status</option><option value="active">Active</option><option value="suspended">Suspended</option></select><select id="fr" aria-label="Role"><option value="">Any role</option><option value="super">Super admins</option></select></div>
+      <div class="sa-toolbar"><label class="sf">${ic('search')}<input type="search" id="fq" placeholder="Search name or email" value="${esc(f.q)}" aria-label="Search users"></label><select id="fs" aria-label="Status"><option value="">Any status</option><option value="active">Active</option><option value="suspended">Suspended</option></select><select id="fr" aria-label="User type"></select><select id="fo" aria-label="Organization"></select></div>
       <div class="card" id="tbl">${loading()}</div></div>`);
-    $('#fs').value = f.status; $('#fr').value = f.role;
+    api('GET', '/api/admin/user-types').then((ut) => {
+      $('#fr').innerHTML = '<option value="">Any user type</option>' + ut.types.filter((t) => ut.enabled || ['individual', 'super_admin'].includes(t)).map((t) => `<option value="${t}">${esc(UTYPE[t] || t)}</option>`).join('');
+      $('#fo').innerHTML = '<option value="">Any organization</option>' + ut.organizations.map((o) => `<option value="${o.id}">${esc(o.name)}</option>`).join('');
+      $('#fr').value = f.type; $('#fo').value = f.organization_id;
+    }).catch(() => {});
+    $('#fs').value = f.status;
     let t; $('#fq').oninput = (e) => { clearTimeout(t); t = setTimeout(() => { f.q = e.target.value; f.page = 1; draw(); }, 250); };
-    $('#fs').onchange = (e) => { f.status = e.target.value; f.page = 1; draw(); }; $('#fr').onchange = (e) => { f.role = e.target.value; f.page = 1; draw(); };
+    $('#fs').onchange = (e) => { f.status = e.target.value; f.page = 1; draw(); }; $('#fr').onchange = (e) => { f.type = e.target.value; f.page = 1; draw(); }; $('#fo').onchange = (e) => { f.organization_id = e.target.value; f.page = 1; draw(); };
     $('#addUser').onclick = addUserDlg;
     await draw();
   };
@@ -304,7 +310,7 @@
     m.$('#go').onclick = () => busy(m.$('#go'), async () => { await api('POST', `/api/admin/subscriptions/${id}/activate`, { days: Number(m.$('#dy').value), record_payment: rp.classList.contains('on'), amount_cents: Number(m.$('#am').value), method: m.$('#md').value, reference: m.$('#rf').value }); m.close(); toast('Subscription activated'); refresh(); });
   }
   VIEWS.subscriptions = async () => {
-    const f = F.subs;
+    const f = F.subs; if (F.subScope === 'orgs') return subsOrgs();
     async function draw() {
       const r = await api('GET', '/api/admin/subscriptions?' + qs(f)); const pg = pager(r, (p) => { f.page = p; draw(); });
       $('#tbl').innerHTML = r.subscriptions.length ? `<div class="table-wrap"><table class="t sa-tbl"><thead><tr><th>Person</th><th>Plan</th><th>State</th><th>Ends</th><th>Tokens used</th><th class="num">Price</th><th></th></tr></thead><tbody>${r.subscriptions.map((s) => { const pct = s.token_limit ? Math.min(100, Math.round((s.tokens_used / s.token_limit) * 100)) : 0; return `<tr><td><a href="#/users/${s.user_id}"><b>${esc(s.name)}</b></a><div class="small muted">${esc(s.email)}</div></td><td>${esc(s.plan)}</td><td>${stateChip(s.state)}</td><td>${day(s.status === 'active' || s.status === 'cancelled' ? s.period_end : s.trial_end)}</td><td style="min-width:170px">${tok(s.tokens_used)} of ${s.token_limit ? tok(s.token_limit) : 'no limit'}<div class="progress"><i style="width:${pct}%"></i></div></td><td class="num">${money(s.price_cents)}</td><td><div class="sa-acts"><button class="btn sm" data-e="${s.user_id}">Edit</button><button class="btn sm primary" data-a="${s.user_id}">Renew</button></div></td></tr>`; }).join('')}</tbody></table></div>${pg.html}` : empty('No subscriptions match these filters.');
@@ -312,8 +318,8 @@
       $$('[data-e]').forEach((b) => (b.onclick = () => subEditDlg(Number(b.dataset.e), r.subscriptions.find((x) => x.user_id == b.dataset.e))));
       $$('[data-a]').forEach((b) => (b.onclick = () => activateDlg(Number(b.dataset.a), r.subscriptions.find((x) => x.user_id == b.dataset.a))));
     }
-    setView(`<div class="page">${head('Subscriptions', '', 'Plans, trials and token use for every person.')}<div class="sa-toolbar"><label class="sf">${ic('search')}<input type="search" id="fq" placeholder="Search name or email" value="${esc(f.q)}" aria-label="Search subscriptions"></label><select id="fs" aria-label="State"><option value="">Any state</option><option value="trial">Trial</option><option value="active">Active</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option><option value="ended">Ended</option></select></div><div class="card" id="tbl">${loading()}</div></div>`);
-    $('#fs').value = f.state; let t; $('#fq').oninput = (e) => { clearTimeout(t); t = setTimeout(() => { f.q = e.target.value; f.page = 1; draw(); }, 250); }; $('#fs').onchange = (e) => { f.state = e.target.value; f.page = 1; draw(); };
+    setView(`<div class="page">${head('Subscriptions', subTabs(), 'Plans, trials and token use for every person.')}<div class="sa-toolbar"><label class="sf">${ic('search')}<input type="search" id="fq" placeholder="Search name or email" value="${esc(f.q)}" aria-label="Search subscriptions"></label><select id="fs" aria-label="State"><option value="">Any state</option><option value="trial">Trial</option><option value="active">Active</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option><option value="ended">Ended</option></select></div><div class="card" id="tbl">${loading()}</div></div>`);
+    bindSubTabs(); $('#fs').value = f.state; let t; $('#fq').oninput = (e) => { clearTimeout(t); t = setTimeout(() => { f.q = e.target.value; f.page = 1; draw(); }, 250); }; $('#fs').onchange = (e) => { f.state = e.target.value; f.page = 1; draw(); };
     await draw();
   };
 
@@ -337,6 +343,7 @@
       ${note(r.note)}
       <div class="sa-toolbar"><label class="small muted">From <input type="date" id="ff" value="${f.from}"></label><label class="small muted">To <input type="date" id="ft" value="${f.to}"></label><button class="btn" id="fa">Apply</button><button class="btn ghost" id="fc">Last 12 months</button></div>
       <div class="sa-kpis">${kpi(money(t.net_cents, cur), 'Net income', `${money(t.gross_cents, cur)} gross, ${money(t.refunds_cents, cur)} refunds`, 'good')}${kpi(money(t.mrr_cents, cur), 'Monthly recurring revenue', `${nf(t.active_subscribers)} active subscribers`, 'info')}${kpi(money(t.arr_cents, cur), 'Annual run rate', 'MRR times twelve', 'info')}${kpi(usd(t.margin_usd), 'Income after AI cost', `AI cost ${usd(t.ai_cost_usd)} for this range`, t.margin_usd >= 0 ? 'good' : 'bad')}</div>
+      ${r.organizations && r.organizations.by_org ? `<section class="card mt"><div class="card-head"><h3>Organization subscriptions</h3><a class="btn sm" href="#/organizations">Manage</a></div><div class="sa-kpis">${kpi(money(r.organizations.mrr_cents, cur), 'Organization recurring revenue', `${nf(r.organizations.active)} active organizations`, 'info')}${kpi(money(r.organizations.events_cents, cur), 'Seat and plan changes in range', 'Charges minus credits', r.organizations.events_cents >= 0 ? 'good' : 'warn')}</div>${r.organizations.by_org.length ? r.organizations.by_org.map((x) => `<div class="sa-bar-row"><a href="#/organizations/${x.id}">${esc(x.name)}</a><div class="progress"><i style="width:${Math.max(2, Math.round((Math.abs(x.cents) / Math.max(1, Math.abs(r.organizations.by_org[0].cents))) * 100))}%"></i></div><span class="n">${money(x.cents, cur)}</span></div>`).join('') : ''}</section>` : ''}
       <div class="sa-grid2 mt"><section class="card"><div class="card-head"><h3>Income by month</h3></div>${r.by_month.length ? bars(r.by_month.map((x) => ({ d: x.month, v: x.cents })), { cls: 'green', fmt: (v) => money(v, cur), label: 'Income by month' }) : empty('No income recorded in this range.')}</section>
       <section class="card"><div class="card-head"><h3>By method</h3></div>${r.by_method.length ? r.by_method.map((x) => `<div class="sa-bar-row"><span>${esc(x.method)}</span><div class="progress"><i style="width:${Math.max(2, Math.round((x.cents / Math.max(1, r.by_method[0].cents)) * 100))}%"></i></div><span class="n">${money(x.cents, cur)}</span></div>`).join('') : empty('No payments yet.')}</section></div>
       <div class="sa-grid2 mt"><section class="card"><div class="card-head"><h3>Top customers</h3></div>${r.top_customers.length ? r.top_customers.map((x) => `<div class="sa-bar-row"><span title="${esc(x.email)}" style="overflow:hidden;text-overflow:ellipsis">${esc(x.email)}</span><div class="progress"><i style="width:${Math.max(2, Math.round((x.cents / Math.max(1, r.top_customers[0].cents)) * 100))}%"></i></div><span class="n">${money(x.cents, cur)}</span></div>`).join('') : empty('No customers yet.')}</section>
@@ -358,8 +365,10 @@
       <div class="sa-grid2 mt"><section class="card"><div class="card-head"><h3>Tokens per day</h3></div>${bars(r.daily.map((x) => ({ d: x.d, v: x.input + x.output })), { cls: 'orange', fmt: tok, label: 'Tokens per day' })}</section><section class="card"><div class="card-head"><h3>Cost per day</h3></div>${bars(r.daily.map((x) => ({ d: x.d, v: x.cost })), { cls: 'green', fmt: (v) => usd(v, 4), label: 'Cost per day' })}</section></div>
       <div class="sa-grid2 mt"><section class="card"><div class="card-head"><h3>By feature</h3></div>${r.by_source.length ? `<div class="table-wrap"><table class="t sa-tbl"><thead><tr><th>Feature</th><th class="num">Calls</th><th class="num">Tokens</th><th class="num">Cost</th></tr></thead><tbody>${r.by_source.map((s) => `<tr><td>${esc(s.source)}</td><td class="num">${nf(s.calls)}</td><td class="num">${tok(s.input + s.output)}</td><td class="num">${usd(s.cost, 4)}</td></tr>`).join('')}</tbody></table></div>` : empty('No AI use in this range.')}</section>
       <section class="card"><div class="card-head"><h3>By model</h3></div>${r.by_model.length ? `<div class="table-wrap"><table class="t sa-tbl"><thead><tr><th>Model</th><th class="num">Calls</th><th class="num">Tokens</th></tr></thead><tbody>${r.by_model.map((s) => `<tr><td>${esc(s.model)}</td><td class="num">${nf(s.calls)}</td><td class="num">${tok(s.input + s.output)}</td></tr>`).join('')}</tbody></table></div>` : empty('No model data yet.')}</section></div>
+      <section class="card mt"><div class="card-head"><h3>By organization</h3><button class="btn sm" id="orgCsv">${ic('dl')}Export CSV</button></div>${(r.by_organization || []).length ? `<div class="table-wrap"><table class="t sa-tbl"><thead><tr><th>Organization</th><th class="num">Calls</th><th class="num">AI units</th><th class="num">Tokens</th><th class="num">Provider cost</th></tr></thead><tbody>${r.by_organization.map((x) => `<tr><td><a href="#/organizations/${x.id}"><b>${esc(x.name)}</b></a></td><td class="num">${nf(x.calls)}</td><td class="num">${nf(x.units)}</td><td class="num">${tok(x.input + x.output)}</td><td class="num">${usd(x.cost_usd, 4)}</td></tr>`).join('')}</tbody></table></div>` : empty('No organization has used AI in this range.')}</section>
       <section class="card mt"><div class="card-head"><h3>Top users</h3></div>${r.top_users.length ? `<div class="table-wrap"><table class="t sa-tbl"><thead><tr><th>Person</th><th class="num">Calls</th><th class="num">Input</th><th class="num">Output</th><th class="num">Cost</th></tr></thead><tbody>${r.top_users.map((u) => `<tr><td><a href="#/users/${u.id}"><b>${esc(u.name)}</b></a><div class="small muted">${esc(u.email)}</div></td><td class="num">${nf(u.calls)}</td><td class="num">${tok(u.input)}</td><td class="num">${tok(u.output)}</td><td class="num">${usd(u.cost, 4)}</td></tr>`).join('')}</tbody></table></div>` : empty('No one has used AI in this range.')}</section></div>`);
     $$('[data-d]').forEach((b) => (b.onclick = () => { F.aiDays = Number(b.dataset.d); refresh(); }));
+    const oc = $('#orgCsv'); if (oc) oc.onclick = () => download('/api/admin/org-usage/export.csv', 'organization-ai-usage.csv');
   };
 
   // ---------- project manager usability ----------
@@ -423,12 +432,15 @@
     const f = F.projects;
     async function draw() {
       const r = await api('GET', '/api/admin/projects?' + qs(f)); const pg = pager(r, (p) => { f.page = p; draw(); });
-      $('#tbl').innerHTML = r.projects.length ? `<div class="table-wrap"><table class="t sa-tbl"><thead><tr><th>Project</th><th>Owner</th><th class="num">Members</th><th class="num">Tasks</th><th>Updated</th><th></th></tr></thead><tbody>${r.projects.map((p) => `<tr><td><b>${esc(p.name)}</b></td><td><a href="#/users/${p.owner_id}">${esc(p.owner_name)}</a><div class="small muted">${esc(p.owner_email)}</div></td><td class="num">${nf(p.members)}</td><td class="num">${nf(p.tasks)}</td><td>${dt(p.updated_at)}</td><td><div class="sa-acts"><button class="btn sm" data-t="${p.id}">Transfer</button><button class="btn sm danger" data-x="${p.id}">Delete</button></div></td></tr>`).join('')}</tbody></table></div>${pg.html}` : empty('No projects match.');
+      $('#tbl').innerHTML = r.projects.length ? `<div class="table-wrap"><table class="t sa-tbl"><thead><tr><th>Project</th><th>Organization</th><th>Owner</th><th class="num">Members</th><th class="num">Tasks</th><th>Updated</th><th></th></tr></thead><tbody>${r.projects.map((p) => `<tr><td><b>${esc(p.name)}</b>${p.program ? `<div class="small muted">${esc(p.program)}</div>` : ''}</td><td>${p.organization ? `<a href="#/organizations/${p.organization_id}">${esc(p.organization)}</a>` : '<span class="muted">Personal</span>'}</td><td><a href="#/users/${p.owner_id}">${esc(p.owner_name)}</a><div class="small muted">${esc(p.owner_email)}</div></td><td class="num">${nf(p.members)}</td><td class="num">${nf(p.tasks)}</td><td>${dt(p.updated_at)}</td><td><div class="sa-acts"><button class="btn sm" data-t="${p.id}">Transfer</button><button class="btn sm" data-mv="${p.id}">Move</button><button class="btn sm danger" data-x="${p.id}">Delete</button></div></td></tr>`).join('')}</tbody></table></div>${pg.html}` : empty('No projects match.');
       pg.bind($('#tbl'));
       $$('[data-t]').forEach((b) => (b.onclick = () => { const p = r.projects.find((x) => x.id == b.dataset.t); const m = modal({ title: 'Transfer ownership', body: `<div class="sa-modal-form"><p class="muted" style="margin:0">${esc(p.name)} is owned by ${esc(p.owner_email)}.</p>${field('New owner email', '<input type="email" id="em">', 'The person must already have an account. They become the project manager.')}</div>`, footer: '<button class="btn" data-close>Cancel</button><button class="btn primary" id="go">Transfer</button>' }); m.$('#go').onclick = () => busy(m.$('#go'), async () => { const em = m.$('#em').value.trim().toLowerCase(); const found = (await api('GET', '/api/admin/users?' + qs({ q: em }))).users.find((u) => u.email === em); if (!found) throw new Error('No account uses that email'); await api('PUT', `/api/admin/projects/${p.id}`, { owner_id: found.id }); m.close(); toast('Ownership transferred'); draw(); }); }));
+      $$('[data-mv]').forEach((b) => (b.onclick = () => moveProjectDlg(r.projects.find((x) => x.id == b.dataset.mv), draw)));
       $$('[data-x]').forEach((b) => (b.onclick = async () => { const p = r.projects.find((x) => x.id == b.dataset.x); if (await confirmDlg({ title: 'Delete project', message: `This permanently deletes ${esc(p.name)} with all its tasks, documents and reports. It cannot be undone.`, ok: 'Delete project', danger: true })) busy(null, async () => { await api('DELETE', `/api/admin/projects/${p.id}`); toast('Project deleted'); draw(); }); }));
     }
-    setView(`<div class="page">${head('Projects', '', 'Every project across all accounts.')}<div class="sa-toolbar"><label class="sf">${ic('search')}<input type="search" id="fq" placeholder="Search project or owner email" value="${esc(f.q)}" aria-label="Search projects"></label></div><div class="card" id="tbl">${loading()}</div></div>`);
+    setView(`<div class="page">${head('Projects', '', 'Every project across all accounts.')}<div class="sa-toolbar"><label class="sf">${ic('search')}<input type="search" id="fq" placeholder="Search project or owner email" value="${esc(f.q)}" aria-label="Search projects"></label><select id="fo" aria-label="Organization"></select></div><div class="card" id="tbl">${loading()}</div></div>`);
+    api('GET', '/api/admin/user-types').then((ut) => { $('#fo').innerHTML = '<option value="">All projects</option><option value="none">Personal only</option><option value="any">Any organization</option>' + ut.organizations.map((o) => `<option value="${o.id}">${esc(o.name)}</option>`).join(''); $('#fo').value = f.organization_id || ''; }).catch(() => {});
+    $('#fo').onchange = (e) => { f.organization_id = e.target.value; f.page = 1; draw(); };
     let t; $('#fq').oninput = (e) => { clearTimeout(t); t = setTimeout(() => { f.q = e.target.value; f.page = 1; draw(); }, 250); };
     await draw();
   };
@@ -577,18 +589,131 @@
 
   // ---------- audit ----------
   VIEWS.audit = async () => {
+    if (F.auditScope === 'orgs') return orgAudit();
     const f = F.audit;
     async function draw() {
       const r = await api('GET', '/api/admin/audit?' + qs(f)); const pg = pager(r, (p) => { f.page = p; draw(); });
       $('#tbl').innerHTML = r.entries.length ? `<div class="table-wrap"><table class="t sa-tbl"><thead><tr><th>When</th><th>Admin</th><th>Action</th><th>Target</th><th>Detail</th></tr></thead><tbody>${r.entries.map((e) => `<tr><td>${dt(e.at)}</td><td>${esc(e.admin)}</td><td>${chip('blue', e.action)}</td><td>${esc(e.target)}</td><td class="wrap small muted">${esc(JSON.stringify(e.detail))}</td></tr>`).join('')}</tbody></table></div>${pg.html}` : empty('No admin actions recorded yet.');
       pg.bind($('#tbl'));
     }
-    setView(`<div class="page">${head('Audit log', '', 'Every change made in this console.')}<div class="sa-toolbar"><label class="sf">${ic('search')}<input type="search" id="fq" placeholder="Search action, target or admin" value="${esc(f.q)}" aria-label="Search the audit log"></label></div><div class="card" id="tbl">${loading()}</div></div>`);
+    setView(`<div class="page">${head('Audit log', auditTabs(), 'Every change made in this console.')}<div class="sa-toolbar"><label class="sf">${ic('search')}<input type="search" id="fq" placeholder="Search action, target or admin" value="${esc(f.q)}" aria-label="Search the audit log"></label></div><div class="card" id="tbl">${loading()}</div></div>`);
+    bindAuditTabs();
     let t; $('#fq').oninput = (e) => { clearTimeout(t); t = setTimeout(() => { f.q = e.target.value; f.page = 1; draw(); }, 250); };
     await draw();
   };
 
 
+
+  // ---------- organizations ----------
+  const ORG_ROLES = ['admin', 'pmo_director', 'program_manager', 'project_manager', 'viewer', 'auditor'];
+  const PLAN_LABEL = { team: 'Team', business: 'Business', enterprise: 'Enterprise' };
+  const BILL = { active: ['green', 'Active'], trial: ['amber', 'Trial'], cancelled: ['gray', 'Cancelled'] };
+  const seg = (items, cur, id) => `<div class="seg" role="group" aria-label="${id}">${items.map(([k, l]) => `<button data-${id}="${k}" class="${k === cur ? 'on' : ''}">${esc(l)}</button>`).join('')}</div>`;
+  const subTabs = () => seg([['people', 'People'], ['orgs', 'Organizations']], F.subScope, 'ss');
+  const bindSubTabs = () => $$('[data-ss]').forEach((b) => (b.onclick = () => { F.subScope = b.dataset.ss; refresh(); }));
+  const auditTabs = () => seg([['platform', 'Platform'], ['orgs', 'Organizations']], F.auditScope, 'as');
+  const bindAuditTabs = () => $$('[data-as]').forEach((b) => (b.onclick = () => { F.auditScope = b.dataset.as; refresh(); }));
+  const orgBar = (used, total) => { const pct = total ? Math.min(100, Math.round((used / total) * 100)) : 0; return `<div class="progress" style="min-width:90px"><i style="width:${pct}%"></i></div>`; };
+
+  async function subsOrgs() {
+    const r = await api('GET', '/api/admin/orgs?size=100');
+    setView(`<div class="page">${head('Subscriptions', subTabs(), 'Plans, seats and AI pool of every organization.')}
+      <div class="card">${r.organizations.length ? `<div class="table-wrap"><table class="t sa-tbl"><thead><tr><th>Organization</th><th>Plan</th><th>State</th><th class="num">Seats</th><th>AI pool</th><th class="num">Price</th><th>Renews</th><th></th></tr></thead><tbody>${r.organizations.map((o) => `<tr><td><b>${esc(o.name)}</b><div class="small muted">${esc(o.owner_email)}</div></td><td>${chip('blue', PLAN_LABEL[o.plan] || o.plan)}</td><td>${chip(...(BILL[o.billing_status] || ['gray', o.billing_status]))}</td><td class="num">${nf(o.seats_used)} of ${nf(o.seats)}</td><td>${orgBar(o.units_used, o.units_total)}<div class="small muted">${nf(o.units_used)} of ${nf(o.units_total)} units</div></td><td class="num">${money(o.price_cents, o.currency)}</td><td>${day(o.period_end)}</td><td><a class="btn sm" href="#/organizations/${o.id}">Manage</a></td></tr>`).join('')}</tbody></table></div>` : empty('No organizations yet.')}</div></div>`);
+    bindSubTabs();
+  }
+  async function orgAudit() {
+    const f = F.orgAudit;
+    async function draw() {
+      const r = await api('GET', '/api/admin/org-audit?' + qs(f)); const pg = pager(r, (p) => { f.page = p; draw(); });
+      $('#tbl').innerHTML = r.entries.length ? `<div class="table-wrap"><table class="t sa-tbl"><thead><tr><th>When</th><th>Organization</th><th>Who</th><th>Action</th><th>Detail</th></tr></thead><tbody>${r.entries.map((e) => `<tr><td>${dt(e.at)}</td><td><a href="#/organizations/${e.organization_id}">${esc(e.organization || '')}</a></td><td>${esc(e.actor || '')}</td><td>${esc(e.action)}</td><td class="small muted">${esc(JSON.stringify(e.meta || {}))}</td></tr>`).join('')}</tbody></table></div>${pg.html}` : empty('No organization activity yet.');
+      pg.bind($('#tbl'));
+    }
+    setView(`<div class="page">${head('Audit log', auditTabs(), 'Everything done inside organizations, including your own platform actions.')}<div class="sa-toolbar"><label class="sf">${ic('search')}<input type="search" id="fq" placeholder="Search action, organization or person" value="${esc(f.q)}" aria-label="Search organization activity"></label></div><div class="card" id="tbl">${loading()}</div></div>`);
+    bindAuditTabs();
+    let t; $('#fq').oninput = (e) => { clearTimeout(t); t = setTimeout(() => { f.q = e.target.value; f.page = 1; draw(); }, 250); };
+    await draw();
+  }
+  async function moveProjectDlg(p, done) {
+    const ut = await api('GET', '/api/admin/user-types');
+    const m = modal({ title: 'Move project', body: `<div class="sa-modal-form"><p class="muted" style="margin:0">${esc(p.name)} is ${p.organization ? 'in ' + esc(p.organization) : 'a personal project'}. Its tasks, history and members do not change.</p>${field('Move to', `<select id="mo"><option value="0">Personal workspace of the owner</option>${ut.organizations.map((o) => `<option value="${o.id}">${esc(o.name)}</option>`).join('')}</select>`)}</div>`, footer: '<button class="btn" data-close>Cancel</button><button class="btn primary" id="go">Move</button>' });
+    m.$('#mo').value = String(p.organization_id || 0);
+    m.$('#go').onclick = () => busy(m.$('#go'), async () => { await api('POST', `/api/admin/projects/${p.id}/organization`, { organization_id: Number(m.$('#mo').value) }); m.close(); toast('Project moved'); done(); });
+  }
+  async function findUser(email) {
+    const e = String(email || '').trim().toLowerCase(); if (!e) throw new Error('Enter the email of an existing account');
+    const r = await api('GET', '/api/admin/users?q=' + encodeURIComponent(e));
+    const u = r.users.find((x) => x.email.toLowerCase() === e);
+    if (!u) throw new Error('No account has this email. Create the user first in Users.');
+    return u;
+  }
+
+  VIEWS.organizations = async (rest) => {
+    if (rest[0]) return orgDetail(Number(rest[0]));
+    const f = F.orgs;
+    async function draw() {
+      const r = await api('GET', '/api/admin/orgs?' + qs(f)); const pg = pager(r, (p) => { f.page = p; draw(); }); const t = r.totals || {};
+      $('#kp').innerHTML = `${kpi(nf(t.organizations), 'Organizations', `${nf(t.paying)} paying, ${nf(t.trial)} on trial`, 'info')}${kpi(nf(t.members), 'Members', `${nf(t.seats_used)} of ${nf(t.seats_bought)} seats in use`, 'info')}${kpi(nf(t.projects), 'Organization projects', '', '')}${kpi(money(t.mrr_cents), 'Recurring revenue', 'From active organizations', 'good')}${kpi(nf(t.units_30d), 'AI units, 30 days', 'All organizations', 'warn')}`;
+      $('#off').hidden = r.enabled !== false;
+      $('#tbl').innerHTML = r.organizations.length ? `<div class="table-wrap"><table class="t sa-tbl"><thead><tr><th>Organization</th><th>Owner</th><th>Plan</th><th class="num">Members</th><th class="num">Seats</th><th class="num">Programs</th><th class="num">Projects</th><th>AI pool</th><th>Created</th></tr></thead><tbody>${r.organizations.map((o) => `<tr class="click" data-id="${o.id}" tabindex="0"><td><b>${esc(o.name)}</b>${o.handovers ? `<div class="small muted">${nf(o.handovers)} waiting for handover</div>` : ''}</td><td>${esc(o.owner || '')}<div class="small muted">${esc(o.owner_email)}</div></td><td>${chip('blue', PLAN_LABEL[o.plan] || o.plan)} ${chip(...(BILL[o.billing_status] || ['gray', o.billing_status]))}</td><td class="num">${nf(o.members)}</td><td class="num">${nf(o.seats_used)} of ${nf(o.seats)}</td><td class="num">${nf(o.programs)}</td><td class="num">${nf(o.projects)}</td><td>${orgBar(o.units_used, o.units_total)}<div class="small muted">${nf(o.units_used)} of ${nf(o.units_total)}${o.blocked ? ' (stopped)' : ''}</div></td><td>${day(o.created_at)}</td></tr>`).join('')}</tbody></table></div>${pg.html}` : empty(f.q || f.plan ? 'No organizations match.' : 'No organizations yet. Create one for a customer.');
+      $$('#tbl tr.click').forEach((tr) => { const go = () => (location.hash = `#/organizations/${tr.dataset.id}`); tr.onclick = go; tr.onkeydown = (e) => { if (e.key === 'Enter') go(); }; });
+      pg.bind($('#tbl'));
+    }
+    setView(`<div class="page">${head('Organizations', '<button class="btn" id="exp">' + ic('dl') + 'Export CSV</button><button class="btn primary" id="add">' + ic('plus') + 'New organization</button>', 'Every organization, its people, plan, AI pool and projects.')}
+      <div id="off" hidden>${note('Organizations are turned off for customers, so nobody can create or use one yet.', 'warn')}<p><button class="btn" id="turnOn">Turn on for customers</button></p></div>
+      <div class="sa-kpis" id="kp"></div>
+      <div class="sa-toolbar mt"><label class="sf">${ic('search')}<input type="search" id="fq" placeholder="Search organization or owner email" value="${esc(f.q)}" aria-label="Search organizations"></label><select id="fp" aria-label="Plan"><option value="">Any plan</option><option value="team">Team</option><option value="business">Business</option><option value="enterprise">Enterprise</option></select></div>
+      <div class="card" id="tbl">${loading()}</div></div>`);
+    $('#fp').value = f.plan;
+    let t; $('#fq').oninput = (e) => { clearTimeout(t); t = setTimeout(() => { f.q = e.target.value; f.page = 1; draw(); }, 250); }; $('#fp').onchange = (e) => { f.plan = e.target.value; f.page = 1; draw(); };
+    $('#exp').onclick = () => download('/api/admin/orgs/export.csv', 'organizations.csv');
+    $('#turnOn').onclick = () => busy($('#turnOn'), async () => { await api('PUT', '/api/admin/config', { settings: { org_features: true } }); toast('Organizations are on'); refresh(); });
+    $('#add').onclick = () => {
+      const m = modal({ title: 'New organization', body: `<div class="sa-modal-form">${field('Organization name', '<input type="text" id="nm" maxlength="80">')}${field('Owner email', '<input type="email" id="ow">', 'The owner becomes the first Admin. The account must already exist.')}${field('Seats', '<input type="number" id="st" min="1" max="10000" value="5">')}</div>`, footer: '<button class="btn" data-close>Cancel</button><button class="btn primary" id="go">Create</button>' });
+      m.$('#go').onclick = () => busy(m.$('#go'), async () => { const u = await findUser(m.$('#ow').value); const r = await api('POST', '/api/admin/orgs', { name: m.$('#nm').value, owner_id: u.id, seats: Number(m.$('#st').value) || 5 }); m.close(); toast('Organization created'); location.hash = `#/organizations/${r.id}`; });
+    };
+    await draw();
+  };
+
+  async function orgDetail(id) {
+    const d = await api('GET', `/api/admin/orgs/${id}`); const o = d.organization, pool = d.pool;
+    const progs = d.structure.filter((x) => x.kind === 'program'), ports = d.structure.filter((x) => x.kind === 'portfolio');
+    const pms = d.members.filter((x) => x.roles.includes('project_manager'));
+    const tbl = (cols, rows, emptyText) => rows.length ? `<div class="table-wrap"><table class="t sa-tbl"><thead><tr>${cols.map((c) => `<th class="${c[1] || ''}">${esc(c[0])}</th>`).join('')}</tr></thead><tbody>${rows.map((x) => `<tr>${x.map((v, i) => `<td class="${cols[i][1] || ''}">${v}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : empty(emptyText);
+    setView(`<div class="page"><a class="sa-back" href="#/organizations">${ic('back')}All organizations</a>${head(o.name, '<button class="btn" id="oEdit">Edit and billing</button><button class="btn danger" id="oDel">Delete</button>', `Owner ${o.owner_email || 'none'}. Created ${day(o.created_at)}.`)}
+      <div class="sa-chips">${chip('blue', PLAN_LABEL[o.plan] || o.plan)}${chip(...(BILL[o.billing_status] || ['gray', o.billing_status]))}${pool && pool.blocked ? chip('red', 'AI pool stopped') : ''}${d.scim_tokens ? chip('gray', 'Provisioning on') : ''}</div>
+      <div class="sa-kpis">${kpi(nf(o.members), 'Members', `${nf(o.seats_used)} of ${nf(o.seats)} seats in use`, 'info')}${kpi(nf(o.programs) + ' / ' + nf(o.portfolios), 'Programs and portfolios', '', '')}${kpi(nf(o.projects), 'Projects', '', '')}${kpi(pool ? nf(pool.used) : '0', 'AI units used', pool ? `of ${nf(pool.total)} this period` : 'No pool', pool && pool.blocked ? 'bad' : 'warn')}${kpi(money(o.price_cents, o.currency), 'Per period', o.period_end ? 'Renews ' + day(o.period_end) : '', 'good')}</div>
+      <section class="card mt"><div class="card-head"><h3>Members</h3><div class="row"><button class="btn sm" id="mCsv">${ic('dl')}Export CSV</button><button class="btn sm primary" id="mAdd">${ic('plus')}Add member</button></div></div>
+        ${tbl([['Person'], ['User type'], ['Program'], ['Status'], ['', 'num']], d.members.map((x) => [`<a href="#/users/${x.user_id}"><b>${esc(x.name)}</b></a><div class="small muted">${esc(x.email)}</div>`, typeChip(x.type), esc(x.program || ''), x.status === 'suspended' ? chip('red', 'Suspended') : chip('green', 'Active'), `<div class="sa-acts"><button class="btn sm" data-mr="${x.user_id}">Change role</button><button class="btn sm danger" data-mx="${x.user_id}">Remove</button></div>`]), 'No members.')}
+        ${d.invites.length ? `<h4 class="mt">Pending invitations</h4>${tbl([['Email'], ['Role'], ['Sent'], ['', 'num']], d.invites.map((i) => [esc(i.email), typeChip(i.role), day(i.created_at), `<button class="btn sm" data-ir="${i.id}">Revoke</button>`]), '')}` : ''}</section>
+      <div class="sa-grid2 mt"><section class="card"><div class="card-head"><h3>Programs and portfolios</h3></div>${d.structure.length ? `<ul class="sa-list">${progs.map((x) => `<li>${chip('gray', 'Program')} ${esc(x.name)}</li>`).join('')}${ports.map((x) => `<li>${chip('gray', 'Portfolio')} ${esc(x.name)}</li>`).join('')}</ul>` : empty('No programs or portfolios yet.')}</section>
+      <section class="card"><div class="card-head"><h3>AI use this period</h3></div>${d.by_member.length ? d.by_member.map((x) => `<div class="sa-bar-row"><span>${esc(x.name || 'Unknown')}</span><div class="progress"><i style="width:${Math.max(2, Math.round((x.units / Math.max(1, d.by_member[0].units)) * 100))}%"></i></div><span class="n">${nf(x.units)}</span></div>`).join('') : empty('No AI use yet.')}${d.ai_policy ? `<p class="small muted mt">AI is ${d.ai_policy.enabled ? 'on' : 'off'} for members${d.ai_policy.member_cap_units ? `, ${nf(d.ai_policy.member_cap_units)} units cap per member` : ''}.</p>` : ''}</section></div>
+      <section class="card mt"><div class="card-head"><h3>Projects</h3></div>${tbl([['Project'], ['Program'], ['Owner'], ['Updated'], ['', 'num']], d.projects.map((p) => [`<b>${esc(p.name)}</b>`, esc(p.program || ''), esc(p.owner_email || ''), dt(p.updated_at), `<button class="btn sm" data-pm="${p.id}">Move out</button>`]), 'No projects in this organization.')}</section>
+      ${d.handovers.length ? `<section class="card mt"><div class="card-head"><h3>Handover queue</h3></div>${tbl([['Project'], ['Previous manager'], ['Since'], ['', 'num']], d.handovers.map((h) => [`<b>${esc(h.project_name)}</b>`, esc(h.from_name), day(h.created_at), `<button class="btn sm primary" data-ht="${h.id}">Assign</button>`]), '')}</section>` : ''}
+      <div class="sa-grid2 mt"><section class="card"><div class="card-head"><h3>Billing events</h3></div>${tbl([['When'], ['Event'], ['Amount', 'num']], d.events.map((e) => [dt(e.at), esc(String(e.kind).replace(/_/g, ' ')), money(e.amount_cents, e.currency)]), 'No billing events.')}</section>
+      <section class="card"><div class="card-head"><h3>Recent activity</h3><a class="btn sm" href="#/audit" id="toAudit">All activity</a></div>${tbl([['When'], ['Action']], d.audit.slice(0, 8).map((e) => [dt(e.at), esc(e.action)]), 'No activity yet.')}</section></div></div>`);
+    $('#toAudit').onclick = () => { F.auditScope = 'orgs'; };
+    $('#mCsv').onclick = () => download(`/api/admin/orgs/${id}/members.csv`, 'organization-members.csv');
+    const roleFields = (cur) => `${field('User type', `<select id="rt">${ORG_ROLES.map((t) => `<option value="${t}"${t === cur ? ' selected' : ''}>${esc(UTYPE[t])}</option>`).join('')}</select>`)}<div id="rp" hidden>${field('Program', `<select id="rg">${progs.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join('') || '<option value="">No programs yet</option>'}</select>`)}</div>`;
+    const bindRole = (m) => { const sync = () => (m.$('#rp').hidden = m.$('#rt').value !== 'program_manager'); m.$('#rt').onchange = sync; sync(); };
+    const roleBody = (m) => ({ type: m.$('#rt').value, ...(m.$('#rt').value === 'program_manager' ? { program_id: Number(m.$('#rg').value) || 0 } : {}) });
+    $('#mAdd').onclick = () => { const m = modal({ title: 'Add member', body: `<div class="sa-modal-form">${field('Email', '<input type="email" id="em">', 'The account must already exist.')}${roleFields('project_manager')}</div>`, footer: '<button class="btn" data-close>Cancel</button><button class="btn primary" id="go">Add</button>' }); bindRole(m); m.$('#go').onclick = () => busy(m.$('#go'), async () => { const u = await findUser(m.$('#em').value); await api('POST', `/api/admin/orgs/${id}/members`, { user_id: u.id, ...roleBody(m) }); m.close(); toast('Member added'); refresh(); }); };
+    $$('[data-mr]').forEach((b) => (b.onclick = () => { const x = d.members.find((y) => y.user_id == b.dataset.mr); const m = modal({ title: `Change role of ${x.name}`, body: `<div class="sa-modal-form">${roleFields(x.type)}</div>`, footer: '<button class="btn" data-close>Cancel</button><button class="btn primary" id="go">Save</button>' }); bindRole(m); m.$('#go').onclick = () => busy(m.$('#go'), async () => { await api('PUT', `/api/admin/orgs/${id}/members/${x.user_id}`, roleBody(m)); m.close(); toast('Role changed'); refresh(); }); }));
+    $$('[data-mx]').forEach((b) => (b.onclick = async () => { const x = d.members.find((y) => y.user_id == b.dataset.mx); if (!(await confirmDlg({ title: 'Remove member', message: `${esc(x.name)} loses access to ${esc(o.name)}. Active projects they managed go to the handover queue and the others are archived.`, ok: 'Remove', danger: true }))) return; busy(null, async () => { const r = await api('DELETE', `/api/admin/orgs/${id}/members/${x.user_id}`); toast(`Removed. ${r.result.handover} for handover, ${r.result.archived} archived`); refresh(); }); }));
+    $$('[data-ir]').forEach((b) => (b.onclick = () => busy(null, async () => { await api('DELETE', `/api/admin/orgs/${id}/invites/${b.dataset.ir}`); toast('Invitation revoked'); refresh(); })));
+    $$('[data-pm]').forEach((b) => (b.onclick = () => { const p = d.projects.find((y) => y.id == b.dataset.pm); moveProjectDlg({ id: p.id, name: p.name, organization: o.name, organization_id: id }, refresh); }));
+    $$('[data-ht]').forEach((b) => (b.onclick = () => { const h = d.handovers.find((y) => y.id == b.dataset.ht); const m = modal({ title: 'Assign project', body: `<div class="sa-modal-form"><p class="muted" style="margin:0">${esc(h.project_name)} needs a new project manager.</p>${field('New manager', `<select id="to">${pms.map((x) => `<option value="${x.user_id}">${esc(x.name)}</option>`).join('') || '<option value="">No Project Managers in this organization</option>'}</select>`)}</div>`, footer: '<button class="btn" data-close>Cancel</button><button class="btn primary" id="go">Assign</button>' }); m.$('#go').onclick = () => busy(m.$('#go'), async () => { await api('POST', `/api/admin/orgs/${id}/handovers/${h.id}/transfer`, { to_user_id: Number(m.$('#to').value) }); m.close(); toast('Project assigned'); refresh(); }); }));
+    $('#oEdit').onclick = () => {
+      const ai = d.ai_policy || { enabled: true, member_cap_units: 0 };
+      const m = modal({ title: 'Edit and billing', size: 'lg', body: `<div class="sa-modal-form">${field('Name', `<input type="text" id="nm" maxlength="80" value="${esc(o.name)}">`)}<div class="two">${field('Plan', `<select id="pl"><option value="team">Team</option><option value="business">Business</option><option value="enterprise">Enterprise</option></select>`)}${field('Seats', `<input type="number" id="st" min="1" max="10000" value="${o.seats}">`, `${o.seats_used} in use`)}</div><div class="two">${field('Extra AI units this period', `<input type="number" id="up" min="0" value="${pool ? pool.purchased : 0}">`)}${field('When the AI pool runs out', `<select id="op"><option value="stop">Stop AI</option><option value="capped">Allow up to a cap</option></select>`)}</div>${field('Overage cap in units', `<input type="number" id="oc" min="0" value="${pool ? pool.overage_cap : 0}">`)}<div class="two">${field('AI for members', `<select id="ae"><option value="1">On</option><option value="0">Off</option></select>`, 'Enterprise plan only')}${field('Units cap per member', `<input type="number" id="ac" min="0" value="${ai.member_cap_units}">`, '0 means no cap')}</div></div>`, footer: '<button class="btn" data-close>Cancel</button><button class="btn primary" id="go">Save</button>' });
+      m.$('#pl').value = o.plan; m.$('#op').value = pool ? pool.policy : 'stop'; m.$('#ae').value = ai.enabled ? '1' : '0';
+      m.$('#go').onclick = () => busy(m.$('#go'), async () => {
+        const body = { name: m.$('#nm').value, plan: m.$('#pl').value, seats: Number(m.$('#st').value), units_purchased: Number(m.$('#up').value) || 0, overage_policy: m.$('#op').value, overage_cap: Number(m.$('#oc').value) || 0 };
+        if (body.plan === 'enterprise') body.ai_policy = { enabled: m.$('#ae').value === '1', member_cap_units: Number(m.$('#ac').value) || 0 };
+        await api('PUT', `/api/admin/orgs/${id}`, body); m.close(); toast('Saved'); refresh();
+      });
+    };
+    $('#oDel').onclick = () => { const m = modal({ title: 'Delete organization', body: `<div class="sa-modal-form"><p style="margin:0">This removes ${esc(o.name)}, its members, programs, portfolios and billing records. ${nf(o.projects)} project${o.projects === 1 ? '' : 's'} return to the personal workspace of the owner. This cannot be undone.</p>${field('Type the organization name to confirm', '<input type="text" id="cf" autocomplete="off">')}</div>`, footer: '<button class="btn" data-close>Cancel</button><button class="btn danger" id="go">Delete organization</button>' }); m.$('#go').onclick = () => busy(m.$('#go'), async () => { await api('DELETE', `/api/admin/orgs/${id}?confirm=${encodeURIComponent(m.$('#cf').value)}`); m.close(); toast('Organization deleted'); location.hash = '#/organizations'; }); };
+  }
 
   // ---------- security ----------
   const SEC_LEVEL = { high: ['red', 'High'], warn: ['amber', 'Warning'], info: ['gray', 'Info'] };
