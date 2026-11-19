@@ -2333,22 +2333,29 @@ Rules:
   on('PUT', '/api/orgs/(\\d+)/seats', async (m, q, b) => O().setSeats(UID(), m[1], b && b.seats));
   on('PUT', '/api/orgs/(\\d+)/overage', async (m, q, b) => O().setOverage(UID(), m[1], b && b.policy, b && b.cap_units));
   on('GET', '/api/orgs/(\\d+)/members', async (m) => O().members(UID(), m[1]));
-  on('POST', '/api/orgs/(\\d+)/invites', async (m, q, b) => O().invite(UID(), m[1], b && b.email, b && b.role, b && b.program_id));
+  on('POST', '/api/orgs/(\\d+)/invites', async (m, q, b) => O().invite(UID(), m[1], b && b.email, b && b.role, b && b.program_id, b && b.portfolio_id));
   on('DELETE', '/api/orgs/(\\d+)/invites/(\\d+)', async (m) => { await O().revoke(UID(), m[1], m[2]); return { ok: true }; });
   on('PUT', '/api/orgs/(\\d+)/members/(\\d+)', async (m, q, b) => { await O().changeRole(UID(), m[1], Number(m[2]), b && b.role); return O().members(UID(), m[1]); });
   on('DELETE', '/api/orgs/(\\d+)/members/(\\d+)', async (m) => O().remove(UID(), m[1], Number(m[2])));
   on('GET', '/api/orgs/(\\d+)/handovers', async (m) => ({ handovers: await O().queue(UID(), m[1]) }));
   on('POST', '/api/orgs/(\\d+)/handovers/(\\d+)/transfer', async (m, q, b) => O().transfer(UID(), m[1], m[2], b && b.user_id));
-  const PG = () => app_programs();
+  const PG = () => app_programs(), PF = () => ops.portfolios;
   on('GET', '/api/orgs/(\\d+)/programs', async (m) => ({ programs: await PG().list(UID(), m[1]) }));
   on('POST', '/api/orgs/(\\d+)/programs', async (m, q, b) => PG().create(UID(), m[1], b && b.name));
   on('PUT', '/api/orgs/(\\d+)/programs/(\\d+)', async (m, q, b) => { await PG().rename(UID(), m[1], m[2], b && b.name); return { ok: true }; });
   on('DELETE', '/api/orgs/(\\d+)/programs/(\\d+)', async (m) => { await PG().archive(UID(), m[1], m[2]); return { ok: true }; });
+  on('GET', '/api/orgs/(\\d+)/overview', async (m) => PF().overview(UID(), m[1]));
+  on('GET', '/api/orgs/(\\d+)/portfolios', async (m) => ({ portfolios: await PF().list(UID(), m[1]) }));
+  on('POST', '/api/orgs/(\\d+)/portfolios', async (m, q, b) => PF().create(UID(), m[1], b && b.name));
+  on('PUT', '/api/orgs/(\\d+)/portfolios/(\\d+)', async (m, q, b) => { await PF().rename(UID(), m[1], m[2], b && b.name); return { ok: true }; });
+  on('DELETE', '/api/orgs/(\\d+)/portfolios/(\\d+)', async (m) => { await PF().archive(UID(), m[1], m[2]); return { ok: true }; });
+  on('GET', '/api/orgs/(\\d+)/portfolios/(\\d+)/dashboard', async (m) => PF().dashboard(UID(), m[1], m[2]));
+  on('PUT', '/api/orgs/(\\d+)/programs/(\\d+)/portfolio', async (m, q, b) => PF().placeProgram(UID(), m[1], m[2], b && b.portfolio_id != null ? b.portfolio_id : null));
   on('GET', '/api/orgs/(\\d+)/projects', async (m) => ({ projects: await PG().projects(UID(), m[1]) }));
   on('GET', '/api/orgs/(\\d+)/programs/(\\d+)/dashboard', async (m) => PG().dashboard(UID(), m[1], m[2]));
   on('PUT', '/api/orgs/(\\d+)/projects/(\\d+)/program', async (m, q, b) => PG().assign(UID(), m[1], m[2], b && b.program_id != null ? b.program_id : null));
-  on('POST', '/api/orgs/(\\d+)/members/(\\d+)/grants', async (m, q, b) => { await PG().grant(UID(), m[1], Number(m[2]), b && b.role, b && b.program_id); return O().members(UID(), m[1]); });
-  on('DELETE', '/api/orgs/(\\d+)/members/(\\d+)/grants', async (m, q, b) => { await PG().revoke(UID(), m[1], Number(m[2]), q.role, q.program_id); return O().members(UID(), m[1]); });
+  on('POST', '/api/orgs/(\\d+)/members/(\\d+)/grants', async (m, q, b) => { await PG().grant(UID(), m[1], Number(m[2]), b && b.role, b && b.program_id, b && b.portfolio_id); return O().members(UID(), m[1]); });
+  on('DELETE', '/api/orgs/(\\d+)/members/(\\d+)/grants', async (m, q, b) => { await PG().revoke(UID(), m[1], Number(m[2]), q.role, q.program_id, q.portfolio_id); return O().members(UID(), m[1]); });
   on('POST', '/api/projects/(\\d+)/move', async (m, q, b) => { P_(m[1], 'manager'); return O().moveProject(UID(), Number(m[1]), b && b.organization_id); });
 
   // ---------- sample projects ----------

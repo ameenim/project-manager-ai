@@ -157,13 +157,17 @@ class Orgs {
     const invites = (await this.rolesIn(userId, wid)).includes('admin') ? (await this.q("SELECT id, email, role, created_at FROM workspace_invites WHERE workspace_id = $1 AND status = 'pending' ORDER BY id", [wid])).rows : [];
     return { members: rows.map((r) => ({ user_id: Number(r.user_id), name: r.name, email: r.email, roles: r.roles })), invites: invites.map((i) => ({ id: String(i.id), email: i.email, role: i.role, created_at: i.created_at })) };
   }
-  async invite(userId, wid, email, role, programId) {
+  async invite(userId, wid, email, role, programId, portfolioId) {
     await this.need(); await this.requireRole(userId, wid, 'admin');
     const e = String(email || '').trim().toLowerCase();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) throw err(400, 'Enter a valid email address');
     if (!INVITE_ROLES.includes(role)) throw err(400, 'Choose a role');
     let scopeType = 'organization', scopeId = 0;
-    if (role === 'program_manager' || (role === 'viewer' && programId)) {
+    if (role === 'viewer' && portfolioId) {
+      const f = (await this.q("SELECT id FROM structure_nodes WHERE id = $1 AND workspace_id = $2 AND kind = 'portfolio' AND status = 'active'", [Number(portfolioId) || 0, wid])).rows[0];
+      if (!f) throw err(400, 'Choose a portfolio of this organization');
+      scopeType = 'portfolio'; scopeId = Number(f.id);
+    } else if (role === 'program_manager' || (role === 'viewer' && programId)) {
       const pr = (await this.q("SELECT id FROM structure_nodes WHERE id = $1 AND workspace_id = $2 AND kind = 'program' AND status = 'active'", [Number(programId) || 0, wid])).rows[0];
       if (!pr) throw err(400, 'Choose a program of this organization');
       scopeType = 'program'; scopeId = Number(pr.id);
