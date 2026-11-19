@@ -7,6 +7,7 @@ const mailer = require('./mailer');
 const err = (status, message) => { const e = new Error(message); e.status = status; return e; };
 const ROLES = ['admin', 'pmo_director', 'program_manager', 'project_manager', 'viewer'];
 const PHASE1_ROLES = ['admin', 'project_manager', 'viewer'];
+const INVITE_ROLES = ['admin', 'pmo_director', 'program_manager', 'project_manager', 'viewer'];
 const DAY = 86400000;
 
 class Orgs {
@@ -156,11 +157,17 @@ class Orgs {
     const invites = (await this.rolesIn(userId, wid)).includes('admin') ? (await this.q("SELECT id, email, role, created_at FROM workspace_invites WHERE workspace_id = $1 AND status = 'pending' ORDER BY id", [wid])).rows : [];
     return { members: rows.map((r) => ({ user_id: Number(r.user_id), name: r.name, email: r.email, roles: r.roles })), invites: invites.map((i) => ({ id: String(i.id), email: i.email, role: i.role, created_at: i.created_at })) };
   }
-  async invite(userId, wid, email, role) {
+  async invite(userId, wid, email, role, programId) {
     await this.need(); await this.requireRole(userId, wid, 'admin');
     const e = String(email || '').trim().toLowerCase();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) throw err(400, 'Enter a valid email address');
-    if (!PHASE1_ROLES.includes(role)) throw err(400, 'Choose Admin, Project Manager or Viewer');
+    if (!INVITE_ROLES.includes(role)) throw err(400, 'Choose a role');
+    let scopeType = 'organization', scopeId = 0;
+    if (role === 'program_manager' || (role === 'viewer' && programId)) {
+      const pr = (await this.q("SELECT id FROM structure_nodes WHERE id = $1 AND workspace_id = $2 AND kind = 'program' AND status = 'active'", [Number(programId) || 0, wid])).rows[0];
+      if (!pr) throw err(400, 'Choose a program of this organization');
+      scopeType = 'program'; scopeId = Number(pr.id);
+    }
     const exists = (await this.q('SELECT 1 FROM workspace_members m JOIN users u ON u.id = m.user_id WHERE m.workspace_id = $1 AND u.email = $2 LIMIT 1', [wid, e])).rows.length;
     if (exists) throw err(409, 'That person is already in this organization');
     if ((await this.q("SELECT 1 FROM workspace_invites WHERE workspace_id = $1 AND email = $2 AND status = 'pending'", [wid, e])).rows.length) throw err(409, 'That person already has an open invitation');
@@ -169,7 +176,7 @@ class Orgs {
       if ((await this.seatsUsed(wid)) + pending >= (await this.seatsBought(wid))) throw err(409, 'All seats are in use. Add seats before inviting another member.');
     }
     const id = this.store.nid();
-    await this.q('INSERT INTO workspace_invites(id, workspace_id, email, role, invited_by) VALUES ($1,$2,$3,$4,$5)', [id, wid, e, role, userId]);
+    await this.q('INSERT INTO workspace_invites(id, workspace_id, email, role, invited_by, scope_type, scope_id) VALUES ($1,$2,$3,$4,$5,$6,$7)', [id, wid, e, role, userId, scopeType, scopeId]);
     const w = await this.business(wid);
     try { await mailer.send({ to: e, subject: `You are invited to ${w.name} on Project Manager AI`, text: `You have been invited to join ${w.name} as ${role.replace('_', ' ')}. Sign in with this email address and accept the invitation from the organization switcher.` }); } catch (x) { /* the invitation stays valid when the mail cannot be sent */ }
     return { id: String(id) };
@@ -184,7 +191,7 @@ class Orgs {
     const u = (await this.q('SELECT email FROM users WHERE id = $1', [userId])).rows[0];
     const i = (await this.q("SELECT * FROM workspace_invites WHERE id = $1 AND status = 'pending'", [inviteId])).rows[0];
     if (!i || !u || i.email !== u.email.toLowerCase()) throw err(404, 'Invitation not found');
-    await this.q('INSERT INTO workspace_members(workspace_id, user_id, role, granted_by) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING', [i.workspace_id, userId, i.role, i.invited_by]);
+    await this.q('INSERT INTO workspace_members(workspace_id, user_id, role, scope_type, scope_id, granted_by) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING', [i.workspace_id, userId, i.role, i.scope_type, i.scope_id, i.invited_by]);
     if (i.role === 'admin') await this.q("INSERT INTO workspace_members(workspace_id, user_id, role, granted_by) VALUES ($1,$2,'project_manager',$3) ON CONFLICT DO NOTHING", [i.workspace_id, userId, i.invited_by]);
     await this.q("UPDATE workspace_invites SET status = 'accepted', decided_at = now() WHERE id = $1", [inviteId]);
     await this.workspaces.ensurePersonal(userId);
@@ -202,7 +209,7 @@ class Orgs {
     if (have.includes('admin') && role !== 'admin' && (await this.admins(wid)) <= 1) throw err(409, 'An organization needs at least one Admin');
     const seatChange = role !== 'viewer' && !have.some((r) => r !== 'viewer');
     if (seatChange && (await this.seatsUsed(wid)) >= (await this.seatsBought(wid))) throw err(409, 'All seats are in use. Add seats first.');
-    await this.q('DELETE FROM workspace_members WHERE workspace_id = $1 AND user_id = $2', [wid, target]);
+    await this.q("DELETE FROM workspace_members WHERE workspace_id = $1 AND user_id = $2 AND role IN ('admin','project_manager','viewer')", [wid, target]);
     const rows = role === 'admin' ? ['admin', 'project_manager'] : [role];
     for (const r of rows) await this.q('INSERT INTO workspace_members(workspace_id, user_id, role, granted_by) VALUES ($1,$2,$3,$4)', [wid, target, r, userId]);
   }
@@ -260,4 +267,4 @@ class Orgs {
   }
 }
 
-module.exports = { Orgs, ROLES, PHASE1_ROLES };
+module.exports = { Orgs, ROLES, PHASE1_ROLES, INVITE_ROLES };

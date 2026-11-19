@@ -6,3 +6,7 @@
 .org-page .row input[type="number"] { flex-basis: 140px; }
 .org-page .card .progress { margin: 10px 0 14px; }
 .org-page h4 { margin: 18px 0 6px; }
+.org-page table { width: 100%; border-collapse: collapse; }
+.org-page th, .org-page td { padding: 10px 12px; text-align: start; border-bottom: 1px solid var(--border); }
+.org-page th { font-weight: var(--fw); color: var(--muted); font-size: var(--fs-small); white-space: nowrap; }
+.org-page .grid { gap: 12px; }

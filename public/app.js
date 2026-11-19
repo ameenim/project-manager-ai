@@ -681,7 +681,7 @@
   async function dispatch(parts, qs, soft) {
     if (!parts.length) return PM.views.dashboard();
     if (parts[0] === 'billing') { S.project = null; return PM.views.billing(); }
-    if (parts[0] === 'organization') { S.project = null; return PM.views.organization(parts[1] ? Number(parts[1]) : null); }
+    if (parts[0] === 'organization') { S.project = null; return PM.views.organization(parts[1] ? Number(parts[1]) : null, parts[2] === 'program' ? Number(parts[3]) : null); }
     if (parts[0] === 'support') { S.project = null; return PM.views.support(parts[1] ? Number(parts[1]) : null); }
     if (parts[0] === 'brand') { S.project = null; return PM.views.brand(); }
     if (parts[0] === 'projects') { S.project = null; return PM.views.projects(); }

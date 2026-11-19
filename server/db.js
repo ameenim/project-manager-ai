@@ -611,6 +611,11 @@ const MIGRATIONS = [
   );
   CREATE INDEX IF NOT EXISTS project_handovers_ws_idx ON project_handovers(workspace_id, status);
   `,
+  // Phase 2 (Program): an invitation can carry the program a Program Manager or Viewer is scoped to.
+  `
+  ALTER TABLE workspace_invites ADD COLUMN IF NOT EXISTS scope_type TEXT NOT NULL DEFAULT 'organization';
+  ALTER TABLE workspace_invites ADD COLUMN IF NOT EXISTS scope_id BIGINT NOT NULL DEFAULT 0;
+  `,
 ];
 
 async function openPg(url) {
